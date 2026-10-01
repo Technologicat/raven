@@ -443,7 +443,7 @@ Attachments are stored beside the chat, **content-addressed** — identical byte
 
 <p align="center">
 <img src="../../img/librarian-cleanup.png" alt="The Clean up chat data dialog, listing two images and a document that no message refers to" width="700"/> <br/>
-<i>The cleanup dialog, opened from the broom button under <b>Maintenance</b>. It is a dry run: nothing is deleted until <b>Clean up &amp; save</b>, and <b>Save all to staging</b> keeps a copy of everything listed first.</i>
+<i>The cleanup dialog, opened from the broom button on the bottom toolbar. It is a dry run: nothing is deleted until <b>Clean up &amp; save</b>, and <b>Save all to staging</b> keeps a copy of everything listed first.</i>
 </p>
 
 **Copying gives you different things depending on what you asked for**, and the difference is exactly this excerpt:
@@ -754,6 +754,8 @@ The toolbar at the bottom contains **global actions**:
 - Copy linearized chatlog to clipboard (F8) — long fetched pages stay as excerpts; see [Message attachments](#message-attachments)
 - Stop the AI's text generation, if in progress (Ctrl+G)
 - Stop the AI avatar's speaking (Ctrl+S)
+- Open the documents folder, where files go for the AI to search; open the chat data folder, which holds the chat history and its attached files
+- Clean up the chat data (shows what would be deleted first; see [Message attachments](#message-attachments))
 - Toggle fullscreen (F11)
 - Built-in Help card (F1)
 
@@ -881,7 +883,7 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
   - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
     - The *automatic* search is rather rudimentary: the query is always the user's latest message (in the current linearized view, after sending the current message if any). The LLM's own `search_documents` tool is what covers the cases where that guess is poor — it can search again with a query it wrote after reading the first results.
     - This may make the LLM's prompt processing time much longer, especially if you have set up a high limit for the number of search results.
-      - A **SYSTEM** indicator will glow at the upper left corner of the avatar panel while the LLM is processing the prompt. See [What the indicators say](#what-the-indicators-say) below.
+      - A **SYSTEM** indicator will glow under the mode toggles, below the avatar panel, while the LLM is processing the prompt. See [What the indicators say](#what-the-indicators-say) below.
     - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
   - If **OFF**, do not autosearch the document database, and do not offer the document tools.
     - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
@@ -918,7 +920,7 @@ The toggles persist across sessions. They are stored in the app state file, whic
 
 ## What the indicators say
 
-Five small labels can light in the upper left corner of the avatar panel, saying what *Librarian* is busy with while you wait. Each appears only while its work is running, and the visible ones stack top-down in the order below — which is roughly the order a question passes through them.
+Five small labels can light under the mode toggles, below the avatar panel, saying what *Librarian* is busy with while you wait. Each appears only while its work is running, and the visible ones stack top-down in the order below — which is roughly the order a question passes through them.
 
 | | Lit while |
 |---|---|
@@ -932,7 +934,8 @@ Five small labels can light in the upper left corner of the avatar panel, saying
 
 Two of them are worth knowing about before they surprise you:
 
-- **INDEXING and DOCUMENTS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background.
+- **INDEXING and DOCUMENTS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background, so INDEXING can be lit alongside any of the others.
+- **SYSTEM is never lit together with READING, DOCUMENTS or INTERNET.** Those three are the work done before the backend gets the prompt, and SYSTEM is the backend reading it. DOCUMENTS lights for the automatic search and for the AI's own searches; INTERNET only ever for the AI's tool calls. Those two are not lit together either, since the AI's tool calls run one at a time.
 - **SYSTEM can take a while and shows no progress.** Prompt processing is the phase where a long conversation, or a batch of injected search results, is read by the backend before a single word comes back, and an OpenAI-compatible API offers no way to ask how far along it is. So the indicator is a light rather than a bar. The terminal window running your LLM backend usually does report the progress and the speed, if you want the number.
   - How much of a wait this is depends on what the backend's cache already holds, which is why the same chat can answer instantly once and slowly after you change something near the top of it. The per-message timing tooltip breaks a completed reply down into prompt processing, thinking and answer.
 

@@ -1770,56 +1770,6 @@ with timer() as tim:
                     dpg_avatar_renderer.set_display_scale(_avatar_display_scale(avatar_panel_h))
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
-                    # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
-                    # Order — INDEXING, DOCUMENTS, READING, SYSTEM, INTERNET — mirrors the typical processing order
-                    # of a query and places the longest-lived indicator (INDEXING) at the top so it stays
-                    # in place when shorter-lived siblings appear below it. READING sits where it does
-                    # because extracting an attachment's text is what happens between finding documents
-                    # and handing the prompt to the backend. DPG's vertical group naturally
-                    # hides any child whose `show=False`, so the visible siblings just repack with no
-                    # overlap. Indexing and search have separate widgets — they can run concurrently
-                    # (since the lock granularity work), so they're independent indicators rather than
-                    # two states of one.
-                    with dpg.group(pos=(16, 16)):
-                        with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
-                            dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
-                            dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
-                            dpg.add_text("INDEXING", tag="docs_indexing_text")
-                            dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
-                            dpg.add_text("", tag="docs_indexing_progress_text")
-                            dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
-
-                        with dpg.group(show=False, horizontal=True) as docs_search_indicator_group:
-                            dpg.add_text(fa.ICON_DATABASE, tag="docs_search_symbol")
-                            dpg.bind_item_font("docs_search_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_search_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("DOCUMENTS", tag="docs_search_text")
-                            dpg.bind_item_theme("docs_search_text", "my_steady_gray_indicator_theme")  # tag
-                            dpg.add_text("", tag="docs_search_progress_text")
-                            dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_indicator_theme")  # tag
-
-                        with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
-                            dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
-                            dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("READING", tag="attachment_read_text")
-                            dpg.bind_item_theme("attachment_read_text", "my_steady_gray_indicator_theme")  # tag
-
-                        with dpg.group(show=False, horizontal=True) as llm_indicator_group:
-                            dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
-                            dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
-                            dpg.bind_item_theme("llm_prompt_process_text", "my_steady_gray_indicator_theme")  # tag
-
-                        with dpg.group(show=False, horizontal=True) as web_indicator_group:
-                            dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
-                            dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("INTERNET", tag="web_access_text")
-                            dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
-
                     dpg.add_text("",
                                  pos=(gui_config.subtitle_x0,
                                       _get_subtitle_bottom_y0(avatar_panel_h)),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
@@ -1997,81 +1947,66 @@ with timer() as tim:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str} [Alt+C]\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
-                    # Utility actions — one-shot actions, kept a visually distinct group from the
-                    # persistent-state toggles above (their own rows, under a separator). The panel below the
-                    # avatar has room to grow this into a collapsing header if more tools land here later.
                     dpg.add_separator()
-                    with dpg.group(horizontal=True):
-                        dpg.add_text("Open folder:")
+                    # Status indicators, here for the reason the server status pill below is: this panel sits
+                    # outside the rect the avatar and the chat graph take turns in, so what the app is busy with
+                    # stays on screen whichever of them holds it, or while the avatar sleeps.
+                    #
+                    # They stack top-down in a vertical group. Order — INDEXING, DOCUMENTS, READING, SYSTEM,
+                    # INTERNET — mirrors the typical processing order of a query and places the longest-lived
+                    # indicator (INDEXING) at the top so it stays in place when shorter-lived siblings appear
+                    # below it. READING sits where it does because extracting an attachment's text is what
+                    # happens between finding documents and handing the prompt to the backend. DPG's vertical
+                    # group naturally hides any child whose `show=False`, so the visible siblings just repack
+                    # with no overlap.
+                    #
+                    # Which can be lit together, which is what sizes the room this needs: INDEXING at any time,
+                    # since indexing runs in the background (hence its own widget, rather than a state of
+                    # DOCUMENTS). SYSTEM is prompt processing, so never alongside READING, DOCUMENTS or
+                    # INTERNET, which all run between prompts rather than during one. DOCUMENTS is a database
+                    # search, automatic or by tool call; INTERNET is the web tools, so tool calls only. The two
+                    # are never lit together either, since `llmtools.perform_tool_calls` runs a round's calls
+                    # one at a time. READING runs on a background task and can overlap a tool call. So at most
+                    # three lines: INDEXING, READING, and one of DOCUMENTS or INTERNET.
+                    with dpg.group():
+                        with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
+                            dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
+                            dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
+                            dpg.add_text("INDEXING", tag="docs_indexing_text")
+                            dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
+                            dpg.add_text("", tag="docs_indexing_progress_text")
+                            dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
 
-                        def _make_open_folder_callback(*, get_dir, button_tag, tooltip, ok_message, ensure_exists=False):
-                            """Build a click callback that opens a directory in the file manager, flashing the button on success/failure.
+                        with dpg.group(show=False, horizontal=True) as docs_search_indicator_group:
+                            dpg.add_text(fa.ICON_DATABASE, tag="docs_search_symbol")
+                            dpg.bind_item_font("docs_search_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("docs_search_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("DOCUMENTS", tag="docs_search_text")
+                            dpg.bind_item_theme("docs_search_text", "my_steady_gray_indicator_theme")  # tag
+                            dpg.add_text("", tag="docs_search_progress_text")
+                            dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_indicator_theme")  # tag
 
-                            `get_dir` is called at click time (so a value like the active datastore path is read fresh, not
-                            captured at GUI-build time). `ensure_exists` creates the directory first — for the documents drop
-                            folder, which may not exist yet on a fresh install."""
-                            def callback() -> None:
-                                # The `try` covers opening the folder and nothing else, so that a fault in
-                                # the acknowledgment is not caught here and reported as the folder having
-                                # failed to open. One flash, outside it, for the same reason: a broken
-                                # acknowledgment reported through a second acknowledgment breaks twice and
-                                # says so once. Same shape as `chat_controller`'s action buttons.
-                                try:
-                                    directory = get_dir()
-                                    if ensure_exists:
-                                        common_utils.create_directory(directory)
-                                    common_utils.open_in_file_manager(directory)
-                                    ok, message = True, ok_message
-                                except Exception as exc:  # noqa: BLE001 -- opening a folder must never crash the GUI
-                                    logger.error(f"open-folder utility ({button_tag}): {type(exc)}: {exc}")
-                                    ok, message = False, "Couldn't open folder"
-                                gui_animation.flash_button(button=button_tag, tooltip=tooltip,
-                                                           ok=ok, message=message, duration=gui_config.acknowledgment_duration)
-                            return callback
+                        with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
+                            dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
+                            dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("READING", tag="attachment_read_text")
+                            dpg.bind_item_theme("attachment_read_text", "my_steady_gray_indicator_theme")  # tag
 
-                        # The callback is bound after the button rather than at creation, because it flashes
-                        # a tooltip that does not exist until the button it belongs to does.
-                        dpg.add_button(label=fa.ICON_FOLDER_TREE,
-                                       width=gui_config.toolbutton_w,
-                                       tag="util_open_docs_dir_button")  # tag
-                        dpg.bind_item_font("util_open_docs_dir_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("util_open_docs_dir_button", "disablable_widget_theme")  # tag
-                        util_open_docs_dir_tooltip = gui_tooltip.Tooltip("util_open_docs_dir_button",  # tag
-                                                                          "Open the documents folder\n(drop files in this folder for the AI to search)")
-                        dpg.set_item_callback("util_open_docs_dir_button",  # tag
-                                              _make_open_folder_callback(get_dir=lambda: librarian_config.llm_docs_dir,
-                                                                         button_tag="util_open_docs_dir_button",
-                                                                         tooltip=util_open_docs_dir_tooltip,
-                                                                         ok_message="Opened documents folder",
-                                                                         ensure_exists=True))
+                        with dpg.group(show=False, horizontal=True) as llm_indicator_group:
+                            dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
+                            dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
+                            dpg.bind_item_theme("llm_prompt_process_text", "my_steady_gray_indicator_theme")  # tag
 
-                        dpg.add_button(label=fa.ICON_DATABASE,
-                                       width=gui_config.toolbutton_w,
-                                       tag="util_open_datastore_dir_button")  # tag
-                        dpg.bind_item_font("util_open_datastore_dir_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
-                        util_open_datastore_dir_tooltip = gui_tooltip.Tooltip("util_open_datastore_dir_button",  # tag
-                                                                               "Open the chat data folder\n(chat history + attached files)")
-                        dpg.set_item_callback("util_open_datastore_dir_button",  # tag
-                                              _make_open_folder_callback(get_dir=lambda: pathlib.Path(chat_controller.datastore.datastore_file).expanduser().resolve().parent,
-                                                                         button_tag="util_open_datastore_dir_button",
-                                                                         tooltip=util_open_datastore_dir_tooltip,
-                                                                         ok_message="Opened chat data folder"))
-
-                    # A destructive action gets its own row rather than a third seat on the folder row above:
-                    # that row's label would start lying, and "delete things forever" should not sit a few
-                    # pixels from two buttons whose worst outcome is a file manager opening.
-                    with dpg.group(horizontal=True):
-                        dpg.add_text("Maintenance:")
-
-                        dpg.add_button(label=fa.ICON_BROOM,
-                                       callback=lambda: cleanup_dialog.open(),
-                                       width=gui_config.toolbutton_w,
-                                       tag="util_cleanup_button")  # tag
-                        dpg.bind_item_font("util_cleanup_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("util_cleanup_button", "disablable_widget_theme")  # tag
-                        util_cleanup_tooltip = gui_tooltip.Tooltip("util_cleanup_button",  # tag
-                                                                    "Clean up and save the chat data\n(shows what would be deleted first)")
+                        with dpg.group(show=False, horizontal=True) as web_indicator_group:
+                            dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
+                            dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("INTERNET", tag="web_access_text")
+                            dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
 
                     # Raven-server's status, on the same pattern as the composer's LLM-backend row and for
                     # the same reason: a server that has gone away is something the user has to be told,
@@ -2084,9 +2019,8 @@ with timer() as tim:
                     #
                     # Shown only when something is wrong, plus a moment on the way back. A row that said
                     # "connected" all day would be teaching the user to stop reading it.
-                    # Parked at the bottom of the panel rather than following the utility rows, which leaves
-                    # the empty middle as the gap between them: the row is not a third utility action and
-                    # should not read as one.
+                    # Parked at the bottom of the panel rather than following the status indicators, so that it
+                    # does not jump about as they come and go.
                     #
                     # Positioned rather than spaced, and set once rather than tracked, because this child
                     # window's *height* is the fixed `chat_controls_h` while only its width follows the
@@ -2106,8 +2040,13 @@ with timer() as tim:
                             server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
                     # Bottom edge, less one row and the padding the child window keeps below it. Outside the
                     # group's own `with`, so it applies to the group rather than to a member of it.
+                    #
+                    # Indented clear of the status indicators, which stack down the left edge of the same panel.
+                    # Three lines fit above this row, which is as many as can be lit at once, but the x offset
+                    # keeps the two apart without leaning on that count. The widest indicator, INDEXING with its
+                    # progress figure, measured 167 px.
                     dpg.set_item_pos("server_status_pill",  # tag
-                                     (guiutils.DPG_WINDOW_PADDING,
+                                     (260,
                                       gui_config.chat_controls_h - gui_config.mode_toggle_row_h - 2 * guiutils.DPG_WINDOW_PADDING))
 
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
@@ -2218,6 +2157,73 @@ with timer() as tim:
                     dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_stop_speech_button", "disablable_widget_theme")  # tag
                     stop_speech_tooltip = gui_tooltip.Tooltip("chat_stop_speech_button", "Stop speaking [Ctrl+S]")  # tag
+
+                    add_separator(line=False)
+
+                    def _make_open_folder_callback(*, get_dir, button_tag, tooltip, ok_message, ensure_exists=False):
+                        """Build a click callback that opens a directory in the file manager, flashing the button on success/failure.
+
+                        `get_dir` is called at click time (so a value like the active datastore path is read fresh, not
+                        captured at GUI-build time). `ensure_exists` creates the directory first — for the documents drop
+                        folder, which may not exist yet on a fresh install."""
+                        def callback() -> None:
+                            # The `try` covers opening the folder and nothing else, so that a fault in
+                            # the acknowledgment is not caught here and reported as the folder having
+                            # failed to open. One flash, outside it, for the same reason: a broken
+                            # acknowledgment reported through a second acknowledgment breaks twice and
+                            # says so once. Same shape as `chat_controller`'s action buttons.
+                            try:
+                                directory = get_dir()
+                                if ensure_exists:
+                                    common_utils.create_directory(directory)
+                                common_utils.open_in_file_manager(directory)
+                                ok, message = True, ok_message
+                            except Exception as exc:  # noqa: BLE001 -- opening a folder must never crash the GUI
+                                logger.error(f"open-folder utility ({button_tag}): {type(exc)}: {exc}")
+                                ok, message = False, "Couldn't open folder"
+                            gui_animation.flash_button(button=button_tag, tooltip=tooltip,
+                                                       ok=ok, message=message, duration=gui_config.acknowledgment_duration)
+                        return callback
+
+                    # The callback is bound after the button rather than at creation, because it flashes
+                    # a tooltip that does not exist until the button it belongs to does.
+                    dpg.add_button(label=fa.ICON_FOLDER_TREE,
+                                   width=gui_config.toolbutton_w,
+                                   tag="util_open_docs_dir_button")  # tag
+                    dpg.bind_item_font("util_open_docs_dir_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("util_open_docs_dir_button", "disablable_widget_theme")  # tag
+                    util_open_docs_dir_tooltip = gui_tooltip.Tooltip("util_open_docs_dir_button",  # tag
+                                                                      "Open the documents folder\n(drop files in this folder for the AI to search)")
+                    dpg.set_item_callback("util_open_docs_dir_button",  # tag
+                                          _make_open_folder_callback(get_dir=lambda: librarian_config.llm_docs_dir,
+                                                                     button_tag="util_open_docs_dir_button",
+                                                                     tooltip=util_open_docs_dir_tooltip,
+                                                                     ok_message="Opened documents folder",
+                                                                     ensure_exists=True))
+
+                    dpg.add_button(label=fa.ICON_DATABASE,
+                                   width=gui_config.toolbutton_w,
+                                   tag="util_open_datastore_dir_button")  # tag
+                    dpg.bind_item_font("util_open_datastore_dir_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
+                    util_open_datastore_dir_tooltip = gui_tooltip.Tooltip("util_open_datastore_dir_button",  # tag
+                                                                           "Open the chat data folder\n(chat history + attached files)")
+                    dpg.set_item_callback("util_open_datastore_dir_button",  # tag
+                                          _make_open_folder_callback(get_dir=lambda: pathlib.Path(chat_controller.datastore.datastore_file).expanduser().resolve().parent,
+                                                                     button_tag="util_open_datastore_dir_button",
+                                                                     tooltip=util_open_datastore_dir_tooltip,
+                                                                     ok_message="Opened chat data folder"))
+
+                    add_separator(line=False)
+
+                    dpg.add_button(label=fa.ICON_BROOM,
+                                   callback=lambda: cleanup_dialog.open(),
+                                   width=gui_config.toolbutton_w,
+                                   tag="util_cleanup_button")  # tag
+                    dpg.bind_item_font("util_cleanup_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("util_cleanup_button", "disablable_widget_theme")  # tag
+                    util_cleanup_tooltip = gui_tooltip.Tooltip("util_cleanup_button",  # tag
+                                                                "Clean up and save the chat data\n(shows what would be deleted first)")
 
                     add_separator(line=False)
 
@@ -2520,7 +2526,7 @@ def render_help_extras(self: helpcard.HelpWindow,
             "Deleting is the exception, and the only one: a message's trash button removes that message and everything below it, for good. It asks for a second click first, because there is no undo."),
          helpcard.section(
             f"**Document database** {self.c_txt}(retrieval-augmented generation, RAG){self.c_end}",
-            f'You can put documents for the AI to access in `{librarian_config.llm_docs_dir}`. The folder button on the {self.c_hig}**Open folder:**{self.c_end} row opens it in your file manager.',
+            f'You can put documents for the AI to access in `{librarian_config.llm_docs_dir}`. The first folder button on the bottom toolbar opens it in your file manager.',
             'Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed. Recognition is by file extension, listed as `llm_docs_exts` in `raven/librarian/config.py` — add to it if you keep notes in a plain-text format that is not there. That file sets the folder above, too.',
             f'The documents are search-indexed automatically, and the index is kept up to date. It is stored in `{librarian_config.llm_database_dir}`. If you ever need to clear it manually, just delete that directory.',
             'Indexing runs in the app as it goes, but `raven-indexer` does the same from a terminal and then exits - for a folder you have just filled with hundreds of documents, or a machine you reach over SSH with no display to start a GUI on.',
