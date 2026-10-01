@@ -5974,10 +5974,9 @@ Two paths reach it, and the first is by far the common one:
   teardown runs. `SIGINT` needed nothing: CPython's handler survives SDL, and the loops already catch
   `KeyboardInterrupt`.
 
-  **What remains here is the other apps.** Librarian is wired; the other five DPG frontends are not, and
-  `quitsignal.install(dpg.stop_dearpygui)` beside each render loop is the whole of it — one line each,
-  though each loop's teardown wants reading first, which is the audit this cluster's shared-helper item
-  is for.
+  **Every GUI app is wired since 2026-10-01**, and a test in `raven/common/tests/test_quitsignal.py` finds
+  any render loop without it. A signal now takes the same path as a window close, which is only as sound
+  as each app's teardown — the audit this cluster's shared-helper item is for.
 - **`sys.exit` from a non-main thread.** `_load_initial_animator_settings` calls `sys.exit(255)` on two error
   paths, and by its own comment it runs on DPG's callback thread. `sys.exit` outside the main thread raises
   `SystemExit` in *that* thread only, so it neither runs `atexit` nor actually exits the process. Both paths
