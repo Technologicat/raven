@@ -2069,6 +2069,23 @@ Worth deciding early: whether this writes back into the user's `.bib` at all, or
 merge for them to apply. Rewriting a bibliography in place is the kind of operation that has to be right the
 first time.
 
+## Librarian: a builtin tool that runs a sub-task as a sub-agent
+
+*Cluster: ? · Cost: ? · Gate: the prioritization session · Filed: 2026-10-01 · See also: `briefs/design/corpus-interrogation-sketch.md` (the multi-agent passage), "Agent skills for Librarian", "Librarian: open a chat datastore other than the configured default"*
+
+Let the model hand a sub-task to a sub-agent: a fresh chat with a scoped prompt, driven by
+`raven.librarian.agent`, which may run several turns — the main agent can ask follow-up questions once the
+first answer is back. The result comes back to the main chat, and the sub-agent's transcript is kept.
+
+Decided in the corpus-interrogation sketch (2026-08-11), recorded there and nowhere the TODO lists reach:
+
+- **A builtin tool, not only the scripting surface.** Scripting-only means the user decides to decompose a
+  task; a tool means the model can.
+- **One at a time, never in parallel** (maintainer, 2026-10-01), Raven being a local tool.
+- **The transcript is kept**, probably as a `PersistentForest` with its own sidecar directory, since the
+  follow-up questions are where the reasoning is. Opening another chat datastore is how it would be read.
+- **One tool call costs many turns**, so it meets the tool-call budget work.
+
 ## Agent skills for Librarian (natural-language workflows over the document database)
 
 *Cluster: ? · Cost: ? · Gate: shortly after the MCP client (brief 04) · Filed: 2026-08-11*
@@ -2240,10 +2257,10 @@ than a flash.
 *Cluster: ? · Cost: M · Gate: 0.2.11 · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
 
 `HybridIR.commit` prepares one document at a time, and `_prepare_document_for_indexing` sends one tokenizer
-request and one embedding request per document. For a corpus of short documents — abstracts, a few chunks
-each — the round trip then dominates. The same shape in the upgrade's re-tokenizing pass measured 31 ms per
-chunk batched per document, against 6.8 ms batched across documents, on a 7k-chunk index of abstracts
-(2026-10-01). So first-time indexing of such a corpus should speed up several-fold.
+request and one embedding request per document. For a corpus of short documents — a BibTeX record or an
+abstract each, a few chunks long — the round trip then dominates. The same shape in the upgrade's re-tokenizing pass measured 31 ms per
+chunk batched per document, against 6.8 ms batched across documents, on a 7k-chunk index of single BibTeX
+records (2026-10-01), `investigations/tokenizer-migration/`. So first-time indexing of such a corpus should speed up several-fold.
 
 M rather than the migration's few lines, because `commit` handles cancellation, progress reporting and
 errors per document, and takes `datastore_lock` per document so that queries can interleave. Batching across
