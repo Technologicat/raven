@@ -629,7 +629,9 @@ class TestMinimumShowTime:
         hold.hide("light")
         assert calls == [("show", "light")], "hidden at once, before the minimum"
         assert self._wait_until(lambda: ("hide", "light") in calls, deadline=5.0), "never hidden"
-        assert time.monotonic() - t0 >= self.MIN
+        # A `threading.Timer` can fire a few milliseconds early as `time.monotonic` measures it: seen on the
+        # Windows runner, 0.297 s against 0.3. Invisible on screen, so the test allows a frame's worth.
+        assert time.monotonic() - t0 >= self.MIN - 0.02
 
     def test_a_late_hide_is_immediate(self, calls):
         hold = guiutils.MinimumShowTime(0.0)
