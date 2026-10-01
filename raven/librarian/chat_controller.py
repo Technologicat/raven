@@ -173,7 +173,10 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
                   }
 
 # Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
-web_access_tool_names = frozenset(("websearch", "webfetch"))
+# The set `llmtools.perform_tool_calls` runs one at a time, which is what keeps that light truthful.
+web_access_tool_names = llmclient.NETWORK_TOOL_NAMES
+# The tool that searches the document database -> lights up DOCUMENTS while it runs, as the automatic search does.
+document_search_tool_names = frozenset(("search_documents",))
 
 
 def _open_source_url(url: str) -> None:
@@ -5176,11 +5179,17 @@ class DPGChatController:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
                             dpg.show_item(self.web_indicator_widget)
+                        elif function_name in document_search_tool_names:
+                            if self.indicator_glow_animation is not None:
+                                self.indicator_glow_animation.reset()
+                            dpg.show_item(self.docs_search_indicator_widget)
 
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
                         if function_name in web_access_tool_names:
                             dpg.hide_item(self.web_indicator_widget)
+                        elif function_name in document_search_tool_names:
+                            dpg.hide_item(self.docs_search_indicator_widget)
 
                 def on_tool_done(node_id: str) -> None:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
