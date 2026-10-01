@@ -386,7 +386,7 @@ It has been reported to work on Mac OS X, as well as on Windows (with [Miniconda
 Raven has the following requirements:
 
  - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
- - An NVIDIA GPU for running AI models via CUDA. (This is subject to change in the future.)
+ - A GPU that PyTorch supports, for running AI models. Raven is developed on NVIDIA (CUDA), and Apple Silicon (MPS) is a supported target; AMD (ROCm) and Intel Arc (XPU) should work but are untested. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).
 
 :exclamation: **Help wanted!** If you have an AMD GPU and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1). Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. :exclamation:
 
