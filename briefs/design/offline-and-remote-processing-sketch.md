@@ -22,6 +22,11 @@ server can own the jobs that fill it, and no app has to stay open for them.
 do. A job that runs *in* the server stops with it, whichever LLM backend it talks to. So the fully offline
 case is a job that runs somewhere else entirely and is collected later.
 
+**In practice the server is up all working day** (maintainer, 2026-10-01): on the development setup it runs
+every office day, so it could process imports with the local LLM whenever there is data to import. The
+in-server case may therefore cover much of the need on its own. Few datasets have been tried so far, which does
+not cover the variety; the team expects more in the mid-term.
+
 ## Remote processing
 
 Not all data is private, and for the public part, cloud services can do the heavy lifting. Two kinds:
