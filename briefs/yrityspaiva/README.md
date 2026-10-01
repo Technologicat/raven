@@ -304,3 +304,27 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      spent much of itself on things that flickered: `## 0.2.10 (7 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition`. **Whatever still carries a `0.2.10` gate then is re-gated to `0.2.11`**, at
      that point. When 0.2.11 comes, and so where the drydock falls, waits on the prioritization session —
      which in turn waits on the triage. So the worksheet goes first.
+5. **The prioritization session** (2026-10-01, with the maintainer, against the roadmap overview and the gates
+   pass 5 left).
+   - **0.2.10, in order of how much use each change needs before the demo runs on it**:
+     - *First*: a home for Librarian's status indicators that does not depend on the right pane's occupant;
+       `quitsignal.install` in the other five apps; the global rounding vars (believed to change nothing,
+       since those roundings are already in use, so the job is to check); the long subtitle splitter; moving
+       webfetch's "approve denied host" button.
+     - *Middle*: the low-risk S fixes — `get_all_root_nodes`, the backdrop onto `fit_cover`, Cherrypick's
+       crown-in-compare, the thumbnail grid's static textures — and the two live-backend checks, the
+       `reasoning_effort` re-test and the tool-call budget probe, against the backend on the personal machine.
+     - *Last*, no runtime risk: the ruff indentation pair, `chat_controller` without spaCy, the `## Declined`
+       sweep, the HF Hub env-var docs, the licensing story in `README.md` and `LICENSE.md`.
+     - **Moved to 0.2.11**: the shared two-phase shutdown helper with its audit (every app's teardown, the
+       week of a demo), and versioning the chat datastore file (a format change to the file the demo runs on).
+   - **After 0.2.10: the per-document pass first.** The maintainer's part of the AOKK study blocks on it, and
+     that blocks the other researchers. Then the lab installation's prerequisites, then the drydock.
+   - **The drydock is to be sized before it is scheduled**, and if it comes out XL, stretch goals split off
+     it. The maintainer's recollection is at least L, and fairly monolithic.
+   - **0.2.11 is trimmed after the above settles**, since that decides what the release is for.
+   - **Sizes, by the maintainer's hunch**: the drydock is by far the largest build on the list; the Markdown
+     renderer is probably second if LaTeX is in; Anthropic-style backends may need data-model retrofits, so
+     perhaps L. Everything else is of reasonable size each.
+   - **LaTeX is wanted.** Whether it goes into the Markdown renderer's feature build or comes as a separate
+     extension later is a separate question, still open.

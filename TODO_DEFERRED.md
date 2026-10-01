@@ -4411,7 +4411,7 @@ Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
 ## Fleet-wide: shared two-phase DPG shutdown helper + audit
 
-*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.10 · Filed: 2026-06-04*
+*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.11, moved off 0.2.10 as too wide a change for the week of a demo (2026-10-01) · Filed: 2026-06-04*
 
 **`abnormal-exit` wants writing up as a brief, in the post-sprint cleanup** (agreed 2026-09-03). It has
 five members now — this helper, the `is_dearpygui_running` segfault, the leaked avatar instance and its
@@ -5437,7 +5437,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Version the chat datastore file, so migrations can be skipped once applied
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: 0.2.11, early; moved off 0.2.10 as a format change to the file the demo runs on (2026-10-01) · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Raised 2026-07-29 (Juha), from noticing that `appstate.backfill_sidecar_metadata` walks every revision of every
 node at every load. Nothing today tells a loaded datastore apart from one that has already been through each
