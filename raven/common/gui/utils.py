@@ -402,6 +402,12 @@ def setup_themes() -> env:
             # off a rounded control. Matched to the frame rather than the window, since the list reads as
             # an extension of the box it drops out of.
             dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 6, category=dpg.mvThemeCat_Core)
+            # A slider's grab, matched to the frame it slides in. ImGui's default is square.
+            dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 6, category=dpg.mvThemeCat_Core)
+            # These two are ImGui's own defaults (as of the ImGui 1.92.5 in DPG 2.3.1), written out so that
+            # all seven rounding vars are stated here rather than three of them inherited.
+            dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 9, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_TabRounding, 5, category=dpg.mvThemeCat_Core)
     dpg.bind_theme(global_theme)  # set this theme as the default
 
     # Tight text layout

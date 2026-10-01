@@ -5663,26 +5663,6 @@ from a note rather than from a profile of *this* code, and "probably" is doing r
 someone checks. The tile size matters to the answer too — the cost may scale with texture count, with total
 texture memory, or with both.
 
-## Raven's global theme sets three of ImGui's seven rounding vars
-
-*Cluster: polish · Cost: S · Gate: 0.2.10 · Filed: 2026-08-14*
-
-`raven.common.gui.utils.setup_themes` sets `FrameRounding` 6, `WindowRounding` 8, `ChildRounding` 8, and
-**`PopupRounding` 6 as of 2026-08-14** — added because a combo's dropdown list is a popup, so it took none
-of the other three and fell back to ImGui's default of none at all: square corners hanging off a rounded
-control. Noticed by Juha in the file dialog's file-type combo.
-
-Still unset, and therefore still at ImGui's defaults:
-
-- **`ScrollbarRounding`** — the widest blast radius by far. Every scrolling panel in every app has one.
-- **`GrabRounding`** — slider and scrollbar grabs.
-- **`TabRounding`** — tab bars.
-
-Deliberately not swept in with the popup fix (Juha, 2026-08-14): they change the look of all six GUI apps at
-once, which wants a fresh-eyes pass across the apps rather than a one-line change judged from a single
-screenshot. The popup one was safe to take on its own because it was visibly wrong and affects one widget
-kind.
-
 ## Visualizer's importer should read the document database, not just `.bib` files
 
 *Cluster: ? · Cost: ? · Gate: brief 13 · Filed: 2026-07-29*

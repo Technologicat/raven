@@ -79,6 +79,7 @@
 
 #### Constellation-wide
 
+- **Slider grabs are rounded**, as the sliders they move in already were. In v0.2.9 they were square.
 - **The `--qr` overlay's label reads "Raven on GitHub"**, where it said "Get Raven".
 - **A fault in one GUI animation no longer closes the app.** The animation is dropped and the error logged with its traceback; everything else carries on.
 - **A dtype in `overrides.json` that is not a Torch dtype stops the app at startup, with an error naming it.**
