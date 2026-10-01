@@ -22,7 +22,7 @@ It sits one level above `raven.librarian.agent` (brief 15). That surface answers
 what happened"; this answers "run one turn per document over two thousand documents, and survive the
 afternoon."
 
-## Why now: eight users, none of which knew about the others
+## Why now: nine users, none of which knew about the others
 
 Each surfaced from a different direction. That is the pattern that says a shared primitive is missing,
 rather than six features being wanted.
@@ -58,6 +58,13 @@ rather than six features being wanted.
    by slice with `--skip`. **This brief goes first** (Juha, 2026-09-29), so that the filter is built on
    the primitive rather than lifting a third copy. It brings two requirements the other
    seven do not state, both measured there rather than predicted — see *Cache key* and *Batching* below.
+9. **Structured fields upon import, for filtering** (Juha, 2026-10-01) — author affiliations, say, extracted
+   once per document at import and stored with it, so that a search can be filtered on a field rather than
+   left to keyword luck. Seen in Librarian the same day: asked to search the document database for papers
+   by authors from Finland, Qwen 3.8 noticed in its own reasoning that the search matches keywords and does
+   no structured affiliation filtering. The same import step as 7; the extraction is what
+   `investigations/aokk-corpus-scope/extract_fields.py` already does for its study, and filtering on the
+   result is brief 13's scope mechanism with a different source for the tags.
 
 Corpus sizes make several of these concrete rather than prospective: ~12k hydrogen abstracts already
 ingested, ~2500 one-page ECCOMAS 2024 conference abstracts, an arXiv AI fulltext set of 1200+ full papers.
@@ -78,7 +85,7 @@ belongs to that sketch.
 
 ### Resume is the load-bearing feature
 
-Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the eight users
+Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the nine users
 exist *only* because it is missing.
 
 The shape follows from what already works: `rag_live_corpus` keeps a JSONL ledger beside a
