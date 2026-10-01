@@ -3179,7 +3179,7 @@ No action until the user decides whether to pursue the clean-room path. Discover
 
 ## Modules worth testing that are not app entry points
 
-*Cluster: test coverage · Cost: L · Gate: none · Filed: 2026-04-17, rescoped from measurement 2026-09-04*
+*Cluster: test coverage · Cost: L overall; S–M per module · Gate: none · Filed: 2026-04-17, rescoped from measurement 2026-09-04, re-measured 2026-10-01*
 
 **Measured 2026-09-04**, over the whole local suite — the `ml` and `gui` groups included, which CI cannot
 run:
@@ -3204,7 +3204,41 @@ Two things fall out of that and are worth keeping whatever happens to this item:
 2026-09-04): an `app.py` parses its command line at module scope and cannot be imported under pytest, which
 is right for an entry point and fatal for a test.
 
-What is left is worth covering where reasonable, largest first:
+**Re-measured 2026-10-01**, CI's shape run locally: 59%, and **67% once the `app.py` entry modules left the
+measurement** (`[tool.coverage.run] omit`, same day). Before that six of them counted as 0% while Librarian's
+and the Visualizer's were missing from the data altogether, so the figure depended on which entry modules
+coverage happened to find.
+
+**Two of the low numbers in that run are artefacts.** `visualizer/importer.py` (14%) and `common/nlptools.py`
+(17%) have `ml`-marked test modules, which a `-m "not ml"` run skips. With its own tests the importer is at
+**76%**. `nlptools`' tests load real models and cover most of it; that it is low in CI is the cost of the
+marker, which `raven/visualizer/CLAUDE.md` records as deliberate.
+
+**Ranked by value for effort**, from a survey of the uncovered code that day (statement gains estimated):
+
+1. **`papers/pdf2bib.py`** (0%): no split needed. The prompt closures call the module-global `extract` and
+   read only `record.reply` and `record.messages`, so a scripted fake for `extract` drives them all,
+   retry-exhausted branches included. S–M, about +300. Check `scripts/check_ci_imports.py` once written.
+2. **`common/gui/widgetfinder.py`** (8%): `binary_search_widget` calls no DPG at all, the `is_*_target_y`
+   predicates need two `guiutils` calls patched, and the depth-first search runs on an unmapped context.
+   Runs in CI. S, about +130.
+3. **`common/audio/recorder.py`** (29%): everything goes through `pvrecorder.PvRecorder`, imported inside
+   `__init__`, so a stand-in module makes it testable — autostop through `silencegate`, monitor mode, a
+   refused second start. S–M, about +160. *Contrary to the note at the end of this item*, which has the
+   recorder staying excluded as hardware-bound; that note predates this reading, and which stands is open.
+4. **Cherrypick**: `imageview.py`'s zoom and pan state through the `__new__` stand-in pattern (S, about +90);
+   `grid.py`'s bookkeeping on the existing `triage_grid` fixture (S, about +75); `preload.py`'s
+   `_preload_one` on a tiny PNG and its two schedulers (S, about +85). Leave `_render` and the `_bg_*` tasks.
+5. **`importer.py`'s `_summarize`** now, faked as the keyword tests fake `llmclient`. `import_bibtex` and
+   `_reduce_dimension` wait for brief 11's item 5, which reorders the stages they would pin.
+6. **`chat_controller.py`**: a slice of about +100 through the existing stand-ins — `find_tool_call_origin`,
+   `get_chatlog_as_markdown`, `refresh_system_injects_if_stale`, `delete_revision`, the prefill bail-outs.
+   Local only until its import chain is cleared (its own item, 0.2.11). The rest is widget building, and
+   `ai_turn`'s event dispatch is interleaved line by line with widget calls: L, and not worth it.
+
+Skip: splitting `nlptools` (L, and its code is already tested), `ai_turn`, imageview's rendering.
+
+The 2026-09-04 picture, for comparison — what is left is worth covering where reasonable, largest first:
 
 | file | missed | covered |
 |---|---|---|
