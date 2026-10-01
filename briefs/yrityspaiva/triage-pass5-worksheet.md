@@ -29,14 +29,3 @@ helps that session start from a cleaner list.
 | MCP support (brief 04) | keep [High]; schedule with 05/06 | |
 | Server config variants by VRAM tier | keep [High] | a single modest GPU is a supported configuration |
 | Unit tests ("very sparse") | **delete** | stale: 105 test modules; the specific gaps are filed in `TODO_DEFERRED.md` |
-
-## C. `post-0.2.10` items that may be wanted sooner
-
-The rest of the `post-0.2.10` gates just mean "later" and can stay. These four say more:
-
-| item | proposal |
-|---|---|
-| Expose the docs-DB sources behind RAG citations | "wanted this year" — rank with inline citations |
-| Let the AI drive the constellation's own views | "this year if possible" — rank with brief 13 |
-| The document-ingestion cluster (formats, spreadsheets, text from images, `.svg`, page images) | write its one brief when the cluster is picked up, as the head item says |
-| A crash during ingest loses the whole run | gate → the per-document LLM pass, as it says |

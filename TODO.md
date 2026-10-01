@@ -99,7 +99,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** More import sources: Semantic Scholar, Scopus, ERIC (educational sciences/didactics), and others.
 
-- **[Low]** Data file format: replace `.pickle` with `npz` or similar (not portable across Python/app versions). Also rename dataset vs. NLP cache file extensions to avoid the current `.pickle`/`.pickle` collision.
+- **[High]** Data file format: replace `.pickle` with a format of our own (not portable across Python/app versions). Also rename dataset vs. NLP cache file extensions to avoid the current `.pickle`/`.pickle` collision.
+  - **Near-future, so that datasets become migratable** (maintainer, 2026-10-01). Pilot users upgrade, and a pickle has no migrator: until this lands, **losing imported datasets after a Python version upgrade is a known limitation.**
+  - Keep it easily accessible to external tools: JSON, plus NPZ for the arrays, is the first candidate. Details not decided.
+  - `briefs/design/install-and-first-run-sketch.md` → *Upgrading*; brief 13's unified DB may be where it lands.
 
 - **[Low]** Deployability: move user-configurable parts to `~/.raven/visualizer/` (consistent with `~/.raven/` already used by Librarian). Check Windows and macOS conventions.
 

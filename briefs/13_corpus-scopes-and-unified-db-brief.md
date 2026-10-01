@@ -284,6 +284,18 @@ when it runs. Everything in this section is [P] and wants arguing with.
 Worked out 2026-09-29, from the display side (Yrityspäivä sprint). This replaces the "autosearch off, tools
 still on" middle setting as the plan, and leaves that setting as a possible transition step.
 
+**[?] Reopened 2026-10-01** (maintainer): agent memory, wanted this autumn, is the same problem in another
+suit. A user who expects a vaguely human-shaped entity expects memory recall to be automatic — what has been
+discussed on the same topic before should come back without a nudge, and anthropomorphisms that hold up
+well enough take load off the user's mental model. So automatic search has to be good enough, and the user
+may want to see which memories were retrieved. If memory keeps an automatic search, the documents may too,
+and retiring it is no longer settled.
+- `briefs/librarian-extension/06_hindsight-standup-brief.md` §2 already plans memory as *two-track recall*,
+  automatic and agentic, and its *Provenance storage* and *GUI inspection affordance* sections plan a record
+  of what each turn's automatic search injected. That record may be what makes the automatic document search
+  openable too, without storing its results as a call-and-result pair — a reader's inference, not yet
+  checked against the rejected option below.
+
 - **[N] Why the automatic search exists at all** (Juha): classical RAG searched automatically because models
   could not call tools. Raven searches automatically for a different reason — without it, the model does not
   know what the database covers, so it cannot decide to look. **Once the scope is published to the model,

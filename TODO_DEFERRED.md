@@ -4935,7 +4935,11 @@ three to test rather than merely the largest.
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10, wanted this year · Filed: 2026-07-18*
+*Cluster: ? · Cost: ? · Gate: wanted this year; with inline citations, and back on the table since automatic search may stay · Filed: 2026-07-18*
+
+**Back on the table, 2026-10-01** (maintainer): retiring the automatic search, which would have made the
+missing half moot, is reopened — see brief 13 §4a. Agent memory has the same need to show what was
+retrieved, so the two may share a mechanism.
 
 When the AI composes a reply using the document database, it sees a set of retrieved snippets, and that
 provenance is already tracked per turn (the payload's `retrieval` field records the query and the snippets the
@@ -5729,7 +5733,7 @@ drawn, giving the pass a scaffold rather than a blank page.
 
 ## Let the AI drive the constellation's own views (tools, and then voice)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10, this year if possible · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: after brief 13's unified DB · Filed: 2026-07-29*
 
 Falls out of the item above, and is easy to miss because it looks like prose: *"show me the map"*, *"search my
 documents"*, *"show me what cleanup is about to delete"* are not descriptions of features, they are things a
@@ -6181,7 +6185,7 @@ Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: the per-document LLM pass: a resumable job is the remedy · Filed: 2026-08-06 · See also: `briefs/per-document-llm-pass-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
