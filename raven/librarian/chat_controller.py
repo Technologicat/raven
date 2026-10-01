@@ -1289,7 +1289,6 @@ class DPGChatMessage:
         self._build_regeneration_buttons(g, greeting_node_ids)
         self._build_edit_button(g, greeting_node_ids)
         self._build_branching_buttons(g, system_prompt_node_ids, greeting_node_ids)
-        self._build_tool_approval_button(g)
         self._build_navigation_buttons(g)
 
     def _build_copy_button(self, g) -> None:
@@ -1605,59 +1604,6 @@ class DPGChatMessage:
         # c_end = '</font>'
         # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)
 
-    def _build_tool_approval_button(self, g) -> None:
-        """Build the button that approves a host the allowlist refused and retries that one fetch.
-
-        Added only on a `webfetch` tool result the client-side allowlist denied; nothing is built otherwise.
-
-        `g`: the horizontal group the buttons go into.
-        """
-        role = self.role
-        node_id = self.node_id
-
-        # "Approve denied host & retry" override. Appears ONLY on a webfetch tool result that the client-side
-        # allowlist refused (such a node carries `webfetch_denied_host` in its generation_metadata, set by
-        # `llmclient.webfetch`). Clicking it approves the host for this session and re-runs that one
-        # fetch on a new branch — see `scaffold.retry_tool_calls`.
-        #
-        # This is a conditional, rare button, so it is intentionally NOT counted in `number_of_message_buttons`
-        # (bumping that would add left margin to EVERY message row for a button almost never shown). The cost:
-        # the leading right-align spacer reserves space for the fixed button count, so the extra button pushes
-        # the sibling counter ("1 / 2") further right and possibly off-view on a denied tool row. Acceptable
-        # for a button that appears only when a fetch was refused; the *unconditional* half of this problem —
-        # the jump-back link, which every tool result carried — now lives in the message's left gutter
-        # instead (`_render_gutter_and_body`), so an ordinary tool row no longer reads as misaligned.
-        #
-        # NOTE: provisional placement. Brief 03 (content-parts) moves tool-result rendering into the assistant
-        # message body; when that lands, this affordance relocates there. See briefs/librarian-extension/.
-        maybe_denied_host = None
-        if role == "tool" and node_id is not None:
-            denied_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
-            maybe_denied_host = denied_node_payload.get("generation_metadata", {}).get("webfetch_denied_host")
-        if maybe_denied_host is not None:
-            def approve_and_retry_callback():
-                chat_controller = self.parent_view.chat_controller
-                llmclient.approve_host_for_session(maybe_denied_host)
-
-                # Rewind the GUI to the branch point: the denied tool result and every message after it.
-                # `retry_tool_calls` re-adds the new branch via the ai_turn callbacks.
-                if not chat_controller.view.rewind_to(node_id):  # not found: a rebuild got there first
-                    return
-
-                # Re-run the denied fetch on a new branch and continue. HEAD is updated by the callbacks.
-                chat_controller.ai_turn(docs_query=None,
-                                        continue_=False,
-                                        _retry_tool_node_id=node_id)
-            approve_retry_button = dpg.add_button(label=fa.ICON_UNLOCK,
-                                                  callback=approve_and_retry_callback,
-                                                  width=gui_config.toolbutton_w,
-                                                  tag=f"message_approve_retry_button_{self.gui_uuid}",  # tag
-                                                  parent=g)
-            dpg.bind_item_font(approve_retry_button, self.parent_view.themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(approve_retry_button, "disablable_widget_theme")  # tag
-            approve_retry_tooltip = dpg.add_tooltip(approve_retry_button)
-            dpg.add_text(f"Approve host '{maybe_denied_host}' for this session, and retry the fetch (on a new branch)", parent=approve_retry_tooltip)
-
     def _build_navigation_buttons(self, g) -> None:
         """Build the buttons that step between this message's siblings, and jump to where its branch continues.
 
@@ -1972,6 +1918,11 @@ class DPGCompleteChatMessage(DPGChatMessage):
             for document_id in generation_metadata.get("document_ids") or []:
                 self._render_document_reference(document_id)
 
+        # A fetch the client-side allowlist refused carries the host it refused, and offers to approve it
+        # here, beside the result that names it.
+        if role == "tool" and (maybe_denied_host := generation_metadata.get("webfetch_denied_host")) is not None:
+            self._render_denied_host_override(maybe_denied_host)
+
         # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
         # Without this, a tool-calling turn — often with empty `content` — would show nothing
         # between the assistant message and the subsequent tool-result node.
@@ -1981,6 +1932,41 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           name=function.get("name", "?"),
                                           arguments=function.get("arguments", ""),
                                           tool_call_id=tool_call.get("id"))
+
+    def _render_denied_host_override(self, host: str) -> None:
+        """Render a row offering to approve `host` for this session and fetch from it again.
+
+        For a webfetch result the allowlist refused. The retry runs on a new branch, from this tool result;
+        see `scaffold.retry_tool_calls`.
+        """
+        node_id = self.node_id
+
+        def approve_and_retry() -> None:
+            chat_controller = self.parent_view.chat_controller
+            llmclient.approve_host_for_session(host)
+            # Rewind the GUI to the branch point: this tool result and every message after it.
+            # `retry_tool_calls` re-adds the new branch via the ai_turn callbacks.
+            if not chat_controller.view.rewind_to(node_id):  # not found: a rebuild got there first
+                return
+            # Re-run the refused fetch on a new branch and continue. HEAD is updated by the callbacks.
+            chat_controller.ai_turn(docs_query=None,
+                                    continue_=False,
+                                    _retry_tool_node_id=node_id)
+
+        with self.paragraphs_lock:
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            # A plain button, not `_add_action_button`, whose flash would land on a widget the rewind has
+            # just destroyed.
+            button = dpg.add_button(label=fa.ICON_UNLOCK,
+                                    callback=approve_and_retry,
+                                    width=gui_config.toolbutton_w,
+                                    tag=f"message_approve_retry_button_{self.gui_uuid}",  # tag
+                                    parent=row)
+            dpg.bind_item_font(button, self.parent_view.themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(button, "disablable_widget_theme")  # tag
+            self._add_tooltip(button, f"Approve '{host}' for this session, and fetch again\n(on a new branch)")
+            label = dpg.add_text(f"Approve {host} for this session, and fetch again", parent=row)
+            self._make_clickable([label], action=approve_and_retry)
 
     def _render_editor(self) -> None:
         """Render this message's text as an editable field, with Save and Cancel below it.

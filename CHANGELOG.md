@@ -49,6 +49,7 @@
 
 #### Raven-librarian
 
+- **A web fetch refused by the allowlist offers its approval under the result**, as a button with a line naming the host, rather than as an extra button at the end of the message's button row, where it pushed the sibling counter out of line.
 - **A long sentence is subtitled across several cards**, two lines each at most, rather than as one card covering much of the avatar.
   - With closed captions, each card goes up as its first word is spoken.
   - With translated subtitles, the whole sentence is still translated at once and then cut, each card going up at the same point in the speech as it starts in the translation.

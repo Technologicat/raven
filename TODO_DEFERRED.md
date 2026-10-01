@@ -3634,28 +3634,9 @@ Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (e
 
 Discovered during cancellable-commit work (2026-04-27).
 
-## webfetch "approve denied host" button relocates in brief 03
-
-*Cluster: ? · Cost: S, estimated · Gate: 0.2.10 · Filed: 2026-06-04*
-
-The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
-a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
-attached to the denied `role="tool"` node's button row. That attachment point is **provisional**:
-brief 03 (content-parts) moves tool-result rendering into the assistant message body (tool calls
-become gear-icon sub-elements, results become content-parts). When that lands, relocate the approve
-button to wherever the denied fetch's result then renders, and drop the special `role == "tool"`
-button-row branch. The backend (`retry_tool_calls`, `approve_host_for_session`, the
-`webfetch_denied_host` marker) is rendering-independent and stays as-is.
-
-**This should have closed already, and its precondition landing without it makes it more live than when
-filed.** Brief 03 shipped; the relocation did not, and `chat_controller` still carries the `role == "tool"`
-branch. That is what a conditional deferral looks like when nothing watches for the condition.
-
-Discovered while implementing the brief-01 GUI override (2026-06-04).
-
 ## webfetch: batch-approve several denied hosts at once
 
-*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-04 · Blocked by: "webfetch \"approve denied host\" button relocates in brief 03"*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-04*
 
 The "approve denied host & retry" override creates a NEW branch per approval (correct, given the
 chat store is a forest). But approving several denied fetches one at a time leaves all-but-the-last
@@ -3665,8 +3646,8 @@ or an "approve all denials in this turn" button), then re-run all of them on a s
 `retry_tool_calls` currently re-runs exactly one call; the batch version would re-run the union of
 approved calls and copy/share the rest — a natural generalization of the same branch-and-rebuild logic.
 
-Batch approval attaches to wherever the approve button ends up, so building this before the relocation
-means building it twice.
+The approve button sits under the refused result since 2026-10-01 (`_render_denied_host_override`), so
+that is where a batch version attaches.
 
 Discovered during the brief-01 GUI override session (2026-06-04).
 
