@@ -309,7 +309,7 @@ is really *extract-or-generate*.
 - **Relation to the retrieval work**: this is the lazy-on-retrieval summary from the coverage-mode discussion,
   reaching the registry as an ordinary producer. Cost is bounded by what gets looked at rather than by corpus
   size, which is what makes it viable at all — import-time summarization of 10k abstracts was measured as
-  hours-to-days and rejected.
+  hours-to-days and rejected. **Revisited 2026-10-01**: see the mipmap chain below.
 
 ### The summary mipmap chain (maintainer, 2026-10-01)
 
@@ -323,21 +323,22 @@ length of summary — like the mipmap levels of a texture:
 | *"Let's compare these 20 studies…"* | one page |
 | *"Let's look at the details of the arguments in these two studies…"* | the full text |
 
-So `synopsis` is not one artifact but a chain of them, one per level, and `params` carries the level. The
-maintainer's proposal is to **generate them at import**.
+So `synopsis` is not one artifact but a chain of them, one per level, and `params` carries the level.
 
-Open, for whoever designs this:
+- **Generated at import, offline** (maintainer, 2026-10-01). This revisits the lazy-on-retrieval decision
+  above: the expensive per-document work moves to import time and runs where no app has to wait for it, which
+  is the subject of `briefs/design/offline-and-remote-processing-sketch.md` — offline processing on
+  Raven-server, batch providers for the public part of a corpus, and routing by a privacy tag.
+- **Built downward, with checkpoints** (maintainer, 2026-10-01). Each level is generated from the one below
+  it, as a texture's mip chain is — except that **an authoritative summary at a level replaces the generated
+  one, and the next level starts from it**. For a paper:
+  - full text → generate the one-page summary;
+  - one page → an abstract exists, so use it and generate nothing for the paragraph level;
+  - abstract → generate the one-sentence summary.
 
-- **Import-time generation was measured once and rejected**, above — hours to days for 10k abstracts. Whether
-  that verdict holds for every level is worth asking separately: the sentence level is short output, the page
-  level is long output from the full text, and they need not share a schedule. Generating the cheap levels at
-  import and the expensive ones lazily, or in a background pass that fills the chain over time, are both
-  shapes this registry already allows.
-- **The author has often written one level already.** By the extract-or-generate rule above, a paper's
-  abstract is its paragraph level.
-- **Whether a level is generated from the one below or from the source.** A texture's mip chain is built
-  downward, each level from the previous one; text could be too, which makes the coarse levels cheap once a
-  finer one exists, at the cost of compounding the finer level's omissions.
+  This is the extract-or-generate rule above, applied per level. Building downward makes each coarse level
+  cheap once a finer one exists; the cost is that a finer level's omissions carry down, which a checkpoint
+  resets.
 - **The producer is the per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`), which is what a
   multi-hour run over a corpus needs: resumable, cancellable, and stopping on a backend failure.
 

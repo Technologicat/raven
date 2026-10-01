@@ -234,6 +234,14 @@ An avatar-only mode for someone across the room: ambient notifications, QR codes
 errors. A discussion sketch with five open questions. The lab installation (after 0.2.10) waits on its
 avatar-only toggle and file-object polish; the sketch's status line lists what else it needs.
 
+## Sketch: offline and remote processing at import
+
+*Cluster: corpus-pipeline · Cost: ~L · Gate: a design session; lands with brief 13 · Filed: 2026-10-01 · See also: `briefs/design/offline-and-remote-processing-sketch.md`*
+
+Expensive per-document work (the summary mipmap chain first) at import time, offline on Raven-server or
+remotely on cloud services and batch queues; several backends at once; public and private import
+directories, with a router that keeps anything private local. Four open questions.
+
 ## Report `bibtexparser`'s writer dropping split names, with a patch
 
 *Cluster: papers · Cost: S to report, ? to land · Gate: none · Filed: 2026-08-28, moved here 2026-09-30 · See also: `briefs/done/bibliography-dedup-brief.md`*

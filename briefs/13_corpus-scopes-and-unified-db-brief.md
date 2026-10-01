@@ -339,6 +339,11 @@ ends up running, needs designing rather than assuming. **Dropping server-optiona
 (Juha, 2026-09-28), if autostart makes it obsolete — then there is only one way to reach the DB, and the
 question goes away.
 
+**Its companion is offline processing at import** (maintainer, 2026-10-01): once the server owns the DB, it
+can own the expensive per-document jobs that fill it, and no app has to stay open for them.
+`briefs/design/offline-and-remote-processing-sketch.md` carries that, along with remote processing for the
+public part of a corpus and a privacy tag on every record, which would live in this DB.
+
 ## What the design session has to settle
 
 Collected so the session has an agenda rather than a pile:

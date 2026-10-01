@@ -34,6 +34,10 @@ anything in one as settled.
   not category — a crowded field is not a closed one), the aesthetic influences, and the rule that decides the
   hard cases: when the register and usefulness conflict, usefulness wins.
 
+- **[`offline-and-remote-processing-sketch.md`](offline-and-remote-processing-sketch.md)** — expensive
+  per-document work at import time, run offline on Raven-server or remotely on a cloud service or a batch
+  queue, with a privacy tag on every record deciding which services may see it.
+
 The first three are not independent: two of them converge (the interrogation flow *is* a view-control problem,
 and the avatar's HCI is how you address a view), and both need the architecture sketch before parts of them can
 be built. The fourth sits across all of them — it describes no mechanism, and is what the others are designed
