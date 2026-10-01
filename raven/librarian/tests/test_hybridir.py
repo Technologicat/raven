@@ -876,18 +876,45 @@ class TestIndexLock:
     corpus.
     """
 
-    def _stub_out_the_store(self, monkeypatch):
-        """Replace the expensive parts of `setup`, and record whether they ran."""
+    def _stub_out_the_store(self, monkeypatch, stale=False):
+        """Replace the expensive parts of `setup`, and record whether they ran.
+
+        `stale`: whether the fake store says its tokens need migrating.
+        """
         built = []
 
         class FakeRetriever:
             def __init__(self, **kwargs):
                 built.append(kwargs)
 
+            def needs_retokenizing(self):
+                return stale
+
         monkeypatch.setattr(hybridir, "HybridIR", FakeRetriever)
         monkeypatch.setattr(hybridir, "HybridIRFileSystemEventHandler",
-                            lambda **kwargs: types.SimpleNamespace(**kwargs))
+                            lambda **kwargs: types.SimpleNamespace(commit_task="the commit task", **kwargs))
         return built
+
+    def _record_commits(self, monkeypatch):
+        submitted = []
+        monkeypatch.setattr(hybridir, "init", lambda executor=None: None)
+        monkeypatch.setitem(hybridir.task_managers, "commit",
+                            types.SimpleNamespace(submit=lambda task, env: submitted.append(task)))
+        monkeypatch.setattr(hybridir.datastorelock, "acquire", lambda target, what: object())
+        return submitted
+
+    def test_a_stale_store_gets_a_commit_scheduled(self, tmp_path, monkeypatch):
+        """An unchanged documents directory schedules no commit, and a stale store is migrated by one."""
+        self._stub_out_the_store(monkeypatch, stale=True)
+        submitted = self._record_commits(monkeypatch)
+        hybridir.setup(docs_dir=tmp_path / "docs", recursive=False, db_dir=tmp_path / "index")
+        assert submitted == ["the commit task"]
+
+    def test_a_current_store_gets_none(self, tmp_path, monkeypatch):
+        self._stub_out_the_store(monkeypatch, stale=False)
+        submitted = self._record_commits(monkeypatch)
+        hybridir.setup(docs_dir=tmp_path / "docs", recursive=False, db_dir=tmp_path / "index")
+        assert submitted == []
 
     def test_the_lock_is_taken_on_the_index_and_outlives_the_call(self, tmp_path, monkeypatch):
         self._stub_out_the_store(monkeypatch)
@@ -992,9 +1019,13 @@ class TestRetokenizeOnOpen:
         data_file.write_text(json.dumps(data), encoding="utf-8")
 
         reopened = self._build(tmp_path)
+        assert reopened.needs_retokenizing()
+        assert reopened.documents["paper"]["tokens"][0] == ["stale"], "opening must not block on the migration"
+        reopened.commit()
 
+        assert not reopened.needs_retokenizing()
         tokens = reopened.documents["paper"]["tokens"][0]
-        assert tokens != ["stale"], "the datastore was opened without being re-tokenized"
+        assert tokens != ["stale"], "the commit did not re-tokenize the stale store"
         assert {"elsevier", "2024", "qwen3", "h2o"} <= set(tokens)
         saved = json.loads(data_file.read_text(encoding="utf-8"))
         assert saved["tokenizer_version"] == hybridir.TOKENIZER_VERSION, "the migration was not saved"
@@ -1014,6 +1045,7 @@ class TestRetokenizeOnOpen:
 
         monkeypatch.setattr(hybridir, "TOKENIZE_BATCH_SIZE", 2)  # so that batches straddle documents
         reopened = self._build(tmp_path)
+        reopened.commit()
 
         expected = {"a": "elsevier", "b": "photocatalysis", "c": "qwen3"}
         for doc_id, word in expected.items():
@@ -1028,6 +1060,47 @@ class TestRetokenizeOnOpen:
         ret.commit()
 
         calls = []
-        monkeypatch.setattr(hybridir.HybridIR, "_retokenize_all", lambda self, version: calls.append(version))
-        self._build(tmp_path)
+        monkeypatch.setattr(hybridir.HybridIR, "_retokenize_all", lambda self, task_env=None: calls.append(1))
+        reopened = self._build(tmp_path)
+        reopened.add(document_id="another", path="<test>", text="Published by Springer.")
+        reopened.commit()
         assert calls == [], "a datastore already at the current version paid for a re-tokenization"
+
+    def _stale_store(self, tmp_path):
+        import json
+        ret = self._build(tmp_path)
+        ret.add(document_id="paper", path="<test>", text="Published by Elsevier in 2024.")
+        ret.commit()
+        data = json.loads(ret.fulldocs_documents_file.read_text(encoding="utf-8"))
+        del data["tokenizer_version"]
+        data["documents"]["paper"]["tokens"] = [["stale"]]
+        ret.fulldocs_documents_file.write_text(json.dumps(data), encoding="utf-8")
+        return ret.fulldocs_documents_file
+
+    def test_a_save_before_the_migration_keeps_the_old_stamp(self, tmp_path, client_api_initialized):
+        """The scanner saves when it repoints moved documents, which can happen before the migrating commit."""
+        import json
+        data_file = self._stale_store(tmp_path)
+        reopened = self._build(tmp_path)
+        reopened._save_datastore()
+        assert json.loads(data_file.read_text(encoding="utf-8"))["tokenizer_version"] == 1, (
+            "a stale store was saved as current, and would never be migrated")
+        assert self._build(tmp_path).needs_retokenizing()
+
+    def test_a_commit_with_pending_edits_migrates_too(self, tmp_path, client_api_initialized):
+        self._stale_store(tmp_path)
+        reopened = self._build(tmp_path)
+        reopened.add(document_id="new", path="<test>", text="Qwen3 splits H2O.")
+        reopened.commit()
+        assert not reopened.needs_retokenizing()
+        assert "elsevier" in reopened.documents["paper"]["tokens"][0]
+        assert "qwen3" in reopened.documents["new"]["tokens"][0]
+
+    def test_a_cancelled_migration_saves_nothing(self, tmp_path, client_api_initialized):
+        import json
+        data_file = self._stale_store(tmp_path)
+        reopened = self._build(tmp_path)
+        reopened.commit(task_env=types.SimpleNamespace(cancelled=True))
+        assert reopened.needs_retokenizing()
+        saved = json.loads(data_file.read_text(encoding="utf-8"))
+        assert saved["documents"]["paper"]["tokens"] == [["stale"]], "a cancelled migration wrote something"

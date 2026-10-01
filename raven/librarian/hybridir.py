@@ -38,6 +38,7 @@ import concurrent.futures
 import copy
 import functools
 import json
+import math
 import operator
 import os
 import pathlib
@@ -506,10 +507,10 @@ class HybridIR:
 
         self._stopwords = nlptools.default_stopwords
 
-        # Before the keyword index is loaded: it is built from the stored tokens, so it must not be read while
-        # they are stale.
-        if self.documents and stored_tokenizer_version != TOKENIZER_VERSION:
-            self._retokenize_all(stored_tokenizer_version)
+        # Which tokenizer made the stored tokens. Every save writes this rather than the current version, so
+        # a store saved before its tokens are migrated still says it needs migrating. A store made by an
+        # older tokenizer is migrated at the next `commit`, ahead of any pending edits.
+        self._tokenizer_version = stored_tokenizer_version if self.documents else TOKENIZER_VERSION
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
@@ -690,37 +691,58 @@ class HybridIR:
         assert len(docs) == len(texts)
         return [keyword_tokens(doc, self._stopwords) for doc in docs]
 
-    def _retokenize_all(self, stored_tokenizer_version: int) -> None:
-        """Tokenize every stored chunk again with the current tokenizer, and save the datastore.
+    def needs_retokenizing(self) -> bool:
+        """Return whether the stored tokens were made by an older tokenizer, so that the next `commit` migrates them."""
+        return self._tokenizer_version != TOKENIZER_VERSION
+
+    def _retokenize_all(self, task_env: Optional[envcls] = None) -> bool:
+        """Tokenize every stored chunk again with the current tokenizer, then save and rebuild the keyword index.
 
         For a datastore made by an older `_tokenize_many`. Costs a tokenization pass over the whole corpus —
-        the slow step of indexing — so a large corpus takes a while, once.
+        the slow step of indexing — so a large corpus takes a while, once. Called from `commit`.
+
+        `task_env`: as for `commit`. If it is cancelled, the pass is abandoned without saving, and the next
+                    commit starts it again.
+
+        Returns whether the pass completed.
         """
+        # Tokenized outside `datastore_lock`, so that queries go on meanwhile, answered by the old index.
+        # The documents cannot change underneath: only `commit` adds or removes them, and this runs inside it.
         with self.datastore_lock:
-            n_docs = len(self.documents)
-            plural_s = "s" if n_docs != 1 else ""
-            logger.info(f"HybridIR._retokenize_all: datastore at '{str(self.fulldocs_path)}' was tokenized by "
-                        f"version {stored_tokenizer_version}, current is {TOKENIZER_VERSION}. Re-tokenizing "
-                        f"{n_docs} document{plural_s}; this may take a while.")
-            # Batched across documents, not per document: most documents are a few chunks long, and a
-            # per-document batch would pay the server round trip for every three or so chunks.
             docs = list(self.documents.values())
             texts = [chunk["text"] for doc in docs for chunk in doc["chunks"]]
-            tokens = []
-            for start in range(0, len(texts), TOKENIZE_BATCH_SIZE):
-                tokens.extend(self._tokenize_many(texts[start:start + TOKENIZE_BATCH_SIZE]))
-                done = min(start + TOKENIZE_BATCH_SIZE, len(texts))
-                if (start // TOKENIZE_BATCH_SIZE) % 20 == 0 or done == len(texts):
-                    logger.info(f"HybridIR._retokenize_all: {done} / {len(texts)} chunks")
+        plural_s = "s" if len(docs) != 1 else ""
+        logger.info(f"HybridIR._retokenize_all: datastore at '{str(self.fulldocs_path)}' was tokenized by "
+                    f"version {self._tokenizer_version}, current is {TOKENIZER_VERSION}. Re-tokenizing "
+                    f"{len(docs)} document{plural_s}; this may take a while.")
+        # Batched across documents, not per document: most documents are a few chunks long, and a
+        # per-document batch would pay the server round trip for every three or so chunks.
+        n_batches = math.ceil(len(texts) / TOKENIZE_BATCH_SIZE)
+        eta_estimator = ETAEstimator(total=n_batches, keep_last=50)
+        tokens = []
+        for start in range(0, len(texts), TOKENIZE_BATCH_SIZE):
+            if task_env is not None and getattr(task_env, "cancelled", False):
+                logger.info("HybridIR._retokenize_all: cancelled; the next commit starts again.")
+                return False
+            batch = texts[start:start + TOKENIZE_BATCH_SIZE]
+            tokens.extend(self._tokenize_many(batch))
+            eta_estimator.tick()
+            self._indexing_progress_text = (f"updating keyword search | {len(tokens)} / {len(texts)} "
+                                            f"chunk{common_text.plural_s(len(texts))} | "
+                                            f"{eta_estimator.formatted_eta}")
+            if (start // TOKENIZE_BATCH_SIZE) % 20 == 0 or len(tokens) == len(texts):
+                logger.info(f"HybridIR._retokenize_all: {len(tokens)} / {len(texts)} chunk{common_text.plural_s(len(texts))}")
+        with self.datastore_lock:
             position = 0
             for doc in docs:
                 n_chunks = len(doc["chunks"])
                 doc["tokens"] = tokens[position:position + n_chunks]
                 position += n_chunks
-            self._save_datastore()
-            # The keyword index on disk was built from the old tokens. Rebuilding it here saves the new one,
-            # which `__init__` then loads.
-            self._rebuild_keyword_search_index()
+            self._tokenizer_version = TOKENIZER_VERSION
+        self._indexing_progress_text = "Saving…"
+        self._save_datastore()
+        self._rebuild_keyword_search_index()  # the index on disk was built from the old tokens
+        return True
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
@@ -862,6 +884,9 @@ class HybridIR:
             except Exception:
                 logger.exception("HybridIR.commit: on_indexing_start raised")
         try:
+            if self.needs_retokenizing():
+                if not self._retokenize_all(task_env=task_env):
+                    return  # cancelled; the pending edits stay pending
             self._commit_body(task_env=task_env)
         finally:
             self._indexing_progress_text = ""
@@ -987,7 +1012,7 @@ class HybridIR:
                 embeddings.append(tempdoc.pop("embeddings"))
                 documents_without_embeddings[document_id] = tempdoc
             data = {"embedding_model_name": self.embedding_model_name,
-                    "tokenizer_version": TOKENIZER_VERSION,
+                    "tokenizer_version": self._tokenizer_version,
                     "documents": documents_without_embeddings}
 
             logger.info("HybridIR._save_datastore: Saving...")
@@ -1070,7 +1095,7 @@ class HybridIR:
         # measurement it was 3% of the work (0.7 s for 288 chunks), because the embedder runs on the GPU.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
         if on_progress is not None:
-            on_progress(f"embedding {len(document_chunks)} chunks")
+            on_progress(f"embedding {len(document_chunks)} chunk{common_text.plural_s(len(document_chunks))}")
         document_embeddings = self.embedder.encode([chunk["text"] for chunk in document_chunks])
         document_embeddings = document_embeddings.tolist()  # for JSON serialization
 
@@ -1986,6 +2011,12 @@ def setup(docs_dir: Union[pathlib.Path, str],
                                              recursive=recursive,
                                              retriever=retriever,
                                              extractor=extractor)
+
+    # A store made by an older tokenizer is migrated by the next commit, and an unchanged documents directory
+    # schedules none, so schedule one. It runs in the background like any commit, behind the app's indexing
+    # indicator, and `raven-indexer` waits for it as it waits for any pending work.
+    if retriever.needs_retokenizing():
+        task_managers["commit"].submit(scanner.commit_task, envcls(wait=True))
 
     return retriever, scanner
 

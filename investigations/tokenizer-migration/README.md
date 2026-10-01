@@ -11,7 +11,7 @@ and doing the tokenizing (spaCy `en_core_web_sm`, spaCy 3.8.16).
 
 | script | what it answers |
 |---|---|
-| `migrate_one.py <index dir>` | Opens one index, which migrates it, and prints the time taken and the rate per chunk. Opens it with `HybridIR` directly, so nothing reconciles it against a documents directory. |
+| `migrate_one.py <index dir>` | Migrates one index and prints the time taken and the rate per chunk. Opens it with `HybridIR` directly and commits, so nothing reconciles it against a documents directory. |
 | `migrate_all.sh` | Backs up each of the eight indexes under `~/.config/raven/librarian/`, then runs `migrate_one.py` on each, smallest first, logging to `migrate.log` beside the backups. |
 | `check_alignment.py <index dir>` | Whether every chunk got its own tokens back: one token list per chunk, and most of each chunk's tokens found in that chunk's own text. Runs the same test on tokens shifted by one chunk as its negative control. |
 
@@ -43,7 +43,7 @@ server round trips per document".
 | `rag_index_hydrogen` | 31 600 | 214.2 s | 6.8 ms |
 | `rag_index_arxiv_fulltext` | 159 383 | 1157.6 s | 7.3 ms |
 
-26 minutes in all, nothing failed, and every index came out at tokenizer version 2 with one token list per
+Measured when the migration ran as the index was opened; it has since moved into the first commit, which does the same work. 26 minutes in all, nothing failed, and every index came out at tokenizer version 2 with one token list per
 chunk in every document. The times include opening the index, which is negligible beside the tokenizing for
 all but the smallest. The backups took 3.4 GB.
 

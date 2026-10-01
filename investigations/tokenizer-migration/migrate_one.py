@@ -1,9 +1,10 @@
-"""Open one RAG index, which migrates it to the current tokenizer, and report how long that took.
+"""Migrate one RAG index to the current tokenizer, and report how long that took.
 
 Usage: python migrate_one.py <index directory>
 
-Opens the index with `HybridIR` directly, so nothing reconciles it against a documents directory. Needs a
-Raven-server answering at the configured URL, which does the tokenizing. Prints one `RESULT:` line.
+Opens the index with `HybridIR` directly and commits, which migrates it; nothing reconciles it against a
+documents directory. Needs a Raven-server answering at the configured URL, which does the tokenizing. Prints
+one `RESULT:` line.
 """
 
 import json
@@ -27,12 +28,14 @@ def main() -> None:
     model = json.loads(data_file.read_text(encoding="utf-8"))["embedding_model_name"]
 
     t0 = time.monotonic()
-    hybridir.HybridIR(datastore_base_dir=base, embedding_model_name=model, local_model_loader_fallback=False)
+    retriever = hybridir.HybridIR(datastore_base_dir=base, embedding_model_name=model,
+                                  local_model_loader_fallback=False)
+    retriever.commit()  # the migration runs in the first commit
     dt = time.monotonic() - t0
 
     after = json.loads(data_file.read_text(encoding="utf-8"))
     chunks = sum(len(doc["chunks"]) for doc in after["documents"].values())
-    print(f"RESULT: opened in {dt:.1f} s; version now {after.get('tokenizer_version')}; {chunks} chunks; "
+    print(f"RESULT: migrated in {dt:.1f} s; version now {after.get('tokenizer_version')}; {chunks} chunks; "
           f"{1000 * dt / chunks:.1f} ms per chunk")
 
 
