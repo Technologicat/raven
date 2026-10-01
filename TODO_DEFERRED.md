@@ -235,7 +235,7 @@ avatar-only toggle and file-object polish; the sketch's status line lists what e
 
 ## Sketch: installing and starting Raven without a terminal ritual
 
-*Cluster: dependencies · Cost: ? · Gate: three probes first (uv's torch backend choice, `lms` headless, LM Studio's JIT loading) · Filed: 2026-10-01 · See also: `briefs/design/install-and-first-run-sketch.md`, `briefs/server-autostart-brief.md`*
+*Cluster: dependencies · Cost: ? · Gate: three probes first (uv's torch backend choice, `lms` headless, LM Studio at login) · Filed: 2026-10-01 · See also: `briefs/design/install-and-first-run-sketch.md`, `briefs/server-autostart-brief.md`*
 
 One install command, then launchers — one per app, and one for Raven-server alone in a terminal, for
 background import processing — with the server and the LLM backend starting themselves. Gathers the

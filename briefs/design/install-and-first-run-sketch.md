@@ -43,6 +43,13 @@ Most of them exist as separate items already; this sketch is what they add up to
 - **The LLM backend started and loaded the same way.** Nothing covers this yet. LM Studio ships a CLI,
   `lms`; its own error messages suggest `lms load`, so Raven could start the backend and load the
   configured model as it will start its own server.
+  - **The model to load is already configurable**: `raven.librarian.config.llm_model`, whose comment says
+    that on LM Studio with just-in-time loading, naming the model in a request makes the server load it.
+    If that holds, Raven only has to *start* the server, and the first request does the rest.
+  - **Only when the backend is local and declared to be LM Studio** (maintainer, 2026-10-01): `localhost` in
+    `llm_backend_url`, and `llm_backend_flavor = "lmstudio"` set explicitly. Autodetection cannot answer
+    here, `llmclient.detect_backend_flavor` working by asking the running server — which is the thing
+    that is missing.
 - **Installing as a tool, from PyPI.** One command, the console scripts on `PATH`, no `cd` and no
   activation. Waits on the `raven-lab` rename and the wheel audit (`TODO_DEFERRED.md`, both 0.2.11), and
   above all on the GPU install item below.
@@ -61,5 +68,5 @@ None of these has been checked; each decides how much of the above is cheap.
    gained an option that picks the PyTorch backend from the installed driver. If it holds for `uv tool
    install`, it answers the GPU install item for Linux and Windows.
 2. **What `lms` can do headless**: start the server, and load a model by name.
-3. **Whether LM Studio loads a model on first request** (just-in-time loading), or can start its server at
-   login. Either would make the backend half nearly free.
+3. **Whether LM Studio can start its server at login.** That would make the backend half nearly free. Its
+   just-in-time loading is documented in our own config's `llm_model` comment; confirm it is on by default.
