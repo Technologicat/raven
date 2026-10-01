@@ -30,6 +30,20 @@ jobs:
       - name: Lint advisories (non-blocking)
         run: ruff check . --select SIM103 || true
 
+      # The repository checkers in `scripts/`: stdlib only, so they need nothing installed, and about ten
+      # seconds together. `check_dependency_versions.py` is left out, since it reads `pdm.lock`, which is
+      # not committed. Some of these check Markdown, so a docs-only push can fail here.
+      - name: Repository checks
+        run: |
+          python scripts/check_ci_imports.py
+          python scripts/check_doc_links.py
+          python scripts/check_exports.py
+          python scripts/check_hotkey_tooltips.py
+          python scripts/check_module_maps.py
+          python scripts/check_option_lists.py
+          python scripts/check_todo_structure.py
+          python scripts/check_usage_paths.py
+
   test:
     needs: lint
     # A hung test step otherwise runs to GitHub's default of six hours, and reads as "still running" the
