@@ -409,15 +409,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Voice command interface: split transcribed text to words, check first two words for command prefix, trigger command processor for the rest. Low priority.
 
-- **[Medium]** Long subtitle splitter — **for 0.2.10** (Juha, 2026-09-24). The subtitler shows one card per
-  sentence, so a long sentence becomes a card of up to ten lines covering half the avatar; professional
-  subtitling splits a sentence across several cards. The timing is already there: TTS returns per-word
-  timestamps (they drive the lipsync), so each part can go up when its first word is spoken, rather than
-  dividing the sentence's audio length evenly. Open question: where to split in the *translated* text, whose
-  words do not line up one-to-one with the spoken English — splitting the English first and translating each
-  part is the simple answer, at some cost in translation quality across the cut. Seen while recording the
-  manual's avatar clips, which were chosen to avoid the long cards.
-
 - **[Low]** Edit spoken message before sending.
 
 - **[Low]** Look into quantized whisper-large-v3-turbo to save VRAM (~1.6 GB currently). May need vLLM backend.
@@ -494,6 +485,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Low]** IBM Granite OCR / vision OCR: low priority. Since writing this item, DeepSeek-OCR and Qwen3.5 native vision have appeared. Evaluate accuracy/speed/model size tradeoff when relevant.
 
 - **[Parked]** Translator upgrade. Current: `Helsinki-NLP/opus-mt-tc-big-en-fi`, sentence-level only, so it misses whatever needs broader context to disambiguate. Surveyed 2026-07-27; nothing clean is available, so this stays parked until HPLT v2 ships HF weights:
+  - **With a context-aware translator, the subtitler should translate the whole reply**, not a sentence at a time (maintainer, 2026-10-01). Today `avatar_controller`'s preprocessor translates per sentence, which is all the current model can use.
   - **HPLT v2 en-fi** (https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus) — still Marian-format only. The card says "we are working on converting it to the Hugging Face format", with no timeline. Would need a second backend, which is why it was parked in the first place.
   - **HPLT v1.0 en-fi** does ship HF-format weights, but the card documents a conversion defect: the checkpoint "cannot work with transformer versions <4.26 or >4.30" (recommends `transformers==4.28`). Raven-server shares one `transformers` across classify / embeddings / Whisper / translate, so that pin is unaffordable. Dead end — recorded so it isn't re-investigated.
   - **NLLB-200** — CC-BY-NC. Blocked by the commercial partners who want to use Raven, independently of quality.

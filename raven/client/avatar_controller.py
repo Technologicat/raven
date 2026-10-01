@@ -1033,6 +1033,10 @@ class DPGAvatarController:
                         logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): no audio produced during precomputing, skipping sentence")
                         continue
 
+                    subtitle_cards = (self._cut_subtitle_into_cards(subtitle, prep.word_metadata or [],
+                                                                    is_spoken_text=(subtitle == sentence))
+                                      if subtitle is not None else None)
+
                     emotion = None
                     if input_record["update_emotion"] and (emotion_text := emotion_window.add(sentence)) is not None:
                         emotion = _avatar_get_emotion_from_text(input_record["config"].emotion_blacklist,
@@ -1054,6 +1058,7 @@ class DPGAvatarController:
                                      "sentence": sentence,
                                      # ----------------------------------------
                                      "subtitle": subtitle,
+                                     "subtitle_cards": subtitle_cards,  # [(seconds into the speech, text), ...], or `None`
                                      "emotion": emotion,  # `None` if the emotion is not to follow the speech
                                      "prep": prep,
                                      "is_first_sentence_in_batch": (is_first_line and is_first_sentence),
@@ -1093,6 +1098,43 @@ class DPGAvatarController:
     # --------------------------------------------------------------------------------
     # Background task: TTS playback controller
 
+    def _cut_subtitle_into_cards(self,
+                                 subtitle: str,
+                                 word_metadata: List[Any],
+                                 is_spoken_text: bool) -> List[Tuple[float, str]]:
+        """Cut `subtitle` into cards of at most two lines each, and time them against the speech.
+
+        `subtitle`: The text to show while one sentence is spoken.
+        `word_metadata`: The TTS's `WordTiming`s for that sentence.
+        `is_spoken_text`: Whether `subtitle` is the spoken text itself (closed captions), so that each card
+                          can go up with its first word. Otherwise (a translation) the cards are timed by
+                          their position in the text.
+
+        Returns `[(seconds into the speech, card text), ...]`, the first card at zero. Measured with the
+        subtitle widget's own font and wrap width; if that cannot be read, the whole subtitle is one card.
+        """
+        try:
+            wrap_width = dpg.get_item_configuration(self.subtitle_text_gui_widget)["wrap"]
+            font = dpg.get_item_font(self.subtitle_text_gui_widget)
+        except Exception as exc:  # the GUI may be going away; a subtitle shown whole is still a subtitle
+            logger.warning(f"DPGAvatarController._cut_subtitle_into_cards: cannot measure the subtitle widget; showing it whole: {type(exc)}: {exc}")
+            return [(0.0, subtitle)]
+        if wrap_width is None or wrap_width <= 0:
+            return [(0.0, subtitle)]
+
+        def width_of(text: str) -> float:
+            return dpg.get_text_size(text, font=font)[0] if font else dpg.get_text_size(text)[0]
+
+        cards = common_text.split_into_cards(subtitle, wrap_width, width_of, max_lines=2)
+        if not cards:
+            return [(0.0, subtitle)]
+        words = [(timing.word, timing.start_time, timing.end_time) for timing in word_metadata]
+        if is_spoken_text:
+            times = common_text.card_times_from_words(subtitle, cards, words)
+        else:
+            times = common_text.card_times_proportional(len(subtitle), cards, words)
+        return [(time_s, card.text) for time_s, card in zip(times, cards)]
+
     def reposition_subtitle(self) -> None:
         """Reposition the current subtitle, if any.
 
@@ -1125,7 +1167,22 @@ class DPGAvatarController:
             config = output_record["config"]  # which avatar instance
             # sentence = output_record["sentence"]  # not actually used during speaking
             subtitle = output_record["subtitle"]
+            subtitle_cards = output_record.get("subtitle_cards") or ([(0.0, subtitle)] if subtitle is not None else [])
+            sentence_done = threading.Event()  # set when this sentence stops, so its later cards stay down
             logger.info(f"speak_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, sentence {sentence_uuid}: starting processing")
+
+            def advance_subtitle_cards(t0: float) -> None:
+                """Put up each card after the first when its time comes, until the sentence ends."""
+                for card_time, card_text in subtitle_cards[1:]:
+                    if sentence_done.wait(timeout=max(0.0, t0 + card_time - time.monotonic())):
+                        return
+                    # Asked again just before writing, so a card due as the sentence ends does not overwrite
+                    # the next sentence's first card. The window between the two calls remains.
+                    if sentence_done.is_set() or not self.gui_updates_safe:
+                        return
+                    with guiutils.nonexistent_ok():
+                        dpg.set_value(self.subtitle_text_gui_widget, card_text)
+                    self.reposition_subtitle()
             with task_env.lock:
                 task_env.tts_speaking = True  # for `speak_task` main loop
                 task_env.tts_idle_announced = False  # there is speech again, so there is a next fall-silent to announce
@@ -1146,10 +1203,14 @@ class DPGAvatarController:
                     custom_on_start_sentence(output_record)
                 if self.gui_updates_safe:
                     # Show subtitle if any
-                    if self.subtitle_text_gui_widget is not None and subtitle is not None:
-                        dpg.set_value(self.subtitle_text_gui_widget, subtitle)
+                    if self.subtitle_text_gui_widget is not None and subtitle_cards:
+                        t0 = time.monotonic()  # the card times count from here, the speech starting now
+                        dpg.set_value(self.subtitle_text_gui_widget, subtitle_cards[0][1])
                         dpg.show_item(self.subtitle_text_gui_widget)
                         self.reposition_subtitle()
+                        if len(subtitle_cards) > 1:
+                            threading.Thread(target=advance_subtitle_cards, args=(t0,),
+                                             name=f"subtitle_cards_{sentence_uuid}", daemon=True).start()
 
                     # Allow the user to cancel the TTS
                     if self.stop_tts_button_gui_widget is not None:
@@ -1157,6 +1218,7 @@ class DPGAvatarController:
 
             def speak_task_on_stop_speaking():
                 logger.info(f"speak_task.process_item.speak_task_on_stop_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: TTS finished.")
+                sentence_done.set()
                 if (custom_on_stop_sentence := output_record["on_stop_sentence"]) is not None:
                     custom_on_stop_sentence(output_record)
                 # The `task_env.cancelled` check catches the case where `speak_task` is being power-cycled. In that case, we must emit the `on_stop_speaking` event (if configured).

@@ -49,6 +49,9 @@
 
 #### Raven-librarian
 
+- **A long sentence is subtitled across several cards**, two lines each at most, rather than as one card covering much of the avatar.
+  - With closed captions, each card goes up as its first word is spoken.
+  - With translated subtitles, the whole sentence is still translated at once and then cut, each card going up at the same point in the speech as it starts in the translation.
 - **A window wider than its default size gives the extra width to the chat graph**, or to the avatar panel when it is showing. The chat log stays at its default width, and a narrower window still takes the difference from it. In v0.2.9 all the extra width went to the chat log.
 - **The avatar grows with a large window.** It fills its panel's height, as it did at the default size; past the size the server makes it at, Librarian enlarges the frames itself, at no extra cost in network bandwidth or server time. In v0.2.9 it stopped growing at that size.
   - `display_scaling` in `raven.librarian.config` chooses how: to fit the panel exactly (`"fit"`, the default), by whole factors only, which looks sharper (`"integer"`), or not at all (`"off"`).
