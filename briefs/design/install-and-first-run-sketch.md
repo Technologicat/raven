@@ -71,6 +71,11 @@ a user's own settings live outside the installed tree, in `~/.config/raven/overr
 does not overwrite them; and Librarian's chat datastore migrates itself on load. What is missing is the
 upgrade itself — one command, once Raven installs as a tool rather than from a checkout.
 
+**One thing does not survive an upgrade safely: the Visualizer's datasets.** They are pickles with no
+migrator, not portable across Python or app versions, so an upgrade can leave a pilot user unable to open
+their own data. The format is due a redesign anyway (`TODO.md`, "Data file format"), and brief 13's
+unified DB may be where that happens; until then, an upgrade path for pilots should at least say so.
+
 ## To probe first
 
 None of these has been checked; each decides how much of the above is cheap.
