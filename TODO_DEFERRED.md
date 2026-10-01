@@ -4777,7 +4777,7 @@ Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
-*Cluster: ? · Cost: ? · Gate: when it becomes unusably slow; 0.2.11 at the earliest · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: when it becomes unusably slow; 0.2.11 at the earliest · Filed: 2026-07-17 · See also: "Version the chat datastore file …"*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
 `chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
@@ -5411,7 +5411,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Version the chat datastore file, so migrations can be skipped once applied
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11, early; moved off 0.2.10 as a format change to the file the demo runs on (2026-10-01) · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: 0.2.11, early; moved off 0.2.10 as a format change to the file the demo runs on (2026-10-01) · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …"*
 
 Raised 2026-07-29 (Juha), from noticing that `appstate.backfill_sidecar_metadata` walks every revision of every
 node at every load. Nothing today tells a loaded datastore apart from one that has already been through each
