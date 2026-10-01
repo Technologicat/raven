@@ -2235,6 +2235,20 @@ Worth deciding together: whether a shape or glyph should carry the state alongsi
 reason belongs somewhere a keyboard user reaches, and whether the blocked send should announce itself as more
 than a flash.
 
+## Indexing pays two server round trips per document: batch across documents
+
+*Cluster: ? · Cost: M · Gate: 0.2.11 · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
+
+`HybridIR.commit` prepares one document at a time, and `_prepare_document_for_indexing` sends one tokenizer
+request and one embedding request per document. For a corpus of short documents — abstracts, a few chunks
+each — the round trip then dominates. The same shape in the upgrade's re-tokenizing pass measured 31 ms per
+chunk batched per document, against 6.8 ms batched across documents, on a 7k-chunk index of abstracts
+(2026-10-01). So first-time indexing of such a corpus should speed up several-fold.
+
+M rather than the migration's few lines, because `commit` handles cancellation, progress reporting and
+errors per document, and takes `datastore_lock` per document so that queries can interleave. Batching across
+documents has to keep all four. Scheduled for 0.2.11 (maintainer, 2026-10-01).
+
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
 *Cluster: ? · Cost: M · Gate: the offline-processing sketch: import-time work runs offline · Filed: 2026-08-12 (measured 2026-08-06)*
