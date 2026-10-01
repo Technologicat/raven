@@ -69,6 +69,7 @@
 - **The `metrics_enabled` animator setting is gone.** The timing it logged is now on the debug overlay, and in the server's log every 5 seconds at `--log-level DEBUG`, without slowing the renderer. An animator settings file that still names it loads with a warning that it is ignored.
 - **The server's DEBUG log no longer fills with per-frame lines** while the avatar animates.
 - **The settings editor's voice chooser is on Ctrl+Shift+V**, where it was Ctrl+V: pressed while typing the text to speak, Ctrl+V pasted as well.
+- **In the settings editor, the upscaler's Preset comes after Quality, and is greyed out unless Quality is `low` or `high`**, the two that use Anime4K. The others ignore the preset.
 
 #### Raven-xdot-viewer
 

@@ -651,6 +651,8 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_tooltip("upscale_preset_choice", tag="upscale_preset_tooltip")  # tag
                         dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
+                    dpg.bind_item_theme("upscale_preset_choice", "disablable_widget_theme")  # tag
+                    self._update_preset_enabled()
                     dpg.add_slider_float(label="x drawn", default_value=1.0, min_value=1.0, max_value=3.0, format="%.2f", clamped=True, width=self.button_width - 64,
                                          callback=self.on_display_scale_change, tag="display_scale_slider")
                     dpg.add_tooltip("display_scale_slider", tag="display_scale_tooltip")  # tag
@@ -1233,7 +1235,15 @@ class PostprocessorSettingsEditorGUI:
         self.upscale = new_upscale
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
+        self._update_preset_enabled()
         self.on_gui_settings_change(sender, app_data)
+
+    def _update_preset_enabled(self) -> None:
+        """Enable the upscaler's preset chooser only for a quality the preset applies to."""
+        if dpg.get_value("upscale_quality_choice") in upscaler.ANIME4K_QUALITIES:  # tag
+            dpg.enable_item("upscale_preset_choice")  # tag
+        else:
+            dpg.disable_item("upscale_preset_choice")  # tag
 
     def on_display_scale_change(self, sender, app_data):
         """Draw the avatar larger than its frames, on the client. A preview; nothing is sent to the server or saved."""
@@ -1343,6 +1353,7 @@ class PostprocessorSettingsEditorGUI:
             if "upscale_quality" in animator_settings:
                 self.upscale_quality = animator_settings["upscale_quality"]
                 dpg.set_value("upscale_quality_choice", self.upscale_quality)
+                self._update_preset_enabled()
 
             if "animefx_enabled" in animator_settings:
                 dpg.set_value("animefx_checkbox", animator_settings["animefx_enabled"])

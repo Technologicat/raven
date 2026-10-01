@@ -3,7 +3,7 @@
 This module is licensed under the MIT license (same license as Anime4K).
 """
 
-__all__ = ["UPSCALE_QUALITIES",
+__all__ = ["UPSCALE_QUALITIES", "ANIME4K_QUALITIES",
            "Upscaler"]
 
 import threading
@@ -31,6 +31,9 @@ UPSCALE_QUALITIES = {
     "bicubic": "bicubic interpolation, no Anime4K: very fast, slightly sharper than bilinear",
     "lanczos": "Lanczos interpolation, no Anime4K: fast, and the sharpest that runs no neural net",
 }
+
+# The qualities that run Anime4K, and so the only ones the `preset` applies to. The rest bypass it.
+ANIME4K_QUALITIES = ("low", "high")
 
 class Upscaler:
     def __init__(self,
@@ -69,7 +72,7 @@ class Upscaler:
         # cropped-then-upscaled size); the lock serializes those against an in-flight `upscale` call.
         self._lock = threading.Lock()
 
-        if quality in ("bilinear", "bicubic", "lanczos"):
+        if quality not in ANIME4K_QUALITIES:
             self.pipeline = None  # bypass Anime4K; resample directly
             return
 
