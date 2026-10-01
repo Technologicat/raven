@@ -515,7 +515,8 @@ Briefs in part 1 (server availability, autostart).
 - **A web status panel for long jobs** · post-0.2.10 · `TD "Web status panel…"`
 - **Check for a local model before the HF Hub** · ~M · `T:1050`; **document the HF Hub env vars** [High] · ~S ·
   `T:398`; **model update UX** · `T:1057`
-- **Replace torchaudio's resample, drop torchaudio** — unpins torch from 2.11 · S · 0.2.10 · `TD "Replace
+- **Replace torchaudio's resample, drop torchaudio** — low priority: torchaudio no longer pins torch (measured
+  2026-10-01) · S · `TD "Replace
   `torchaudio.functional.resample`…"`
 - **Easy install with a chosen CUDA, and a CPU default** · re-scope around torchaudio first · `TD "Easy install
   with a chosen CUDA version…"`

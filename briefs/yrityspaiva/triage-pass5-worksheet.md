@@ -39,7 +39,7 @@ helps that session start from a cleaner list.
 | The licensing story (`LICENSE.md`, README section) | keep 0.2.10, decoupled from PyPI | the docs are wrong today, upload or not *(inferred)* |
 | flake8 → ruff dropped indentation checks | keep 0.2.10 | S |
 | Assert the linter runs the rules we rely on | keep 0.2.10 | S, pairs with the above |
-| Replace torchaudio's resample, drop torchaudio | keep 0.2.10 | S; unpins torch |
+| Replace torchaudio's resample, drop torchaudio | ungate (was 0.2.10) | S; no longer unpins torch — measured 2026-10-01, so nothing forces it |
 | `chat_controller` not importable without spaCy | keep 0.2.10 | S; brings its tests into CI |
 | `quitsignal.install` in the other five apps (the leaked avatar item) | keep 0.2.10 | ~S |
 | Shared two-phase DPG shutdown helper | keep 0.2.10 | pairs with the above |

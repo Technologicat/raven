@@ -134,13 +134,16 @@ to the same data from plain synthesized speech, which would make the engine choi
 widens, (b) we vendor, (c) we pivot the engine once something is materially better and the analysis route is
 built.
 
-**The deadline is October 2028, when Python 3.12 goes EOL** — and there are now *two* items on that clock, not
-one. Kokoro caps the Python version outright. `torchaudio` caps the *torch* version: its latest release is
-2.11.0 (2026-03-23), it skipped both torch 2.12.0 and 2.13.0 while torchvision shipped same-day with each, and
-`raven.common.audio.resample` is its only user. Decision 2026-08-10: **keep both and re-check later.** Two
-years is enough time to build an alternative from whatever parts exist then, and charting the risk in advance
-is what keeps it a plan rather than an emergency. What would make it urgent is either project going visibly
-dead, or a synthesizer worth switching to arriving first.
+**The deadline is October 2028, when Python 3.12 goes EOL.** Kokoro caps the Python version outright.
+Decision 2026-08-10: **keep it and re-check later.** Two years is enough time to build an alternative from
+whatever parts exist then, and charting the risk in advance is what keeps it a plan rather than an emergency.
+What would make it urgent is the project going visibly dead, or a synthesizer worth switching to arriving
+first.
+
+`torchaudio` was a second item on that clock, thought to cap the *torch* version, and is not: its 2.11.0
+release is forward-compatible with later torch by design, and measured so against torch 2.14.1 on 2026-10-01.
+It is in maintenance mode with `raven.common.audio.resample` as its only user, so replacing it is a
+low-priority item in `TODO_DEFERRED.md` rather than a deadline.
 
 Until one of those branches lands, **don't add `3.13`/`3.14` to the CI matrix** — it would fail at dependency resolution time. The test CI currently works around this by using `pip install -e . --no-deps` and hand-picking a minimal dependency subset for the test suite, which avoids pulling in kokoro/misaki at all. That's how the test matrix can stay lightweight even though kokoro lives in the full `[project] dependencies`.
 

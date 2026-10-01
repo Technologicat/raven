@@ -1745,40 +1745,20 @@ applied to tooling.
 
 ## Replace `torchaudio.functional.resample`, and drop torchaudio
 
-*Cluster: dependencies · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: dependencies · Cost: S · Gate: none; low priority since 2026-10-01 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
 
-**Upstream has changed the premise — the priority argument below may no longer hold** (checked 2026-09-30).
-torchaudio's README now says 2.11 "works with `torch` 2.11 and with every future `torch` release … and
-installing TorchAudio does not pin `torch` to a specific version", and that the project is in a maintenance
-phase. The repo is alive in that sense: commits through 2026-09-23 build a single abi3 wheel, set the
-dependency to `torch>=2.11` and stop erroring on minor CUDA mismatches — one release meant to outlive torch
-versions, rather than a paired release per torch. Separately, `resample` and its two kernel helpers in
-`torchaudio/functional/functional.py` are pure torch ops and never reach the compiled extension, so our one
-call does not depend on that promise holding for the C parts.
+**torchaudio no longer holds torch back — measured 2026-10-01.** In a scratch venv with CPU torch 2.14.1
+beside torchaudio 2.11.0, `raven/common/audio/tests/test_resample.py` passed 16 of 16 with none skipped (the
+module `importorskip`s torchaudio, so a skip would have hidden an import failure). The compiled extension
+loaded too — the wheels are `abi3` builds against torch's stable ABI — and `forced_align`, a compiled op, ran.
+That matches upstream's README since the 2.11 release: it "works with `torch` 2.11 and with every future
+`torch` release", and the project is now in a maintenance phase, one release meant to outlive torch versions
+rather than a paired release per torch. Our own call would not have depended on it anyway: `resample` and its
+two kernel helpers are pure torch ops.
 
-**Not yet measured: whether it actually runs.** The README is a claim, and the missing-symbol failure
-described below was reasoned from the ABI rather than observed. The check: a scratch venv with CPU torch
-2.14.1 beside torchaudio 2.11.0, running `raven/common/audio/tests/test_resample.py` — which also covers
-whether `import torchaudio.functional` loads the extension eagerly. Scheduled for 2026-10-01. If it passes,
-torchaudio stops pinning torch, the "what it buys" paragraph below collapses, and this item drops to "replace
-a maintenance-mode dependency when convenient". **The project `CLAUDE.md`'s 3.12-cap section repeats the
-old premise** ("`torchaudio` caps the *torch* version") and wants correcting in the same change.
-
-*The analysis below predates that, and is kept until the measurement settles it.*
-
-**Higher priority than it looks**, because torchaudio is already a hard dependency rather than a future one,
-and it is silently pinning torch.
-
-**torchaudio has stopped shipping.** Last release 2.11.0 on 2026-03-23, the same day as torch 2.11.0; torch
-has since shipped 2.12.0, 2.12.1 and 2.13.0 with no counterpart. Note "dead" is overclaimed — a few months
-of silence is not conclusive — but *missing three consecutive torch releases after a history of same-day
-pairing* is the sharper signal.
-
-**The pin is real and invisible to the resolver.** torchaudio 2.11.0 declares *no* `requires_dist`, so the
-torch pairing is a compiled-ABI constraint rather than a declared one: pip will install it beside torch
-2.13.0 without complaint and fail at load with a missing-symbol error. `pyproject.toml` already pins
-`torchaudio==2.11.0` exactly, so Raven is effectively held at torch 2.11.x with nothing in the metadata
-saying so.
+**So what is left is a maintenance-mode dependency carrying one function.** Worth replacing when convenient,
+on the grounds that a dependency in maintenance mode may stop shipping wheels for some future platform or
+Python, but nothing currently forces it.
 
 **The exposure is one function.** Production use is `raven/common/audio/resample.py`, a thin wrapper over
 `torchaudio.functional.resample`, called from `stt.py` for Whisper input. Everything else is two tests behind
@@ -1794,18 +1774,15 @@ milliseconds on CPU, and the call sites are Whisper input at 16 kHz and TTS outp
 measure rather than assume. `raven/common/audio/tests/test_resample.py` already works to a tolerance (±2
 samples of rounding slack), so a backend swap is testable against what is there.
 
-**What it buys: newer torch.** `pyproject.toml` pins `torch==2.11.0`, and **that pin was added on 2026-08-10
-because of torchaudio** — it is this problem already written into the build, not pre-existing CUDA-index
-policy. Remove torchaudio and the pin has no remaining reason; torch 2.12 and 2.13 become available, and the
-`[cuda]` extra's version-alignment problem goes from three packages to two. *(Recorded because it was
-misread once already, as a deliberate CUDA-alignment choice independent of torchaudio. The comment in
-`pyproject.toml` describes the mechanism — a pinned trio from the `pytorch-cu128` index — without saying
-which package forced it, which is what makes the misreading available. Worth a word in that comment.)*
+**What it buys: the `[cuda]` extra's version-alignment problem goes from three packages to two.** It no longer
+buys newer torch: the `torch==2.11.0` pin in `pyproject.toml` was added on 2026-08-10 because of torchaudio,
+and with torchaudio forward-compatible that reason is gone, so moving torch is now its own decision whether
+or not this item is done.
 
 **The cost to state honestly**: nothing touches lipsync today, but the escape route from Kokoro would have
-used `torchaudio.functional.forced_align`. `TODO.md` already re-scopes that to an acoustic model from
-`transformers` plus an in-house alignment step, so the bridge becomes buildable rather than importable —
-which is a real cost, and also stops the escape route depending on a package that may be dead.
+used `torchaudio.functional.forced_align`. `TODO.md` re-scopes that to an acoustic model from `transformers`
+plus an in-house alignment step. Since `forced_align` still runs under current torch, keeping torchaudio
+until that bridge is designed is a legitimate option rather than a risk.
 
 ## Batch tools: LLM reconnect mid-run
 
@@ -3812,8 +3789,9 @@ Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm insta
 **Absorbed 2026-08-12: "torch / torchaudio CUDA version alignment on fresh installs" was the same problem
 filed twice**, from the fresh-install end rather than the switching-machines end. What it added: bare
 `pip install torchaudio` against `torch==2.10.0+cu128` pulls the CUDA-13 build from PyPI, which fails to
-load; torch, torchvision and torchaudio minor versions must match, and PyPI's default wheels track the
-latest CUDA while most installed torch is older. Its follow-ups were to document the workaround in the
+load; torch, torchvision and torchaudio minor versions had to match (true of the paired releases up to
+2.10 — torchaudio 2.11 is forward-compatible with later torch, measured 2026-10-01), and PyPI's default
+wheels track the latest CUDA while most installed torch is older. Its follow-ups were to document the workaround in the
 README, and to check whether PDM honours PyTorch's index-url convention via `[[tool.pdm.source]]`.
 
 **Re-scope before doing any of it.** Every symptom recorded here and there is torchaudio's, so if
