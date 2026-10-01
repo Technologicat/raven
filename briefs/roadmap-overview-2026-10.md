@@ -477,9 +477,9 @@ Briefs in part 1 (server availability, autostart).
 - **Sliders have no keyboard story** · M · a design decision · `TD "Sliders have no keyboard story…"`
 - **The main keyboard offers no zoom** · S once keys are chosen · `TD "The main keyboard offers no zoom…"`
 - **Layout-aware positional hotkeys** · ? · `TD "Keyboard-layout-aware positional hotkeys…"`
-- **Every hotkey in a tooltip and on its card** — 3 of 7 apps signed off · M per app · `TD "Fleet audit: every
-  hotkey discoverable…"` (+`T:91`). The help cards themselves were all swept on 2026-09-14; that item is
-  removed (2026-10-01)
+- ~~**Every hotkey in a tooltip and on its card**~~ — **done**: every app read through and signed off by
+  2026-09-14, the cards swept the same day. Both items removed 2026-10-01; `check_hotkey_tooltips.py` holds
+  the line
 - **Filter/search in a help card's hotkey list** · ~M · `T:460`
 - **Colourblind-safe ok/error flashes** · 0.2.10 · `TD "Colorblind-safe status signaling…"`
 - **Flash the search field when a hotkey focuses it** · ~S · `T:407` — the keyboard marks may have made it moot
