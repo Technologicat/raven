@@ -6254,6 +6254,13 @@ after.
 Raised by Juha (2026-08-26), carried across two compactions before being written down — which is why it is
 here rather than in a session note.
 
+**Its prompt processing is slow too, which is a separate cost from the thinking.** From `generation_metadata`
+in the chat datastore, 2026-10-01: 3.8 (27B) has a median prefill of 9.7 s over 27 replies, against 0.8 s
+for 3.6 (35B-A3B) over 235. It generates at about 54 t/s against 100, but the prefill brings it to about
+22 t/s overall against 74. The metadata records no prompt length, so this is a time, not a rate. One
+unchecked possibility: going by its name, 3.8 is a dense model and 3.6 a MoE with about 3B active
+parameters, which may account for the gap on its own. Otherwise usable (Juha, 2026-10-01).
+
 ## A transient postprocessor effect cannot ease in or out
 
 *Cluster: avatar-effects · Cost: ? · Gate: a design decision about where the envelope lives · Filed: 2026-08-26*

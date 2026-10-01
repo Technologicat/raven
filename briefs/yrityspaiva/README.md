@@ -366,11 +366,18 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **Structured fields at import** (affiliations, for filtering) went into the per-document pass brief as
        its ninth user, from Qwen 3.8 noticing that the search matches keywords and does no structured
        affiliation filtering.
-   - **Open, from the end of the day**: whether to build the dotted-name reference checker (backquoted
-     `a.b.c` in docstrings, comments and Markdown resolving to real definitions, the maintainer's concern
-     being renames and moves) now or after 0.2.10, and where it is filed; and whether Qwen 3.8's prompt
-     processing, much slower than 3.6's (maintainer), wants recording beside the `reasoning_effort` re-test.
-   - **Costed for tomorrow: stage reporting for the web tools**, as DOCUMENTS has (maintainer's idea). M,
+   - **Decided that evening** (maintainer, 2026-10-01), for 2026-10-02:
+     - **Stage reporting for the web tools goes in 0.2.10, first thing**, as the costing below describes. The
+       UX win is worth the half day.
+     - **The dotted-name reference checker: the S half tomorrow, then cost the rest.** A probe found 33 of 354
+       distinct fully qualified backquoted `raven.…` names unresolved, about ten of them real rot in live
+       source and docs; the rest are names a brief plans, closed briefs, and placeholders, so the checker
+       exempts `briefs/` and `investigations/` and wants a marker for planned names. The short forms
+       (`guiutils.focus_item`) need per-file alias resolution: look first at whether pyan's name resolution
+       can be borrowed, adding features to pyan if needed. If that comes out large, file it.
+     - **Qwen 3.8's slow prompt processing is recorded** beside the `reasoning_effort` re-test, from the
+       datastore's `generation_metadata`.
+   - **Costed: stage reporting for the web tools**, as DOCUMENTS has (maintainer's idea). M,
      about half a day. `server.util.stream_job` sends one JSON result after a leading space; it would send
      newline-separated records, progress lines and then the result, the job reporting through a callback;
      `client.util.post_streamed_job` reads them as they come; `llmtools` exposes the text; `chat_controller`
