@@ -4773,6 +4773,13 @@ Librarian stores *every* chat — all nodes, all payload revisions, across the w
 - **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
   holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
   whole directory each time.
+- **Finding the roots is still O(n), just less often.** `Forest.get_all_root_nodes` remembers its answer
+  against `Forest.generation` since 2026-10-01, so the full-forest scan runs once per change rather than once
+  per call. But any change re-arms it, a new revision included, and the chat graph and `get_siblings` on a
+  card both ask, so during a streaming reply each write still costs one scan. Good enough at today's sizes
+  (maintainer). If it shows up in a profile, the true O(1) answer is an index of roots kept by the mutating
+  methods; the cost there is keeping it correct across create, delete, copy, reparent, prune and load, and
+  in the scan's order.
 
 Directions to weigh when it matters (don't pre-build): shard the sidecar dir by hash prefix (`ab/cd/<sha>.png`);
 move the forest to an on-disk store with incremental writes (SQLite, or append-only revisions) instead of
