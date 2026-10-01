@@ -406,20 +406,22 @@ class TestMalformedToolCallRequests:
         assert expected in chatutil.content_to_text(records[0].data["content"])
 
 
+def _tool_call_message(*names):
+    """An assistant message asking for one call of each tool in `names`, with IDs `call_0`, `call_1`, …"""
+    return {"role": "assistant", "content": "",
+            "tool_calls": [{"type": "function", "function": {"name": name, "arguments": "{}"},
+                            "id": f"call_{i}", "index": str(i)}
+                           for i, name in enumerate(names)]}
+
+
+def _tool_settings(**entrypoints):
+    """Settings offering exactly `entrypoints`, as `name=callable`."""
+    return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+               tool_entrypoints=entrypoints)
+
+
 class TestPerformToolCallsAbort:
     """An abort handle answers the unfinished calls as cancelled, without waiting for the one in progress."""
-
-    @staticmethod
-    def _message(*names):
-        return {"role": "assistant", "content": "",
-                "tool_calls": [{"type": "function", "function": {"name": name, "arguments": "{}"},
-                                "id": f"call_{i}", "index": str(i)}
-                               for i, name in enumerate(names)]}
-
-    @staticmethod
-    def _settings(**entrypoints):
-        return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
-                   tool_entrypoints=entrypoints)
 
     def test_a_stop_during_a_call_keeps_what_finished_and_cancels_the_rest(self):
         release = threading.Event()  # never set: the blocked tool is what a slow site looks like
@@ -438,8 +440,8 @@ class TestPerformToolCallsAbort:
         threading.Timer(0.3, abort.abort).start()
 
         t0 = time.monotonic()
-        records = llmclient.perform_tool_calls(self._settings(fast=fast, blocked=blocked, never=never),
-                                               self._message("fast", "blocked", "never"),
+        records = llmclient.perform_tool_calls(_tool_settings(fast=fast, blocked=blocked, never=never),
+                                               _tool_call_message("fast", "blocked", "never"),
                                                on_call_start=None, on_call_done=None, maybe_abort=abort)
         elapsed = time.monotonic() - t0
         release.set()  # let the abandoned thread finish
@@ -454,8 +456,8 @@ class TestPerformToolCallsAbort:
         called = []
         abort = netutil.Abort()
         abort.abort()
-        records = llmclient.perform_tool_calls(self._settings(tool=lambda: called.append(1)),
-                                               self._message("tool", "tool"),
+        records = llmclient.perform_tool_calls(_tool_settings(tool=lambda: called.append(1)),
+                                               _tool_call_message("tool", "tool"),
                                                on_call_start=None, on_call_done=None, maybe_abort=abort)
         assert [r.status for r in records] == ["cancelled", "cancelled"]
         assert called == []
@@ -469,7 +471,7 @@ class TestPerformToolCallsAbort:
             return dyn.tool_context.marker
         def dispatch():
             with dyn.let(tool_context=env(marker="this turn's context")):
-                seen["records"] = llmclient.perform_tool_calls(self._settings(tool=tool), self._message("tool"),
+                seen["records"] = llmclient.perform_tool_calls(_tool_settings(tool=tool), _tool_call_message("tool"),
                                                                on_call_start=None, on_call_done=None,
                                                                maybe_abort=netutil.Abort())
         worker = threading.Thread(target=dispatch)
@@ -482,7 +484,7 @@ class TestPerformToolCallsAbort:
     def test_a_failing_tool_is_still_an_error(self):
         def broken():
             raise ValueError("broken")
-        records = llmclient.perform_tool_calls(self._settings(broken=broken), self._message("broken"),
+        records = llmclient.perform_tool_calls(_tool_settings(broken=broken), _tool_call_message("broken"),
                                                on_call_start=None, on_call_done=None,
                                                maybe_abort=netutil.Abort())
         assert records[0].status == "error"
@@ -496,9 +498,6 @@ class TestPerformToolCallsInParallel:
     real tool names to land in the kind under test. Overlap is detected rather than timed: each tool waits a
     while for the other to have started, and reports whether it did.
     """
-
-    _message = staticmethod(TestPerformToolCallsAbort._message)
-    _settings = staticmethod(TestPerformToolCallsAbort._settings)
 
     @staticmethod
     def _meeting(first: str, second: str, patience: float):
@@ -524,8 +523,8 @@ class TestPerformToolCallsInParallel:
     def test_calls_of_different_kinds_overlap(self):
         web, docs = self._meeting("websearch", "search_documents", patience=5.0)
         t0 = time.monotonic()
-        records = llmclient.perform_tool_calls(self._settings(websearch=web, search_documents=docs),
-                                               self._message("websearch", "search_documents"),
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=web, search_documents=docs),
+                                               _tool_call_message("websearch", "search_documents"),
                                                on_call_start=None, on_call_done=None)
         assert self._texts(records) == ["met", "met"], "the two kinds ran one after the other"
         assert time.monotonic() - t0 < 3.0
@@ -533,8 +532,8 @@ class TestPerformToolCallsInParallel:
     def test_calls_of_one_kind_do_not(self):
         # The negative control for the test above: without it, running *everything* in parallel would pass.
         first, second = self._meeting("websearch", "webfetch", patience=0.5)
-        records = llmclient.perform_tool_calls(self._settings(websearch=first, webfetch=second),
-                                               self._message("websearch", "webfetch"),
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=first, webfetch=second),
+                                               _tool_call_message("websearch", "webfetch"),
                                                on_call_start=None, on_call_done=None)
         assert self._texts(records) == ["alone", "alone"], "two web calls ran at once, which their indicator cannot show"
 
@@ -548,16 +547,16 @@ class TestPerformToolCallsInParallel:
             return "docs"
         def quick():
             return "other"
-        records = llmclient.perform_tool_calls(self._settings(websearch=slow, search_documents=medium, calculate=quick),
-                                               self._message("websearch", "search_documents", "calculate"),
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=slow, search_documents=medium, calculate=quick),
+                                               _tool_call_message("websearch", "search_documents", "calculate"),
                                                on_call_start=None, on_call_done=None)
         assert [record.tool_call_id for record in records] == ["call_0", "call_1", "call_2"]
         assert self._texts(records) == ["web", "docs", "other"]
 
     def test_a_garbled_request_keeps_its_place(self):
-        message = self._message("websearch", "search_documents")
+        message = _tool_call_message("websearch", "search_documents")
         message["tool_calls"].insert(1, {"id": "garbled", "type": "function", "function": {"arguments": "{}"}})
-        records = llmclient.perform_tool_calls(self._settings(websearch=lambda: "web", search_documents=lambda: "docs"),
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=lambda: "web", search_documents=lambda: "docs"),
                                                message, on_call_start=None, on_call_done=None)
         assert [record.status for record in records] == ["success", "error", "success"]
         assert self._texts(records)[0::2] == ["web", "docs"]
@@ -573,9 +572,9 @@ class TestPerformToolCallsInParallel:
             return "unreachable"
         abort = netutil.Abort()
         threading.Timer(0.3, abort.abort).start()
-        records = llmclient.perform_tool_calls(self._settings(websearch=blocked, webfetch=after,
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=blocked, webfetch=after,
                                                               search_documents=lambda: "docs"),
-                                               self._message("websearch", "search_documents", "webfetch"),
+                                               _tool_call_message("websearch", "search_documents", "webfetch"),
                                                on_call_start=None, on_call_done=None, maybe_abort=abort)
         release.set()
         assert [record.status for record in records] == ["cancelled", "success", "cancelled"]
@@ -590,9 +589,9 @@ class TestPerformToolCallsInParallel:
             return dyn.tool_context.marker
         def dispatch():
             with dyn.let(tool_context=env(marker="this turn's context")):
-                seen["records"] = llmclient.perform_tool_calls(self._settings(websearch=reads_context,
+                seen["records"] = llmclient.perform_tool_calls(_tool_settings(websearch=reads_context,
                                                                               search_documents=reads_context),
-                                                               self._message("websearch", "search_documents"),
+                                                               _tool_call_message("websearch", "search_documents"),
                                                                on_call_start=None, on_call_done=None)
         worker = threading.Thread(target=dispatch)
         worker.start()
@@ -611,9 +610,9 @@ class TestPerformToolCallsInParallel:
                 time.sleep(0.05)  # long enough for a concurrent event to arrive while this one is inside
             finally:
                 inside.release()
-        records = llmclient.perform_tool_calls(self._settings(websearch=lambda: "web", search_documents=lambda: "docs",
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=lambda: "web", search_documents=lambda: "docs",
                                                               calculate=lambda: "other"),
-                                               self._message("websearch", "search_documents", "calculate"),
+                                               _tool_call_message("websearch", "search_documents", "calculate"),
                                                on_call_start=event, on_call_done=event)
         assert [record.status for record in records] == ["success"] * 3
         assert overlaps == [], f"two events ran at once: {overlaps}"
