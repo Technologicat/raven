@@ -283,14 +283,17 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      `TODO.md`'s dated session-plan blocks retired, their live parts moved out; duplicates merged; the
      thinking-toggle probe record moved to `investigations/thinking-toggle/`. Two small bugs the triage
      turned up were fixed on the way (the importer's duplicate-field-key recovery, the entity decoder).
-   - **Pass 5, re-gating and re-tiering, half done.** The ten `TODO_DEFERRED.md` gates naming RN2026 were
-     re-gated with the maintainer the same evening (webfetch ships allow-all for now, demo included; the
+   - **Pass 5, re-gating and re-tiering, done 2026-10-01.** The ten `TODO_DEFERRED.md` gates naming RN2026
+     were re-gated with the maintainer on 2026-09-30 (webfetch ships allow-all for now, demo included; the
      in-app drag-and-drop cue is a help-card line, the overlay being blocked by GLFW; the icon set to be
-     resolved soon, over its licence). **The rest is proposed, row by row, in `triage-pass5-worksheet.md`**
-     beside this README, written while the triage was fresh. **Left:** whether the [High] tiers in `TODO.md` get re-read in the prioritization session or as a quick
-     keep-or-demote list first; and the sixty `0.2.10` gates, a release-scope question for that session.
-     The worksheet's no-decision section was applied 2026-10-01 — the help-card item turned out done
-     rather than stale (every card swept 2026-09-14) and was removed.
+     resolved soon, over its licence). The rest went through a row-by-row worksheet the next day, now
+     deleted, its answers applied: the `TODO.md` [High] tiers, given releases where they had one; the items
+     gated into 0.2.10 and the thirty gated `post-0.2.10`, each given a real gate; and the items that were
+     done rather than stale removed (the help cards and the hotkey audit, both finished 2026-09-14).
+   - **The release scope this produced** (maintainer, 2026-10-01): 0.2.10 takes as many reasonable S items
+     as fit, preferring ones that help UX or move things forward. **0.2.11 is getting full** — what is
+     scheduled for it is the ideal-world plan, to be re-prioritized in the session that places the
+     drydock.
    - **Decided 2026-10-01, for the prioritization session to start from** (maintainer): the lab
      installation comes after 0.2.10 and is feature-gated — the avatar-only toggle, the sci-fi file
      objects, the MCP client, and the `cu130` move it dates (`briefs/design/lab-assistant-hci-sketch.md`).
