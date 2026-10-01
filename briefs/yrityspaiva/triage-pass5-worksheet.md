@@ -51,7 +51,7 @@ helps that session start from a cleaner list.
 | Move the avatar backdrop onto `fit_cover` | → post-0.2.10 | nothing waits on it *(inferred)* |
 | Consolidate image conversions | → post-0.2.10 | the item itself is tentative |
 | Cherrypick: preload 16 MP, idle load, low FPS, zoom-in neighbours | → post-0.2.10, as one measured pass | a cluster; the items say measure first |
-| Easy install with a chosen CUDA | → post-0.2.10 | "re-scope first" |
+| Easy install with a chosen CUDA | **applied 2026-10-01**: gate → the lab installation, re-scoped against the `cu130` move | the lab installation installs from zero, after 0.2.10 |
 | Relocate webfetch's "approve denied host" button | → post-0.2.10 | cosmetic *(inferred)* |
 | Colorblind-safe ok/error flashes | → with the styling-constants sweep | same code |
 | Attach a document from a URL | → post-0.2.10 | a design question in the item |
@@ -71,9 +71,3 @@ The rest of the `post-0.2.10` gates just mean "later" and can stay. These four s
 | Let the AI drive the constellation's own views | "this year if possible" — rank with brief 13 |
 | The document-ingestion cluster (formats, spreadsheets, text from images, `.svg`, page images) | write its one brief when the cluster is picked up, as the head item says |
 | A crash during ingest loses the whole run | gate → the per-document LLM pass, as it says |
-
-## D. No decision needed
-
-Three headings or premises to correct: "Librarian's help card: the room exists now…" (Librarian's and the
-Visualizer's cards are done; six remain), "Datastore scaling…" (still assumes the datastore is saved only
-at exit), and "Documented command lines are unchecked" (its note about three slow CLI tools is fixed).

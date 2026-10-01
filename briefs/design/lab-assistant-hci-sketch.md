@@ -7,6 +7,20 @@ sketch names this one under "One angle among several" and does not develop it. T
 Same caution applies: the workflow is clear, the mechanism mostly is not, and writing it as a brief now would
 freeze decisions nobody has made.
 
+**Status, 2026-10-01: this is what the lab installation is waiting for** (maintainer). The installation is
+planned for this autumn, after 0.2.10, and is gated on features rather than on a date. It needs:
+
+- **The avatar-only mode, toggleable on the fly**: the operator presses a key to drop to the ordinary
+  Librarian GUI and back. That answers open question 1 for this deployment — a toggle with a hotkey.
+- **The sci-fi polish**, for instance file icons or thumbnails hovering around the avatar, translucent, *as it
+  reads files* — so the objects of "A representation of what arrived" appear for what the AI reads, as well as
+  for what the user uploads.
+- **The MCP client** (`briefs/librarian-extension/`, brief 04).
+- **The `cu130` move**, since the machine is built from zero (`TODO_DEFERRED.md`, "Move the torch trio to
+  CUDA 13").
+
+Whether it comes before or after brief 13's unified DB is open.
+
 ## What the mode is
 
 Hide the Librarian GUI except the avatar. What remains on screen is a character you talk to — as if you were

@@ -50,7 +50,8 @@ schedulable steps. Statuses are the briefs' own.
   - Item 5: cluster once, in high-D (spec in `investigations/highdim-clustering/`) · 1–2 days · **specified and
     measured, ready**. The importer's remaining tests are to be written with it.
   - Item 1: the Nomic migration · ~M · fork decided 2026-09-30 (v1.5 unless something now offers both), and
-    must re-measure Librarian's off-corpus threshold before the swap
+    must re-measure Librarian's off-corpus threshold before the swap · **goes in during brief 13's build**
+    (2026-10-01)
   - Item 4: Procrustes alignment for adding papers to a map · ~M · less urgent once scopes exist (brief 13).
     Absorbs `T:473`.
 - **Derived artifact store, brief 12** (`briefs/12_derived-artifact-store-brief.md`) — one key shape and one
@@ -62,6 +63,9 @@ schedulable steps. Statuses are the briefs' own.
 - **Corpus scopes and the unified document DB, brief 13** (`briefs/13_corpus-scopes-and-unified-db-brief.md`)
   — scopes as tags, one DB behind both apps, a corpus TOC for the model, retiring the automatic search · "rough
   draft, unscheduled, but needed this year" · ~L+, and the brief warns it expands to fill its schedule
+  - **A drydock build** (2026-10-01): several weeks with Raven not operable, so **a release is cut just before
+    it starts**. The multimodal embedder goes in during it; the unified DB unlocks the Librarian↔Visualizer
+    integration
   - **A design session first**, six-item agenda · ~S–M · not held
   - §4a: publish a scope TOC, measure whether the model searches on its own, then drop the automatic search
   - *Where the database lives*: behind Raven-server or not — reads together with server autostart
@@ -134,7 +138,9 @@ schedulable steps. Statuses are the briefs' own.
 - **How Raven's parts talk to each other** — the server as switchboard; clients pull; nobody listens on a port ·
   five open questions, two of which brief 13 and brief 04 §6 now bear on without saying so
 - **The avatar as the interface** — an avatar-only mode for someone across the room · ~L · needs the
-  constellation sketch and availability item 1
+  constellation sketch and availability item 1. **The lab installation waits on it** (2026-10-01): an
+  avatar-only toggle the operator can leave and re-enter with a key, and file objects hovering round the
+  avatar as it reads
 - **What kind of product Raven is** — a stance, no mechanism
 
 ### What gates what
@@ -144,7 +150,7 @@ Stated in the briefs unless marked *(inferred)*.
 - **per-document pass** → corpus filter → AOKK numbers; → the interrogation sketch's map stage; → importer
   `_summarize` and `raven-pdf2bib` ports; → title-per-document (which also waits on 13)
 - **the Nomic fork decision** (v1.5 image-text vs v2-moe multilingual) → brief 11 item 1 = brief 06 step 4 (the
-  same migration, claimed by both) → brief 12's vision-embedding producer → VLM reranking, images in the docs DB
+  same migration, claimed by both; built during 13, 2026-10-01) → brief 12's vision-embedding producer → VLM reranking, images in the docs DB
   and the Visualizer, semantic grouping of the sidecar cleanup, re-measuring the `embeddings` VRAM *(the last
   four from `TD` items gated "post-Nomic")*
 - **13** → keyword pools' dialog; → the corpus TOC and retiring the automatic search; → cross-corpus GC in 12; →
@@ -152,6 +158,10 @@ Stated in the briefs unless marked *(inferred)*.
 - **12** does not depend on 13; 12 → images in the DB
 - **11 item 5** → the importer's clustering tests
 - **availability item 2** → server autostart
+- **the lab installation** (after 0.2.10, feature-gated) ← the avatar-only toggle and file-object polish (the
+  avatar sketch), **04, the MCP client**, and the `cu130` move; the `cu130` move pulls in the CUDA half of
+  easy install and, as a reader's inference, `pdm.lock`. Before or after 13: open
+- **13** ← a release cut just before it, Raven being inoperable for the weeks it takes
 - **06 steps 1–3** → 04 → 06's agentic path. 04 and 06 name each other as gates; 06's first three steps need no
   Raven code, which breaks the cycle *(the resolution is a reader's)*
 - **05** (assembler interface) → 06 (assembler ranking)
@@ -167,6 +177,10 @@ Four decisions each unblock several of the above. Where they stand (maintainer, 
 - **Brief 13's design session: wanted**, corpus scopes being a feature needed this year. Not yet held.
 - **Brief 12's O1–O6: to be discussed in the near future.**
 - **The ooba upgrade: not worth doing at the moment**; it and the four items behind it can safely wait.
+
+Added 2026-10-01 (maintainer): **the lab installation comes after 0.2.10**, gated on features — the avatar-only
+mode, the sci-fi file objects, the MCP client — and is the first install from zero, which dates the `cu130`
+move. **Brief 13 is a drydock build** with a release cut just before it. Which of the two comes first is open.
 
 
 ## 2. Open items by theme
@@ -464,8 +478,8 @@ Briefs in part 1 (server availability, autostart).
 - **The main keyboard offers no zoom** · S once keys are chosen · `TD "The main keyboard offers no zoom…"`
 - **Layout-aware positional hotkeys** · ? · `TD "Keyboard-layout-aware positional hotkeys…"`
 - **Every hotkey in a tooltip and on its card** — 3 of 7 apps signed off · M per app · `TD "Fleet audit: every
-  hotkey discoverable…"` (+`T:91`); and **the remaining six help cards** · S per piece · `TD "Librarian's help
-  card: the room exists now…"`
+  hotkey discoverable…"` (+`T:91`). The help cards themselves were all swept on 2026-09-14; that item is
+  removed (2026-10-01)
 - **Filter/search in a help card's hotkey list** · ~M · `T:460`
 - **Colourblind-safe ok/error flashes** · 0.2.10 · `TD "Colorblind-safe status signaling…"`
 - **Flash the search field when a hotkey focuses it** · ~S · `T:407` — the keyboard marks may have made it moot
@@ -515,12 +529,17 @@ Briefs in part 1 (server availability, autostart).
 - **A web status panel for long jobs** · post-0.2.10 · `TD "Web status panel…"`
 - **Check for a local model before the HF Hub** · ~M · `T:1050`; **document the HF Hub env vars** [High] · ~S ·
   `T:398`; **model update UX** · `T:1057`
+- **Move the torch trio to `cu130`, and with it to torch 2.14** — `cu128` stops at torch 2.11; the `[cuda]` extra
+  goes to CUDA 13 too · M · before the lab installation · `TD "Move the torch trio to CUDA 13…"` (added 2026-10-01)
+- **huggingface-hub 2.x** · S · waits on transformers, sentence-transformers and tokenizers lifting their caps ·
+  `TD "`huggingface-hub` 2.x…"` (added 2026-10-01)
 - **Replace torchaudio's resample, drop torchaudio** — low priority: torchaudio no longer pins torch (measured
   2026-10-01) · S · `TD "Replace
   `torchaudio.functional.resample`…"`
-- **Easy install with a chosen CUDA, and a CPU default** · re-scope around torchaudio first · `TD "Easy install
-  with a chosen CUDA version…"`
-- **`pdm.lock` is gitignored, against fleet policy** · M · `next` · `TD "`pdm.lock` is gitignored…"`
+- **Easy install with a chosen CUDA, and a CPU default** · re-scope against the `cu130` move, which may settle
+  the CUDA half · the lab installation · `TD "Easy install with a chosen CUDA version…"`
+- **`pdm.lock` is gitignored, against fleet policy** · M · `next`; the lab installation is the first install
+  where it would pay · `TD "`pdm.lock` is gitignored…"`
 - **Audit the wheel's contents** · S · `TD "Audit what the built wheel actually contains"`
 - **The distribution rename to `raven-lab`**, and whether there is a PyPI upload at all · S · tentative ·
   `TD "Rename the distribution to `raven-lab`…"` (+`T:45`)
@@ -671,9 +690,10 @@ top…"` (a settled-by-looking note).
   runs in English.
 
 *Headings or premises out of date* — `TD "Librarian doesn't check that the LLM backend has a model loaded"`
-(the titular case shipped); `TD "Librarian's help card: the room exists now…"` (Librarian's part done);
-`TD "Datastore scaling…"` (assumes save-at-exit); `TD "Documented command lines are unchecked"` (its slow-tool
-note is fixed); `TD "Only the configured character wears…"` (the code moved to `chattextures`).
+(the titular case shipped); `TD "Librarian's help card: the room exists now…"` (**removed 2026-10-01**: every
+card was swept on 2026-09-14, so the item was done rather than stale); `TD "Datastore scaling…"` (assumes
+save-at-exit; **fixed 2026-10-01**); `TD "Documented command lines are unchecked"` (its slow-tool note is
+fixed; **updated 2026-10-01**); `TD "Only the configured character wears…"` (the code moved to `chattextures`).
 
 *Briefs out of date* — brief 12 says v0.2.9 in its body and v0.2.10 in its status, and does not record that its
 chat-store renames shipped; `librarian-extension/README.md` still says "09 is the one in progress" and lists

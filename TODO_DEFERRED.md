@@ -26,9 +26,9 @@ and why hygiene items rank higher than they used to.
 
 ## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
 
-*Cluster: dependencies · Cost: M · Gate: before the lab installation, autumn 2026 · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio"*
+*Cluster: dependencies · Cost: M · Gate: before the lab installation, after 0.2.10 · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio", `briefs/design/lab-assistant-hci-sketch.md`*
 
-**The trigger is the lab installation planned for later this autumn** (maintainer, 2026-10-01). That machine
+**The trigger is the lab installation planned for later this autumn**, after 0.2.10 and gated on features rather than a date (maintainer, 2026-10-01; what it needs is in `briefs/design/lab-assistant-hci-sketch.md`). That machine
 is built from zero and will have CUDA 13 at least, so doing this first means it installs on the stack it
 will stay on, instead of starting on `cu128` and being migrated afterwards.
 
@@ -231,7 +231,8 @@ questions; brief 13's *Where the database lives* and brief 04's §6 bear on two 
 *Cluster: constellation · Cost: ~L · Gate: a design session; the constellation sketch, for upload · Filed: 2026-09-30 · See also: `briefs/design/lab-assistant-hci-sketch.md`*
 
 An avatar-only mode for someone across the room: ambient notifications, QR codes for upload, speakable
-errors. A discussion sketch with five open questions.
+errors. A discussion sketch with five open questions. The lab installation (after 0.2.10) waits on its
+avatar-only toggle and file-object polish; the sketch's status line lists what else it needs.
 
 ## Report `bibtexparser`'s writer dropping split names, with a patch
 
@@ -334,8 +335,8 @@ the script exists would have passed it. Worth building (maintainer, 2026-09-21).
 is present. That is looser than consulting the parser and much safer, and needs no import whitelist.
 
 Cost, measured 2026-09-23: all 26 console scripts take 36.5 s in total, median 0.40 s — nearly all of it
-three CLI tools that parse argv below their heavy imports (the root `CLAUDE.md` names them). Affordable as it
-is, and cheaper once those three are fixed.
+three CLI tools that parsed argv below their heavy imports. Those three were fixed on 2026-09-30, so the total
+should now be a fraction of that; not re-measured.
 
 ## The dev-facing file dialog manual
 
@@ -3205,100 +3206,6 @@ PEP 639 deprecates those, and this project is already clean on that axis.
   corrected — it described `raven/common/` as BSD-licensed. What remains for this item is the `pyproject.toml`
   expression, which needs `LGPL-3.0-or-later`.
 
-## Librarian's help card: the room exists now, and is not all spent
-
-*Cluster: discoverability · Cost: S per remaining piece · Gate: none · Filed: 2026-08-05 · Updated: 2026-09-09 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
-
-**Librarian's card is finished and signed off (2026-09-09), the Visualizer's followed (2026-09-10), and the
-remaining work is the other six.**
-The standard it now sets is written down rather than left to be inferred — `raven-style-guide.md`, *User-facing
-text*: grammatical labels with their articles, sentence case, `"Same, but …"` for a row that varies its
-neighbour, and **nothing in a hotkey table may wrap**, that last one because the two column-groups share
-table rows, so one wrapped cell pushes both down and destroys the blank-row grouping. Measured on this
-font, a cell holds about 35 characters; the only real test is looking.
-
-What a sweep of another card should check for, all of which this one had:
-
-- **Rows that lean on prose the reader has not reached.** The table sits above the explanation, so
-  *"Do what clicking the box does"* explained nothing.
-- **Claims that were true when written.** Ctrl+T/S/R and the sibling steps said *"the last message"* and
-  act on the **marked** one; the device name in the mic row was interpolated at import and froze at
-  startup while the F9 panel could change it. Anything a card states about live state is a staleness bug
-  unless something rebuilds the table, and nothing does.
-- **Constraints that make a key silently do nothing.** Ctrl+U is dispatched to the marked message and
-  returns early unless it is the last, so pressing it elsewhere is a no-op with no feedback. Disabling the
-  *button* does not cover the hotkey — `fire_event_if_exists` calls the stashed callable directly.
-- **Duplicated action text**, which hides which rows are variants. `visualizer`'s *"Copy report to
-  clipboard"* is fixed (2026-09-10, along with five more the note had not spotted); still outstanding in
-  `xdot_viewer`'s *"Pan view"* and `cherrypick`'s *"...all selected"*.
-
-**The shape decision is built and shipped (2026-09-09).** `HelpWindow` takes `pages`, and Librarian's card
-is two: the keys on one, everything the card says *about* Librarian on the other. What is left is content
-— filling the room rather than finding it. The pieces below are separable and each is small.
-
-**What is still missing is printed on every run** by `scripts/check_option_lists.py`, as the keys each
-README documents that the app's `hotkey_info` does not offer. Librarian's card is complete as of
-2026-09-09 — the graph's nineteen keys went onto a page of their own, and the seven mode switches onto
-the keyboard page — and the Visualizer's `Ctrl+S` for saving a word cloud went onto its card the next day.
-What the script reports now is one entry, Librarian's `Ctrl+Enter`, which is on the card under a computed
-name it cannot read (`_send_key_label`).
-
-**The visual pass and the attachments content are done (2026-09-09)**, in the session that asked for them.
-What landed, so a later reader does not re-do it: paragraph and section spacing; `HelpWindow.column_width`,
-which takes the inter-column gap *and* a gutter off before halving, so a line filling its wrap no longer
-runs into the next column or up to the card's edge; `HelpWindow.prose_columns`, which pins each column with
-an explicitly sized spacer so the divide holds all the way down a page; newspaper column order, a section
-belonging wholly to one column because the eye finishes a column before it crosses; the *Message
-attachments* section; and a bullet list for the tool inventory, which had been a wall of text.
-
-- **The suspected cause was right**: a group takes its widest *rendered* line rather than the `wrap` its
-  text was given. Confirmed by the divide sitting at three different x positions on one page before the
-  pin and at one after it.
-- **The `visualizer/app.py` comment that contradicted its own code is settled.** The comment was the
-  correct half — narrow is the safe direction — and the code had never done it. The arithmetic moved onto
-  `column_width`, which both cards now use.
-- **`color=` on `dpg_markdown.add_text` replaced the `c_txt` spans**, which were a workaround from before
-  the renderer had it. A span opened on a paragraph's first line makes the whole string one CommonMark
-  paragraph, so a bullet list inside one renders as literal text — which is what forced the change.
-
-**The Visualizer's is done too** (2026-09-10), and it is the case where content forced the issue rather
-than taste: the card was full to within twenty pixels, so the four keys it had never listed could not go on
-until the prose moved to a page of its own. Two pages now — *Keyboard*, and *Concepts* for the terminology,
-the search rules, what the map is and what the two auxiliary windows do. `check_option_lists.py` reports
-nothing for this app any more.
-
-Three things learned there that the remaining seven should expect:
-
-- **A card that is full is the signal to page it**, and it is worth measuring rather than eyeballing: the
-  prose was 230 px of a 1000 px card, which is eight rows of table.
-- **The variant rows were spelling their neighbour out in full** in six places, not the one the sweep
-  below records. Look for a repeated *Action* string, which is what hides the relationship the indentation
-  is asserting.
-- **A sentence compressed to fit stays compressed after the room arrives.** This card said clusters were
-  "auto-detected by a linguistic analysis" — defensible, semantic embedding being one, and about all that
-  fitted on a single page beside everything else. With a page to spend it says what actually happens, which
-  is what a reader wanting to know can use. So the pass that finds room is also the moment to re-read what
-  was written without it; nothing else will, a card being checked by nothing.
-
-**The other seven cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
-prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
-card that declares no pages behaves exactly as it did.
-
-**Two-column prose is the part they all want, pages or no** (Juha, 2026-09-09). A card is wide enough that
-a single column gives lines too long to track back to the start of, and Librarian's sections read much
-better split. Only one section in the constellation had it before this work — the Visualizer's
-*Terminology* — so the rest of that card's prose and `xdot_viewer`'s eleven calls are the sweep. It is
-independent of paging, and it is now one `HelpWindow.prose_columns` call per page rather than a hand-built
-pair of groups per section.
-
-One thing learned while fitting the text, worth knowing before touching it again:
-
-- **Long paths and identifiers should go in the highlight colour, not italics** (`self.c_hig`, as the
-  section already does for **Documents** and the retrieval marker). They read better against the body text.
-
-**Do the remaining pieces in one pass with the hotkey-discoverability audit**, which rewrites the same card
-from the other direction.
-
 ## Modernize the Librarian system prompt / character card
 
 *Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
@@ -3808,7 +3715,7 @@ Discovered during postprocessor chain ordering redesign (2026-04-09).
 
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
-*Cluster: dependencies · Cost: ? · Gate: 0.2.10, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
+*Cluster: dependencies · Cost: ? · Gate: the lab installation; re-scope against the `cu130` move first · Filed: 2026-04-29 · See also: "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14", "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
@@ -3833,6 +3740,11 @@ torchaudio goes (see "Replace `torchaudio.functional.resample`, and drop torchau
 pin torchaudio into the CUDA dep set rather than letting it float — becomes moot, and what survives is the
 genuinely separate half: **the CPU-default path**, where a bare `pdm install` must still yield a working
 `import torch`, with `-G cuda12` / `-G cuda13` overriding the base pins. That is the real content.
+
+**Since 2026-10-01 torchaudio is no longer the obstacle** (it is forward-compatible with later torch), and
+the `cu130` move rewrites the CUDA dep set anyway. Re-scope against that item: it may settle the
+CUDA-selection half outright, leaving the CPU default. Wanted before the lab installation, which installs a
+machine from zero (maintainer, 2026-10-01).
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
 
@@ -4740,7 +4652,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: discoverability · Cost: M per app · Gate: post-0.2.10 · Filed: 2026-06-07 · Updated: 2026-09-10 · See also: "Librarian's help card: the room exists now, and is not all spent"*
+*Cluster: discoverability · Cost: M per app · Gate: post-0.2.10 · Filed: 2026-06-07 · Updated: 2026-09-10*
 
 **Narrower than when filed, in two ways** (2026-09-09):
 
@@ -4914,20 +4826,10 @@ Librarian stores *every* chat — all nodes, all payload revisions, across the w
 
 - **The JSON**: `PersistentForest.save` serializes and rewrites the *entire* file every time it runs. As the
   forest grows to thousands of nodes with revision history, load-at-startup and each save get linearly slower,
-  and a corrupted write risks the whole history at once. (Note that "autosave" today means a single `atexit`
-  write per session, not a periodic one — so the rewrite cost is currently paid once at exit. Adding a real
-  autosave would multiply it by the save frequency, which is why that item and this one are coupled.)
-  - **The other half of "once at exit" is that anything which skips the exit loses the session entire.**
-    Demonstrated by accident on 2026-08-26: a driven test closed the app with `xdotool windowclose`, which
-    destroys the window without telling the client, so no `atexit` ran — and the datastore's last write was
-    from *startup*, taking every message of that session with it. No crash, no core dump, nothing in the log.
-    A real crash mid-session costs exactly the same, and today nothing bounds that loss by anything shorter
-    than the session. That is the case for a cadence, and it is independent of the rewrite cost above.
-    - **It happened again on 2026-09-03**, the same way and in a session where this very entry was open,
-      which is the interesting part: the loss is not from anyone doubting the rule but from `windowclose`
-      *reading* like the polite close the rule asks for, while calling `XDestroyWindow`. `wmctrl -i -c`
-      is the one that asks, and it was verified the same day to run the shutdown to `save: All done`.
-      A cadence would make the whole question cost a turn instead of a session.
+  and a corrupted write risks the whole history at once. Since 2026-09-15 Librarian autosaves every
+  `llm_autosave_interval` seconds (60 by default, `appstate.start_autosave`), skipping the write when nothing
+  changed — so a crash costs at most a minute, and the whole-file rewrite is paid about once a minute while
+  a chat is active rather than once at exit.
 - **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
   holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
   whole directory each time.
@@ -6077,7 +5979,10 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version", "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14"*
+
+The lab installation (after 0.2.10, see the `cu130` item) is the first install from zero where a lock would
+pay: a reason to settle this before it rather than after.
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on

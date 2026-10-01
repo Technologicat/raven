@@ -7,7 +7,16 @@ this brief.
 
 **Status, 2026-09-30:** unscheduled, but needed this year (maintainer). **Scope it before starting**: this
 is the kind of item that expands to fill whatever schedule it is given, so the design session should fix
-what v1 is and what waits (maintainer's worry, 2026-09-30). **It precedes
+what v1 is and what waits (maintainer's worry, 2026-09-30).
+
+**Status, 2026-10-01 — a drydock build** (maintainer). It replaces the data model wholesale, so it is
+expected to take several weeks during which Raven is not in an operable state. **A release is cut just
+before it starts**, containing whatever is done at that moment. **The multimodal embedder goes in during
+it** (the Nomic migration, v1.5 per brief 11 item 1), which unlocks storing image documents in the DB and
+clustering images in the Visualizer; the unified DB itself unlocks the Librarian↔Visualizer integration.
+Whether it comes before or after the lab installation (`briefs/design/lab-assistant-hci-sketch.md`) is open.
+
+**It precedes
 `visualizer-keyword-pools-brief.md`'s corpus-level display** (2026-09-10): §2 keeps the corpus frequency
 stats that window reads.
 

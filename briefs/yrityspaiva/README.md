@@ -288,6 +288,11 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      in-app drag-and-drop cue is a help-card line, the overlay being blocked by GLFW; the icon set to be
      resolved soon, over its licence). **The rest is proposed, row by row, in `triage-pass5-worksheet.md`**
      beside this README, written while the triage was fresh. **Left:** whether the [High] tiers in `TODO.md` get re-read in the prioritization session or as a quick
-     keep-or-demote list first; the sixty `0.2.10` gates, a release-scope question for that session; and,
-     no decision needed, three stale headings or premises ("Librarian's help card…", "Datastore
-     scaling…", "Documented command lines…").
+     keep-or-demote list first; and the sixty `0.2.10` gates, a release-scope question for that session.
+     The worksheet's no-decision section was applied 2026-10-01 — the help-card item turned out done
+     rather than stale (every card swept 2026-09-14) and was removed.
+   - **Decided 2026-10-01, for the prioritization session to start from** (maintainer): the lab
+     installation comes after 0.2.10 and is feature-gated — the avatar-only toggle, the sci-fi file
+     objects, the MCP client, and the `cu130` move it dates (`briefs/design/lab-assistant-hci-sketch.md`).
+     Brief 13 is a drydock build of several weeks, with a release cut just before it and the multimodal
+     embedder built during it. Which of the two comes first is open.
