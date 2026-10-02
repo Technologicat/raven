@@ -100,6 +100,7 @@
 
 #### Raven-librarian
 
+- **Subtitles follow the window's size.** In v0.2.9 they kept the width of the window the app started in, so after going fullscreen they stayed narrow, even for a reply spoken again. A resize now applies from the next sentence.
 - **The DOCUMENTS indicator lights while the AI searches the document database itself or reads a document from it**, as it does for the automatic search. In v0.2.9 it stayed dark for everything the AI did there on its own.
 - **Setting `llm_char_name` in `overrides.json` now brings the character's face and voice along.**
   - Before, only the name and the card changed, and the avatar stayed Aria's, speaking in her voice.

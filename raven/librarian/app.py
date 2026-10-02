@@ -1337,6 +1337,8 @@ with timer() as tim:
             return w, h
         def _get_subtitle_bottom_y0(avatar_panel_h: int):
             return (avatar_panel_h - 24) + gui_config.subtitle_y0
+        def _get_subtitle_wrap_width(avatar_panel_w: int) -> int:
+            return (avatar_panel_w - 16) - gui_config.subtitle_x0 - gui_config.subtitle_text_wrap_margin
         def _get_chat_field_base_width() -> int:  # full width; the toolbar (send/mic/VU) sits below the field now, not beside it
             return gui_config.chat_panel_w  # `chat_controls` has `no_scrollbar=True`, so full width can't trip a horizontal scrollbar
         def _get_chat_field_width(main_window_w: int) -> int:
@@ -1800,7 +1802,7 @@ with timer() as tim:
                                  pos=(gui_config.subtitle_x0,
                                       _get_subtitle_bottom_y0(avatar_panel_h)),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
                                  color=gui_config.subtitle_color,
-                                 wrap=(avatar_panel_w - 16) - gui_config.subtitle_x0 - gui_config.subtitle_text_wrap_margin,
+                                 wrap=_get_subtitle_wrap_width(avatar_panel_w),
                                  tag="avatar_subtitle_text")
                     dpg.bind_item_font("avatar_subtitle_text", subtitle_font)  # tag
 
@@ -2760,6 +2762,8 @@ def _resize_panels() -> None:
     _center_ai_warning(avatar_panel_w)
     _place_server_status_pill(avatar_panel_w)  # the panel under the mode toggles is as wide as the avatar's
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
+    # Re-wraps the card on screen at once; the cards are cut against this width as each sentence starts speaking.
+    dpg.configure_item("avatar_subtitle_text", wrap=_get_subtitle_wrap_width(avatar_panel_w))  # tag
     avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
