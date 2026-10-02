@@ -417,3 +417,8 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **Whether `GlyphAtlasRefresh` should cover every font an app loads**, not only the four Markdown faces.
        A few lines; it would not have repaired 2026-10-02's specimen, the batch having failed to heal font 71
        when drawn by hand, so the question is whether it is worth having anyway (maintainer, 2026-10-02).
+     - **A live check of DOCUMENTS' stages with the search slowed down artificially**, since the document
+       search is fast enough that the stages flip by unread (maintainer, 2026-10-02).
+     - **A second look at the automatic search**, alongside the `.bib` mitigations: Qwen called it sloppy
+       (maintainer, 2026-10-02). The reply is chat node `gensym#forest-node:4d3eb2c1-c4b4-4b1a-bccf-be4178d67fb4`,
+       2026-10-02 14:54, in the maintainer's datastore.
