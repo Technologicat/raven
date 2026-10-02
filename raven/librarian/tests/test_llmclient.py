@@ -164,12 +164,19 @@ class TestSearchDocumentsResult:
     MATCHES = [{"document_id": f"doc{k}.txt", "text": f"  The matched span number {k}.  ", "score": 0.9, "offset": 100 * k}
                for k in range(3)]
 
-    def _search(self, matches):
+    def _search(self, matches, **context):
         class _Retriever:
-            def query(self, query, k, max_span_length, return_extra_info):
+            def query(self, query, k, max_span_length, return_extra_info, on_progress=None):
+                if on_progress is not None:
+                    on_progress("Keyword search…")
                 return matches
-        with dyn.let(tool_context=env(retriever=_Retriever())):
+        with dyn.let(tool_context=env(retriever=_Retriever(), **context)):
             return llmtools.search_documents("photocatalysis")
+
+    def test_the_searchs_steps_reach_the_calls_reporter(self):
+        progress = []
+        self._search(self.MATCHES, report_progress=progress.append)
+        assert progress == ["Keyword search…"]
 
     def test_a_heading_and_one_part_per_match(self):
         parts, metadata = self._search(self.MATCHES)
@@ -212,6 +219,15 @@ class TestFetchDocumentRefusal:
             output, metadata = llmtools.fetch_document("ECCOMAS2024-deadbeef")
         assert "'ECCOMAS2024-deadbeef'" in output
         assert metadata == {"grounding": False}
+
+
+class TestFetchDocumentProgress:
+    def test_it_says_it_is_reading(self):
+        retriever = env(datastore_lock=threading.RLock(), documents={"real.bib": {"text": "x", "path": "/r"}})
+        progress = []
+        with dyn.let(tool_context=env(retriever=retriever, report_progress=progress.append)):
+            llmtools.fetch_document("ECCOMAS2024-deadbeef")
+        assert progress == ["Reading document…"]
 
 
 class TestWebfetchResultHeader:

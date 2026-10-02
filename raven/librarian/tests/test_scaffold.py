@@ -146,7 +146,7 @@ def populated_forest(llm_settings):
 
 
 # All callbacks that `ai_turn` accepts, in order.
-_AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_done",
+_AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_progress", "on_docs_done",
                       "on_prompt_ready",
                       "on_llm_start", "on_llm_progress", "on_llm_done",
                       "on_tools_start",
@@ -495,6 +495,30 @@ class TestAITurnSimple:
                     on_docs_start=lambda: docs_calls.append("start"),
                     on_docs_done=lambda matches: docs_calls.append(("done", matches)))
         assert docs_calls == []
+
+    def test_the_searchs_steps_arrive_between_start_and_done(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Hi!"))
+
+        class ReportingRetriever(FakeRetriever):
+            def query(self, q, k=10, return_extra_info=False, on_progress=None, **kwargs):
+                on_progress("Keyword search…")
+                on_progress("Semantic search…")
+                return super().query(q, k=k, return_extra_info=return_extra_info, **kwargs)
+
+        docs_calls = []
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=ReportingRetriever(),
+                    docs_query="Hello",
+                    on_docs_start=lambda: docs_calls.append("start"),
+                    on_docs_progress=lambda text: docs_calls.append(text),
+                    on_docs_done=lambda matches: docs_calls.append("done"))
+        assert docs_calls == ["start", "Keyword search…", "Semantic search…", "done"]
 
 
 # ---------------------------------------------------------------------------

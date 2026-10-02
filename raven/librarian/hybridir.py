@@ -560,13 +560,11 @@ class HybridIR:
         self._indexing_lock = threading.Lock()
         self._indexing_count = 0
 
-        # Human-readable progress messages for the GUI to mirror. Two independent channels — `commit()` and
-        # `query()` can run concurrently (each acquires `datastore_lock` only briefly), so they need
-        # separate strings to drive separate indicators in the GUI. String reads and writes are atomic
-        # under the GIL; no lock needed. The GUI side polls each channel and re-sets the corresponding
-        # DPG text widget on change.
+        # Human-readable progress message for the GUI to mirror while `commit()` runs. Polled rather than
+        # reported through a callback, since a commit runs in the background with no caller waiting on it.
+        # (`query()` reports its own progress to its caller instead; see there.) String reads and writes are
+        # atomic under the GIL; no lock needed.
         self._indexing_progress_text: str = ""  # set per-iteration in commit; "Saving…" during the tail
-        self._query_progress_text: str = ""     # set per-phase in query (Tokenizing/Embedding/…)
 
         # Indexing lifecycle callbacks. Fired on the 0↔1 transitions of `_indexing_count`, so nested or
         # concurrent commits don't fire `start`/`done` multiple times — only the outermost invocation
@@ -636,17 +634,6 @@ class HybridIR:
         """
         self._on_indexing_start = on_start
         self._on_indexing_done = on_done
-
-    def get_query_progress_text(self) -> str:
-        """Return the current human-readable query progress message, or `""` if no query is running.
-
-        Per-phase during query: `"Tokenizing query…"`, `"Embedding query…"`, `"Keyword search…"`,
-        `"Semantic search…"`, `"Merging results…"`. Outside of query: `""`.
-
-        Intended for GUI clients that poll once per frame and mirror the value into a DPG text widget.
-        The underlying string is set from the worker thread that runs `query()`; GIL-atomic, no lock.
-        """
-        return self._query_progress_text
 
     def _tokenize(self, text: str) -> List[str]:
         """Apply lowercasing, tokenization, lemmatization, stopword removal.
@@ -1191,7 +1178,8 @@ class HybridIR:
               merge: bool = True,
               max_span_length: Optional[int] = None,
               multi_query: bool = False,
-              return_extra_info: bool = False) -> Union[List[Dict], Tuple[List[Dict], envcls]]:
+              return_extra_info: bool = False,
+              on_progress: Optional[Callable[[str], None]] = None) -> Union[List[Dict], Tuple[List[Dict], envcls]]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
         `query`: Search query, of the kind you'd type into Google: space-separated keywords, or a natural-language question.
@@ -1272,6 +1260,10 @@ class HybridIR:
                        round trips: one `bm25s.retrieve` over all token lists, one `encode` over all texts,
                        one Chroma query over all embeddings. Cost is not what is wrong with it.
 
+        `on_progress`: If given, called with a short line as the search reaches each step: `"Tokenizing query…"`,
+                       `"Embedding query…"`, `"Keyword search…"`, `"Semantic search…"`, `"Merging results…"`.
+                       Called on the thread running the query.
+
         `return_extra_info`:
             If `True`: Return `final_results, report`, where `report` is an `env` with the fields
 
@@ -1306,21 +1298,19 @@ class HybridIR:
         """
         plural_s = "es" if k != 1 else ""
         logger.info(f"HybridIR.query: entered. Searching for {k} best match{plural_s} for '{query}'")
-        try:
-            return self._query_body(query=query,
-                                    k=k,
-                                    alpha=alpha,
-                                    keyword_score_threshold=keyword_score_threshold,
-                                    semantic_distance_threshold=semantic_distance_threshold,
-                                    include_documents=include_documents,
-                                    keyword_weight=keyword_weight,
-                                    rrf_k=rrf_k,
-                                    merge=merge,
-                                    max_span_length=max_span_length,
-                                    multi_query=multi_query,
-                                    return_extra_info=return_extra_info)
-        finally:
-            self._query_progress_text = ""
+        return self._query_body(query=query,
+                                k=k,
+                                alpha=alpha,
+                                keyword_score_threshold=keyword_score_threshold,
+                                semantic_distance_threshold=semantic_distance_threshold,
+                                include_documents=include_documents,
+                                keyword_weight=keyword_weight,
+                                rrf_k=rrf_k,
+                                merge=merge,
+                                max_span_length=max_span_length,
+                                multi_query=multi_query,
+                                return_extra_info=return_extra_info,
+                                on_progress=on_progress if on_progress is not None else (lambda text: None))
 
     def _query_body(self,
                     query: str,
@@ -1335,7 +1325,8 @@ class HybridIR:
                     merge: bool,
                     max_span_length: Optional[int],
                     multi_query: bool,
-                    return_extra_info: bool):
+                    return_extra_info: bool,
+                    on_progress: Callable[[str], None]):
         # The whole text is always queried; `split_into_subqueries` adds the sentences worth asking
         # separately, and returns nothing when there are none. Beside the whole rather than instead of it —
         # see that function for why splitting alone trades one failure for its mirror image.
@@ -1346,12 +1337,12 @@ class HybridIR:
             logger.info(f"HybridIR.query: querying with the whole message and {len(query_texts) - 1} subqueries")
 
         # Prepare queries for keyword search (slow — runs the spaCy NLP pipeline; no datastore access).
-        self._query_progress_text = "Tokenizing query…"
+        on_progress("Tokenizing query…")
         query_tokens = [self._tokenize(text) for text in query_texts]
 
         # Prepare queries for vector search (slow — server roundtrip; no datastore access). One call for all
         # of them: the embedder batches, so the subqueries cost no extra round trip, only extra rows.
-        self._query_progress_text = "Embedding query…"
+        on_progress("Embedding query…")
         query_embeddings = self.embedder.encode(query_texts)
 
         # Pin the index references atomically and run both searches under the *same* `datastore_lock`
@@ -1391,14 +1382,14 @@ class HybridIR:
                 keyword_k = len(keyword_retriever.corpus)
 
             # BM25 search
-            self._query_progress_text = "Keyword search…"
+            on_progress("Keyword search…")
             logger.info("HybridIR.query: keyword search")
             # Here we always search all documents; we filter afterward, if needed.
             raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve(query_tokens,  # list of list of tokens (outer list = one element per query; runs them all in one pass)
                                                                                  k=keyword_k)
 
             # Vector search
-            self._query_progress_text = "Semantic search…"
+            on_progress("Semantic search…")
             logger.info("HybridIR.query: semantic search")
             if include_documents is not None:  # search only documents with given IDs
                 chroma_results = vector_collection.query(query_embeddings=list(query_embeddings),
@@ -1500,7 +1491,7 @@ class HybridIR:
         #       have been merged into each result, so chunk-specific fields wouldn't make sense), but only
         #       "document_id", "offset", "text", and "score" (RRF score).
         if merge:
-            self._query_progress_text = "Merging results…"
+            on_progress("Merging results…")
             logger.info(f"HybridIR.query: merging contiguous spans in results (max span length: {max_span_length})")
             merged = merge_contiguous_spans(fused_results, max_span_length=max_span_length)
         else:

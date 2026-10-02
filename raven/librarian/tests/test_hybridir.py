@@ -191,6 +191,19 @@ class TestDocumentStorage:
 # Query result structure
 # ---------------------------------------------------------------------------
 
+class TestQueryProgress:
+    def test_each_step_is_reported_in_order(self, retriever):
+        progress = []
+        retriever.query("ai agents", k=5, on_progress=progress.append)
+        assert progress == ["Tokenizing query…", "Embedding query…", "Keyword search…", "Semantic search…",
+                            "Merging results…"]
+
+    def test_without_merging_there_is_no_merge_step(self, retriever):
+        progress = []
+        retriever.query("ai agents", k=5, merge=False, on_progress=progress.append)
+        assert progress[-1] == "Semantic search…"
+
+
 class TestResultStructure:
     def test_result_is_list_of_dicts(self, retriever):
         results = retriever.query("ai agents", k=5)

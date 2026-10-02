@@ -163,7 +163,8 @@ def _create_incomplete_ai_payload(llm_settings: env) -> dict:
 
 def _search_docs(retriever: "hybridir.HybridIR",
                  query: str,
-                 k: int | None = None) -> list[dict]:
+                 k: int | None = None,
+                 on_progress: Callable[[str], None] | None = None) -> list[dict]:
     """Helper for `ai_turn`. Search the document database (`retriever`) for `query`, returning `k` best matches.
 
     `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
@@ -176,6 +177,9 @@ def _search_docs(retriever: "hybridir.HybridIR",
          any very low-quality semantic matches.
 
          The default `None` means `k=10`.
+
+    `on_progress`: If given, called with a short line as the search reaches each step; see
+                   `raven.librarian.hybridir.HybridIR.query`.
 
     An empty result is an ordinary outcome, reported as an empty list. It used to end the turn before the LLM
     ran, on the reasoning that a model with no documents would confabulate; that guard is now a *badge* on
@@ -190,7 +194,8 @@ def _search_docs(retriever: "hybridir.HybridIR",
     return retriever.query(query,
                            k=k,
                            max_span_length=librarian_config.docs_max_result_length,
-                           return_extra_info=False)
+                           return_extra_info=False,
+                           on_progress=on_progress)
 
 def _grounding_was_declared(content: list[dict],
                             maybe_metadata: dict | None) -> bool:
@@ -899,6 +904,7 @@ def ai_turn(llm_settings: env,
             docs_num_results: int | None,
             markup: str | None,
             on_docs_start: Callable | None,
+            on_docs_progress: Callable | None,
             on_docs_done: Callable | None,
             on_prompt_ready: Callable | None,
             on_llm_start: Callable | None,
@@ -983,6 +989,14 @@ def ai_turn(llm_settings: env,
                      to show that the document database search (RAG) is starting.
 
                      Only called if `docs_query is not None`.
+
+    `on_docs_progress`: 1-argument callable, with argument `text: str`, a short line saying which step the
+                        search has reached, such as `"Embedding query…"`.
+
+                        The return value is ignored.
+
+                        Called while the document database is being searched, between `on_docs_start` and
+                        `on_docs_done`.
 
     `on_docs_done`: 1-argument callable, with argument `matches: list[dict]`. For the exact format,
                     see `raven.librarian.hybridir.HybridIR.query`; this is the return value from that.
@@ -1165,7 +1179,8 @@ def ai_turn(llm_settings: env,
         try:
             docs_matches = _search_docs(retriever=retriever,
                                         query=docs_query,
-                                        k=docs_num_results)
+                                        k=docs_num_results,
+                                        on_progress=lambda text: _notify("on_docs_progress", on_docs_progress, text))
         finally:
             # Ensure `on_docs_done` always fires - including when the search raises mid-flight - so GUI
             # state (e.g. `_docs_reading`) recovers cleanly.
@@ -1469,6 +1484,7 @@ def retry_tool_calls(llm_settings: env,
                      thinking_enabled: bool = True,
                      maybe_abort: netutil.Abort | None = None,
                      on_docs_start: Callable | None = None,
+                     on_docs_progress: Callable | None = None,
                      on_docs_done: Callable | None = None,
                      on_prompt_ready: Callable | None = None,
                      on_llm_start: Callable | None = None,
@@ -1588,6 +1604,7 @@ def retry_tool_calls(llm_settings: env,
                    thinking_enabled=thinking_enabled,
                    maybe_abort=maybe_abort,
                    on_docs_start=on_docs_start,
+                   on_docs_progress=on_docs_progress,
                    on_docs_done=on_docs_done,
                    on_prompt_ready=on_prompt_ready,
                    on_llm_start=on_llm_start,

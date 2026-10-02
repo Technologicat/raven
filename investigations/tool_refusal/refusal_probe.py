@@ -68,7 +68,7 @@ def run_once(llm_settings):
                              head_node_id=head, tools_enabled=True, continue_=False,
                              docs_enabled=True, docs_query=QUESTION, docs_num_results=None,
                              speculate=False, markup=None,
-                             on_docs_start=None, on_docs_done=None, on_prompt_ready=None,
+                             on_docs_start=None, on_docs_progress=None, on_docs_done=None, on_prompt_ready=None,
                              on_llm_start=None, on_llm_progress=None, on_llm_done=None,
                              on_tools_start=None,
                              on_call_lowlevel_start=None, on_call_lowlevel_done=None, on_call_lowlevel_progress=None,

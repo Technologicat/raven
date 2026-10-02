@@ -704,6 +704,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 thinking_enabled=app_state["thinking_enabled"],
                                                 markup="ansi",
                                                 on_docs_start=None,
+                                                on_docs_progress=None,
                                                 on_docs_done=None,
                                                 on_llm_start=on_llm_start,
                                                 on_prompt_ready=None,  # debug/info hook

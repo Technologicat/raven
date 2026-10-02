@@ -519,7 +519,8 @@ def search_documents(query: str) -> tuple[str, dict]:
     matches = retriever.query(query,
                               k=librarian_config.docs_num_results,
                               max_span_length=librarian_config.docs_max_result_length,
-                              return_extra_info=False)
+                              return_extra_info=False,
+                              on_progress=getattr(dyn.tool_context, "report_progress", None))
     plural_s = "es" if len(matches) != 1 else ""
     logger.info(f"search_documents: {len(matches)} match{plural_s} for '{query}'.")
     if not matches:
@@ -607,6 +608,9 @@ def fetch_document(document_id: str,
         logger.info("fetch_document: no retriever in the tool context; document database not in play this turn.")
         return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
 
+    maybe_report_progress = getattr(dyn.tool_context, "report_progress", None)
+    if maybe_report_progress is not None:
+        maybe_report_progress("Reading document…")
     text = document_text(retriever, document_id)
     if text is None:
         logger.info(f"fetch_document: no document with ID '{document_id}'.")
@@ -948,11 +952,9 @@ def perform_tool_calls(settings: env,
                         The return value of the event is ignored.
 
                         Called while a tool runs, with a short line saying which step it has reached, such
-                        as `"Loading the page…"` — for the tools that report one, currently the web tools.
-                        An entrypoint reports through `dyn.tool_context.report_progress`, which is bound
-                        per call. The document search reports its stages through the retriever's own
-                        progress text instead, since the automatic search, which is not a tool call, shares
-                        it.
+                        as `"Loading the page…"` — for the tools that report one: the web tools, and the
+                        document tools that take long enough to have steps. An entrypoint reports through
+                        `dyn.tool_context.report_progress`, which is bound per call.
 
     Each returned `env` has the following attributes:
 

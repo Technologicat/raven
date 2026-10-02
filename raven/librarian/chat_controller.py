@@ -3829,8 +3829,8 @@ class DPGChatController:
         `docs_access_indicator_widget`: DPG tag or ID of the widget to show while the database is being
                                         read: searched, automatically or by the LLM, or a document fetched.
 
-        `docs_access_progress_text_widget`: DPG tag or ID of a text widget inside that indicator;
-                                            mirrors `retriever.get_query_progress_text()`.
+        `docs_access_progress_text_widget`: DPG tag or ID of a text widget inside that indicator; shows the
+                                            step the search or the document tool call reports.
 
         `is_any_modal_window_visible`: Zero-argument predicate, or `None` to skip the check. Passed to the
                                        chat view, whose scroll-end flasher abandons its fade if a modal
@@ -3901,11 +3901,10 @@ class DPGChatController:
 
         # Indicator wiring. Show/hide events are pushed via callbacks (symmetric across all four
         # indicators: on_docs_start/done from the chat scaffold drive DOCUMENTS / SYSTEM / INTERNET; the new
-        # on_indexing_start/done on the retriever drive INDEXING). Progress text remains polled —
-        # it's a continuously-updated state, not a discrete event, and polling models that shape
-        # naturally with no per-update callback overhead.
+        # on_indexing_start/done on the retriever drive INDEXING). So are the progress texts of DOCUMENTS
+        # and INTERNET, which a turn's callbacks report. INDEXING's is polled: a commit runs in the
+        # background, outside any turn, with no caller to report to.
         self._docs_indexing_progress_last = ""
-        self._docs_access_progress_last = ""
         if self.retriever is not None:
             self.retriever.set_indexing_callbacks(on_start=self._on_indexing_start,
                                                   on_done=self._on_indexing_done)
@@ -4120,15 +4119,14 @@ class DPGChatController:
         if self.gui_updates_safe:
             self.indicator_hold.hide(self.docs_indexing_indicator_widget)
 
-    def update_docs_indicator_progress_text(self) -> None:
-        """Poll the retriever's two progress-text channels; mirror changes to the DPG widgets.
+    def update_indexing_progress_text(self) -> None:
+        """Poll the retriever's indexing progress text; mirror a change to INDEXING's text widget.
 
         Intended to be called once per frame from the app's `update_animations` tick. Cheap when nothing
-        is changing (two string comparisons), only does GUI work on change.
+        is changing (one string comparison), only does GUI work on change.
 
-        Indicator visibility is push-driven via callbacks — `on_docs_start`/`on_docs_done` from the chat
-        scaffold for DOCUMENTS, `on_indexing_start`/`on_indexing_done` from the retriever for INDEXING. Only
-        the progress texts (continuously-updated state, not discrete events) remain polled.
+        Indicator visibility is push-driven via callbacks — `on_indexing_start`/`on_indexing_done` from the
+        retriever. The text is polled, a commit running in the background with no caller to report to.
         """
         if self.retriever is None:
             return
@@ -4140,17 +4138,15 @@ class DPGChatController:
             dpg.set_value(self.docs_indexing_progress_text_widget, indexing_progress)
             self._docs_indexing_progress_last = indexing_progress
 
-        query_progress = self.retriever.get_query_progress_text()
-        if query_progress != self._docs_access_progress_last:
-            # A query that has just ended says so, for as long as DOCUMENTS' minimum show time holds it up. The
-            # retriever's own text is empty outside a query, and a row already hidden shows nothing either way.
-            dpg.set_value(self.docs_access_progress_text_widget, query_progress or "Done")
-            self._docs_access_progress_last = query_progress
-
     def _show_docs_access_indicator(self) -> None:
         """Show DOCUMENTS, with its progress text cleared, so the previous query's "Done" does not flash first."""
         dpg.set_value(self.docs_access_progress_text_widget, "")
         self.indicator_hold.show(self.docs_access_indicator_widget)
+
+    def _hide_docs_access_indicator(self) -> None:
+        """Hide DOCUMENTS, saying "Done" for as long as its minimum show time holds it up."""
+        dpg.set_value(self.docs_access_progress_text_widget, "Done")
+        self.indicator_hold.hide(self.docs_access_indicator_widget)
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
@@ -4878,9 +4874,13 @@ class DPGChatController:
                             self.indicator_glow_animation.reset()  # crisp phase on appear
                         self._show_docs_access_indicator()
 
+                def on_docs_progress(text: str) -> None:
+                    if self.gui_updates_safe:
+                        dpg.set_value(self.docs_access_progress_text_widget, text)
+
                 def on_docs_done(matches: list[dict]) -> None:
                     if self.gui_updates_safe:
-                        self.indicator_hold.hide(self.docs_access_indicator_widget)
+                        self._hide_docs_access_indicator()
                         stop_turn_data_eyes()
 
                 def on_llm_start(node_id: str) -> None:
@@ -5204,8 +5204,11 @@ class DPGChatController:
                             self._show_docs_access_indicator()
 
                 def on_call_lowlevel_progress(tool_call_id: str, function_name: str, text: str) -> None:
-                    if self.gui_updates_safe and function_name in web_access_tool_names:
-                        dpg.set_value(self.web_progress_text_widget, text)
+                    if self.gui_updates_safe:
+                        if function_name in web_access_tool_names:
+                            dpg.set_value(self.web_progress_text_widget, text)
+                        elif function_name in document_access_tool_names:
+                            dpg.set_value(self.docs_access_progress_text_widget, text)
 
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
@@ -5214,7 +5217,7 @@ class DPGChatController:
                             dpg.set_value(self.web_progress_text_widget, "Done")
                             self.indicator_hold.hide(self.web_indicator_widget)
                         elif function_name in document_access_tool_names:
-                            self.indicator_hold.hide(self.docs_access_indicator_widget)
+                            self._hide_docs_access_indicator()
 
                 def on_tool_done(node_id: str) -> None:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
@@ -5246,6 +5249,7 @@ class DPGChatController:
                 # the context manager for the idle-off override. The same callback bundle serves both: the
                 # override re-runs one denied tool call on a new branch, then continues via `ai_turn`.
                 common_callbacks = dict(on_docs_start=on_docs_start,
+                                        on_docs_progress=on_docs_progress,
                                         on_docs_done=on_docs_done,
                                         on_llm_start=on_llm_start,
                                         on_prompt_ready=on_prompt_ready,  # debug/info hook
