@@ -394,3 +394,23 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
    - **Still to do for 0.2.10**, needing the GUI or the maintainer: the backdrop onto `fit_cover`,
      Cherrypick's crown-in-compare, the thumbnail grid's textures, the `reasoning_effort` re-test and the
      tool-call budget probe.
+   - **2026-10-02.** Each item its own commit:
+     - **Stage reporting for the web tools, done.** `stream_job` sends newline-delimited records, progress
+       then the result; the client's read timeout became a deadline on the whole job, since progress lines
+       reset it. Terse panel wording for the indicator text (maintainer).
+     - **DOCUMENTS lights for every document tool**, `fetch_document` included — an unintentional omission,
+       so a bug (maintainer). The indicator's names became `docs_access_*`.
+     - **DOCUMENTS' progress text is pushed rather than polled**, by the same route as INTERNET's; only
+       INDEXING is still polled, a commit having no caller to report to.
+     - **Subtitles follow the window's size**, cut as each sentence starts speaking. Re-cutting the rest of a
+       sentence on a mid-sentence resize was judged not worth the complexity; a TODO marks it (maintainer).
+     - **A glyph-drop specimen in the subtitle font**, outside the Markdown faces, which the batch of new
+       glyphs did not heal. Recorded in `TODO_DEFERRED.md` under "The Markdown renderer drops text".
+   - **Moved to Monday 2026-10-05** (maintainer, 2026-10-02: there is still time before the event to keep to
+     the original plan):
+     - The dotted-name reference checker, the S half (fully qualified names), then costing the short forms.
+     - The prefill comparison: Qwen 3.6 35B-A3B, 3.6 27B and 3.8 27B on the same prompts, *Documents* off;
+       whether prefill can be tuned in LM Studio; whether `usage` reports a prompt token count worth saving
+       per node, beside which toggles were on.
+     - **Qwen drops the `.bib` extension from a document ID**, finds the fetch fails, and retries with it.
+       Mitigations to think about (maintainer, 2026-10-02).

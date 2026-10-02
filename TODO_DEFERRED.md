@@ -3953,6 +3953,25 @@ in the regular face only — bold text in the same message kept both letters.
   from understanding the mechanism.
 - Built at the time: the four body faces at size 20 only (ids 26–29); `H1`–`H6` not yet built.
 
+**2026-10-02: the first sighting outside the Markdown faces, and the documented repair did not repair it.**
+Librarian, DPG 2.3.1, `--repl`. The avatar's subtitle font (font id 71, size 48, loaded through
+`guiutils.load_extra_font` — not one of `dpg_markdown`'s faces) drew blanks with their advance widths kept.
+
+- **What was blank**, read off a probe window drawing the alphabet in font 71: `A C E O`, `g q r`, `0 2 4`
+  and the parentheses. A dozen glyphs at once, which is the large end of the scale.
+- **`GlyphAtlasRefresh` never touched this font**: it draws its batch in the four Markdown faces only
+  (`_faces()`, ids 26–29 in this run). So the startup repair could not have covered it either way.
+- **A batch of never-seen glyphs did not heal it.** `_ATLAS_REFRESH_GLYPHS` (440 characters, through Latin
+  Extended-A) drawn in font 71 rendered — the new glyphs, Latin-1 and Extended-A included, drew correctly —
+  and the same dozen glyphs stayed blank inside the batch itself and in the probe. That is the opposite of
+  2026-09-24's controlled heal, where such a batch repaired a blank `O` in face 26 within a second. So "a grown
+  atlas is uploaded whole, and that heals it" is not the whole story: either the heal is not reliable, or
+  this damage is a different kind — pixels never rasterized, say, rather than an upload missed. Unresolved.
+- **The regular Markdown face was intact in the same instance** (face 26, size 20, the same alphabet): the
+  damage was confined to one font.
+- Probes in the session log only; the shape is the one above, `add_text` items in a DPG window bound to the
+  font id, driven through `--repl`, screenshotted with `import -window` (no focus needed).
+
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
 `--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can
 be interrogated instead of killed, which is what this bug most needed and never had — it is not
