@@ -414,3 +414,6 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        per node, beside which toggles were on.
      - **Qwen drops the `.bib` extension from a document ID**, finds the fetch fails, and retries with it.
        Mitigations to think about (maintainer, 2026-10-02).
+     - **Whether `GlyphAtlasRefresh` should cover every font an app loads**, not only the four Markdown faces.
+       A few lines; it would not have repaired 2026-10-02's specimen, the batch having failed to heal font 71
+       when drawn by hand, so the question is whether it is worth having anyway (maintainer, 2026-10-02).
