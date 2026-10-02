@@ -2004,14 +2004,14 @@ with timer() as tim:
                             dpg.add_text("", tag="docs_indexing_progress_text")
                             dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
 
-                        with dpg.group(show=False, horizontal=True) as docs_search_indicator_group:
-                            dpg.add_text(fa.ICON_DATABASE, tag="docs_search_symbol")
-                            dpg.bind_item_font("docs_search_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_search_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("DOCUMENTS", tag="docs_search_text")
-                            dpg.bind_item_theme("docs_search_text", "my_steady_gray_indicator_theme")  # tag
-                            dpg.add_text("", tag="docs_search_progress_text")
-                            dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_indicator_theme")  # tag
+                        with dpg.group(show=False, horizontal=True) as docs_access_indicator_group:
+                            dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
+                            dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("docs_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("DOCUMENTS", tag="docs_access_text")
+                            dpg.bind_item_theme("docs_access_text", "my_steady_gray_indicator_theme")  # tag
+                            dpg.add_text("", tag="docs_access_progress_text")
+                            dpg.bind_item_theme("docs_access_progress_text", "my_steady_gray_indicator_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
                             dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
@@ -3468,8 +3468,8 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indexing_indicator_widget=docs_indexing_indicator_group,
                                     docs_indexing_progress_text_widget="docs_indexing_progress_text",
-                                    docs_search_indicator_widget=docs_search_indicator_group,
-                                    docs_search_progress_text_widget="docs_search_progress_text",
+                                    docs_access_indicator_widget=docs_access_indicator_group,
+                                    docs_access_progress_text_widget="docs_access_progress_text",
                                     web_indicator_widget=web_indicator_group,
                                     web_progress_text_widget="web_access_progress_text",
                                     is_any_modal_window_visible=is_any_modal_window_visible,

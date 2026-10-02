@@ -100,7 +100,7 @@
 
 #### Raven-librarian
 
-- **The DOCUMENTS indicator lights while the AI searches the document database itself**, as it does for the automatic search. In v0.2.9 it stayed dark for the AI's own searches.
+- **The DOCUMENTS indicator lights while the AI searches the document database itself or reads a document from it**, as it does for the automatic search. In v0.2.9 it stayed dark for everything the AI did there on its own.
 - **Setting `llm_char_name` in `overrides.json` now brings the character's face and voice along.**
   - Before, only the name and the card changed, and the avatar stayed Aria's, speaking in her voice.
 - **The first Ctrl+Shift+O after starting the app no longer closes the attach dialog as it opens.**

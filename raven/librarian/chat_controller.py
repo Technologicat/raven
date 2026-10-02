@@ -178,8 +178,9 @@ _INDICATOR_MIN_SHOW_TIME = 0.5
 # Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
 # The set `llmtools.perform_tool_calls` runs one at a time, which is what keeps that light truthful.
 web_access_tool_names = llmclient.NETWORK_TOOL_NAMES
-# The tool that searches the document database -> lights up DOCUMENTS while it runs, as the automatic search does.
-document_search_tool_names = frozenset(("search_documents",))
+# Tools that read the document database -> light up DOCUMENTS while they run, as the automatic search does.
+# The set `llmtools.perform_tool_calls` runs one at a time, as for INTERNET above.
+document_access_tool_names = llmclient.DOCUMENT_TOOL_NAMES
 
 
 def _open_source_url(url: str) -> None:
@@ -3751,8 +3752,8 @@ class DPGChatController:
                  llm_indicator_widget: str | int,
                  docs_indexing_indicator_widget: str | int,
                  docs_indexing_progress_text_widget: str | int,
-                 docs_search_indicator_widget: str | int,
-                 docs_search_progress_text_widget: str | int,
+                 docs_access_indicator_widget: str | int,
+                 docs_access_progress_text_widget: str | int,
                  web_indicator_widget: str | int,
                  web_progress_text_widget: str | int,
                  is_any_modal_window_visible: Callable[[], bool] | None = None,
@@ -3825,10 +3826,10 @@ class DPGChatController:
         `docs_indexing_progress_text_widget`: DPG tag or ID of a text widget inside the indexing indicator;
                                               mirrors `retriever.get_indexing_progress_text()`.
 
-        `docs_search_indicator_widget`: DPG tag or ID of the widget to show while the database is being
-                                        *consulted* (search) by the LLM.
+        `docs_access_indicator_widget`: DPG tag or ID of the widget to show while the database is being
+                                        read: searched, automatically or by the LLM, or a document fetched.
 
-        `docs_search_progress_text_widget`: DPG tag or ID of a text widget inside the search indicator;
+        `docs_access_progress_text_widget`: DPG tag or ID of a text widget inside that indicator;
                                             mirrors `retriever.get_query_progress_text()`.
 
         `is_any_modal_window_visible`: Zero-argument predicate, or `None` to skip the check. Passed to the
@@ -3891,10 +3892,10 @@ class DPGChatController:
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indexing_indicator_widget = docs_indexing_indicator_widget
         self.docs_indexing_progress_text_widget = docs_indexing_progress_text_widget
-        self.docs_search_indicator_widget = docs_search_indicator_widget
+        self.docs_access_indicator_widget = docs_access_indicator_widget
         # The indicators go up and down through this, so that a search over in a frame still reads as a signal.
         self.indicator_hold = guiutils.MinimumShowTime(_INDICATOR_MIN_SHOW_TIME)
-        self.docs_search_progress_text_widget = docs_search_progress_text_widget
+        self.docs_access_progress_text_widget = docs_access_progress_text_widget
         self.web_indicator_widget = web_indicator_widget
         self.web_progress_text_widget = web_progress_text_widget
 
@@ -3904,7 +3905,7 @@ class DPGChatController:
         # it's a continuously-updated state, not a discrete event, and polling models that shape
         # naturally with no per-update callback overhead.
         self._docs_indexing_progress_last = ""
-        self._docs_search_progress_last = ""
+        self._docs_access_progress_last = ""
         if self.retriever is not None:
             self.retriever.set_indexing_callbacks(on_start=self._on_indexing_start,
                                                   on_done=self._on_indexing_done)
@@ -4140,16 +4141,16 @@ class DPGChatController:
             self._docs_indexing_progress_last = indexing_progress
 
         query_progress = self.retriever.get_query_progress_text()
-        if query_progress != self._docs_search_progress_last:
+        if query_progress != self._docs_access_progress_last:
             # A query that has just ended says so, for as long as DOCUMENTS' minimum show time holds it up. The
             # retriever's own text is empty outside a query, and a row already hidden shows nothing either way.
-            dpg.set_value(self.docs_search_progress_text_widget, query_progress or "Done")
-            self._docs_search_progress_last = query_progress
+            dpg.set_value(self.docs_access_progress_text_widget, query_progress or "Done")
+            self._docs_access_progress_last = query_progress
 
-    def _show_docs_search_indicator(self) -> None:
+    def _show_docs_access_indicator(self) -> None:
         """Show DOCUMENTS, with its progress text cleared, so the previous query's "Done" does not flash first."""
-        dpg.set_value(self.docs_search_progress_text_widget, "")
-        self.indicator_hold.show(self.docs_search_indicator_widget)
+        dpg.set_value(self.docs_access_progress_text_widget, "")
+        self.indicator_hold.show(self.docs_access_indicator_widget)
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
@@ -4875,11 +4876,11 @@ class DPGChatController:
                         start_turn_data_eyes()
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # crisp phase on appear
-                        self._show_docs_search_indicator()
+                        self._show_docs_access_indicator()
 
                 def on_docs_done(matches: list[dict]) -> None:
                     if self.gui_updates_safe:
-                        self.indicator_hold.hide(self.docs_search_indicator_widget)
+                        self.indicator_hold.hide(self.docs_access_indicator_widget)
                         stop_turn_data_eyes()
 
                 def on_llm_start(node_id: str) -> None:
@@ -5197,10 +5198,10 @@ class DPGChatController:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
                             dpg.set_value(self.web_progress_text_widget, "")  # not the previous call's "Done"
                             self.indicator_hold.show(self.web_indicator_widget)
-                        elif function_name in document_search_tool_names:
+                        elif function_name in document_access_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()
-                            self._show_docs_search_indicator()
+                            self._show_docs_access_indicator()
 
                 def on_call_lowlevel_progress(tool_call_id: str, function_name: str, text: str) -> None:
                     if self.gui_updates_safe and function_name in web_access_tool_names:
@@ -5212,8 +5213,8 @@ class DPGChatController:
                             # Says so for as long as the minimum show time holds INTERNET up, as DOCUMENTS does.
                             dpg.set_value(self.web_progress_text_widget, "Done")
                             self.indicator_hold.hide(self.web_indicator_widget)
-                        elif function_name in document_search_tool_names:
-                            self.indicator_hold.hide(self.docs_search_indicator_widget)
+                        elif function_name in document_access_tool_names:
+                            self.indicator_hold.hide(self.docs_access_indicator_widget)
 
                 def on_tool_done(node_id: str) -> None:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
@@ -5351,7 +5352,7 @@ class DPGChatController:
                     # Also make sure that the AI-turn-scoped processing indicators hide. The INDEXING
                     # indicator is intentionally *not* touched here — it has its own polling-driven
                     # lifecycle (background commits run independent of any AI turn).
-                    self.indicator_hold.hide(self.docs_search_indicator_widget)
+                    self.indicator_hold.hide(self.docs_access_indicator_widget)
                     self.indicator_hold.hide(self.web_indicator_widget)
                     self.indicator_hold.hide(self.llm_indicator_widget)
         def abort_if_nothing_to_lose(task_env: env) -> None:
