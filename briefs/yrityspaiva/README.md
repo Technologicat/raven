@@ -376,8 +376,9 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        (`guiutils.focus_item`) need per-file alias resolution: look first at whether pyan's name resolution
        can be borrowed, adding features to pyan if needed. If that comes out large, file it.
      - **Qwen 3.8's slow prompt processing is recorded** beside the `reasoning_effort` re-test, from the
-       datastore's `generation_metadata`. Tomorrow: run the same prompts on Qwen 3.6 27B (dense) to tell
-       dense from MoE apart from 3.6 against 3.8; see whether prefill speed can be tuned in LM Studio or is
+       datastore's `generation_metadata` — confounded, it turned out the next day: *Documents* was on for the
+       3.8 replies, 50 matches per prompt. Tomorrow: run the same prompts, *Documents* off, on Qwen 3.6
+       35B-A3B, 3.6 27B (dense) and 3.8 27B, to tell dense from MoE apart from 3.6 against 3.8; see whether prefill speed can be tuned in LM Studio or is
        fixed by the model; and check whether the backend's `usage` reports a prompt token count, which may be
        worth saving per node. The count is a property of the generation, so the chat tree's branching does
        not argue against it. The full prompt is not worth storing, since the conversation part rebuilds from

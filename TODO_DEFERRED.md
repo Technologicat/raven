@@ -6261,6 +6261,8 @@ for 3.6 (35B-A3B) over 235. It generates at about 54 t/s against 100, but the pr
 unchecked possibility: going by its name, 3.8 is a dense model and 3.6 a MoE with about 3B active
 parameters, which may account for the gap on its own. Otherwise usable (Juha, 2026-10-01).
 
+**Those figures are confounded and may show nothing about 3.8.** The *Documents* toggle had been left on for the 3.8 replies, so each prompt carried 50 document matches; the metadata does not say what the 3.6 replies carried (Juha, 2026-10-02). Wanted: clean runs of 3.6 35B-A3B, 3.6 27B and 3.8 27B on the same prompts, *Documents* off.
+
 ## A transient postprocessor effect cannot ease in or out
 
 *Cluster: avatar-effects · Cost: ? · Gate: a design decision about where the envelope lives · Filed: 2026-08-26*
