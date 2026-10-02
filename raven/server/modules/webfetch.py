@@ -290,7 +290,8 @@ def _extract_title(html: Optional[str]) -> Optional[str]:
 class _NoBrowser(webcommon.WebToolException):
     """Tier 2 cannot run: the server has no headless browser installed."""
 
-def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], bool]) -> str | None:
+def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], bool],
+                 on_progress: Callable[[str], None]) -> str | None:
     """Tier 2: render `url` in a real headless browser, then extract.
 
     Returns "" if the browser could not navigate, and `None` if the page did not finish loading within
@@ -303,14 +304,18 @@ def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], boo
     global _driver
     from .. import config as server_config
     from selenium.common import exceptions as selenium_exceptions  # noqa: PLC0415 -- deferred, as the factory's are
+    if _driver_lock.locked():
+        on_progress("Waiting for the browser…")
     with webcommon.lock_unless_cancelled(_driver_lock, is_cancelled):  # one navigation at a time
         if _driver is None:
+            on_progress("Starting the browser…")
             _driver = webcommon.get_driver(page_load_timeout=server_config.web_page_load_timeout)
             if _driver is not None:
                 atexit.register(lambda: _driver.quit())
         if _driver is None:
             logger.info("_fetch_tier2: no browser available; cannot render JS-heavy page.")
             raise _NoBrowser
+        on_progress("Rendering the page…")
         try:
             _driver.get(url)
             html = _driver.page_source
@@ -332,7 +337,8 @@ def _make_result(content: str, *, url: str, spa_suspected: bool = False, title: 
     return {"content": content, "url": url, "spaSuspected": spa_suspected, "title": title}
 
 def fetch(url: str, output_format: str = "markdown",
-          is_cancelled: Callable[[], bool] | None = None) -> Dict:
+          is_cancelled: Callable[[], bool] | None = None,
+          on_progress: Callable[[str], None] | None = None) -> Dict:
     """Retrieve a web page's main content as clean text/markdown.
 
     Returns a dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
@@ -347,12 +353,17 @@ def fetch(url: str, output_format: str = "markdown",
     `is_cancelled`: If given, asked before the headless browser is started, and while waiting for it; once
                     it answers `True`, the fetch stops and raises `webcommon.Cancelled`.
 
+    `on_progress`: If given, called with a short line saying which step the fetch has reached, such as
+                   `"Rendering the page…"`.
+
     Order of operations: scheme + SSRF gate (on the effective URL) → URL rewriting →
     special extractor or two-tier fetch → content normalization.
     """
     from .. import config as server_config
     if is_cancelled is None:
         is_cancelled = lambda: False  # noqa: E731 -- a constant predicate; a `def` would add a name for nothing
+    if on_progress is None:
+        on_progress = lambda text: None  # noqa: E731 -- as above
     trafilatura_format = "markdown" if output_format == "markdown" else "txt"
 
     effective_url, special_extractor = _rewrite_url(url)
@@ -362,6 +373,7 @@ def fetch(url: str, output_format: str = "markdown",
     if refusal is not None:
         return _make_result(refusal, url=effective_url)
 
+    on_progress("Loading the page…")
     if special_extractor is not None:
         content, title = special_extractor(effective_url)
         if len(content) >= server_config.webfetch_min_content_chars:
@@ -381,7 +393,8 @@ def fetch(url: str, output_format: str = "markdown",
             logger.info(f"fetch: '{effective_url}': cancelled before Tier 2.")
             raise webcommon.Cancelled
         try:
-            maybe_tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format, is_cancelled=is_cancelled)
+            maybe_tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format,
+                                               is_cancelled=is_cancelled, on_progress=on_progress)
         except _NoBrowser:
             no_browser = True
         else:

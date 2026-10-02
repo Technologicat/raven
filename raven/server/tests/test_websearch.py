@@ -19,7 +19,7 @@ def fake_engine(monkeypatch):
     calls = []
     script = []
 
-    def _search(query, max_links, is_cancelled):
+    def _search(query, max_links, is_cancelled, on_progress):
         calls.append(query)
         outcome = script.pop(0)
         if isinstance(outcome, Exception):
@@ -80,4 +80,3 @@ class TestSearchCancellation:
             assert not worker.is_alive(), "the waiting search did not give up when cancelled"
         assert outcome == {"cancelled": True}
         assert calls == []
-

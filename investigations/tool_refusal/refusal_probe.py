@@ -71,7 +71,7 @@ def run_once(llm_settings):
                              on_docs_start=None, on_docs_done=None, on_prompt_ready=None,
                              on_llm_start=None, on_llm_progress=None, on_llm_done=None,
                              on_tools_start=None,
-                             on_call_lowlevel_start=None, on_call_lowlevel_done=None,
+                             on_call_lowlevel_start=None, on_call_lowlevel_done=None, on_call_lowlevel_progress=None,
                              on_tool_done=None, on_tools_done=None)
 
     # Walk the branch the turn built.

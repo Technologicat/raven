@@ -35,6 +35,7 @@
   - The reply ends at once, where in v0.2.9 Stop waited for the tool calls to finish — for a web search or page fetch, as long as the site took.
   - The results that had arrived are kept, and each unfinished call is recorded as cancelled. An empty send lets the AI go on from what it has.
   - A web search or page fetch that was stopped also stops on *Raven-server*, where it used to run to its end.
+- **The INTERNET indicator says what a web search or page fetch is doing**, such as *Opening DuckDuckGo…* or *Rendering the page…*, as DOCUMENTS does for a document search, and ends on *Done*.
 
 #### Raven-avatar
 

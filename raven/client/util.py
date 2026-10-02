@@ -15,7 +15,9 @@ import json
 import os
 import pathlib
 import requests
+import threading
 import traceback
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional, Union
 
 from bs4 import BeautifulSoup  # for error message prettification (strip HTML from server's error response)
@@ -123,18 +125,22 @@ def yell_on_error(response: requests.Response) -> None:
 def post_streamed_job(url: str,
                       input_data: dict,
                       timeout: "Timeout",
-                      maybe_abort: netutil.Abort | None = None) -> dict:
+                      maybe_abort: netutil.Abort | None = None,
+                      on_progress: Callable[[str], None] | None = None) -> dict:
     """POST `input_data` to a Raven-server endpoint that answers with a streamed job, and return its result.
 
-    The server side is `raven.server.util.stream_job`: the headers arrive at once and the JSON result
-    when the job is done.
+    The server side is `raven.server.util.stream_job`: the headers arrive at once, then the job's progress
+    lines, then its JSON result.
 
-    `timeout`: a `raven.client.config.Timeout`. Its read timeout is between bytes, and the server sends
-               nothing while the job runs, so it bounds the job.
+    `timeout`: a `raven.client.config.Timeout`. Its read timeout bounds the whole job, not only the wait
+               between two bytes; past it the call raises `requests.Timeout`. `None` waits as long as it takes.
 
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if the call should be abandonable from another
                    thread. Firing it closes the connection, which also tells the server to stop the job,
                    and raises `netutil.Aborted` here.
+
+    `on_progress`: Called with each progress line the job reports, such as `"Loading the page…"`, on the
+                   thread that made this call.
 
     Raises `RuntimeError` when the server refuses the request (a bad status), and when the job itself
     failed (an `"error"` in the body) — the same exception for both, since to the caller they are the same
@@ -146,19 +152,50 @@ def post_streamed_job(url: str,
     headers["Content-Type"] = "application/json"
     response = requests.post(url, headers=headers, json=input_data, timeout=timeout, stream=True)
     yell_on_error(response)
+
+    # The read timeout is between bytes, and every progress line resets it, so on its own it would no longer
+    # bound the job. The deadline closes the response the same way an abort does.
+    deadline = netutil.Abort()
+    deadline.arm(response)
+    maybe_timer = None
+    if timeout.read is not None:
+        maybe_timer = threading.Timer(timeout.read, deadline.abort)
+        maybe_timer.daemon = True
+        maybe_timer.start()
     if maybe_abort is not None:
         maybe_abort.arm(response)
+    output_data = None
     try:
-        body = response.content
+        for line in response.iter_lines():
+            if not line.strip():  # the leading space
+                continue
+            record = json.loads(line)
+            if "progress" in record:
+                if on_progress is not None:
+                    on_progress(record["progress"])
+                continue
+            output_data = record
+            break
     except requests.RequestException as exc:
         if maybe_abort is not None and maybe_abort.aborted:
             raise netutil.Aborted("post_streamed_job: aborted while waiting for the result") from exc
+        if deadline.aborted:
+            raise requests.Timeout(f"post_streamed_job: no result within {timeout.read} s") from exc
         raise
     finally:
+        if maybe_timer is not None:
+            maybe_timer.cancel()
         if maybe_abort is not None:
             maybe_abort.disarm()
-    output_data = json.loads(body)
+        deadline.disarm()
+        response.close()
+    if output_data is None:  # the stream ended without a result: closed from this side, or the server went away
+        if maybe_abort is not None and maybe_abort.aborted:
+            raise netutil.Aborted("post_streamed_job: aborted while waiting for the result")
+        if deadline.aborted:
+            raise requests.Timeout(f"post_streamed_job: no result within {timeout.read} s")
+        raise requests.ConnectionError("post_streamed_job: the response ended before the result")
     if "error" in output_data:
         logger.error(f"post_streamed_job: Raven-server reported a failure: {output_data['error']}")
         raise RuntimeError(f"While calling Raven-server: {output_data['error']}")
-    return output_data
+    return output_data["result"]

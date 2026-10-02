@@ -2033,6 +2033,8 @@ with timer() as tim:
                             dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("INTERNET", tag="web_access_text")
                             dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
+                            dpg.add_text("", tag="web_access_progress_text")
+                            dpg.bind_item_theme("web_access_progress_text", "my_steady_gray_indicator_theme")  # tag
 
                     # Raven-server's status, on the same pattern as the composer's LLM-backend row and for
                     # the same reason: a server that has gone away is something the user has to be told,
@@ -3469,6 +3471,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_search_indicator_widget=docs_search_indicator_group,
                                     docs_search_progress_text_widget="docs_search_progress_text",
                                     web_indicator_widget=web_indicator_group,
+                                    web_progress_text_widget="web_access_progress_text",
                                     is_any_modal_window_visible=is_any_modal_window_visible,
                                     # The user's choice, not whether the renderer is shown. The graph also
                                     # stands in for an avatar whose video is off or still warming up, and

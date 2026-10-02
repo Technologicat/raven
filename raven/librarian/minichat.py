@@ -712,6 +712,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 on_tools_start=None,
                                                 on_call_lowlevel_start=None,
                                                 on_call_lowlevel_done=None,
+                                                on_call_lowlevel_progress=None,
                                                 on_tool_done=on_tool_done,
                                                 on_tools_done=None)
             app_state["HEAD"] = new_head_node_id

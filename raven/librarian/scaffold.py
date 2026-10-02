@@ -784,6 +784,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                   on_tools_start: Callable | None = None,
                                   on_call_lowlevel_start: Callable | None = None,
                                   on_call_lowlevel_done: Callable | None = None,
+                                  on_call_lowlevel_progress: Callable | None = None,
                                   on_tool_done: Callable | None = None,
                                   on_tools_done: Callable | None = None) -> str:
     """Execute the tool calls in `assistant_message`, storing each result as a `role="tool"` chat node.
@@ -840,7 +841,8 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                                              on_call_start=on_call_lowlevel_start,
                                                              on_call_done=on_call_lowlevel_done,
                                                              maybe_refusal_text=maybe_refusal_text,
-                                                             maybe_abort=maybe_abort)
+                                                             maybe_abort=maybe_abort,
+                                                             on_call_progress=on_call_lowlevel_progress)
 
     for tool_response_record in tool_response_records:
         _record_grounding(tool_context, tool_response_record)
@@ -905,6 +907,7 @@ def ai_turn(llm_settings: env,
             on_tools_start: Callable | None,
             on_call_lowlevel_start: Callable | None,
             on_call_lowlevel_done: Callable | None,
+            on_call_lowlevel_progress: Callable | None,
             on_tool_done: Callable | None,
             on_tools_done: Callable | None,
             tool_context: env | None = None,
@@ -1065,6 +1068,13 @@ def ai_turn(llm_settings: env,
                              Main use case is to turn off tool-specific GUI indicators.
 
                              See `llmclient.perform_tool_calls` for arguments.
+
+    `on_call_lowlevel_progress`: Called while a tool runs, with a short line saying which step it has
+                                 reached — for the tools that report one, currently the web tools.
+
+                                 Main use case is a progress text beside a tool-specific GUI indicator.
+
+                                 See `llmclient.perform_tool_calls` (its `on_call_progress`) for arguments.
 
     `on_tool_done`: 1-argument callable, with argument `node_id: str`.
                     The return value is ignored.
@@ -1421,6 +1431,7 @@ def ai_turn(llm_settings: env,
                                                          on_tools_start=on_tools_start,
                                                          on_call_lowlevel_start=on_call_lowlevel_start,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,
+                                                         on_call_lowlevel_progress=on_call_lowlevel_progress,
                                                          on_tool_done=on_tool_done,
                                                          on_tools_done=on_tools_done)
             if budget_spent:
@@ -1466,6 +1477,7 @@ def retry_tool_calls(llm_settings: env,
                      on_tools_start: Callable | None = None,
                      on_call_lowlevel_start: Callable | None = None,
                      on_call_lowlevel_done: Callable | None = None,
+                     on_call_lowlevel_progress: Callable | None = None,
                      on_tool_done: Callable | None = None,
                      on_tools_done: Callable | None = None) -> str:
     """Re-run a single previously-denied tool call on a NEW branch, then continue the AI's turn.
@@ -1550,6 +1562,7 @@ def retry_tool_calls(llm_settings: env,
                                                  on_tools_start=on_tools_start,
                                                  on_call_lowlevel_start=on_call_lowlevel_start,
                                                  on_call_lowlevel_done=on_call_lowlevel_done,
+                                                 on_call_lowlevel_progress=on_call_lowlevel_progress,
                                                  on_tool_done=on_tool_done,
                                                  on_tools_done=None)
 
@@ -1583,6 +1596,7 @@ def retry_tool_calls(llm_settings: env,
                    on_tools_start=on_tools_start,
                    on_call_lowlevel_start=on_call_lowlevel_start,
                    on_call_lowlevel_done=on_call_lowlevel_done,
+                   on_call_lowlevel_progress=on_call_lowlevel_progress,
                    on_tool_done=on_tool_done,
                    on_tools_done=on_tools_done,
                    tool_context=tool_context)

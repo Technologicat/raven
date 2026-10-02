@@ -250,12 +250,14 @@ def _format_results(texts: List[str],
     preformatted_text = "-----\n".join(format_result(result) for result in results)
     return preformatted_text, results
 
-def _search_google(query: str, max_links: int, is_cancelled: Callable[[], bool]) -> Tuple[str, Dict]:
+def _search_google(query: str, max_links: int, is_cancelled: Callable[[], bool],
+                   on_progress: Callable[[str], None]) -> Tuple[str, Dict]:
     # The query is the user's question in their own words, so it is counted rather than quoted; likewise
     # the results, which say what was asked about as plainly as the query does. Diagnosing a scraper that
     # a site's markup change has broken needs the *counts* - zero results parsed is the symptom - and
     # anything beyond that is better asked for as a reproduction than harvested from everyone's searches.
     logger.info(f"_search_google: searching Google, {len(query)} character query, max_links {max_links}.")
+    on_progress("Opening Google…")
     _open_results_page(f"https://google.com/search?hl=en&q={_encodeURIComponent(query)}&num={max_links}",
                        results_container_id="res")
 
@@ -270,6 +272,7 @@ def _search_google(query: str, max_links: int, is_cancelled: Callable[[], bool])
     # text.write("\n".join(_get_content_by_selector(selector=".hgKElc")))
 
     # Page snippets
+    on_progress("Reading results…")
     texts = _get_content_by_selector(selector=".r025kc.lVm3ye")
     # texts_old = _get_content_by_selector(selector=".yDYNvb.lyLwlc"))  # Old selectors for page snippets (for compatibility)
     links = _get_attr_by_selector(selector=".yuRUbf a", attr="href")
@@ -278,8 +281,10 @@ def _search_google(query: str, max_links: int, is_cancelled: Callable[[], bool])
     logger.info(f"_search_google: {len(results)} result{common_text.plural_s(len(results))}, {len(preformatted_text)} characters.")
     return preformatted_text, results
 
-def _search_duckduckgo(query: str, max_links: int, is_cancelled: Callable[[], bool]) -> Tuple[str, Dict]:
+def _search_duckduckgo(query: str, max_links: int, is_cancelled: Callable[[], bool],
+                       on_progress: Callable[[str], None]) -> Tuple[str, Dict]:
     logger.info(f"_search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
+    on_progress("Opening DuckDuckGo…")
     _open_results_page(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}",
                        results_container_id="web_content_wrapper")
 
@@ -292,6 +297,7 @@ def _search_duckduckgo(query: str, max_links: int, is_cancelled: Callable[[], bo
         for k in range(5):
             if is_cancelled():  # each scroll can wait 5 s for more to load
                 raise webcommon.Cancelled
+            on_progress("Loading more results…")
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
             new_page_height = _wait_for_page_height_increase(page_height)
             if new_page_height == page_height:
@@ -300,6 +306,7 @@ def _search_duckduckgo(query: str, max_links: int, is_cancelled: Callable[[], bo
             links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
             if len(links) >= max_links:
                 break
+    on_progress("Reading results…")
     texts = _get_content_by_selector('[data-result="snippet"]')
 
     preformatted_text, results = _format_results(texts=texts, links=links)
@@ -352,7 +359,8 @@ _results_cache: dict[tuple[str, str, int], Tuple[str, Dict]] = {}
 _search_lock = threading.Lock()  # serializes navigations: a single Selenium driver is not concurrency-safe
 
 def search(query: str, engine: str = "duckduckgo", max_links: int = 10,
-           is_cancelled: Callable[[], bool] | None = None) -> Tuple[str, Dict]:
+           is_cancelled: Callable[[], bool] | None = None,
+           on_progress: Callable[[str], None] | None = None) -> Tuple[str, Dict]:
     """Search the web. Return `(preformatted_text, results)`; see `_format_results`.
 
     Raises `EngineUnavailable` when the search engine did not answer. An empty `results` means it did,
@@ -361,11 +369,18 @@ def search(query: str, engine: str = "duckduckgo", max_links: int = 10,
     `is_cancelled`: If given, asked between the search's steps, and while it waits for another search to
                     finish; once it answers `True`, the search stops and raises `webcommon.Cancelled`. A
                     page load already in progress runs to its end.
+
+    `on_progress`: If given, called with a short line saying which step the search has reached, such as
+                   `"Reading results…"`.
     """
     if is_cancelled is None:
         is_cancelled = lambda: False  # noqa: E731 -- a constant predicate; a `def` would add a name for nothing
+    if on_progress is None:
+        on_progress = lambda text: None  # noqa: E731 -- as above
     key = (engine, query, max_links)
 
+    if _search_lock.locked():
+        on_progress("Waiting for another search…")
     with webcommon.lock_unless_cancelled(_search_lock, is_cancelled):  # one navigation at a time
         if key in _results_cache:
             return _results_cache[key]
@@ -374,7 +389,7 @@ def search(query: str, engine: str = "duckduckgo", max_links: int = 10,
         # Only an answer is cached. A failure is the engine's state at that moment, and caching it would
         # refuse the same query for the rest of the session — which is why this is not `unpythonic.memoize`,
         # which caches exceptions as well as results.
-        result = _engines[engine](query, max_links, is_cancelled)
+        result = _engines[engine](query, max_links, is_cancelled, on_progress)
         _results_cache[key] = result
         return result
 

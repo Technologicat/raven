@@ -163,21 +163,21 @@ class TestFetchOutcome:
         monkeypatch.setattr(webfetch, "_extract_title", lambda html: None)
 
     def test_a_page_that_did_not_finish_loading_says_so(self, monkeypatch, short_tier1):
-        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format, is_cancelled: None)
+        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format, is_cancelled, on_progress: None)
         result = webfetch.fetch("https://slow.example/p")
         assert result["content"] == webfetch.CANONICAL_PAGE_TIMEOUT.format(url="https://slow.example/p")
         assert not result["spaSuspected"]
 
     def test_a_page_that_loaded_empty_is_still_a_js_only_page(self, monkeypatch, short_tier1):
         # The control for the one above: the same fixture, and only the Tier 2 outcome differs.
-        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format, is_cancelled: "")
+        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format, is_cancelled, on_progress: "")
         result = webfetch.fetch("https://spa.example/p")
         assert result["content"] == webfetch.CANONICAL_SPA_SUSPECTED
         assert result["spaSuspected"]
 
     def test_a_server_with_no_browser_says_so(self, monkeypatch, short_tier1):
         # Rather than the JS-only notice, which would blame the site for what the server lacks.
-        def no_browser(url, output_format, is_cancelled):
+        def no_browser(url, output_format, is_cancelled, on_progress):
             raise webfetch._NoBrowser
         monkeypatch.setattr(webfetch, "_fetch_tier2", no_browser)
         result = webfetch.fetch("https://spa.example/p")
@@ -187,7 +187,7 @@ class TestFetchOutcome:
     def test_a_cancelled_fetch_never_starts_the_browser(self, monkeypatch, short_tier1):
         started = []
         monkeypatch.setattr(webfetch, "_fetch_tier2",
-                            lambda url, output_format, is_cancelled: started.append(url) or "")
+                            lambda url, output_format, is_cancelled, on_progress: started.append(url) or "")
         with pytest.raises(webcommon.Cancelled):
             webfetch.fetch("https://spa.example/p", is_cancelled=lambda: True)
         assert started == []

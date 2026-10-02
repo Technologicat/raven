@@ -316,7 +316,8 @@ def websearch(query: str,
                                                  engine,
                                                  librarian_config.web_num_results,
                                                  timeout=librarian_config.web_tool_timeout,
-                                                 maybe_abort=getattr(dyn.tool_context, "maybe_abort", None))  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
+                                                 maybe_abort=getattr(dyn.tool_context, "maybe_abort", None),
+                                                 on_progress=getattr(dyn.tool_context, "report_progress", None))  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
     except requests.Timeout:
         logger.warning(f"websearch: no answer within {librarian_config.web_tool_timeout.read} s")
         return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
@@ -440,7 +441,8 @@ def webfetch(url: str) -> tuple[str, dict]:
     api = _client_api()
     try:
         result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
-                                    maybe_abort=getattr(dyn.tool_context, "maybe_abort", None))
+                                    maybe_abort=getattr(dyn.tool_context, "maybe_abort", None),
+                                    on_progress=getattr(dyn.tool_context, "report_progress", None))
     except requests.Timeout:
         logger.warning(f"webfetch: no answer within {librarian_config.web_tool_timeout.read} s for '{url}'")
         result = {"content": CANONICAL_WEBFETCH_TIMEOUT.format(url=url), "url": url, "title": None}
@@ -895,7 +897,8 @@ def perform_tool_calls(settings: env,
                        on_call_start: Callable | None,
                        on_call_done: Callable | None,
                        maybe_refusal_text: str | None = None,
-                       maybe_abort: netutil.Abort | None = None) -> list[env]:
+                       maybe_abort: netutil.Abort | None = None,
+                       on_call_progress: Callable | None = None) -> list[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
@@ -939,6 +942,17 @@ def perform_tool_calls(settings: env,
 
                     In error cases that never got so far as to call the tool, `on_call_done`
                     may be called with no corresponding `on_call_start`, to report the error.
+
+    `on_call_progress`: 3-argument callable: `(tool_call_id: str, function_name: str, text: str)`.
+
+                        The return value of the event is ignored.
+
+                        Called while a tool runs, with a short line saying which step it has reached, such
+                        as `"Loading the page…"` — for the tools that report one, currently the web tools.
+                        An entrypoint reports through `dyn.tool_context.report_progress`, which is bound
+                        per call. The document search reports its stages through the retriever's own
+                        progress text instead, since the automatic search, which is not a tool call, shares
+                        it.
 
     Each returned `env` has the following attributes:
 
@@ -1110,6 +1124,20 @@ def perform_tool_calls(settings: env,
                                      tool_call_id=tool_call_id,
                                      function_name=function_name)
 
+    def _with_progress_reporter(tool_call_id: str, function_name: str) -> env:
+        """Return the turn's `tool_context`, with a `report_progress` for this one call."""
+        def report_progress(text: str) -> None:
+            if on_call_progress is None:
+                return
+            with callback_lock:
+                try:
+                    on_call_progress(tool_call_id, function_name, text)
+                except Exception:
+                    logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_progress`", exc_info=True)
+        # A copy, since calls of different kinds run at once and each wants its own reporter. Entrypoints
+        # only read the context; `scaffold` writes it between rounds, never during one.
+        return env(**dict(dyn.tool_context.items()), report_progress=report_progress)
+
     def run_in_order(calls: list[tuple]) -> None:
         """Make the planned `calls`, one after another."""
         for position, (index, tool_call_id, function_name, function, kwargs) in enumerate(calls):
@@ -1125,7 +1153,8 @@ def perform_tool_calls(settings: env,
                     logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
             try:
                 with timer() as tim:
-                    tool_output = _call_abandonably(function_name, function, kwargs, maybe_abort)
+                    with dyn.let(tool_context=_with_progress_reporter(tool_call_id, function_name)):
+                        tool_output = _call_abandonably(function_name, function, kwargs, maybe_abort)
             except netutil.Aborted:
                 cancel(calls[position:])
                 return

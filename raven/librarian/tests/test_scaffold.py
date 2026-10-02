@@ -150,7 +150,7 @@ _AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_done",
                       "on_prompt_ready",
                       "on_llm_start", "on_llm_progress", "on_llm_done",
                       "on_tools_start",
-                      "on_call_lowlevel_start", "on_call_lowlevel_done",
+                      "on_call_lowlevel_start", "on_call_lowlevel_done", "on_call_lowlevel_progress",
                       "on_tool_done", "on_tools_done")
 
 

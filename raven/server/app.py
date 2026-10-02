@@ -1636,17 +1636,22 @@ def api_websearch2():
     This format preserves the connection between the text of the result
     and its corresponding link.
 
-    The response is streamed: it opens with a space, and the result follows when the search is done. A
-    failure of the search itself arrives in the body, as `{"error": "..."}`. See `serverutil.stream_job`.
+    The response is streamed, for two reasons. The client holds it from the start, so it can abandon the
+    search by closing the connection, which is also what tells the server to stop; and the server can report
+    the search's progress as it goes. So the response opens with a space, which sends the headers at once,
+    then carries the progress lines, then the result. The status has therefore gone out, as 200 OK, before
+    the search has run, and a failure of the search itself cannot become one: it arrives in the body, as
+    `{"error": "..."}`. A bad request is still refused with a status, being checked first. See
+    `serverutil.stream_job`.
     """
     if not websearch.is_available():
         abort(403, "Module 'websearch' not running")
     query, engine, max_links = _parse_websearch_request()
 
-    def job(is_cancelled: Callable[[], bool]) -> dict:
+    def job(is_cancelled: Callable[[], bool], report: Callable[[str], None]) -> dict:
         try:
             preformatted_text, structured_results = websearch.search(query, engine=engine, max_links=max_links,
-                                                                     is_cancelled=is_cancelled)
+                                                                     is_cancelled=is_cancelled, on_progress=report)
         except websearch.EngineUnavailable as exc:
             logger.warning(f"api_websearch2: engine '{engine}' did not answer: {exc}")
             return {"results": "", "data": [], "engineAnswered": False}
@@ -1681,8 +1686,13 @@ def api_webfetch():
     Network-level safety (refusing private-network addresses and non-HTTP(S) schemes) is
     enforced here, server-side. The domain allowlist is enforced client-side, before the call.
 
-    The response is streamed: it opens with a space, and the result follows when the fetch is done. A
-    failure of the fetch itself arrives in the body, as `{"error": "..."}`. See `serverutil.stream_job`.
+    The response is streamed, for two reasons. The client holds it from the start, so it can abandon the
+    fetch by closing the connection, which is also what tells the server to stop; and the server can report
+    the fetch's progress as it goes. So the response opens with a space, which sends the headers at once,
+    then carries the progress lines, then the result. The status has therefore gone out, as 200 OK, before
+    the fetch has run, and a failure of the fetch itself cannot become one: it arrives in the body, as
+    `{"error": "..."}`. A bad request is still refused with a status, being checked first. See
+    `serverutil.stream_job`.
     """
     if not webfetch.is_available():
         abort(403, "Module 'webfetch' not running")
@@ -1698,8 +1708,9 @@ def api_webfetch():
     # fetched, and a failure here cannot be diagnosed without knowing what was asked for. The page that
     # comes back is content and is not logged.
     logger.debug(f"api_webfetch: '{url}' as {output_format}")
-    return serverutil.stream_job(lambda is_cancelled: webfetch.fetch(url, output_format=output_format,
-                                                                     is_cancelled=is_cancelled))
+    return serverutil.stream_job(lambda is_cancelled, report: webfetch.fetch(url, output_format=output_format,
+                                                                             is_cancelled=is_cancelled,
+                                                                             on_progress=report))
 
 
 # --------------------------------------------------------------------------------

@@ -77,7 +77,7 @@ import json
 import pathlib
 import re
 import requests
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING, Any
 
 # import PIL.Image
@@ -868,17 +868,22 @@ def translate_translate(text: str | list[str], source_lang: str, target_lang: st
 
 def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10,
                      timeout: "Timeout | None" = None,
-                     maybe_abort: netutil.Abort | None = None) -> dict:
+                     maybe_abort: netutil.Abort | None = None,
+                     on_progress: Callable[[str], None] | None = None) -> dict:
     """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page.
 
     Uses the "/api/websearch2" endpoint on the server, which see. Returns its output dict: `"results"`,
     `"data"`, and `"engineAnswered"`, which is false when the search engine did not answer.
 
-    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`.
+    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`. Its read
+               timeout bounds the whole search.
 
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if the search should be abandonable from another
                    thread; firing it raises `netutil.Aborted` here, and the server stops the search. See
                    `raven.client.util.post_streamed_job`.
+
+    `on_progress`: If given, called with each line the server reports about the search's progress, such as
+                   `"Loading the page…"`.
     """
     util.require()
     input_data = {"query": query,
@@ -886,14 +891,16 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
                   "max_links": max_links}
     return util.post_streamed_job(f"{util.api_config.raven_server_url}/api/websearch2", input_data,
                                   timeout=(timeout if timeout is not None else util.api_config.network_timeout),
-                                  maybe_abort=maybe_abort)
+                                  maybe_abort=maybe_abort,
+                                  on_progress=on_progress)
 
 # --------------------------------------------------------------------------------
 # Webfetch
 
 def webfetch_fetch(url: str, output_format: str = "markdown",
                    timeout: "Timeout | None" = None,
-                   maybe_abort: netutil.Abort | None = None) -> dict:
+                   maybe_abort: netutil.Abort | None = None,
+                   on_progress: Callable[[str], None] | None = None) -> dict:
     """Retrieve a web page's main content as clean text/markdown, via Raven-server.
 
     Uses the "/api/webfetch" endpoint on the server, which see. The server handles the
@@ -904,15 +911,20 @@ def webfetch_fetch(url: str, output_format: str = "markdown",
     `content` is the extracted text (or a canonical user-facing message for a refusal / limit).
     `title` is the page title on a successful fetch, `None` for a refusal or a titleless page.
 
-    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`.
+    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`. Its read
+               timeout bounds the whole fetch.
 
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if the fetch should be abandonable from another
                    thread; firing it raises `netutil.Aborted` here, and the server stops the fetch. See
                    `raven.client.util.post_streamed_job`.
+
+    `on_progress`: If given, called with each line the server reports about the fetch's progress, such as
+                   `"Loading the page…"`.
     """
     util.require()
     input_data = {"url": url,
                   "format": output_format}
     return util.post_streamed_job(f"{util.api_config.raven_server_url}/api/webfetch", input_data,
                                   timeout=(timeout if timeout is not None else util.api_config.network_timeout),
-                                  maybe_abort=maybe_abort)
+                                  maybe_abort=maybe_abort,
+                                  on_progress=on_progress)

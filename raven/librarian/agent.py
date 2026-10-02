@@ -548,7 +548,7 @@ def turn(llm_settings: env,
                                      on_prompt_ready=prompts.append,
                                      on_llm_start=None, on_llm_progress=on_progress, on_llm_done=None,
                                      on_tools_start=None,
-                                     on_call_lowlevel_start=None, on_call_lowlevel_done=None,
+                                     on_call_lowlevel_start=None, on_call_lowlevel_done=None, on_call_lowlevel_progress=None,
                                      on_tool_done=None, on_tools_done=None)
 
     # A continuation revises the node it was given rather than adding one, so the turn's span is that node

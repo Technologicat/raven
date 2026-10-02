@@ -53,7 +53,7 @@ def fake_fetch(monkeypatch):
     """Replace the HTTP fetch with a recorder; returns the list of URLs that reached the server."""
     fetched_urls = []
 
-    def _fake(url, output_format="markdown", timeout=None, maybe_abort=None):
+    def _fake(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
         fetched_urls.append(url)
         return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
@@ -229,7 +229,7 @@ class TestWebfetchResultHeader:
 
     def test_a_server_refusal_names_the_url(self, monkeypatch):
         # The URL is the one the server ended up at, which a rewrite can change.
-        def _refuse(url, output_format="markdown", timeout=None, maybe_abort=None):
+        def _refuse(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
             return {"content": "This site doesn't render its content as static HTML and can't be fetched as text.",
                     "url": "https://old.x.example/p", "spaSuspected": True, "title": None}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_refuse))
@@ -618,6 +618,62 @@ class TestPerformToolCallsInParallel:
         assert overlaps == [], f"two events ran at once: {overlaps}"
 
 
+class TestPerformToolCallsProgress:
+    """A tool reports its progress through `dyn.tool_context.report_progress`, and it reaches `on_call_progress` named for that call."""
+
+    @staticmethod
+    def _reporting(*texts):
+        def tool():
+            for text in texts:
+                dyn.tool_context.report_progress(text)
+            return "done"
+        return tool
+
+    def test_each_report_is_attributed_to_its_own_call(self):
+        # Two kinds run in parallel here, so each call needs its own reporter rather than one for the round.
+        events = []
+        llmclient.perform_tool_calls(_tool_settings(websearch=self._reporting("Opening…", "Reading…"),
+                                                    search_documents=self._reporting("Searching…"),
+                                                    calculate=lambda: "4"),
+                                     _tool_call_message("websearch", "search_documents", "calculate"),
+                                     on_call_start=None, on_call_done=None,
+                                     on_call_progress=lambda *a: events.append(a))
+        assert [a for a in events if a[0] == "call_0"] == [("call_0", "websearch", "Opening…"),
+                                                           ("call_0", "websearch", "Reading…")]
+        assert [a for a in events if a[0] == "call_1"] == [("call_1", "search_documents", "Searching…")]
+        assert len(events) == 3, "a call that reported nothing produced an event"
+
+    def test_the_turns_context_is_still_there_beside_the_reporter(self):
+        seen = {}
+        def tool():
+            seen["marker"] = getattr(dyn.tool_context, "marker", None)
+            dyn.tool_context.report_progress("Working…")
+            return "done"
+        events = []
+        with dyn.let(tool_context=env(marker="the turn's")):
+            llmclient.perform_tool_calls(_tool_settings(websearch=tool), _tool_call_message("websearch"),
+                                         on_call_start=None, on_call_done=None,
+                                         on_call_progress=lambda *a: events.append(a))
+        assert seen == {"marker": "the turn's"}
+        assert events == [("call_0", "websearch", "Working…")]
+
+    def test_reports_arrive_from_a_call_made_abandonable(self):
+        # With an abort handle the call runs on a thread of its own, which the context has to be handed to.
+        events = []
+        llmclient.perform_tool_calls(_tool_settings(websearch=self._reporting("Working…")),
+                                     _tool_call_message("websearch"),
+                                     on_call_start=None, on_call_done=None,
+                                     maybe_abort=netutil.Abort(),
+                                     on_call_progress=lambda *a: events.append(a))
+        assert events == [("call_0", "websearch", "Working…")]
+
+    def test_without_a_handler_a_report_goes_nowhere(self):
+        records = llmclient.perform_tool_calls(_tool_settings(websearch=self._reporting("Working…")),
+                                               _tool_call_message("websearch"),
+                                               on_call_start=None, on_call_done=None)
+        assert records[0].status == "success"
+
+
 class TestWebsearchWrapper:
     """brief 03 §4: websearch returns one text content-part per result, with each field normalized."""
 
@@ -657,7 +713,7 @@ class TestWebsearchWrapper:
     def _patch_capture_engine(monkeypatch):
         """Patch `api.websearch_search` to record the engine it was called with; return the capture dict."""
         captured = {}
-        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None, on_progress=None):
             captured["engine"] = engine
             return {"data": [], "engineAnswered": True}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
@@ -714,7 +770,7 @@ class TestWebsearchFailures:
 
     def test_the_call_waits_for_the_web_tool_timeout(self, monkeypatch):
         captured = {}
-        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None, on_progress=None):
             captured["timeout"] = timeout
             return {"data": [], "engineAnswered": True}
         self._patch(monkeypatch, fake_search)
@@ -724,7 +780,7 @@ class TestWebsearchFailures:
     def test_the_turns_abort_handle_reaches_the_server_call(self, monkeypatch):
         # So that a stopped turn closes the request, and the server stops searching.
         captured = {}
-        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None, on_progress=None):
             captured["maybe_abort"] = maybe_abort
             return {"data": [], "engineAnswered": True}
         self._patch(monkeypatch, fake_search)
@@ -733,13 +789,25 @@ class TestWebsearchFailures:
             llmtools.websearch("q")
         assert captured["maybe_abort"] is handle
 
+    def test_the_calls_progress_reporter_reaches_the_server_call(self, monkeypatch):
+        # So that the server's progress lines reach the INTERNET indicator.
+        captured = {}
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None, on_progress=None):
+            captured["on_progress"] = on_progress
+            return {"data": [], "engineAnswered": True}
+        self._patch(monkeypatch, fake_search)
+        reporter = lambda text: None  # noqa: E731 -- compared by identity
+        with dyn.let(tool_context=env(report_progress=reporter)):
+            llmtools.websearch("q")
+        assert captured["on_progress"] is reporter
+
 
 class TestWebfetchFailures:
     """A fetch the server did not answer, or could not be asked for, answers in a sentence under the usual header."""
 
     @staticmethod
     def _patch(monkeypatch, exc):
-        def fake_fetch(url, output_format="markdown", timeout=None, maybe_abort=None):
+        def fake_fetch(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
             raise exc
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=fake_fetch))
         _set_allowlist(monkeypatch, None)
@@ -758,6 +826,19 @@ class TestWebfetchFailures:
         text, _ = llmtools.webfetch("https://x.example/p")
         assert text.rstrip().endswith(llmtools.CANONICAL_WEBFETCH_UNAVAILABLE.format(
             reason=f"{type(exc).__name__}: {exc}"))
+
+    def test_the_calls_progress_reporter_reaches_the_server_call(self, monkeypatch):
+        # As for websearch: the server's progress lines are what the INTERNET indicator shows.
+        captured = {}
+        def fake_fetch(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
+            captured["on_progress"] = on_progress
+            return {"content": "x", "url": url, "title": None}
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=fake_fetch))
+        _set_allowlist(monkeypatch, None)
+        reporter = lambda text: None  # noqa: E731 -- compared by identity
+        with dyn.let(tool_context=env(report_progress=reporter)):
+            llmtools.webfetch("https://x.example/p")
+        assert captured["on_progress"] is reporter
 
 
 # ---------------------------------------------------------------------------

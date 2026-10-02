@@ -3754,6 +3754,7 @@ class DPGChatController:
                  docs_search_indicator_widget: str | int,
                  docs_search_progress_text_widget: str | int,
                  web_indicator_widget: str | int,
+                 web_progress_text_widget: str | int,
                  is_any_modal_window_visible: Callable[[], bool] | None = None,
                  avatar_panel_covered: Callable[[], bool] | None = None,
                  on_search_results_changed: Callable[[], None] | None = None,
@@ -3864,7 +3865,10 @@ class DPGChatController:
         `open_revision_history`: Called with a chat node ID when the reader clicks a message's revision
                                  number, to show that message's revisions. `None` means nothing is done.
 
-        `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
+        `web_indicator_widget`: DPG tag or ID of the widget to show while a web tool call is in progress.
+
+        `web_progress_text_widget`: DPG tag or ID of a text widget inside the web indicator; shows the step
+                                    the running web tool call reports.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
         """
@@ -3892,6 +3896,7 @@ class DPGChatController:
         self.indicator_hold = guiutils.MinimumShowTime(_INDICATOR_MIN_SHOW_TIME)
         self.docs_search_progress_text_widget = docs_search_progress_text_widget
         self.web_indicator_widget = web_indicator_widget
+        self.web_progress_text_widget = web_progress_text_widget
 
         # Indicator wiring. Show/hide events are pushed via callbacks (symmetric across all four
         # indicators: on_docs_start/done from the chat scaffold drive DOCUMENTS / SYSTEM / INTERNET; the new
@@ -5190,15 +5195,22 @@ class DPGChatController:
                         if function_name in web_access_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
+                            dpg.set_value(self.web_progress_text_widget, "")  # not the previous call's "Done"
                             self.indicator_hold.show(self.web_indicator_widget)
                         elif function_name in document_search_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()
                             self._show_docs_search_indicator()
 
+                def on_call_lowlevel_progress(tool_call_id: str, function_name: str, text: str) -> None:
+                    if self.gui_updates_safe and function_name in web_access_tool_names:
+                        dpg.set_value(self.web_progress_text_widget, text)
+
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
                         if function_name in web_access_tool_names:
+                            # Says so for as long as the minimum show time holds INTERNET up, as DOCUMENTS does.
+                            dpg.set_value(self.web_progress_text_widget, "Done")
                             self.indicator_hold.hide(self.web_indicator_widget)
                         elif function_name in document_search_tool_names:
                             self.indicator_hold.hide(self.docs_search_indicator_widget)
@@ -5241,6 +5253,7 @@ class DPGChatController:
                                         on_tools_start=on_tools_start,
                                         on_call_lowlevel_start=on_call_lowlevel_start,
                                         on_call_lowlevel_done=on_call_lowlevel_done,
+                                        on_call_lowlevel_progress=on_call_lowlevel_progress,
                                         on_tool_done=on_tool_done,
                                         on_tools_done=on_tools_done)
                 # The turn is about to recompute the injects for the wire; keep the log's copy in step, so a

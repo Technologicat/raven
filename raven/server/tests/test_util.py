@@ -1,4 +1,4 @@
-"""Unit tests for raven.server.util. `stream_job`: the streamed body's shape, and a client abandoning the job under waitress."""
+"""Unit tests for raven.server.util. `stream_job`: the streamed body's records, and a client abandoning the job under waitress."""
 
 import json
 import socket
@@ -43,25 +43,41 @@ def waitress_server():
         server.close()
 
 
+def _records(body: bytes) -> list[dict]:
+    """The JSON records in a `stream_job` body, in order."""
+    return [json.loads(line) for line in body.split(b"\n") if line.strip()]
+
+
 class TestBody:
     """What the client receives, which does not depend on the server."""
 
     def test_the_result_follows_a_leading_space(self):
-        client = _app_serving(lambda is_cancelled: {"answer": 42}).test_client()
+        client = _app_serving(lambda is_cancelled, report: {"answer": 42}).test_client()
         body = client.post("/job").data
         assert body.startswith(b" "), "the space is what sends the headers before the job has run"
-        assert json.loads(body) == {"answer": 42}
+        assert _records(body) == [{"result": {"answer": 42}}]
+
+    def test_progress_comes_before_the_result_in_the_order_reported(self):
+        def job(is_cancelled, report):
+            report("First step…")
+            report("Second step…")
+            return {"answer": 42}
+        body = _app_serving(job).test_client().post("/job").data
+        assert _records(body) == [{"progress": "First step…"},
+                                  {"progress": "Second step…"},
+                                  {"result": {"answer": 42}}]
 
     def test_a_failing_job_reports_in_the_body(self):
-        def job(is_cancelled):
+        def job(is_cancelled, report):
+            report("Starting…")
             raise ValueError("boom")
         response = _app_serving(job).test_client().post("/job")
         assert response.status_code == 200, "the status has gone out before the job runs"
-        assert json.loads(response.data) == {"error": "ValueError: boom"}
+        assert _records(response.data) == [{"progress": "Starting…"}, {"error": "ValueError: boom"}]
 
     def test_outside_waitress_nothing_is_ever_cancelled(self):
         seen = []
-        _app_serving(lambda is_cancelled: seen.append(is_cancelled()) or {}).test_client().post("/job").data  # noqa: B018 -- the job runs as the body is read
+        _app_serving(lambda is_cancelled, report: seen.append(is_cancelled()) or {}).test_client().post("/job").data  # noqa: B018 -- the job runs as the body is read
         assert seen == [False]
 
 
@@ -70,7 +86,7 @@ class TestAbandoning:
 
     @staticmethod
     def _slow_job(seen: dict):
-        def job(is_cancelled):
+        def job(is_cancelled, report):
             t0 = time.monotonic()
             while time.monotonic() - t0 < 10.0:
                 if is_cancelled():
@@ -103,10 +119,10 @@ class TestAbandoning:
     def test_a_client_that_stays_gets_the_result(self, waitress_server):
         # The control for the one above: the same job and server, and nobody leaves.
         seen = {}
-        def quick_job(is_cancelled):
+        def quick_job(is_cancelled, report):
             seen["cancelled"] = is_cancelled()
             return {"finished": True}
         url = waitress_server(_app_serving(quick_job))
         response = requests.post(url, timeout=(5, 30))
-        assert response.json() == {"finished": True}
+        assert _records(response.content) == [{"result": {"finished": True}}]
         assert seen == {"cancelled": False}
