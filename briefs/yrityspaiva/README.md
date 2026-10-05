@@ -422,3 +422,34 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **A second look at the automatic search**, alongside the `.bib` mitigations: Qwen called it sloppy
        (maintainer, 2026-10-02). The reply is chat node `gensym#forest-node:4d3eb2c1-c4b4-4b1a-bccf-be4178d67fb4`,
        2026-10-02 14:54, in the maintainer's datastore.
+   - **2026-10-05.**
+     - **Document IDs resolve loosely, done**: an ID matches on trailing whole path components, the last of
+       which may omit its extension; ambiguity is refused with the candidates named, the database being
+       local and trusted (maintainer).
+     - **The automatic search, decided** (maintainer). The whole user message is the query, and an
+       instruction to the agent is a poor one; 50 matches are ~18k tokens of prefill every turn, 30–60 s on
+       Qwen 3.8 by feel. Two parts, both to be built:
+       - **A GUI toggle for the automatic search**, separate from DOCUMENTS, the document tools staying on
+         when it is off. A user can still say "search the documents for…". S.
+       - **The model writes the query.** A pre-call in `scaffold.ai_turn` sends the conversation with the
+         new user message replaced, on the wire only, by an instruction: write a document search query for
+         this message, or exactly `N/A` if it needs no search. The search runs with that query, at the usual
+         k, and the real message then goes out as now. M.
+         - Thinking off for the pre-call. On Qwen that is cheap, the switch sitting at the end of the prefix
+           (on Gemma 4 it sits at the top of the conversation, so it is not). Effort cannot be set per
+           request on LM Studio, which has no way to pass chat-template kwargs; the maintainer sets it to
+           low in the server's template.
+         - The pre-call carries the same injects in the same order as the real request, so the backend's
+           cached prefix runs up to the user message.
+         - If the pre-call fails or times out, warn and skip the automatic search for that turn, rather than
+           falling back to the raw message, which would spring the prefill cost the feature exists to avoid.
+           How the GUI warns is a UX decision still to make.
+         - `N/A` skips the search outright, which a smaller k could not; follow-ups ("the second one") get
+           a query written with the conversation in view.
+       - **Rejected: a smaller k when the tools are on.** k=10 often missed the gold document in the
+         retrieval evaluation, and 4k tokens is a lot to pay for a rough topic listing (maintainer).
+       - **To measure in the prefill session:** the pre-call's time with thinking off, and the query rewrite
+         scored on the retrieval harness's rambling subset, the focused subset as the control.
+       - **Related, later:** telling the model what the database holds. A summary must be rebuilt whenever
+         the database changes; a cheap one needs no LLM (counts, file types, distinctive terms from the BM25
+         index) and could run at commit, globally now and per scope once scopes exist.
