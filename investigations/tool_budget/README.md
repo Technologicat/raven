@@ -26,6 +26,11 @@ Model: qwen3.6-35b-a3b (IQ4_NL_XL, 128 Ki context) via LM Studio. `max_tool_call
   diagnosis came from.
 - `run-2026-07-29.log` — verbatim console output.
 
+The first two are **kept on the machine that ran them and not committed** (`.gitignore`), and have not been
+since 2026-10-05: the chattrees hold the fetched abstracts, which are copyrighted third-party text (see
+`investigations/retrieval/`, "Corpus and copyright"), and the result lines carry replies that can quote
+them. Earlier commits still hold them. The tables below are what the repository keeps.
+
 ## Result, 24 samples (12 per arm), 2026-07-29
 
 **Reaching the cap is what produces the empty reply.**

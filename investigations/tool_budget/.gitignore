@@ -1,3 +1,5 @@
 # Per-sample chattrees and result lines carry fetched abstracts from a copyrighted corpus, and the
 # replies quoting them: kept on the machine that ran them, never committed. See README.md.
 cap20-*
+spent_tools_notice-*.json
+spent_tools_notice.jsonl
