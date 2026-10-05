@@ -61,3 +61,29 @@ badly. The association is strong and the mechanism is legible in the traces, but
 "raise the budget and the empty replies go away" remains a prediction rather than a finding until the
 budget is actually raised and re-measured. The probe resumes and the arms are recorded, so that measurement
 is a re-run rather than a rebuild.
+
+## Re-measured at cap 20, 2026-10-05
+
+The re-run the paragraph above asks for, after `max_tool_call_rounds` went from 5 to 20. Same probe and
+corpus, notice on (as shipped), 12 samples per model, `parallel` 1 on the backend. Two runs:
+
+| model | answered | rounds per follow-up | samples past July's cap of 5 |
+|---|---|---|---|
+| qwen3.6-35b-a3b (IQ4_NL_XL, 128 Ki) — July's model | **12 / 12** | 1, 1, 1, 1, 1, 1, 1, 2, 4, 9, 10, 21 | 3, all answered |
+| qwen3.8-27b (Q4_K_XL, 128 Ki) | **12 / 12** | 1 × 7, 2 × 4, 3 × 1 | none |
+
+- **The prediction held for 3.6, on what little it can show.** Three of its follow-ups went past five rounds,
+  where July's cap would have stopped them, and all three answered, one of them after reaching the new cap
+  and being refused once (21 rounds, a reply opening "The tool call budget ran out"). July's notice arm had
+  4 of 12 unanswered, all four at the cap.
+- **Most turns never get near any cap**: they ask for their fetches in one or two rounds, 4–10 at a time.
+  July's 3.6 did both, one per round in some samples and several in one in others; whether today's lean
+  towards batching is the model's variability or the parallel tool calls added on 2026-10-01 is not
+  established, and three samples past the old cap is too few to say more than "no empty replies".
+- **3.8 batches consistently**, never above three rounds, so it says nothing about the cap either way.
+
+Files: `cap20-qwen3.6-35b-a3b.jsonl` and `cap20-qwen3.8-27b.jsonl`, each with its per-sample chattrees
+beside it, **kept on the machine that ran them and not committed** (`.gitignore`): the chattrees hold the
+fetched abstracts, which are copyrighted third-party text (see `investigations/retrieval/`, "Corpus and
+copyright"), and the result lines carry replies that quote them. Run with `rag_live_corpus.py` pointed at the hydrogen corpus by setting `llm_docs_dir` and
+`llm_database_dir` on `raven.librarian.config` before running it, rather than by editing the configuration.
