@@ -435,6 +435,10 @@ def setup_themes() -> env:
             dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+        # Checkboxes: the label and the check mark both dim, the box itself keeps the global frame colour.
+        with dpg.theme_component(dpg.mvCheckbox, enabled_state=False):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, disabled_color, category=dpg.mvThemeCat_Core)
         # Same for combos (used by cherrypick toolbar).
         with dpg.theme_component(dpg.mvCombo, enabled_state=False):
             dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)

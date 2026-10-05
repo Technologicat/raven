@@ -5276,7 +5276,7 @@ class DPGChatController:
                                                             internet_enabled=self.app_state["internet_enabled"],
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
-                                                            docs_query=docs_query,
+                                                            docs_query=(docs_query if self.app_state["autosearch_enabled"] else None),
                                                             docs_num_results=librarian_config.docs_num_results,
                                                             thinking_enabled=self.app_state["thinking_enabled"],
                                                             maybe_abort=task_env.maybe_abort,

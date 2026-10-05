@@ -1936,6 +1936,9 @@ with timer() as tim:
                             app_state["internet_enabled"] = not app_state["internet_enabled"]
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
+                            dpg.configure_item("autosearch_enabled_checkbox", enabled=app_state["docs_enabled"])  # tag
+                        def toggle_autosearch_enabled():
+                            app_state["autosearch_enabled"] = not app_state["autosearch_enabled"]
                         def toggle_speech_enabled():
                             app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
@@ -1959,7 +1962,13 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
-                        dpg.add_text("Before responding, search document database for relevant information. [Alt+D]\nAlso lets the AI search the database itself; with this off, the document\ntools are not offered at all.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
+                        dpg.add_text("Let the AI search and read your document database. [Alt+D]\n\nWith this off, the document tools are not offered at all, and\nAuto-search is not in effect.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].", parent="docs_enabled_tooltip")  # tag
+
+                        dpg.add_checkbox(label="Auto-search", default_value=app_state["autosearch_enabled"], callback=toggle_autosearch_enabled,
+                                         enabled=app_state["docs_enabled"], tag="autosearch_enabled_checkbox")
+                        dpg.bind_item_theme("autosearch_enabled_checkbox", "disablable_widget_theme")  # tag
+                        dpg.add_tooltip("autosearch_enabled_checkbox", tag="autosearch_enabled_tooltip")  # tag
+                        dpg.add_text("Before each reply, search the documents for your message, and give\nthe AI the best matches. [Alt+A]\n\nUsed when Documents is on.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply. With this off, the AI can still search the\ndocuments itself, when you ask it to or when it sees the need.", parent="autosearch_enabled_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.
@@ -2470,6 +2479,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether thinking traces arrive open"),
                env(key_indent=0, key="Alt+I", action_indent=0, action="Internet", notes="websearch, webfetch"),
                env(key_indent=0, key="Alt+D", action_indent=0, action="Documents", notes="Your document database"),
+               env(key_indent=1, key="Alt+A", action_indent=1, action="Auto-search", notes="Search it before each reply"),
                env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
                env(key_indent=0, key="Alt+S", action_indent=0, action="Speech", notes="Whether the avatar speaks replies"),
                env(key_indent=1, key="Alt+C", action_indent=1, action="Subtitles", notes="Used when Speech is on"),
@@ -3255,6 +3265,9 @@ def librarian_hotkeys_callback(sender, app_data):
             guiutils.toggle_checkbox("internet_enabled_checkbox")  # tag
         elif key == dpg.mvKey_D:
             guiutils.toggle_checkbox("docs_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_A:
+            if app_state["docs_enabled"]:  # as a click does nothing to the checkbox while Documents is off
+                guiutils.toggle_checkbox("autosearch_enabled_checkbox")  # tag
         elif key == dpg.mvKey_G:
             guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
         elif key == dpg.mvKey_S:

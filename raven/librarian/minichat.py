@@ -83,7 +83,7 @@ class _FlagCommand(NamedTuple):
 # and `!cmd False` set. Each used to be written out separately, which is how `!docs` came to return its
 # "unrecognized argument" value positionally where its siblings named it.
 #
-# In the order the GUI shows the same three checkboxes, which is also the order they are announced at
+# In the order the GUI shows the same checkboxes, which is also the order they are announced at
 # startup. The help listing is alphabetical for its own reasons and does not follow this.
 _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
                                             subject="Thinking",
@@ -97,7 +97,11 @@ _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
                                         subject="Document database",
                                         gloss=" (retrieval-augmented generation, RAG)",
                                         summary="Document database",
-                                        detail=f"; document store at '{librarian_config.llm_docs_dir}'")}
+                                        detail=f"; document store at '{librarian_config.llm_docs_dir}'"),
+                  "!autosearch": _FlagCommand(flag="autosearch_enabled",
+                                              subject="Automatic document search",
+                                              gloss=" (search the documents for each message before the AI answers)",
+                                              summary="Automatic document search")}
 
 def _thought_marker(*, closing: bool, note: str = "") -> str:
     """One end of the bracket the terminal draws around the AI's thinking.
@@ -699,7 +703,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
                                                 internet_enabled=app_state["internet_enabled"],
                                                 docs_enabled=app_state["docs_enabled"],
-                                                docs_query=docs_query,
+                                                docs_query=(docs_query if app_state["autosearch_enabled"] else None),
                                                 docs_num_results=librarian_config.docs_num_results,
                                                 thinking_enabled=app_state["thinking_enabled"],
                                                 markup="ansi",
