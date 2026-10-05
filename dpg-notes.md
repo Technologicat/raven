@@ -2007,6 +2007,21 @@ the same space, so nothing moves.
 Raven's chat message icons are the worked example: `chat_controller.DPGChatMessage.build` puts the role
 glyph's drawlist in `chat_icon_group_*` so that hovering it can name the speaker.
 
+## A positioned item's tooltip never shows — put the `pos` on a group holding both
+
+Found 2026-10-05, Raven-librarian's *Chat graph* checkbox, moved to the right end of a row with `pos=`: the
+checkbox worked and its tooltip never appeared. The tooltip was attached exactly as on the unpositioned
+checkboxes beside it, so the difference was the `pos`.
+
+From DPG 2.3.1's source (`src/mvAppItem.cpp`, `RestoreImGuiCursor`): after drawing an item with an explicit
+position, DPG puts the cursor back and submits a zero-size `ImGui::Dummy`, which ImGui 1.92 needs after a
+`SetCursorPos` (Dear ImGui issue #5548). That dummy is now ImGui's *last item*, and a tooltip drawn after the
+checkbox tests hover on the last item — on the dummy, never on the checkbox.
+
+The fix, confirmed live: give the `pos` to a group, and put the item and its tooltip inside it. The tooltip is
+then drawn inside the group, right after its target, and the dummy comes after the group closes.
+`_place_chat_graph_checkbox` in `raven/librarian/app.py` is the worked example.
+
 ## A drawlist ignores `pos`, and reports back the position it was asked for
 
 Measured 2026-08-21, while looking for a way to draw a mark around an arbitrary widget. `dpg.add_drawlist`

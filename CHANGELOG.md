@@ -50,6 +50,7 @@
 
 #### Raven-librarian
 
+- **The Chat graph switch is at the right end of the row above the panel**, beside the name of what the panel is showing. In v0.2.9 it was among the mode toggles below the panel.
 - **Each status indicator stays up for at least half a second**, so a document search over in a tenth of a second reads as one rather than as a flicker. DOCUMENTS and INTERNET end on *Done*, held for half a second however long the work took.
 - **Tool calls of different kinds run at once.** When the AI asks for a web search and a document search in the same step, the slower one no longer waits for the other to finish. Calls of one kind still run one after another, and the results reach the AI in the order it asked for them.
 - **A web fetch refused by the allowlist offers its approval under the result**, as a button with a line naming the host, rather than as an extra button at the end of the message's button row, where it pushed the sibling counter out of line.

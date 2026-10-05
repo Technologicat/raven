@@ -765,6 +765,23 @@ def _describe_server_status(available: bool) -> tuple[str, str, str]:
 
 _server_status_pill_w = 0  # as last measured; the pill is as wide as its caption
 
+# Where the Chat graph checkbox goes before its width can be measured, which is after the first frame.
+_CHAT_GRAPH_CHECKBOX_W_ESTIMATE = 110
+
+def _place_chat_graph_checkbox(panel_w: int) -> None:
+    """Put the Chat graph checkbox at the right end of the row above the avatar panel.
+
+    `panel_w`: that row's width, in pixels.
+
+    Before the first frame the checkbox has no size, and it stays where its estimated width put it until the
+    next resize pass.
+    """
+    checkbox_w, _ = guiutils.get_widget_size("chat_graph_checkbox")  # tag
+    if not checkbox_w:
+        return
+    dpg.set_item_pos("chat_graph_checkbox_group",  # tag
+                     (panel_w - guiutils.DPG_WINDOW_PADDING - checkbox_w, guiutils.DPG_WINDOW_PADDING))
+
 def _place_server_status_pill(panel_w: int) -> None:
     """Put the server status pill at the bottom right of the panel under the mode toggles.
 
@@ -1430,6 +1447,29 @@ with timer() as tim:
                     with dpg.tooltip("search_counter_text"):  # tag
                         dpg.add_text("Which match is at the top of the view, of how many the search\n"
                                      "found in the chat log — this branch of this chat.")
+            def toggle_chat_graph():
+                # The checkbox is a *preference*, not the panel's state: the graph also stands
+                # in whenever the avatar has nothing to show. So this records what the user
+                # asked for and lets the one writer work out what that means right now.
+                app_state["chat_graph_shown"] = dpg.get_value("chat_graph_checkbox")  # tag
+                if not app_state["chat_graph_shown"]:
+                    # Switching the graph off is a request for the avatar, and a request for
+                    # the avatar is activity — so it wakes one that had gone to sleep, exactly
+                    # as clicking into the chat would.
+                    #
+                    # Without this the switch does nothing whenever the avatar had already
+                    # idled out *before* the graph took the panel: the graph is then standing
+                    # in for an absence rather than covering anything, so unchecking recomputes
+                    # to "still no video, keep the graph". The state that decides which of
+                    # those two happened is invisible to the user, so the same gesture would
+                    # work or not for reasons nobody can see.
+                    #
+                    # Here rather than in `_apply_panel_occupancy`, which runs on a timer
+                    # (`_PANEL_OCCUPANCY_TICK_S`): a ping there would keep the avatar awake
+                    # forever.
+                    avatar_controller.ping(avatar_record)
+                _apply_panel_occupancy()
+
             with dpg.child_window(tag="graph_search_row",  # the graph's search navigation goes here too, to the right
                                   width=_get_avatar_panel_base_size()[0],
                                   height=gui_config.search_row_h,
@@ -1466,6 +1506,32 @@ with timer() as tim:
                     with dpg.tooltip("graph_search_counter_text"):  # tag
                         dpg.add_text("Which match you are at, of how many the search found in the\n"
                                      "chat graph — every branch of every chat, not just this one.")
+                # The switch for what fills the panel, at the right of the row that names what does. It decides
+                # the panel rather than anything about the AI's answers, which is what the mode toggles below
+                # the panel are about. Positioned rather than placed in the group, so that the counter's width
+                # changing as the count does moves nothing; `_place_chat_graph_checkbox` keeps it at the edge.
+                #
+                # The position goes on a group holding the checkbox *and* its tooltip. After a positioned item,
+                # DPG 2.3 restores the cursor with a zero-size dummy item, which a tooltip placed after the
+                # checkbox would then take for its target, and never show.
+                with dpg.group(tag="chat_graph_checkbox_group",
+                               pos=(_get_avatar_panel_base_size()[0] - guiutils.DPG_WINDOW_PADDING - _CHAT_GRAPH_CHECKBOX_W_ESTIMATE,
+                                    guiutils.DPG_WINDOW_PADDING)):
+                    dpg.add_checkbox(label="Chat graph",
+                                     default_value=app_state["chat_graph_shown"],
+                                     callback=toggle_chat_graph, tag="chat_graph_checkbox")
+                    dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
+                    dpg.add_text("Show the chat tree in place of the avatar. [Alt+G]\n\n"
+                                 "Every chat ever started is in there, branching. Clicking a message\n"
+                                 "shows it; clicking it again switches the conversation to it, so you\n"
+                                 "can look around without changing anything. To steer it from the\n"
+                                 "keyboard, give it the keys — and the same chord again to come back\n"
+                                 "out and switch it off. [Ctrl+Shift+G]\n\n"
+                                 "The avatar's video pauses while it is covered, and switching this\n"
+                                 "off wakes it, even if it had gone to sleep meanwhile. With this off,\n"
+                                 "the graph still stands in whenever the avatar has nothing to show:\n"
+                                 "while its video starts up, and once it switches itself off.",
+                                 parent="chat_graph_tooltip")  # tag
 
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
@@ -1875,28 +1941,6 @@ with timer() as tim:
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
-                        def toggle_chat_graph():
-                            # The checkbox is a *preference*, not the panel's state: the graph also stands
-                            # in whenever the avatar has nothing to show. So this records what the user
-                            # asked for and lets the one writer work out what that means right now.
-                            app_state["chat_graph_shown"] = dpg.get_value("chat_graph_checkbox")  # tag
-                            if not app_state["chat_graph_shown"]:
-                                # Switching the graph off is a request for the avatar, and a request for
-                                # the avatar is activity — so it wakes one that had gone to sleep, exactly
-                                # as clicking into the chat would.
-                                #
-                                # Without this the switch does nothing whenever the avatar had already
-                                # idled out *before* the graph took the panel: the graph is then standing
-                                # in for an absence rather than covering anything, so unchecking recomputes
-                                # to "still no video, keep the graph". The state that decides which of
-                                # those two happened is invisible to the user, so the same gesture would
-                                # work or not for reasons nobody can see.
-                                #
-                                # Here rather than in `_apply_panel_occupancy`, which runs on a timer
-                                # (`_PANEL_OCCUPANCY_TICK_S`): a ping there would keep the avatar awake
-                                # forever.
-                                avatar_controller.ping(avatar_record)
-                            _apply_panel_occupancy()
                         def toggle_show_thinking():
                             app_state["show_thinking"] = not app_state["show_thinking"]
                         def toggle_thinking_enabled():
@@ -1927,34 +1971,6 @@ with timer() as tim:
                         dpg.add_checkbox(label="Show thinking", default_value=app_state["show_thinking"], callback=toggle_show_thinking, tag="show_thinking_checkbox")
                         dpg.add_tooltip("show_thinking_checkbox", tag="show_thinking_tooltip")  # tag
                         dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed. [Alt+Shift+T]\n\nThis is about what you see, not about whether the AI reasons at all -\nthat is the Thinking switch, at the left of this row.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
-
-                        # No line, matching the toolbar below the chat, which separates its sections by
-                        # spacing alone at every one of its call sites.
-                        guiutils.add_toolbar_separator(horizontal=True,
-                                                       toolbar_extent=gui_config.mode_toggle_row_h,
-                                                       size=gui_config.toolbar_separator_w,
-                                                       line=False)
-
-                        # A group of its own, between how the chat log is shown and what the avatar does,
-                        # because it is neither: it governs *which panel* fills the right-hand side. That
-                        # is the same widening a no-avatar mode makes — the panel is what a mode varies,
-                        # and the avatar is one thing that can fill it. Grouped with Speech and Subtitles
-                        # it read as a third avatar control, which is the one thing it is not.
-                        dpg.add_checkbox(label="Chat graph",
-                                         default_value=app_state["chat_graph_shown"],
-                                         callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
-                        dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
-                        dpg.add_text("Show the chat tree in place of the avatar. [Alt+G]\n\n"
-                                     "Every chat ever started is in there, branching. Clicking a message\n"
-                                     "shows it; clicking it again switches the conversation to it, so you\n"
-                                     "can look around without changing anything. To steer it from the\n"
-                                     "keyboard, give it the keys — and the same chord again to come back\n"
-                                     "out and switch it off. [Ctrl+Shift+G]\n\n"
-                                     "The avatar's video pauses while it is covered, and switching this\n"
-                                     "off wakes it, even if it had gone to sleep meanwhile. With this off,\n"
-                                     "the graph still stands in whenever the avatar has nothing to show:\n"
-                                     "while its video starts up, and once it switches itself off.",
-                                     parent="chat_graph_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.
@@ -2759,6 +2775,7 @@ def _resize_panels() -> None:
     avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
     dpg.set_item_width("ai_warning_panel", avatar_panel_w)  # tag
     dpg.set_item_width("graph_search_row", avatar_panel_w)  # tag
+    _place_chat_graph_checkbox(avatar_panel_w)
     _center_ai_warning(avatar_panel_w)
     _place_server_status_pill(avatar_panel_w)  # the panel under the mode toggles is as wide as the avatar's
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown

@@ -188,7 +188,7 @@ All such curation, analysis and exploration is facilitated by the natural abstra
 
 ### Chat graph
 
-Switch on **Chat graph** in the mode toggles, and the tree is drawn where the avatar was. This is the way to reach a chat that is not the one you are in: the linearized view only ever shows one branch, and the arrow buttons on a message only step between its immediate siblings.
+Switch on **Chat graph**, at the right end of the row above the avatar, and the tree is drawn where the avatar was. This is the way to reach a chat that is not the one you are in: the linearized view only ever shows one branch, and the arrow buttons on a message only step between its immediate siblings.
 
 What you see is the branch you are on, drawn as a vertical spine, with a few siblings either side of it at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats. Anything left out is drawn as a clickable **…N more**, so a box with no visible links means the tree really does end there.
 
