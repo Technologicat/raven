@@ -68,6 +68,7 @@
   - The result now opens with how many matches it found, and for what.
   - In v0.2.9 every match was shown in full, which for a search returning dozens buried the rest of the conversation.
   - A search stored by v0.2.9 collapses to its opening lines instead.
+- **The AI can fetch a document by part of its ID**: without the file extension, or without the leading folders, as long as that names only one document. A name that fits several gets a list of them, to fetch again by the full ID. In v0.2.9 only the exact ID worked, and an AI that dropped the extension had to spend a round finding out.
 - **A webfetch result says which address it is for, when the fetch failed too.**
   - In v0.2.9 only a fetched page opened with its address, and a failure was a bare sentence, such as *"This site doesn't render its content as static HTML"*, that did not say which site. Every result now opens with *"Webfetch result for"* and the address.
 

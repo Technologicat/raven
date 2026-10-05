@@ -37,10 +37,11 @@ __all__ = ["TOOLS",
            "approve_host_for_session", "webfetch",
            "CANONICAL_NO_DOCUMENT_DATABASE", "CANONICAL_NO_DOCUMENT_MATCHES", "search_documents",
            "CANONICAL_NOTHING_CONSULTED", "list_consulted_documents",
-           "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_NO_ROOM_TO_FETCH", "fetch_document",
+           "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_AMBIGUOUS_DOCUMENT_ID", "CANONICAL_NO_ROOM_TO_FETCH",
+           "fetch_document",
 
            # The document helpers, which read the retriever directly rather than through a tool call.
-           "document_text", "document_path", "label_documents",
+           "document_text", "resolve_document_id", "document_path", "label_documents",
 
            "get_current_time",
            "CANONICAL_BAD_EXPRESSION", "calculate",
@@ -55,6 +56,7 @@ logger = logging.getLogger(__name__)
 import ast
 import json
 import math
+import pathlib
 import threading
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -572,6 +574,15 @@ def list_consulted_documents() -> tuple[str, dict]:
 CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with the ID '{document_id}' in the database. Document IDs "
                               "come from search results; search first, then fetch by the ID a result reports.")
 
+# The database is local and the user's own, so naming what else an ID could have meant leaks nothing,
+# and it saves the model a search round to find out.
+CANONICAL_AMBIGUOUS_DOCUMENT_ID = ("The ID '{document_id}' matches more than one document in the database. "
+                                   "Fetch again with one of these full IDs:\n{candidates}")
+
+# How many candidates an ambiguous ID lists. A bare `README` can match dozens; the model needs enough to
+# see the shape of the ambiguity, not the whole list.
+_MAX_LISTED_CANDIDATES = 10
+
 # Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
 # statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
 # model what it may not do is the shape that measured 29000 characters of deliberation without producing a
@@ -611,8 +622,23 @@ def fetch_document(document_id: str,
     maybe_report_progress = getattr(dyn.tool_context, "report_progress", None)
     if maybe_report_progress is not None:
         maybe_report_progress("Reading document…")
+    candidates = resolve_document_id(retriever, document_id)
+    if not candidates:
+        logger.info(f"fetch_document: no document with ID '{document_id}'.")
+        return (CANONICAL_NO_SUCH_DOCUMENT.format(document_id=document_id), {"grounding": False})
+    if len(candidates) > 1:
+        logger.info(f"fetch_document: ID '{document_id}' is ambiguous; {len(candidates)} candidates.")
+        listed = [f"- {candidate}" for candidate in candidates[:_MAX_LISTED_CANDIDATES]]
+        n_more = len(candidates) - len(listed)
+        if n_more:
+            listed.append(f"- …and {n_more} more")
+        return (CANONICAL_AMBIGUOUS_DOCUMENT_ID.format(document_id=document_id, candidates="\n".join(listed)),
+                {"grounding": False})
+    if candidates[0] != document_id:
+        logger.info(f"fetch_document: ID '{document_id}' resolved to '{candidates[0]}'.")
+    document_id = candidates[0]  # from here on, the real ID: the header teaches it to the model
     text = document_text(retriever, document_id)
-    if text is None:
+    if text is None:  # deleted between the two reads
         logger.info(f"fetch_document: no document with ID '{document_id}'.")
         return (CANONICAL_NO_SUCH_DOCUMENT.format(document_id=document_id), {"grounding": False})
 
@@ -648,6 +674,45 @@ def document_text(retriever: "hybridir.HybridIR | None",
     with retriever.datastore_lock:
         document = retriever.documents.get(document_id)
         return document["text"] if document is not None else None
+
+def _id_parts(document_id: str) -> list[str]:
+    """Split a document ID into path components, accepting either separator.
+
+    IDs are paths relative to the documents directory, so they carry the OS's separator, and a model may
+    write either one whatever the OS.
+    """
+    return [part for part in document_id.replace("\\", "/").split("/") if part]
+
+def resolve_document_id(retriever: "hybridir.HybridIR | None",
+                        document_id: str) -> list[str]:
+    """Return the IDs of the documents `document_id` can mean, sorted. Empty if none.
+
+    An exact match is the only candidate, whatever else would match. Otherwise `document_id` matches a
+    document whose ID *ends with* it, component-wise, where the last component may also omit the file
+    extension: `paper` and `refs/paper` both match `refs/paper.bib`. That covers the IDs a model actually
+    sends, which drop the extension or the leading directories.
+
+    One candidate means the ID resolved. More than one means it is ambiguous — the same name in two
+    directories, or with two extensions — and the caller should say so rather than pick.
+    """
+    if retriever is None:
+        return []
+    query = _id_parts(document_id)
+    if not query:
+        return []
+    *query_dirs, query_name = query
+    with retriever.datastore_lock:
+        if document_id in retriever.documents:
+            return [document_id]
+        candidates = []
+        for candidate in retriever.documents:
+            parts = _id_parts(candidate)
+            if len(parts) < len(query):
+                continue
+            *dirs, name = parts[-len(query):]
+            if dirs == query_dirs and query_name in (name, pathlib.PurePath(name).stem):
+                candidates.append(candidate)
+    return sorted(candidates)
 
 def document_path(retriever: "hybridir.HybridIR | None",
                   document_id: str) -> str | None:

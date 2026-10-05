@@ -221,6 +221,82 @@ class TestFetchDocumentRefusal:
         assert metadata == {"grounding": False}
 
 
+def _retriever_with(*document_ids):
+    return env(datastore_lock=threading.RLock(),
+               documents={document_id: {"text": f"TEXT of {document_id}", "path": f"/docs/{document_id}"}
+                          for document_id in document_ids})
+
+
+class TestResolveDocumentId:
+    def test_an_exact_id_wins_even_when_a_looser_match_exists(self):
+        # `paper` is both an ID in its own right and the stem of `paper.bib`.
+        retriever = _retriever_with("paper", "paper.bib")
+        assert llmtools.resolve_document_id(retriever, "paper") == ["paper"]
+
+    def test_the_extension_may_be_omitted(self):
+        retriever = _retriever_with("refs/paper.bib", "refs/other.bib")
+        assert llmtools.resolve_document_id(retriever, "refs/paper") == ["refs/paper.bib"]
+
+    def test_leading_directories_may_be_omitted(self):
+        retriever = _retriever_with("a/b/paper.bib", "a/b/other.bib")
+        assert llmtools.resolve_document_id(retriever, "paper.bib") == ["a/b/paper.bib"]
+        assert llmtools.resolve_document_id(retriever, "b/paper") == ["a/b/paper.bib"]
+
+    def test_either_separator_is_accepted(self):
+        retriever = _retriever_with("a\\paper.bib")  # as an ID comes out on Windows
+        assert llmtools.resolve_document_id(retriever, "a/paper") == ["a\\paper.bib"]
+
+    def test_a_partial_component_is_not_a_match(self):
+        # Matching is by whole path components: `aper` is not `paper`, nor `b/paper` a suffix of `ab/paper`.
+        retriever = _retriever_with("ab/paper.bib")
+        assert llmtools.resolve_document_id(retriever, "aper.bib") == []
+        assert llmtools.resolve_document_id(retriever, "b/paper.bib") == []
+
+    def test_the_same_stem_with_two_extensions_is_ambiguous(self):
+        retriever = _retriever_with("paper.md", "paper.png")
+        assert llmtools.resolve_document_id(retriever, "paper") == ["paper.md", "paper.png"]
+        assert llmtools.resolve_document_id(retriever, "paper.md") == ["paper.md"]
+
+    def test_the_same_name_in_two_directories_is_ambiguous(self):
+        retriever = _retriever_with("a/paper.bib", "b/paper.bib")
+        assert llmtools.resolve_document_id(retriever, "paper.bib") == ["a/paper.bib", "b/paper.bib"]
+        assert llmtools.resolve_document_id(retriever, "b/paper") == ["b/paper.bib"]
+
+
+class TestFetchDocumentResolution:
+    @pytest.fixture
+    def fetch(self, monkeypatch):
+        # The budget machinery is `llmclient`'s and wants a configured backend; here everything fits.
+        monkeypatch.setattr(llmclient, "budget_for_fetched_text", lambda settings, used_tokens: 10**6)
+        monkeypatch.setattr(llmclient, "fit_text_to_token_budget", lambda settings, text, budget: text)
+
+        def _fetch(retriever, document_id):
+            with dyn.let(tool_context=env(retriever=retriever, llm_settings=None, used_tokens=0)):
+                return llmtools.fetch_document(document_id)
+        return _fetch
+
+    def test_a_unique_loose_id_fetches_and_the_header_names_the_real_one(self, fetch):
+        output, metadata = fetch(_retriever_with("refs/paper.bib", "refs/other.bib"), "paper")
+        assert "Document 'refs/paper.bib'" in output
+        assert "TEXT of refs/paper.bib" in output
+        assert metadata == {"grounding": True, "document_ids": ["refs/paper.bib"]}
+
+    def test_an_ambiguous_id_names_every_candidate_and_fetches_nothing(self, fetch):
+        output, metadata = fetch(_retriever_with("a/paper.bib", "b/paper.bib", "other.bib"), "paper")
+        assert output.startswith("The ID 'paper' matches more than one document")
+        assert "- a/paper.bib" in output and "- b/paper.bib" in output
+        assert "other.bib" not in output
+        assert "TEXT of" not in output
+        assert metadata == {"grounding": False}
+
+    def test_a_long_candidate_list_is_capped(self, fetch):
+        retriever = _retriever_with(*(f"d{k:02d}/README.md" for k in range(25)))
+        output, _ = fetch(retriever, "README")
+        assert "- d00/README.md" in output
+        assert "- d10/README.md" not in output
+        assert output.endswith("- …and 15 more")
+
+
 class TestFetchDocumentProgress:
     def test_it_says_it_is_reading(self):
         retriever = env(datastore_lock=threading.RLock(), documents={"real.bib": {"text": "x", "path": "/r"}})

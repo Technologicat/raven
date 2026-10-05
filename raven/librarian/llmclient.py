@@ -96,11 +96,11 @@ from .llmtools import (TOOLS, TOOL_ENTRYPOINTS,  # noqa: F401 -- re-export
                        CANONICAL_NO_WEB_RESULTS, CANONICAL_SEARCH_ENGINE_UNAVAILABLE, CANONICAL_WEBSEARCH_UNAVAILABLE,
                        CANONICAL_NOT_ON_ALLOWLIST, CANONICAL_WEBFETCH_TIMEOUT, CANONICAL_WEBFETCH_UNAVAILABLE,
                        CANONICAL_NO_DOCUMENT_DATABASE, CANONICAL_NO_DOCUMENT_MATCHES,
-                       CANONICAL_NO_SUCH_DOCUMENT, CANONICAL_NOTHING_CONSULTED,
+                       CANONICAL_NO_SUCH_DOCUMENT, CANONICAL_AMBIGUOUS_DOCUMENT_ID, CANONICAL_NOTHING_CONSULTED,
                        CANONICAL_NO_ROOM_TO_FETCH, CANONICAL_BAD_EXPRESSION,
                        CANONICAL_TOOL_CALL_CANCELLED,
 
-                       document_text, document_path, label_documents,
+                       document_text, resolve_document_id, document_path, label_documents,
 
                        websearch, webfetch, search_documents, fetch_document,
                        get_current_time, calculate, list_consulted_documents)
