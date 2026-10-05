@@ -147,8 +147,12 @@ def format_message_metadata_line(node_payload: dict, role: str, revision: int) -
     """
     return " ".join(part for part in format_message_metadata_parts(node_payload, role, revision) if part)
 
-def format_message_metadata_parts(node_payload: dict, role: str, revision: int) -> tuple[str, str, str]:
+def format_message_metadata_parts(node_payload: dict, role: str, revision: int,
+                                  maybe_live_model: str | None = None) -> tuple[str, str, str]:
     """The three parts of `format_message_metadata_line`, for a view that draws them separately.
+
+    `maybe_live_model`: For a reply still being written, the model writing it, shown until the reply records
+                        its own. `None` for a stored message.
 
     Returns `(when, revision_label, producer_label)`, where `producer_label` is `""` when there is nothing
     to say. The chat log draws the revision label as a link, which is why it is a part of its own.
@@ -159,7 +163,7 @@ def format_message_metadata_parts(node_payload: dict, role: str, revision: int) 
     if role == "tool":
         maybe_producer = chatutil.tool_name_of(node_payload)
     elif role == "assistant":
-        maybe_producer = chatutil.model_of(node_payload)
+        maybe_producer = chatutil.model_of(node_payload) or maybe_live_model
     else:
         maybe_producer = None
     return (node_payload['general_metadata']['datetime'],

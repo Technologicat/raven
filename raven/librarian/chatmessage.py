@@ -343,7 +343,15 @@ class DPGChatMessage:
             #
             # Tagged so a navigation jump can flash it: it is the one widget every stored message has, at a
             # fixed place at its top, which makes it the natural "here is the message you asked for" marker.
-            when, revision_label, producer_label = messagetext.format_message_metadata_parts(node_payload, role, node_active_revision)
+            # A reply still arriving has not recorded its model yet, so it shows the one writing it, which is the
+            # string the stored reply will record: both come from `llm_settings.model`.
+            maybe_live_model = None
+            if self.renders_live_reply:
+                maybe_live_model = self.parent_view.chat_controller.llm_settings.model
+                if maybe_live_model == llmclient.NO_MODEL_INFO:
+                    maybe_live_model = None
+            when, revision_label, producer_label = messagetext.format_message_metadata_parts(node_payload, role, node_active_revision,
+                                                                                              maybe_live_model=maybe_live_model)
             metadata_row = dpg.add_group(horizontal=True, horizontal_spacing=_METADATA_SPACING,
                                          parent=text_vertical_layout_group)
             dpg.add_text(when,

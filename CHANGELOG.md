@@ -61,6 +61,7 @@
 
 #### Raven-librarian
 
+- **A reply names the model writing it while it is being written**, in the grey line above it, as a finished reply already did.
 - **Clickable names in the chat log highlight under the mouse**: an attached file's name, a document from the knowledge base, the revision link above an edited message. The button that does the same as clicking the name now sits right beside it.
 - **Hovering the icon of the system prompt or of a tool result says which it is**, as hovering an AI or user message's icon names who wrote it. In v0.2.9 those two icons had no tooltip.
 - **The [no sources retrieved] marker counts the internet as a source**, so it now also appears with *Internet* on and *Documents* off. With both off it still does not appear. A message that only calls tools never gets it, since what it asked for arrives after it.

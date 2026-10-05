@@ -84,6 +84,23 @@ class TestFormatMessageMetadataLine:
         line = messagetext.format_message_metadata_line(self._payload(), "assistant", 1)
         assert line == "2026-09-04 07:52:48 R1"
 
+    def test_a_reply_still_arriving_names_the_model_writing_it(self):
+        # Nothing is recorded until the reply finishes, so a streaming one is given the live model instead.
+        _, _, producer = messagetext.format_message_metadata_parts(self._payload(), "assistant", 1,
+                                                                   maybe_live_model="qwen3.8-27b")
+        assert producer == "[qwen3.8-27b]"
+
+    def test_a_recorded_model_wins_over_the_live_one(self):
+        # A stored reply names the model that wrote it, which need not be the one loaded now.
+        _, _, producer = messagetext.format_message_metadata_parts(self._payload({"model": "qwen3.5-4b"}), "assistant", 1,
+                                                                   maybe_live_model="qwen3.8-27b")
+        assert producer == "[qwen3.5-4b]"
+
+    def test_the_live_model_is_not_credited_to_a_users_message(self):
+        _, _, producer = messagetext.format_message_metadata_parts(self._payload(), "user", 1,
+                                                                   maybe_live_model="qwen3.8-27b")
+        assert producer == ""
+
     def test_a_users_own_message_is_not_credited_to_anything(self):
         # The control for the pair. Both branches are gated on the role, and a payload carrying both
         # fields is what would expose a gate that had stopped checking it.
