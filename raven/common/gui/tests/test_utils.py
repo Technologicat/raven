@@ -647,6 +647,20 @@ class TestMinimumShowTime:
         time.sleep(self.MIN + 0.3)  # past when the cancelled hide would have fired
         assert calls == [("show", "light")], "the cancelled hide fired, or the light was shown twice"
 
+    def test_linger_holds_a_light_that_has_been_up_long_enough(self, calls):
+        # Without the linger this light would go at once (minimum 0), so it is the linger being measured.
+        hold = guiutils.MinimumShowTime(0.0)
+        hold.show("light")
+        hold.hide("light")
+        assert calls == [("show", "light"), ("hide", "light")], "control: no linger, so hidden at once"
+        calls.clear()
+        t0 = time.monotonic()
+        hold.show("light")
+        hold.hide("light", linger=self.MIN)
+        assert calls == [("show", "light")], "hidden at once despite the linger"
+        assert self._wait_until(lambda: ("hide", "light") in calls, deadline=5.0), "never hidden"
+        assert time.monotonic() - t0 >= self.MIN - 0.02  # a `threading.Timer` may fire a few ms early
+
     def test_lights_are_independent(self, calls):
         hold = guiutils.MinimumShowTime(self.MIN)
         hold.show("a")

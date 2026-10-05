@@ -1326,8 +1326,9 @@ class MinimumShowTime:
 
     For status lights whose work can be over in a frame or two: shown and hidden as the work goes, such a
     light reads as a glitch rather than as a signal. `show(widget)` shows it, `hide(widget)` hides it — at
-    once if it has been up long enough, otherwise when it has. A `show` while a hide is pending cancels the
-    hide, so a light switched off and straight back on stays lit.
+    once if it has been up long enough, otherwise when it has. `hide(widget, linger=s)` additionally keeps
+    it up for `s` seconds after the call, for a light that says something on its way out ("Done"). A `show`
+    while a hide is pending cancels the hide, so a light switched off and straight back on stays lit.
 
     Any number of widgets; each is tracked separately. Callable from any thread, as DPG allows. A widget that
     no longer exists when its delayed hide comes due is ignored.
@@ -1349,13 +1350,13 @@ class MinimumShowTime:
         with nonexistent_ok():
             dpg.show_item(widget)
 
-    def hide(self, widget: str | int) -> None:
-        """Hide `widget`, once it has been shown for at least the minimum."""
+    def hide(self, widget: str | int, linger: float = 0.0) -> None:
+        """Hide `widget`, once it has been shown for at least the minimum, and at least `linger` seconds from now."""
         with self._lock:
             if widget not in self._shown_at:
                 return
             generation = self._generation.get(widget, 0)
-            remaining = self.min_duration - (time.monotonic() - self._shown_at[widget])
+            remaining = max(self.min_duration - (time.monotonic() - self._shown_at[widget]), linger)
         if remaining <= 0:
             self._hide_if_still_wanted(widget, generation)
         else:

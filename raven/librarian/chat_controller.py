@@ -175,6 +175,9 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
 # How long a status indicator stays up once shown, in seconds, however soon its work is over.
 _INDICATOR_MIN_SHOW_TIME = 0.5
 
+# How long an indicator saying "Done" stays up after its work ends, in seconds, however long the work took.
+_INDICATOR_DONE_LINGER = 0.5
+
 # Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
 # The set `llmtools.perform_tool_calls` runs one at a time, which is what keeps that light truthful.
 web_access_tool_names = llmclient.NETWORK_TOOL_NAMES
@@ -4144,9 +4147,9 @@ class DPGChatController:
         self.indicator_hold.show(self.docs_access_indicator_widget)
 
     def _hide_docs_access_indicator(self) -> None:
-        """Hide DOCUMENTS, saying "Done" for as long as its minimum show time holds it up."""
+        """Hide DOCUMENTS, saying "Done" on its way out."""
         dpg.set_value(self.docs_access_progress_text_widget, "Done")
-        self.indicator_hold.hide(self.docs_access_indicator_widget)
+        self.indicator_hold.hide(self.docs_access_indicator_widget, linger=_INDICATOR_DONE_LINGER)
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
@@ -5213,9 +5216,9 @@ class DPGChatController:
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
                         if function_name in web_access_tool_names:
-                            # Says so for as long as the minimum show time holds INTERNET up, as DOCUMENTS does.
+                            # Says so on its way out, as DOCUMENTS does.
                             dpg.set_value(self.web_progress_text_widget, "Done")
-                            self.indicator_hold.hide(self.web_indicator_widget)
+                            self.indicator_hold.hide(self.web_indicator_widget, linger=_INDICATOR_DONE_LINGER)
                         elif function_name in document_access_tool_names:
                             self._hide_docs_access_indicator()
 
