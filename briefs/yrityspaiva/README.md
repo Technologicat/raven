@@ -562,7 +562,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          ended at the AI's last reply, which the template renders differently once something follows it. It
          now ends at the last user message; the readout adds the tail from the local estimate, exact while
          under 2% (maintainer's choice over a second prefill request, measured at double the work).
-         `investigations/prefill-by-model/`. **Wants a live look in Librarian** before release.
+         `investigations/prefill-by-model/`. Checked live the same evening: a follow-up on a ~10.6k-token
+         prompt spent 1.56 s in prompt processing, against ~7 s for the whole.
+       - **For 6 October: with the chat graph showing, Ctrl+N sometimes brings the avatar back after its glitch
+         effect has already ended** (maintainer, seen live), so the switch to the new chat happens without it.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
          then the systems check.
        - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;
