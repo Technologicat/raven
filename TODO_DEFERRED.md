@@ -6579,3 +6579,24 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   either way: most messages are a sentence or two, and the ones that are not tend to be pasted rather than
   typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
   work outside our control can only be missed. Noticed by Juha (2026-08-04) while testing the send-key change.
+
+## Swap the thought-bubble retcon in, as a streaming paragraph now is
+
+*Cluster: ? · Cost: S–M · Gate: a model that triggers it, to verify against · Filed: 2026-10-05 · See also: `DPGChatMessage.reclassify_all_paragraphs_as_thought`*
+
+When reasoning arrives with no opening tag — the chat template opened the thinking block itself, so only
+`</think>` comes through — `reclassify_all_paragraphs_as_thought` moves everything shown so far into the
+thought bubble by deleting each paragraph's widget and rendering them all afresh into the bubble. Any frame
+drawn between the deletions and the re-render has the reply missing, which is the jump `replace_last_paragraph`
+had until 2026-10-05, when it moved to building the replacement hidden and handing it to `WidgetSwap`.
+
+The same cure applies, but it is not a reuse: this is a many-to-one move (several paragraphs in the reply
+container become one bubble holding them all), and `WidgetSwap` replaces one widget with one. So it wants
+either a many-to-one form of `WidgetSwap` or a bubble built hidden with its paragraphs and swapped in as one
+unit. The move itself still changes the layout a lot, by design; what a swap removes is the frame in between.
+
+Expected to fire fairly often on the 4B and 9B size tiers, and on other backends such as text-generation-webui
+(Juha, 2026-10-05), so it is not the once-in-a-while path it looks like from Qwen 3.8, which separates its
+channels and never reaches it. That is also the gate: verifying it needs one of those running.
+
+Discovered while fixing the streaming paragraph's jump (2026-10-05).
