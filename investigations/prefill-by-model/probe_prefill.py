@@ -60,8 +60,8 @@ def main() -> None:
             results.flush()
 
         for model in models:
-            # `parallel` pinned: a model's stored default may say otherwise, and parallel slots split the cache
-            # that the tail runs measure.
+            # `parallel` pinned so that every model is measured under the same load settings: the stored
+            # defaults are per model, and some said 4.
             loaded = post(f"{base}/api/v1/models/load", {"model": model, "context_length": CONTEXT_LENGTH, "parallel": 1})
             info = [m for m in requests.get(f"{base}/api/v1/models", timeout=30).json()["models"] if m["key"] == model]
             record(event="load", model=model, response=loaded, instances=info[0]["loaded_instances"] if info else None)
