@@ -1064,10 +1064,11 @@ class GlyphAtlasRefresh(Animation):
     # What this repairs: DPG 2.3 is built on ImGui 1.92, whose atlas loads glyphs as text first needs them,
     # and every so often one comes out blank — advance width kept, pixels missing — in a single face, for the
     # rest of the run. Drawing that glyph again does not repair it. Drawing a large batch of glyphs the atlas
-    # has never held does, at once and everywhere on screen, which fits a grown atlas being uploaded whole.
-    # The repair is observed; the mechanism is inferred. It runs after the startup content has been built,
-    # because that is when the damage has been seen to happen, and it cannot help with a glyph that goes
-    # blank later.
+    # has never held repairs it only when the batch makes the atlas grow: a grown atlas is a new texture,
+    # uploaded whole from the CPU-side pixels, which hold the glyph that never reached the GPU. A batch that
+    # fits in the atlas as it is uploads only its own glyphs and repairs nothing. It runs after the startup
+    # content has been built, because that is when the damage has been seen to happen, and it cannot help
+    # with a glyph that goes blank later.
     #
     # Nearly transparent rather than transparent, because ImGui skips drawing text whose alpha is zero, and
     # text it does not draw loads no glyphs. Likewise the batch must be inside the viewport, since clipped
