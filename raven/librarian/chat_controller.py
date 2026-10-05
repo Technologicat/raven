@@ -439,10 +439,11 @@ class DPGChatMessage:
         # rather than `_add_tooltip`: the name is fixed for the life of the widget, and a caption written
         # once cannot show the autosize glitch the `Tooltip` class exists to hide.
         #
-        # Only the two roles that have a speaker. A system prompt and a tool result are nobody's, and a
-        # caption explaining what their glyph *means* is a different feature from naming who is talking.
-        if persona is not None:
-            dpg.add_text(persona, parent=dpg.add_tooltip(icon_group))
+        # A system prompt and a tool result have no speaker, so their caption says what the message is.
+        maybe_caption = persona if persona is not None else {"system": "System prompt",
+                                                             "tool": "Tool result"}.get(role)
+        if maybe_caption is not None:
+            dpg.add_text(maybe_caption, parent=dpg.add_tooltip(icon_group))
 
         # ----------------------------------------
         # text content

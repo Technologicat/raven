@@ -52,6 +52,7 @@
 
 #### Raven-librarian
 
+- **Hovering the icon of the system prompt or of a tool result says which it is**, as hovering an AI or user message's icon names who wrote it. In v0.2.9 those two icons had no tooltip.
 - **The [no sources retrieved] marker counts the internet as a source**, so it now also appears with *Internet* on and *Documents* off. With both off it still does not appear. A message that only calls tools never gets it, since what it asked for arrives after it.
 - **The Chat graph switch is at the right end of the row above the panel**, beside the name of what the panel is showing. In v0.2.9 it was among the mode toggles below the panel.
 - **Each status indicator stays up for at least half a second**, so a document search over in a tenth of a second reads as one rather than as a flicker. DOCUMENTS and INTERNET end on *Done*, held for half a second however long the work took.
