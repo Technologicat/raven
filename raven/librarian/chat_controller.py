@@ -2228,7 +2228,9 @@ class DPGChatController:
             self.indicator_hold.show(self.llm_indicator_widget)  # tag
         try:
             out = llmclient.prefill(self.llm_settings,
-                                    history,
+                                    # As the next turn will begin. The bare branch differs from it at the
+                                    # very first message, which would warm a prefix no turn ever sends.
+                                    scaffold.build_prefill_prompt(self.llm_settings, history),
                                     # All the per-group gating is in `maybe_tool_names` now, so this coarser
                                     # switch has nothing left to decide and stays on. It is not redundant at
                                     # its own layer: `ai_turn` still sets it `False` to withdraw the tools

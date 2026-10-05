@@ -7,7 +7,7 @@ __all__ = ["action_ack", "action_stop",  # re-exported from `llmclient`
            # The two system injects, in the order they reach the model. Also what the chat view shows, so
            # the log matches what is sent.
            "build_system_preamble", "build_system_postamble",
-           "build_turn_prompt", "make_tool_context",
+           "build_turn_prompt", "build_prefill_prompt", "make_tool_context",
 
            "ai_turn", "retry_tool_calls"]
 
@@ -610,25 +610,12 @@ def build_turn_prompt(llm_settings: env,
                      delivered as a synthetic call to `get_current_time` — see the comment at that inject
                      for why the two travel together in both directions.
     """
-    # Work on our own list from here on. Everything below inserts into it, and `_add_to_system_message`
-    # replaces its leading element; doing that to the caller's list is what this function used to do, and
-    # what made it impossible to ask "what would Raven send?" without handing over a list to be altered.
-    history = list(history)
-
-    # The instruction injects belong to the character, and go when she does. Not merely a preference: with
-    # no persona there may be no system message at all (Raven's shipped `system_prompt` is empty, all of the
-    # content being the character card), and `_add_to_system_message` *inserts* one when the history has
-    # none — so leaving these on would hand a deliberately bare model a system message containing nothing
-    # but today's date.
-    #
-    # The preamble goes with them for a reason of its own: a bare-model call has no setup block, so a
-    # notice announcing one would describe something that is not there.
-    if use_character_card:
-        _add_to_system_message(llm_settings=llm_settings,
-                               history=history,
-                               preamble=build_system_preamble(llm_settings=llm_settings),
-                               postamble=build_system_postamble(llm_settings=llm_settings,
-                                                                tools_are_spent=tools_are_spent))
+    # A list of our own, with the system message as every request of this conversation sends it. The same
+    # step `build_prefill_prompt` takes, which is what lets a warmed cache be reused.
+    history = _with_system_injects(llm_settings=llm_settings,
+                                   history=history,
+                                   use_character_card=use_character_card,
+                                   tools_are_spent=tools_are_spent)
 
     # The data-like injects below go into synthetic tool exchanges of their own, not into the system
     # message; see `_add_to_system_message` for why the split is not a stylistic one.
@@ -700,6 +687,47 @@ def build_turn_prompt(llm_settings: env,
 
     return history
 
+
+def build_prefill_prompt(llm_settings: env,
+                         history: list[dict],
+                         use_character_card: bool = True) -> list[dict]:
+    """Return what the next turn's prompt will begin with: `history`, with the system message as a turn sends it.
+
+    For warming a backend's KV cache between turns (`llmclient.prefill`). `history` is the linearized branch
+    up to HEAD, and is not modified. The per-turn injects are left out: a turn places them before its new
+    user message, which is after everything here, so they are not part of the prefix it can reuse.
+    """
+    # The system message is the whole point. It opens the prompt, so a prefill that sent the stored one
+    # unwrapped warmed a prefix no turn ever sends, and every turn reprocessed the whole conversation.
+    return _with_system_injects(llm_settings=llm_settings,
+                                history=history,
+                                use_character_card=use_character_card,
+                                tools_are_spent=False)
+
+def _with_system_injects(llm_settings: env,
+                         history: list[dict],
+                         use_character_card: bool,
+                         tools_are_spent: bool) -> list[dict]:
+    """A copy of `history` whose system message carries the turn's preamble and postamble."""
+    # Our own list: `_add_to_system_message` replaces its leading element, and doing that to the caller's
+    # list is what made it impossible to ask "what would Raven send?" without handing over a list to be
+    # altered.
+    history = list(history)
+    # The instruction injects belong to the character, and go when she does. Not merely a preference: with
+    # no persona there may be no system message at all (Raven's shipped `system_prompt` is empty, all of the
+    # content being the character card), and `_add_to_system_message` *inserts* one when the history has
+    # none — so leaving these on would hand a deliberately bare model a system message containing nothing
+    # but today's date.
+    #
+    # The preamble goes with them for a reason of its own: a bare-model call has no setup block, so a
+    # notice announcing one would describe something that is not there.
+    if use_character_card:
+        _add_to_system_message(llm_settings=llm_settings,
+                               history=history,
+                               preamble=build_system_preamble(llm_settings=llm_settings),
+                               postamble=build_system_postamble(llm_settings=llm_settings,
+                                                                tools_are_spent=tools_are_spent))
+    return history
 
 def make_tool_context(llm_settings: env | None,
                       retriever: "hybridir.HybridIR | None") -> env:

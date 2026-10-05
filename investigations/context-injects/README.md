@@ -128,10 +128,13 @@ the previous user message. So without something between turns re-warming the cac
 the previous exchange. Librarian's GUI hides this with its context prefill between turns; a batch run
 through `agent.turn` has no such step. Under A the prompt parts at message 0 instead, as expected.
 
-The cost of A is shown by a live turn instead (2026-10-05, Qwen 3.8 27B): after a prefill of 1406 tokens, a
-turn with an attached PDF reprocessed its whole ~5530-token prompt in 3.68 s, about what the whole prompt
-takes at this model's ~1500 tokens/s against ~2.7 s for the PDF's part alone. A's reminder had changed
-message 0. In a long chat that is the whole context, on the first turn that grounds in anything.
+A's cost therefore rests on its mechanism, which holds by construction: the reminder changes message 0 on
+the first turn with material, and everything after message 0 is then reprocessed. In a long chat that is
+the whole context. A live turn first taken as showing it (a PDF attached after a prefill, its whole prompt
+reprocessed) turned out to show something else, found the same day: **the GUI's prefill sent the stored
+system message without the turn's preamble and postamble**, so it warmed a prefix no turn ever sent, and
+every turn reprocessed the whole conversation whatever the reminder did. The prefill now builds its prompt
+with `scaffold.build_prefill_prompt`, which shares that step with `build_turn_prompt`.
 
 **Decided** (maintainer, 2026-10-05): **C′, as standing text** in `prompts/interaction.md` rather than an
 inject, since it no longer varies; the conditional inject is gone. Not measured: the same words as a bullet

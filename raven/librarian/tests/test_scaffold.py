@@ -1153,6 +1153,22 @@ class TestPerformInjects:
         assert "You are a helpful assistant." in system_text  # the original system prompt survives
         assert "Today is" in system_text
 
+    @pytest.mark.parametrize("tools_enabled", [True, False], ids=["with the clock", "without"])
+    def test_the_prefill_sends_what_the_next_turn_begins_with(self, llm_settings, tools_enabled):
+        # A prefill warms the backend's cache for the next turn, which only helps if that turn's prompt starts
+        # with exactly what the prefill sent. The branch ends at HEAD, the AI's last reply; the turn adds its
+        # injects and the new message after it.
+        branch = make_conversation(llm_settings) + [
+            chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is a variable.")]
+        prefill = scaffold.build_prefill_prompt(llm_settings, branch)
+        turn = scaffold.build_turn_prompt(
+            llm_settings=llm_settings,
+            history=branch + [chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="And Y?")],
+            docs_query="And Y?", docs_matches=[sample_rag_match()],
+            tool_context=grounding_context(grounded=True), tools_enabled=tools_enabled)
+        assert turn[:len(prefill)] == prefill
+        assert turn[0] != branch[0], "the turn sends the stored system message unchanged, so this cannot tell a wrapped prefill from a bare one"
+
     @pytest.mark.parametrize("material", ["search matches", "an attachment", "a grounded tool result"])
     def test_the_system_message_does_not_depend_on_the_turns_material(self, llm_settings, material):
         # The system message opens the prompt, so anything in it that came and went with the turn's material

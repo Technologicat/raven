@@ -123,6 +123,7 @@
 
 #### Raven-librarian
 
+- **The context prefill between turns now prepares what the next reply actually sends.** It sent the conversation with a different system message than a reply does, so nothing it prepared could be used. Whether the backend can then build on what it prepared depends on the backend and the model.
 - **Ctrl+arrows, Ctrl+Home, Ctrl+End and Ctrl+Delete edit text again while you type.** In v0.2.9 the first four also moved the chat to a sibling message, so jumping to the start of a message being typed could switch the conversation under it; and a held Ctrl+Shift+Delete could delete a message, its confirming second press arriving by key repeat. While the message field or the search field has the text cursor, these keys now only edit the text.
 - **Loading a different model in LM Studio mid-session no longer brings the old one back.**
   - In v0.2.9 Librarian asked for the model that was loaded when it started, so LM Studio loaded that one again, or failed where it no longer fit.
