@@ -122,6 +122,7 @@
   - In v0.2.9 Librarian asked for the model that was loaded when it started, so LM Studio loaded that one again, or failed where it no longer fit.
   - Before each reply it now checks which model is loaded and asks for that one, unless its configuration names a model, so the context size and image support it works with are the new model's too.
   - With several models loaded, it uses the first LM Studio lists, and says so in its log.
+- **The LLM backend's status row comes back when a reply fails because no model is loaded or the backend cannot be reached**, and goes away again once it can answer. In v0.2.9 the row appeared only at startup.
 - **When the LLM backend refuses a request, the error in the chat gives the backend's reason**, such as *"Multiple models are loaded"*. In v0.2.9 it said only the HTTP status.
 - **The chat log no longer jumps while the AI is writing.** Each update to the paragraph being written removed it and drew it again, so for a frame the log was shorter and the text below sprang down and back. The updated paragraph now replaces the old one in the same frame.
 - **A missing or unreadable avatar settings file now ends the app cleanly.** In v0.2.9 the app reported the error and then ran on with every button dead, hung when closed, and left its avatar on the server until the server was restarted. It now exits with status 255, releasing the avatar.

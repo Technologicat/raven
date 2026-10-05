@@ -591,14 +591,15 @@ def follow_model_swap(settings: env) -> bool:
     loaded, and the name requests carry unless `config.llm_model` sets one — together with what was fitted
     to the old one, the token-count calibration and the local tokenizer. Everything else in `settings` is left alone, including any per-run overrides a caller has set.
 
-    Does nothing when the backend does not answer: the turn then meets that failure itself, and recovering
-    from it is `reconnect`'s job.
+    When the backend does not answer, it only records that (`backend_is_reachable`, which `backend_status`
+    reads), so that a frontend can say so; recovering is `reconnect`'s job. Returns `False` then.
     """
     if not settings.backend_is_reachable:
         return False
     try:
         info = _resolve_model_info(settings.backend_url, settings.backend_flavor)
     except requests.exceptions.RequestException:
+        settings.backend_is_reachable = False
         return False
     context_length = info.context_length if info.context_length is not None else _DEFAULT_CONTEXT_LENGTH
     if (info.label, context_length, info.is_vlm, info.loaded) == (settings.model, settings.context_length,

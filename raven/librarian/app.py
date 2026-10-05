@@ -2357,6 +2357,14 @@ with timer() as tim:
 _composer_was_active = False
 def update_animations():
     gui_animation.animator.render_frame()
+    # The LLM backend's status row comes back up when a turn finds the backend unable to answer: the turn's
+    # model check (`llmclient.follow_model_swap`) records that in the settings, and this notices it. Two
+    # attribute reads, no request; the poll it starts is what probes, and takes the row down again.
+    if not _backend_pill_shown and not _shutting_down:
+        maybe_bad_status = llmclient.backend_status(llm_settings)
+        if maybe_bad_status is not llmclient.backend_ready:
+            _refresh_backend_status_pill(maybe_bad_status)
+            _start_backend_status_poll(delay_first_probe=False)
     # Mirror the retriever's indexing progress text into INDEXING. The other indicators' texts are pushed.
     chat_controller.update_indexing_progress_text()
     # The jump-to-latest pill must be polled rather than pushed: the mouse wheel and the scrollbar move the

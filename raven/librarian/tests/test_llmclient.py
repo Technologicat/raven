@@ -1803,6 +1803,12 @@ class TestFollowModelSwap:
         monkeypatch.setattr(llmclient, "_resolve_model_info", _refuse)
         assert llmclient.follow_model_swap(settings) is False
         assert settings.model == "a-model"
+        assert llmclient.backend_status(settings) is llmclient.backend_unreachable, "a frontend could not tell"
+
+    def test_an_unloaded_model_reads_as_no_model(self, settings, monkeypatch):
+        self._backend_has(monkeypatch, label=llmclient.NO_MODEL_INFO, context_length=None, is_vlm=None, loaded=False)
+        assert llmclient.follow_model_swap(settings) is True
+        assert llmclient.backend_status(settings) is llmclient.backend_has_no_model
 
 # ---------------------------------------------------------------------------
 # Token counting tiers + usage calibration (brief 02 §7)
