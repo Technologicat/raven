@@ -1153,6 +1153,23 @@ class TestPerformInjects:
         assert "You are a helpful assistant." in system_text  # the original system prompt survives
         assert "Today is" in system_text
 
+    def test_the_prefill_stops_at_the_last_user_message(self, llm_settings):
+        # A template renders the conversation's final reply differently from one with more after it, so a
+        # prefill ending at the reply parts from the next turn inside it, and the backend measured then
+        # reprocesses the whole prompt. A tool exchange after the user message is cut too: it is the last
+        # turn's, and only the user message is rendered the same whatever follows.
+        msg = lambda role, text: chatutil.create_chat_message(llm_settings=llm_settings, role=role, text=text)  # noqa: E731
+        branch = [msg("system", "You are a helpful assistant."), msg("assistant", "How can I help?"),
+                  msg("user", "What is X?"), msg("assistant", "Let me look."), msg("tool", "X is a variable."),
+                  msg("assistant", "X is a variable.")]
+        prefill = scaffold.build_prefill_prompt(llm_settings, branch)
+        assert len(prefill) == 3 and prefill[-1]["role"] == "user"
+        assert scaffold.prefill_cut_index(branch) == 2
+
+    def test_a_branch_with_no_user_message_yet_is_cut_after_the_system_message(self, llm_settings):
+        branch = make_conversation(llm_settings)[:2]  # the system prompt and the greeting: a new chat
+        assert [m["role"] for m in scaffold.build_prefill_prompt(llm_settings, branch)] == ["system"]
+
     @pytest.mark.parametrize("tools_enabled", [True, False], ids=["with the clock", "without"])
     def test_the_prefill_sends_what_the_next_turn_begins_with(self, llm_settings, tools_enabled):
         # A prefill warms the backend's cache for the next turn, which only helps if that turn's prompt starts

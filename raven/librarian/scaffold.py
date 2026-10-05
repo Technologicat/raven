@@ -7,7 +7,7 @@ __all__ = ["action_ack", "action_stop",  # re-exported from `llmclient`
            # The two system injects, in the order they reach the model. Also what the chat view shows, so
            # the log matches what is sent.
            "build_system_preamble", "build_system_postamble",
-           "build_turn_prompt", "build_prefill_prompt", "make_tool_context",
+           "build_turn_prompt", "build_prefill_prompt", "prefill_cut_index", "make_tool_context",
 
            "ai_turn", "retry_tool_calls"]
 
@@ -691,18 +691,35 @@ def build_turn_prompt(llm_settings: env,
 def build_prefill_prompt(llm_settings: env,
                          history: list[dict],
                          use_character_card: bool = True) -> list[dict]:
-    """Return what the next turn's prompt will begin with: `history`, with the system message as a turn sends it.
+    """Return the part of the next turn's prompt a backend can keep cached: `history` up to its last user
+    message, with the system message as a turn sends it.
 
     For warming a backend's KV cache between turns (`llmclient.prefill`). `history` is the linearized branch
-    up to HEAD, and is not modified. The per-turn injects are left out: a turn places them before its new
-    user message, which is after everything here, so they are not part of the prefix it can reuse.
+    up to HEAD, and is not modified. A branch with no user message yet ends after its system message.
     """
-    # The system message is the whole point. It opens the prompt, so a prefill that sent the stored one
-    # unwrapped warmed a prefix no turn ever sends, and every turn reprocessed the whole conversation.
+    # Two things, each of which on its own left every turn reprocessing the whole conversation.
+    #
+    # The system message as a turn sends it: it opens the prompt, so a prefill that sent the stored one
+    # unwrapped warmed a prefix no turn ever sends.
+    #
+    # And cut after the last user message. A chat template renders the conversation's final assistant
+    # message differently from one with more after it, so a prefill ending at HEAD, the AI's reply, parts
+    # from the next turn inside that reply - and measured on LM Studio (Qwen 3.8, 2026-10-05), a turn that
+    # parts from the cached prompt anywhere before its end is processed from the start. Cut at the last
+    # user message, the next turn extends the cached prompt instead, and pays for the last exchange only
+    # (`investigations/prefill-by-model/`).
     return _with_system_injects(llm_settings=llm_settings,
-                                history=history,
+                                history=history[:prefill_cut_index(history) + 1],
                                 use_character_card=use_character_card,
                                 tools_are_spent=False)
+
+def prefill_cut_index(history: list[dict]) -> int:
+    """Index of the last message `build_prefill_prompt` keeps from `history`: its last user message, or where
+    there is none yet, its last leading system message (`-1` for a history with neither)."""
+    for index in range(len(history) - 1, -1, -1):
+        if history[index]["role"] == "user":
+            return index
+    return next((i for i, message in enumerate(history) if message["role"] != "system"), len(history)) - 1
 
 def _with_system_injects(llm_settings: env,
                          history: list[dict],

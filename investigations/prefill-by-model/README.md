@@ -97,9 +97,29 @@ length. On Qwen 3.8 the extension stays cheap with Raven's form of request too: 
 a tool definition, both together, and through `/v1` streaming with a one-token cap and a `seed` (0.60–0.75 s
 against 1.9–5.4 s cold).
 
-**What is left is the content of Raven's prompts.** The leading suspect, untested: a turn's extension begins
-with the clock's synthetic tool exchange, an assistant message with a tool call, directly after the prefix's
-last assistant message, and a chat template may render an assistant message differently when another follows
-it, moving the divergence back into the prefix. Next step: bisect with Raven's own builders against the
-backend (`build_prefill_prompt`, then `build_turn_prompt` with the clock off, persona prefixes stripped, the
-card shortened) until the extension turns cheap.
+**What is left is the content of Raven's prompts, and `probe_raven_prompts.py` found it**: the prefill ended
+with the AI's last reply. Built with Raven's own code on Qwen 3.8, two trials each, the prefix and then the
+turn after it:
+
+| The prefill ends | prefix | turn after it |
+|---|---|---|
+| with the greeting; the turn adds the clock's exchange and the user message | 1.8–2.0 s | 1.9–2.0 s |
+| the same, without the clock's exchange | 1.7–1.8 s | 1.8 s |
+| with the greeting; the turn adds the user message only | 1.7 s | 1.9 s |
+| with the reply to a user message | 1.9 s | 2.2 s |
+| **at that user message, before the reply** | 1.4 s | **0.65–0.70 s** |
+
+So the clock's exchange is not it. A conversation's final assistant message is rendered differently from one
+with more after it (the template's handling of the latest turn), so a prefill ending at a reply parts from the
+next turn *inside* that reply, and a turn that parts from the cached prompt anywhere before its end is
+processed from the start. Ending at the last user message, the next turn extends the cached prompt, as
+`probe_extend.py`'s shape does. **Fixed**: `scaffold.build_prefill_prompt` cuts the branch after its last
+user message, or after the system message when there is none yet. The last exchange is reprocessed each turn,
+the rest reused.
+
+The prefill also measured the prompt's size for the context-fill readout. Sending both the whole branch for
+the size and the cut one for the cache was measured too: in the order *whole, then cut* the next turn kept its
+cache (0.70 s), but neither request reused the other, doubling the work between turns (about 2.1 + 2.0 s
+against 1.5 s); *cut, then whole* lost most of it (1.11 s). Chosen instead (maintainer): the backend's count up
+to the cut, plus Raven's estimate of the rest, shown as exact while the estimated part is under 2% of the
+whole. A local tokenizer (`llm_tokenizer_path`) makes the readout exact regardless.

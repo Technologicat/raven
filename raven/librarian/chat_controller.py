@@ -173,6 +173,10 @@ document_access_tool_names = llmclient.DOCUMENT_TOOL_NAMES
 # --------------------------------------------------------------------------------
 
 
+# The part of the context-fill figure that may be estimated while the readout still calls it exact: the tail
+# after the last user message, which the prefill does not send (see `scaffold.build_prefill_prompt`).
+_NEGLIGIBLE_TAIL_FRACTION = 0.02
+
 @dataclasses.dataclass(frozen=True)
 class TailFollowSample:
     """What the view looked like just before some content was added or replaced.
@@ -2228,8 +2232,8 @@ class DPGChatController:
             self.indicator_hold.show(self.llm_indicator_widget)  # tag
         try:
             out = llmclient.prefill(self.llm_settings,
-                                    # As the next turn will begin. The bare branch differs from it at the
-                                    # very first message, which would warm a prefix no turn ever sends.
+                                    # As the next turn will begin, up to its last user message: see
+                                    # `scaffold.build_prefill_prompt` for why it stops there.
                                     scaffold.build_prefill_prompt(self.llm_settings, history),
                                     # All the per-group gating is in `maybe_tool_names` now, so this coarser
                                     # switch has nothing left to decide and stays on. It is not redundant at
@@ -2256,11 +2260,22 @@ class DPGChatController:
         # tokens it had to *process* rather than the size of the prompt — see `prompt_size_report_looks_whole`.
         # The estimate is the one already computed and shown above, so a refused figure simply leaves that
         # standing rather than replacing it with an identical recount.
+        # What was sent stops at the last user message, so the backend counted the branch up to there; the
+        # rest, usually the last reply, is added from the local estimate. Shown as exact while that tail is a
+        # small part of the whole, which it is unless the last turn brought in a lot - fetched documents, say.
         reported = out.usage["prompt_tokens"]
-        if not llmclient.prompt_size_report_looks_whole(reported, estimate):
+        node_ids = self.datastore.linearize_up(task_env.head_node_id)
+        cut_index = scaffold.prefill_cut_index(history)
+        prefix_estimate = (llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index])[0]
+                           if cut_index >= 0 else 0)
+        if not llmclient.prompt_size_report_looks_whole(reported, prefix_estimate):
             return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
-        logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {reported} tokens")
-        self._render_context_fill(reported, is_exact=True)
+        tail_estimate = max(0, estimate - prefix_estimate)
+        total = reported + tail_estimate
+        tail_is_negligible = tail_estimate <= _NEGLIGIBLE_TAIL_FRACTION * total
+        logger.info(f"DPGChatController._context_prefill_entrypoint: prompt size for HEAD '{task_env.head_node_id}': {reported} tokens "
+                    f"counted by the backend up to the last user message, plus ~{tail_estimate} estimated after it")
+        self._render_context_fill(total, is_exact=tail_is_negligible)
 
     def chat_exchange(self, user_message_text: str, staged_images: list[env] | None = None,
                       staged_files: list[env] | None = None) -> None:
