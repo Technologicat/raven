@@ -11,9 +11,9 @@ Three were stale on 2026-08-31, the day this was written, and each had been wron
 - `raven/conference_timer/app.py` and `raven/xdot_viewer/app.py` both advertised the *package* rather than
   the module — `raven.xdot_viewer` where only `raven.xdot_viewer.app` runs, no package here carrying a
   `__main__.py`.
-- `raven/common/image/tests/loader_bench.py` still gave `raven.cherrypick.tests.loader_bench`, from before
+- `raven/common/image/tests/loader_bench.py` still gave `raven.cherrypick.tests.loader_bench` (stale), from before
   the module moved packages.
-- `convert-all-wos2bib.sh` called `raven.import_wos`, which has never existed in this repository — the
+- `convert-all-wos2bib.sh` called `raven.import_wos` (stale), which has never existed in this repository — the
   module was `raven/wos2bib.py` on the day the script was committed, and is `raven/papers/wos2bib.py` now.
 
 What it checks: for each distinct `python -m <dotted.path>` under the `raven` root, that the path resolves

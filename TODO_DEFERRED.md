@@ -3092,7 +3092,7 @@ Discovered during avatar-client-crop brief review (2026-04-20).
 
 `raven.common.nlptools` is a hub module: it imports `torch`, `transformers`, `sentence_transformers`, `flair`, `dehyphen`, and `spacy`. All five ML-engine loaders (spaCy, classifier, dehyphenator, embedder, translator) live in it, so importing the module drags the entire ML stack into any process that touches it.
 
-`raven.client.api` currently imports `nlptools` purely to reach `deserialize_spacy_docs` for the natlang response reconstruction. If a *lighter* client module ever wants to reconstruct spaCy Docs from wire data without pulling transformers/flair/dehyphen, a clean way to do it would be: extract each backend into its own module (e.g. `raven.common.spacy_wire` for the spaCy serialize/deserialize pair, parallel modules for each of classifier, dehyphenator, embedder, translator), and leave `nlptools` as a thin aggregator that re-exports them.
+`raven.client.api` currently imports `nlptools` purely to reach `deserialize_spacy_docs` for the natlang response reconstruction. If a *lighter* client module ever wants to reconstruct spaCy Docs from wire data without pulling transformers/flair/dehyphen, a clean way to do it would be: extract each backend into its own module (e.g. `raven.common.spacy_wire` (planned) for the spaCy serialize/deserialize pair, parallel modules for each of classifier, dehyphenator, embedder, translator), and leave `nlptools` as a thin aggregator that re-exports them.
 
 Why this is deferred: `api.py` already imports torch, qoi, spaCy, etc. for its other endpoints — so `nlptools` riding along costs `api.py` nothing extra *today*. The split pays off only when some caller wants a minimal "just reconstruct a Doc from JSON" importable, which no one currently needs.
 
@@ -3167,7 +3167,7 @@ So the AGPL tax on the server side is concentrated in three places: the Flask ap
 - A clean-room implementation built on MIT-licensed THA3 plus the user's own BSD-licensable contributions (the bulk of the current animator — see authorship breakdown above).
 - Per-line `git blame` on the final post-deprecation SillyTavern-extras avatar module to classify each line by author. User-authored lines (from either the ST-extras era or Raven) are reusable; non-user lines from the ST-extras era are the only ones that must not be copied. The Raven-era delta is entirely user-authored and reusable wholesale.
 - No code copy-paste from the non-user-authored ST-era portions — even small fragments with shared authorship would re-infect.
-- The server-side animator keeps its tangled lineage and stays AGPL; the BSD client-local animator lives in `raven.common.avatar` (new) or similar, with a cleaner, from-scratch scaffolding around THA3.
+- The server-side animator keeps its tangled lineage and stays AGPL; the BSD client-local animator lives in `raven.common.avatar` (planned) or similar, with a cleaner, from-scratch scaffolding around THA3.
 
 The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
 
@@ -4207,12 +4207,12 @@ shape how, and they say "defer", not "do now":
   otherwise-BSD client. `webfetch` is Raven's own and could be BSD'd — EXCEPT its Tier-2 fallback
   currently borrows websearch's Selenium driver (`_fetch_tier2` → `websearch.get_driver()`), which is
   in the AGPL module. So a prerequisite is a **clean-room BSD Selenium driver factory** (e.g.
-  `raven.common.webdriver`) that both webfetch and websearch use.
+  `raven.common.webdriver` (planned)) that both webfetch and websearch use.
 
 - **Not a `MaybeRemoteService` — the imagefx pattern.** webfetch is *stateless* (no cache, like
   nlp/stt/embeddings), so the 4-layer transparent-dispatch machinery (which earns its keep only when
   there's cache/shape state to hide, as in tts) is overkill. If local mode is built, do it
-  imagefx-style: a clean `raven.common.webfetch` impl the client can call explicitly, with the server
+  imagefx-style: a clean `raven.common.webfetch` (planned) impl the client can call explicitly, with the server
   module delegating to it. No mayberemote class.
 
 - **Low urgency.** Librarian already hard-depends on the server for websearch and RAG embeddings, so

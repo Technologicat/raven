@@ -43,6 +43,7 @@ jobs:
         run: |
           python scripts/check_ci_imports.py
           python scripts/check_doc_links.py
+          python scripts/check_dotted_names.py
           python scripts/check_exports.py
           python scripts/check_hotkey_tooltips.py
           python scripts/check_lint_canary.py
