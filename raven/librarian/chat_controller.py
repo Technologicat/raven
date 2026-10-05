@@ -481,9 +481,8 @@ class DPGChatMessage:
             # to see, it is drawn as a link and the line says how many revisions there are.
             n_revisions = len(self.parent_view.chat_controller.datastore.get_revisions(node_id))
             if n_revisions > 1:
-                revision_link = dpg.add_text(revision_label, color=_LINK_COLOR, parent=metadata_row)
-                self._make_clickable([revision_link],
-                                     action=lambda: self.parent_view.chat_controller.open_revision_history(node_id))
+                revision_link = self._add_clickable_text(revision_label, parent=metadata_row, color=_LINK_COLOR,
+                                                         action=lambda: self.parent_view.chat_controller.open_revision_history(node_id))
                 dpg.add_text(f"Revision {node_active_revision} of this message. Click to see all its revisions [Ctrl+Shift+E]",
                              parent=dpg.add_tooltip(revision_link))
                 # A count rather than "R2/3": revision numbers stay unique after a deletion, so a message can
@@ -1195,8 +1194,7 @@ class DPGChatMessage:
         a click on the content itself has no natural place to put a red flash, and the same action one row
         down does say so.
 
-        One registry serves all `items`, since they share the callback — the chip's glyph and its filename
-        are one target as far as the reader is concerned. The registry is owned by this message and deleted
+        For a thumbnail; text that is clickable wants `_add_clickable_text`, which also shows that it is. The registry is owned by this message and deleted
         in `demolish` (DPG will not collect it with the widgets: it lives in the handler-registry tree).
         """
         def callback() -> None:
@@ -1209,6 +1207,27 @@ class DPGChatMessage:
         dpg.add_item_clicked_handler(parent=registry, button=dpg.mvMouseButton_Left, callback=callback)
         for item in items:
             dpg.bind_item_handler_registry(item, registry)
+
+    def _add_clickable_text(self, text: str, *, parent: str | int, action: Callable[[], None],
+                            color: tuple[int, int, int] | None = None) -> int | str:
+        """Add `text` to `parent` as a line that runs `action` when clicked, and highlights under the mouse.
+
+        For text that is a shortcut for a button, as `_make_clickable` is for a thumbnail. Returns the item,
+        for a tooltip to attach to.
+        """
+        # A selectable rather than text, for ImGui's own hover highlight: plain text has no hovered state to
+        # theme, and a line of text does not otherwise say it can be clicked. Sized to the text, since a
+        # selectable spans the rest of the row by default and would light up whatever follows it.
+        def callback(sender, app_data, user_data) -> None:
+            dpg.set_value(sender, False)  # a selectable remembers being clicked; this one is a link, not a choice
+            try:
+                action()
+            except Exception as exc:  # noqa: BLE001 -- a secondary action must never crash the chat view
+                logger.error(f"DPGChatMessage._add_clickable_text: action failed: {type(exc)}: {exc}")
+        item = dpg.add_selectable(label=text, width=dpg.get_text_size(text)[0], callback=callback, parent=parent)
+        if color is not None:
+            dpg.bind_item_theme(item, self.parent_view.text_color_theme(color))
+        return item
 
     def rebuild_in_place(self) -> None:
         """Rebuild this message's widgets without the panel ever getting shorter.
@@ -2011,8 +2030,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
             dpg.bind_item_font(button, self.parent_view.themes_and_fonts.icon_font_solid)
             dpg.bind_item_theme(button, "disablable_widget_theme")  # tag
             self._add_tooltip(button, f"Approve '{host}' for this session, and fetch again\n(on a new branch)")
-            label = dpg.add_text(f"Approve {host} for this session, and fetch again", parent=row)
-            self._make_clickable([label], action=approve_and_retry)
+            self._add_clickable_text(f"Approve {host} for this session, and fetch again", parent=row,
+                                     action=approve_and_retry)
 
     def _render_editor(self) -> None:
         """Render this message's text as an editable field, with Save and Cancel below it.
@@ -2365,18 +2384,14 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # One row: the actions, then the name they act on. The buttons come first because they are the
             # fixed part — three glyphs in the same place on every attachment — while the name is arbitrary
             # length, so leading with it would leave the buttons at a different x on every chip. The name
-            # carries no glyph of its own: the first button already shows the document icon, and repeating
-            # it a few pixels away reads as two separate things rather than one.
+            # carries no glyph of its own: the button beside it already shows the document icon, and repeating
+            # it a few pixels away reads as two separate things rather than one. That button is the last one,
+            # next to the name, because clicking the name does the same thing.
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
 
-            # "Show document" opens the stored sidecar (verbatim — documents are never transformed, so the
-            # sidecar IS the original) in the OS default app. "Open source" targets the recorded provenance
-            # URL, disabled when nothing is openable. "Open folder" reveals the sidecar dir.
-            self._add_action_button(parent=row,
-                                    icon=fa.ICON_FILE_LINES,
-                                    tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
-                                    ok_message="Opened document",
-                                    action=open_saved_copy)
+            # "Open source" targets the recorded provenance URL, disabled when nothing is openable. "Open folder"
+            # reveals the sidecar dir. "Show document" opens the stored sidecar (verbatim — documents are never
+            # transformed, so the sidecar IS the original) in the OS default app.
             if source_openable:
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             else:
@@ -2392,18 +2407,21 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                     tooltip_text="Open the attachments folder\n(where attached files are stored)",
                                     ok_message="Opened folder",
                                     action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
+            self._add_action_button(parent=row,
+                                    icon=fa.ICON_FILE_LINES,
+                                    tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
+                                    ok_message="Opened document",
+                                    action=open_saved_copy)
 
-            name_id = dpg.add_text(name, parent=row)
-            # A name is text, so unlike a thumbnail it does not advertise itself as clickable. The tooltip is
-            # what carries that here; a hover highlight would be better and is filed separately. It also
-            # names where the document came from and when, which is what tells two same-titled fetches apart.
+            name_id = self._add_clickable_text(name, parent=row, action=open_saved_copy)
+            # The tooltip names where the document came from and when, which is what tells two same-titled
+            # fetches apart.
             document_tooltip = dpg.add_tooltip(name_id)
             dpg.add_text("Click to open the attached document", parent=document_tooltip)
             if source_url:
                 dpg.add_text(urllib.parse.unquote(source_url), color=(180, 180, 180), parent=document_tooltip)
             if meta.get("fetched_at"):
                 dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180), parent=document_tooltip)
-            self._make_clickable([name_id], action=open_saved_copy)
 
     def _render_document_reference(self, document_id: str, labels: dict[str, str] | None = None,
                                    leading: Callable[[int | str], None] | None = None) -> None:
@@ -2446,20 +2464,19 @@ class DPGCompleteChatMessage(DPGChatMessage):
             if path is not None:
                 open_document = lambda: common_utils.open_file(path)  # noqa: E731 -- shared by the click shortcut and the button below
                 self._add_action_button(parent=row,
-                                        icon=fa.ICON_BOOK_OPEN,
-                                        tooltip_text=f"Open the document\n{path}",
-                                        ok_message="Opened document",
-                                        action=open_document)
-                self._add_action_button(parent=row,
                                         icon=fa.ICON_FOLDER_OPEN,
                                         tooltip_text="Open the documents folder\n(the knowledge base the AI searches)",
                                         ok_message="Opened folder",
                                         action=lambda: common_utils.open_in_file_manager(librarian_config.llm_docs_dir))
-                name_id = dpg.add_text(name, parent=row)
+                self._add_action_button(parent=row,
+                                        icon=fa.ICON_BOOK_OPEN,
+                                        tooltip_text=f"Open the document\n{path}",
+                                        ok_message="Opened document",
+                                        action=open_document)
+                name_id = self._add_clickable_text(name, parent=row, action=open_document)
                 path_tooltip = dpg.add_tooltip(name_id)
                 dpg.add_text("Click to open the document", parent=path_tooltip)
                 dpg.add_text(str(path), color=(180, 180, 180), parent=path_tooltip)
-                self._make_clickable([name_id], action=open_document)
             else:
                 self._add_action_button(parent=row,
                                         icon=fa.ICON_BOOK_OPEN,
@@ -2649,6 +2666,7 @@ class DPGLinearizedChatView:
                                        is what knows its own dialogs; this layer must not import it.
         """
         self.themes_and_fonts = themes_and_fonts
+        self._text_color_themes: dict[tuple[int, int, int], int | str] = {}
         self.gui_parent = gui_parent
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self.chat_controller = chat_controller
@@ -2769,6 +2787,15 @@ class DPGLinearizedChatView:
                                                                   font=themes_and_fonts.icon_font_solid,
                                                                   text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                                   text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
+
+    def text_color_theme(self, color: tuple[int, int, int]) -> int | str:
+        """A theme setting the text colour to `color`, made once per colour and kept for the life of this view."""
+        if color not in self._text_color_themes:
+            with dpg.theme() as theme:
+                with dpg.theme_component(dpg.mvAll):
+                    dpg.add_theme_color(dpg.mvThemeCol_Text, color, category=dpg.mvThemeCat_Core)
+            self._text_color_themes[color] = theme
+        return self._text_color_themes[color]
 
     def note_wheel_scroll(self) -> None:
         """Announce this view's scroll ends when the mouse wheel reaches or presses against one.
