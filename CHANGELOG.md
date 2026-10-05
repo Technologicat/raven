@@ -61,6 +61,7 @@
 
 #### Raven-librarian
 
+- **The instruction to base claims about documents on them is now part of the AI's standing setup**, worded to hold whether or not anything is in the conversation. In v0.2.9 it was added to the system message only on a turn that brought in documents or an attachment, so the first such turn made the backend reprocess the whole conversation.
 - **The figures under a reply say how long the auto-search took.**
   - Hovering the token-count line of a turn's first message shows, in a table of its own below the reply's breakdown, the query request's prompt processing, the time spent writing the query, and the time the search itself took.
   - A message that only calls a tool now has a breakdown too, with its prompt processing apart from the call, where the backend streams the call as it is written (LM Studio does).

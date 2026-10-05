@@ -2161,9 +2161,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         session running past midnight the date here catches up at the next view rebuild, while an earlier
         turn in the same log really did send yesterday's - the node cannot express that, and does not try.
 
-        Two further injects are conditional on turn state - whether anything grounded the answer, whether
-        the tool budget ran out - and are left out. Neither is knowable before the turn runs, and a line
-        that came and went between rebuilds would read as instability rather than as information.
+        One further inject is conditional on turn state - whether the tool budget ran out - and is left out.
+        It is not knowable before the turn runs, and a line that came and went between rebuilds would read
+        as instability rather than as information.
 
         The synthetic tool exchanges are deliberately not shown either, each for its own reason: the
         clock's call is staged for the model's benefit and would only raise the question of who made a call
@@ -2173,9 +2173,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
         llm_settings = self.parent_view.chat_controller.llm_settings
         if llm_settings is None:  # no backend connected yet; there is no settings object to ask
             return
-        # `grounding_material_exists=False` selects exactly the unconditional ones; see above.
-        postamble = scaffold.build_system_postamble(llm_settings=llm_settings,
-                                                    grounding_material_exists=False)
+        # `tools_are_spent` left at its default selects exactly the unconditional ones; see above.
+        postamble = scaffold.build_system_postamble(llm_settings=llm_settings)
         if not postamble:
             return
         # What was drawn, so `DPGChatController.refresh_system_injects_if_stale` can tell whether it still

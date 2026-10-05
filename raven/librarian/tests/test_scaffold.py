@@ -1153,7 +1153,29 @@ class TestPerformInjects:
         assert "You are a helpful assistant." in system_text  # the original system prompt survives
         assert "Today is" in system_text
         assert "structured report" in system_text
-        assert "Base claims about the provided documents" in system_text
+
+    @pytest.mark.parametrize("material", ["search matches", "an attachment", "a grounded tool result"])
+    def test_the_system_message_does_not_depend_on_the_turns_material(self, llm_settings, material):
+        # The system message opens the prompt, so anything in it that came and went with the turn's material
+        # would cost a backend's cache the whole conversation on the first turn that had some. That is why
+        # the grounding instruction is standing text in the card rather than an inject sent with material.
+        def system_text(history, docs_matches, grounded):
+            prompt = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                                docs_query="what is X?" if docs_matches else None,
+                                                docs_matches=docs_matches,
+                                                tool_context=grounding_context(grounded=grounded))
+            return chatutil.content_to_text(prompt[0]["content"])
+
+        bare = system_text(make_conversation(llm_settings), [], grounded=False)
+        history = make_conversation(llm_settings)
+        if material == "an attachment":
+            history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf",
+                                                                          source="user_attachment"))
+        with_material = system_text(history,
+                                    [sample_rag_match()] if material == "search matches" else [],
+                                    # Matches ground the turn as `ai_turn` records it, which is what the prompt reads.
+                                    grounded=(material in ("search matches", "a grounded tool result")))
+        assert with_material == bare
 
     def test_system_message_is_not_mutated_in_place(self, llm_settings):
         # `chatutil.linearize_chat` hands out the datastore's own message dicts. Editing one here would
@@ -1165,15 +1187,6 @@ class TestPerformInjects:
                                              docs_query=None, docs_matches=[],
                                              tool_context=grounding_context())
         assert chatutil.content_to_text(stored_system_message["content"]) == stored_text
-
-    def test_context_only_reminder_is_skipped_without_context(self, llm_settings):
-        # Asking a model to stick to documents that were never provided is a contradiction it will
-        # dutifully try to resolve — up to 37x the deliberation, and on one model, never terminating.
-        history = make_conversation(llm_settings)
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query=None, docs_matches=[],
-                                             tool_context=grounding_context())
-        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_the_injects_only_ever_name_registered_tools(self, llm_settings):
         """A synthetic tool exchange whose function is not a real tool is a fiction the model can act on.
@@ -1195,66 +1208,6 @@ class TestPerformInjects:
         assert named, "no synthetic tool calls were injected; this test would pass vacuously"
         assert named <= set(llm_settings.tool_entrypoints), (
             f"injects name tools that do not exist: {sorted(named - set(llm_settings.tool_entrypoints))}")
-
-    def test_context_only_reminder_counts_an_attachment_as_context(self, llm_settings):
-        # "Context" is broader than docs matches: an attached document or image is material to ground in,
-        # even on a turn where the document database returned nothing.
-        history = make_conversation(llm_settings)
-        history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf",
-                                                                      source="user_attachment"))
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query=None, docs_matches=[],
-                                             tool_context=grounding_context())
-        assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
-
-    def test_context_only_reminder_ignores_the_shape_of_the_history(self, llm_settings):
-        # `build_turn_prompt` asks the turn's state, never the history's shape. Here the branch is full of
-        # `role="tool"` messages and the answer is still "nothing grounds this", because that is what was
-        # declared. Reintroducing an inference from message shape — the mechanism this replaced — would
-        # switch the reminder back on, which is the regression this guards.
-        #
-        # Whether a *stored* tool result like this one grounds a later turn is a separate question, decided
-        # by `_branch_grounding_is_present` from the node's recorded declaration, and tested there.
-        history = [chatutil.create_chat_message(llm_settings=llm_settings, role="system", text="You are a helpful assistant."),
-                   chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the weather in Tampere?"),
-                   chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Tampere: 17 C, cloudy."),
-                   chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="It is 17 C and cloudy."),
-                   chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the baseline drift of the Kelvin-7 microarray?")]
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query=None, docs_matches=[],
-                                             tool_context=grounding_context())
-        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
-
-    def test_context_only_reminder_follows_the_declaration_not_the_history(self, llm_settings):
-        # Mid-agent-loop, a search that found something is exactly the material to ground in - but whether
-        # it found something is what the tool declared, not what the history looks like. A `role="tool"`
-        # message is present either way, which is why the shape cannot answer the question: an empty search
-        # result is a perfectly well-formed tool message carrying nothing.
-        history = make_conversation(llm_settings)
-        history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Search result: X is a variable."))
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query=None, docs_matches=[],
-                                             tool_context=grounding_context(grounded=True))
-        assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
-
-    def test_context_only_reminder_is_skipped_when_the_tool_found_nothing(self, llm_settings):
-        # The same history shape, with the opposite declaration. This is the case the whole mechanism
-        # exists for: sent with nothing to ground in, the reminder is a self-contradiction that measured
-        # 5-37x the deliberation of sending nothing, and on one model never terminated.
-        history = make_conversation(llm_settings)
-        history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="No matches."))
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query=None, docs_matches=[],
-                                             tool_context=grounding_context(grounded=False))
-        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
-
-    def test_speculation_on_sends_no_context_only_reminder(self, llm_settings):
-        history = make_conversation(llm_settings)
-        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
-                                             docs_query="what is X?",
-                                             docs_matches=[sample_rag_match()],
-                                             tool_context=grounding_context())
-        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_injects_carry_no_persona_prefix(self, llm_settings):
         # The inject text is bracketed and self-labelling; prefixing the speaker's persona to it
@@ -1747,7 +1700,7 @@ class TestBranchGrounding:
 
     def test_ai_turn_seeds_the_flag_from_the_branch(self, monkeypatch, llm_settings):
         # The end-to-end shape of the follow-up problem: turn 1's search grounded, turn 2 searches nothing,
-        # and the context-only reminder must still be sent because turn 1's material is still in the window.
+        # and turn 2's reply is still grounded, because turn 1's material is still in the window.
         forest, head = self._forest_with_tool_node(llm_settings, "X is foo.",
                                                    {"status": "success", "function_name": "search_documents",
                                                     "grounding": True})
@@ -1760,9 +1713,8 @@ class TestBranchGrounding:
             return make_invoke_result(content="Still foo.")
 
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
-        run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever())
-        system_text = chatutil.content_to_text(seen["history"][0]["content"])
-        assert "Base claims about the provided documents" in system_text
+        final_head = run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever())
+        assert forest.get_payload(final_head)["generation_metadata"]["grounded"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -2177,7 +2129,7 @@ class TestPromptAssemblyFromOutside:
 
         system_text = chatutil.content_to_text(prompt[0]["content"])
         shown = (scaffold.build_system_preamble(llm_settings=settings) +
-                 scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False))
+                 scaffold.build_system_postamble(llm_settings=settings))
         assert shown  # the view has something to show at all
         for inject_text in shown:
             assert inject_text in system_text
@@ -2185,10 +2137,8 @@ class TestPromptAssemblyFromOutside:
 
     def test_which_injects_are_conditional(self, monkeypatch):
         settings = self._settings(monkeypatch)
-        plain = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False)
-        grounded = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=True)
-        spent = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False,
-                                                tools_are_spent=True)
+        plain = scaffold.build_system_postamble(llm_settings=settings)
+        spent = scaffold.build_system_postamble(llm_settings=settings, tools_are_spent=True)
 
         # The unconditional ones are what the chat view draws, so they must not become conditional without
         # the view's docstring being revisited.
@@ -2197,7 +2147,6 @@ class TestPromptAssemblyFromOutside:
         assert chatutil.format_loaded_model(settings.model, settings.context_length) in plain
         assert chatutil.format_reminder_to_write_conversationally() in plain
 
-        assert grounded == plain + [chatutil.format_reminder_to_use_information_from_context_only()]
         assert spent == plain + [chatutil.format_notice_that_tools_are_spent()]
 
     def test_building_the_prompt_leaves_the_caller_s_history_alone(self, monkeypatch):
@@ -2273,16 +2222,12 @@ class TestModelWrittenDocsQuery:
         assert text.startswith(llm_settings.search_query_instruction)
         assert self.MESSAGE in text, "the message is quoted after the instruction"
         # Everything before the user's message is the reply's own prompt, up to where the search results go,
-        # except that the search's matches add the grounding reminder to the reply's system message. That one
-        # difference exists on a branch with nothing grounded before this turn, as this fixture is.
+        # the system message included: nothing in it depends on whether the search found anything, so the
+        # reply reuses the query request's cache from the very start. The fixture's search does find
+        # something, on a branch with nothing grounded before, which is the turn that used to differ.
         reply_history = reply_request["history"]
         n_before_message = len(query_request["history"]) - 1
-        assert query_request["history"][1:n_before_message] == reply_history[1:n_before_message]
-        reminder = llm_settings.formatters.reminder_to_use_information_from_context_only()
-        query_system = chatutil.content_to_text(query_request["history"][0]["content"])
-        reply_system = chatutil.content_to_text(reply_history[0]["content"])
-        assert reminder not in query_system and reminder in reply_system, "fixture: the search should have grounded the reply"
-        assert reply_system.replace(reminder, "").rstrip() == query_system.rstrip()
+        assert query_request["history"][:n_before_message] == reply_history[:n_before_message]
 
     def test_n_a_means_no_search(self, monkeypatch, llm_settings, populated_forest):
         forest, final_head, retriever, _, query_events = self._run(

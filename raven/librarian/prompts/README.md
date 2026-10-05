@@ -38,6 +38,25 @@ Note what belongs here rather than in a character card: instructions that hold *
 Anything true only of one character goes in that character's own card. The split matters because a turn
 taken without a character — which is what Raven's batch tools do — gets this file and nothing else.
 
+## The grounding instruction in `interaction.md`
+
+One bullet in `interaction.md` asks the AI to base claims about documents, attachments and tool results on
+them. Two things about it are deliberate, and both were measured.
+
+**It is about grounding, not a prohibition.** An earlier wording asked for answers from the context only.
+A model that takes instructions literally reads that as a ban on general knowledge, and a question like
+"what is 2+2?" becomes a dilemma to reason through instead of a question to answer: across the supported
+model families it cost 5-37x the deliberation of saying nothing, one model never terminated, and another
+refused outright. The grounding wording measured within noise of saying nothing, while still declining
+correctly when asked about something the documents do not contain (`investigations/context-injects/`, Q4).
+
+**It is standing text, worded so that it is true on every turn.** It covers what is in the conversation, if
+anything is. Until 0.2.10 it was a per-turn inject sent only when there was material, which changed the
+system message on the first turn that had some; the system message opens the prompt, so a backend's KV cache
+lost the whole conversation there. Measured on 2026-10-05 on five models, the always-on wording made no
+difference to answering, declining or deliberation against the one sent only with material
+(`investigations/context-injects/`).
+
 ## The template variables
 
 **Every one of these files is a template, and the braces are load-bearing.** Before the text is used, it

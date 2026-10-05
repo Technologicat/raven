@@ -519,7 +519,6 @@ def build_system_preamble(llm_settings: env) -> list[str]:
     return [llm_settings.formatters.setup_framing_notice(llm_settings.user), "-----"]
 
 def build_system_postamble(llm_settings: env,
-                           grounding_material_exists: bool,
                            tools_are_spent: bool = False) -> list[str]:
     """The system injects this turn appends *after* the standing system prompt: the second of the two kinds.
 
@@ -533,16 +532,8 @@ def build_system_postamble(llm_settings: env,
     list the prompt is built from, and getting it by re-deriving the wording in the GUI would be two sources
     of truth for text the model actually reads.
 
-    The two flags are what makes an inject conditional, and neither is a property of the conversation
-    alone - which is why they are arguments rather than something this function could work out:
-
-    `grounding_material_exists`: whether anything gave the model material to answer *from* this turn:
-                                 retrieval results, a tool result that declared grounding, or an attachment
-                                 on the branch. Adds the reminder to base claims about the provided
-                                 documents on them. Sent with nothing to ground in, that reminder is a
-                                 self-contradiction the model tries to resolve, at up to 37x the
-                                 deliberation and sometimes without terminating - so the condition is
-                                 load-bearing rather than an optimization.
+    One inject is conditional, on something that is not a property of the conversation alone - which is
+    why it is an argument rather than something this function could work out:
 
     `tools_are_spent`: whether the turn has used its tool-call budget, so the model should answer from what
                        it already has rather than reaching for another call it will not get.
@@ -551,8 +542,6 @@ def build_system_postamble(llm_settings: env,
     postamble = [formatters.date_now(),
                  formatters.loaded_model(llm_settings.model, llm_settings.context_length),
                  formatters.reminder_to_write_conversationally()]
-    if grounding_material_exists:
-        postamble.append(formatters.reminder_to_use_information_from_context_only())
     if tools_are_spent:
         postamble.append(formatters.notice_that_tools_are_spent())
     return postamble
@@ -627,11 +616,6 @@ def build_turn_prompt(llm_settings: env,
     # what made it impossible to ask "what would Raven send?" without handing over a list to be altered.
     history = list(history)
 
-    # Two sources, because they are scoped differently (see `_attachment_is_present`). `grounded` is
-    # *declared* by whatever produced the material; an attachment is not produced by anything, so it is
-    # still found by walking the branch.
-    grounding_material_exists = tool_context.grounded or _attachment_is_present(history)
-
     # The instruction injects belong to the character, and go when she does. Not merely a preference: with
     # no persona there may be no system message at all (Raven's shipped `system_prompt` is empty, all of the
     # content being the character card), and `_add_to_system_message` *inserts* one when the history has
@@ -645,7 +629,6 @@ def build_turn_prompt(llm_settings: env,
                                history=history,
                                preamble=build_system_preamble(llm_settings=llm_settings),
                                postamble=build_system_postamble(llm_settings=llm_settings,
-                                                                grounding_material_exists=grounding_material_exists,
                                                                 tools_are_spent=tools_are_spent))
 
     # The data-like injects below go into synthetic tool exchanges of their own, not into the system
@@ -769,9 +752,8 @@ def _record_grounding(tool_context: env,
     Grounding is *declared at the source* rather than inferred from message shape; see
     `_grounding_was_declared` for what a declaration is and what an undeclared result falls back to.
 
-    Why this matters enough to have its own mechanism: the reminder to base claims on the provided context
-    is only sound when there *is* context. Sent with nothing to ground in, it is a self-contradiction that
-    measured 5-37x the deliberation of sending nothing, with one model never terminating at all.
+    It decides the reply's grounding verdict (`generation_metadata["grounded"]`), which the frontends show as
+    the marker on a reply that had nothing retrieved for it.
     """
     if tool_context.grounded:  # already grounded; nothing can un-ground it
         return

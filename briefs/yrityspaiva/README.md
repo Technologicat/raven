@@ -550,6 +550,14 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          - **The heartbeat ships in 0.2.10 only if it runs clean until release day; otherwise 0.2.11**
            (maintainer). The reaper's stall guard and the heartbeat's short read timeout were added after the
            live run, so the server wants a restart on the final code for that run.
+       - **The grounding reminder: C′, as standing text in `prompts/interaction.md`** (maintainer, decided on the
+         probe's results; `investigations/context-injects/`). The conditional inject is gone. Two follow-ups
+         agreed with it:
+         - **The conversational reminder moves into `interaction.md` too**: static text has no business being an
+           inject. The date and the loaded model stay injects, being per-session facts, and the clock stays a
+           synthetic exchange before the user's message, the one inject whose *position* matters.
+         - **What `system.md` should hold for the batch tools** (`raven-pdf2bib`, the importer), which get it and
+           nothing else: the grounding instruction might help them. A separate decision, for later.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
          then the systems check.
        - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;

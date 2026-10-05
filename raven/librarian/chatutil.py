@@ -19,7 +19,6 @@ __all__ = [  # The parts a message is made of, and reading them back
            "format_disclosure_manifest",
            "format_setup_framing_notice",
            "format_reminder_to_write_conversationally",
-           "format_reminder_to_use_information_from_context_only",
            "format_notice_that_tools_are_spent",
            "format_error_that_tools_are_spent",
            "format_docs_match", "format_docs_matches_heading", "format_docs_search_result",
@@ -613,29 +612,6 @@ def format_reminder_to_write_conversationally() -> str:
     """
     return "[System information: In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
-def format_reminder_to_use_information_from_context_only() -> str:
-    """Return the text content of a system message that reminds the LLM to ground its claims in the provided context (not its internal static knowledge).
-
-    As with all things LLM, this isn't completely reliable, but tends to increase the chances of the model NOT responding based on its static knowledge.
-    This is useful when summarizing or extracting information from RAG search results.
-
-    The first line of defense is not giving control to the LLM when the search comes up empty. This reminder helps when the search returns results,
-    but their content is irrelevant to the query - or when docs are not enabled, but there is some other data in the context, and the answer should be
-    based on that.
-
-    The wording is deliberately about *grounding* rather than about a prohibition. Asking for context-only answers
-    reads, to a model that takes instructions literally, as a ban on general knowledge - and then a question like
-    "what is 2+2?" becomes a dilemma to be reasoned through instead of answered. Measured across the supported
-    model families, that phrasing cost 5-37x the deliberation of sending no reminder at all; one model never
-    terminated, and another refused outright. This phrasing measured within noise of sending nothing, while still
-    declining correctly when asked about something the documents do not contain. Caller-side, the reminder is sent
-    only when there actually is context to ground in - a reminder about "the provided documents" with no documents
-    provided is the self-contradiction that started the problem.
-
-    This is for a dynamic injection.
-    """
-    return "[System information: Base claims about the provided documents on those documents. Answer general questions normally.]"
-
 def format_notice_that_tools_are_spent() -> str:
     """Return the text of a system message telling the LLM that this reply gets no more tool calls.
 
@@ -657,11 +633,13 @@ def format_notice_that_tools_are_spent() -> str:
     nothing - 8 of 12 answered with it against 6 of 12 without, p = 0.68, and the two arms disagree about
     the sign once restricted to cap-reaching turns. So this is kept on the strength of the mechanism it
     addresses, which was directly observed, and not on evidence that it works. The fix with the evidence
-    behind it is a larger budget for fetch-shaped calls; see the tool-budget item in `TODO.md`.
+    behind it was a larger budget: at `max_tool_call_rounds = 20`, re-measured on 2026-10-05, every
+    follow-up in the same probe was answered (`investigations/tool_budget/`).
 
     Worded as a statement of the situation with the required action attached, never as a prohibition. "You
-    may not call any more tools" is the shape that measured 5-37x the deliberation elsewhere in this file,
-    and it would land here on a model that is *already* mid-task and looking for a way to continue.
+    may not call any more tools" is the shape that measured 5-37x the deliberation in the grounding
+    instruction's history (see `prompts/README.md`), and it would land here on a model that is *already*
+    mid-task and looking for a way to continue.
     Permission to say the answer is incomplete is part of that: without it, a model whose gathering was cut
     short has a reason to keep trying rather than to report what it has.
 
@@ -685,8 +663,9 @@ def format_error_that_tools_are_spent() -> str:
 
     Worded the same way as `format_notice_that_tools_are_spent`: the situation, plus the action that
     follows from it, and permission to answer incompletely. Not a prohibition - "you may not call any more
-    tools" is the shape that measured 5-37x the deliberation elsewhere in this file, and it would land here
-    on a model that is already mid-task and looking for a way to continue.
+    tools" is the shape that measured 5-37x the deliberation in the grounding instruction's history (see
+    `prompts/README.md`), and it would land here on a model that is already mid-task and looking for a way
+    to continue.
     """
     return ("The tool-call budget for this reply is spent, so this call was not made. Write the answer now, "
             "from the information gathered above. If something you wanted is missing, say so in the answer.")
@@ -979,7 +958,6 @@ def default_formatters() -> env:
                time_now=format_time_now,
                setup_framing_notice=format_setup_framing_notice,
                reminder_to_write_conversationally=format_reminder_to_write_conversationally,
-               reminder_to_use_information_from_context_only=format_reminder_to_use_information_from_context_only,
                notice_that_tools_are_spent=format_notice_that_tools_are_spent,
                error_that_tools_are_spent=format_error_that_tools_are_spent,
                docs_match=format_docs_match,

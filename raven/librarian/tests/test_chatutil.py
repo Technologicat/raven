@@ -486,12 +486,6 @@ class TestFormatReminders:
         assert len(result) > 0
         assert "[System information:" in result
 
-    def test_context_only_reminder_is_nonempty_string(self):
-        result = chatutil.format_reminder_to_use_information_from_context_only()
-        assert isinstance(result, str)
-        assert len(result) > 0
-        assert "[System information:" in result
-
 
 # ---------------------------------------------------------------------------
 # Persona removal

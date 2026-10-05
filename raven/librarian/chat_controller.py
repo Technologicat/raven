@@ -2082,8 +2082,7 @@ class DPGChatController:
             if message.rendered_system_postamble is None:  # not a system message, or drawn before connecting
                 return
             current_preamble = scaffold.build_system_preamble(llm_settings=self.llm_settings)
-            current_postamble = scaffold.build_system_postamble(llm_settings=self.llm_settings,
-                                                                grounding_material_exists=False)
+            current_postamble = scaffold.build_system_postamble(llm_settings=self.llm_settings)
             if (current_preamble == message.rendered_system_preamble and
                     current_postamble == message.rendered_system_postamble):
                 return
