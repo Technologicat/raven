@@ -1152,7 +1152,6 @@ class TestPerformInjects:
         system_text = chatutil.content_to_text(history[0]["content"])
         assert "You are a helpful assistant." in system_text  # the original system prompt survives
         assert "Today is" in system_text
-        assert "structured report" in system_text
 
     @pytest.mark.parametrize("material", ["search matches", "an attachment", "a grounded tool result"])
     def test_the_system_message_does_not_depend_on_the_turns_material(self, llm_settings, material):
@@ -1300,7 +1299,7 @@ class TestTheSetupSaysWhatItIs:
         # what says the insertion happened at all.
         history = [chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is X?")]
         system_text = self._system_text(llm_settings, history)
-        assert chatutil.format_reminder_to_write_conversationally() in system_text, \
+        assert chatutil.format_date_now() in system_text, \
             "no system message was inserted, so this fixture cannot tell a dropped preamble from an unrun inject"
         assert "is your setup" not in system_text
 
@@ -2085,15 +2084,15 @@ class TestPromptAssemblyFromOutside:
         history = [chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
         tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
 
-        settings.formatters.reminder_to_write_conversationally = lambda: "SENTINEL-WORDING"
+        settings.formatters.date_now = lambda: "SENTINEL-WORDING"
         prompt = scaffold.build_turn_prompt(llm_settings=settings, history=history,
                                             docs_query=None, docs_matches=[], tool_context=tool_context)
 
         system_text = chatutil.content_to_text(prompt[0]["content"])
         assert "SENTINEL-WORDING" in system_text
-        assert chatutil.format_reminder_to_write_conversationally() not in system_text
+        assert chatutil.format_date_now() not in system_text
         # The module is untouched, so a second settings object still gets the shipped wording.
-        assert chatutil.default_formatters().reminder_to_write_conversationally() != "SENTINEL-WORDING"
+        assert chatutil.default_formatters().date_now() != "SENTINEL-WORDING"
 
     def test_silencing_an_inject_removes_its_line_entirely(self, monkeypatch):
         # `rag_live_corpus` runs its control arm this way, and it works because `_add_to_system_message`
@@ -2101,7 +2100,6 @@ class TestPromptAssemblyFromOutside:
         settings = self._settings(monkeypatch)
         history = [chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
         tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
-        tool_context.grounded = True  # so the context-only reminder is in play at all
 
         with_notice = scaffold.build_turn_prompt(llm_settings=settings, history=history, docs_query=None,
                                                  docs_matches=[], tool_context=tool_context,
@@ -2142,10 +2140,9 @@ class TestPromptAssemblyFromOutside:
 
         # The unconditional ones are what the chat view draws, so they must not become conditional without
         # the view's docstring being revisited.
-        assert len(plain) == 3
+        assert len(plain) == 2
         assert chatutil.format_date_now() in plain
         assert chatutil.format_loaded_model(settings.model, settings.context_length) in plain
-        assert chatutil.format_reminder_to_write_conversationally() in plain
 
         assert spent == plain + [chatutil.format_notice_that_tools_are_spent()]
 

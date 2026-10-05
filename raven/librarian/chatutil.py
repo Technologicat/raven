@@ -18,7 +18,6 @@ __all__ = [  # The parts a message is made of, and reading them back
            "format_message_text_for_export",
            "format_disclosure_manifest",
            "format_setup_framing_notice",
-           "format_reminder_to_write_conversationally",
            "format_notice_that_tools_are_spent",
            "format_error_that_tools_are_spent",
            "format_docs_match", "format_docs_matches_heading", "format_docs_search_result",
@@ -597,21 +596,6 @@ def format_setup_framing_notice(user: str) -> str:
             f"{user} did not say any of it. Speak from it rather than about it — do not quote it back, and "
             f"do not refer {user} to it unless they ask about it.")
 
-def format_reminder_to_write_conversationally() -> str:
-    """Return the text content of a system message that asks the LLM to answer in prose rather than in report form.
-
-    Aimed at the reflex, strong in the Qwen 3 family, to answer a conversational question with headings and
-    bulleted sections. A chat is a discussion, and a discussion in outline form reads as a briefing document.
-
-    This used to also carry "Reply to the user's most recent message", for models - the distills of
-    DeepSeek-R1, early 2025 - that would otherwise answer some earlier turn instead. No model in the current
-    lineup needs telling: the temporary injects now sit ahead of the user's latest message rather than after
-    it, which leaves the question last, where a chat template already points the model at it.
-
-    This is for a dynamic injection.
-    """
-    return "[System information: In a discussion, prefer writing your raw thoughts rather than a structured report.]"
-
 def format_notice_that_tools_are_spent() -> str:
     """Return the text of a system message telling the LLM that this reply gets no more tool calls.
 
@@ -957,7 +941,6 @@ def default_formatters() -> env:
                loaded_model=format_loaded_model,
                time_now=format_time_now,
                setup_framing_notice=format_setup_framing_notice,
-               reminder_to_write_conversationally=format_reminder_to_write_conversationally,
                notice_that_tools_are_spent=format_notice_that_tools_are_spent,
                error_that_tools_are_spent=format_error_that_tools_are_spent,
                docs_match=format_docs_match,

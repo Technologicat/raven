@@ -57,6 +57,13 @@ lost the whole conversation there. Measured on 2026-10-05 on five models, the al
 difference to answering, declining or deliberation against the one sent only with material
 (`investigations/context-injects/`).
 
+## Writing conversationally
+
+`interaction.md` asks the AI to prefer raw thoughts to a structured report in a discussion. Aimed at the
+reflex, strong in the Qwen 3 family, to answer a conversational question with headings and bulleted
+sections: a chat is a discussion, and a discussion in outline form reads as a briefing document. It used to
+be a per-turn inject, which a fixed sentence never needed to be.
+
 ## The template variables
 
 **Every one of these files is a template, and the braces are load-bearing.** Before the text is used, it

@@ -57,8 +57,10 @@ SYSTEM_PROMPT = ("You are Aria, a helpful research assistant. Answer the user's 
 # Raven now delivers the date and the clock time by separate routes; joined back into one string here so
 # that the probes below, which use it as always-on filler, keep sending what they sent when measured.
 DATETIME_INJECT = f"{chatutil.format_date_now()} {chatutil.format_time_now()}"
-FOCUS_INJECT = chatutil.format_reminder_to_write_conversationally()
-CONTEXT_ONLY_INJECT = chatutil.format_reminder_to_use_information_from_context_only()
+# These two were injects too until 2026-10-05, when both became standing text in the character card's shared
+# half; their wordings as measured here, since there is no longer a formatter to ask.
+FOCUS_INJECT = "[System information: In a discussion, prefer writing your raw thoughts rather than a structured report.]"
+CONTEXT_ONLY_INJECT = "[System information: Base claims about the provided documents on those documents. Answer general questions normally.]"
 ALWAYS_ON_INJECTS = [DATETIME_INJECT, FOCUS_INJECT, CONTEXT_ONLY_INJECT]
 
 # A fact no model can hold, so an answer containing it proves the material was read rather

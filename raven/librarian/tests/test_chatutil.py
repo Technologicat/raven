@@ -479,14 +479,6 @@ class TestFormatDisclosureManifest:
         assert manifest["exported_at"] == "2026-07-29T14:23:11+03:00"
 
 
-class TestFormatReminders:
-    def test_conversational_reminder_is_nonempty_string(self):
-        result = chatutil.format_reminder_to_write_conversationally()
-        assert isinstance(result, str)
-        assert len(result) > 0
-        assert "[System information:" in result
-
-
 # ---------------------------------------------------------------------------
 # Persona removal
 # ---------------------------------------------------------------------------

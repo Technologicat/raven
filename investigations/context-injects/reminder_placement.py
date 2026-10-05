@@ -17,6 +17,10 @@ Built through Raven's own code (`llmclient.setup`, `agent.turn`, the real charac
 by per-run overrides on the settings object: C′ sets `system_prompt` (which ships empty and leads the system
 message when set) and silences the conditional reminder's formatter. Nothing shipped changes.
 
+Measured on 2026-10-05, and C′ shipped the same day, as a bullet in `prompts/interaction.md`; the
+conditional reminder and its formatter are gone. So a re-run no longer has an A to measure: both arms now
+carry the card's bullet, and C′ adds its line on top.
+
 Scenarios, the first three the reminder's job and the fourth its cost:
 
     general   "Who wrote Hamlet?", nothing retrieved. C′'s risk: a reminder about material with none present

@@ -518,7 +518,7 @@ class TestTurn:
 
         wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in prompts[0])
         assert chatutil.default_formatters().date_now() not in wire
-        assert chatutil.default_formatters().reminder_to_write_conversationally() not in wire
+        assert "structured report" not in wire  # nor the card's text, which carries the conversational bullet
 
     def test_progress_is_reported_while_the_model_streams(self, monkeypatch, llm_settings):
         # The single callback this surface takes. A batch of several hundred documents on a local model is
