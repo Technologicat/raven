@@ -460,3 +460,31 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **Not extending `GlyphAtlasRefresh` to every font**: the glyph drop's likely mechanism is a race in
        DPG's `present()`, and the refresh repairs only when its batch grows the atlas. To be fixed in DPG
        after the event: `TODO_DEFERRED.md`, "The Markdown renderer drops text".
+     - **Built the same morning**, each its own commit:
+       - **Auto-search**, the automatic search as a toggle of its own (`Alt+A`), greyed out while Documents is
+         off. It took the slot of **Chat graph**, which moved to the right end of the row above the panel: it
+         decides what fills the panel rather than anything about the answers (maintainer). The toggle row
+         has no room for another; the space under it holds the four indicators.
+       - **DOCUMENTS and INTERNET hold "Done"** for half a second after any search (`MinimumShowTime.hide`'s
+         `linger=`); before, "Done" showed only after a search faster than the minimum.
+       - **The `[no sources retrieved]` marker**: no verdict on a message that only calls tools (one with text
+         beside its calls still gets one, Qwen writing partial answers that way); the internet counts as a
+         source; the web tools declare their grounding, so a failed search or fetch no longer counts as
+         material (webfetch's server result gained `fetched`). Announcement-only messages ("Let me search…")
+         can now carry the marker with Auto-search off: accepted as true if uninformative (maintainer).
+       - **The chat log no longer jumps while streaming**: the last paragraph is swapped in through
+         `WidgetSwap` instead of deleted and re-added. Checked live, the thinking trace open included. The
+         retcon path (`reclassify_all_paragraphs_as_thought`, a template that opens thinking implicitly) still
+         deletes and re-renders, deliberately, as a one-time move; not reproduced, Qwen 3.8 separating its
+         channels.
+     - **Two specimens examined live, and both moved from guesswork to mechanism**:
+       - The glyph drop: a race in DPG's `present()`, read from source, not yet reproduced. To be fixed in DPG
+         after the event, with a reproduction probe first and an upstream report (maintainer). Written up in
+         `TODO_DEFERRED.md`.
+       - Misplaced Markdown decorations: reproduced deterministically (opening a thinking trace above a reply
+         with code spans), a layout fault rather than a race. Probe and write-up in
+         `investigations/dpg-markdown-decorations/`.
+     - **Still for today/tomorrow**: the model-written query (part 2 of the automatic-search decision), the
+       prefill comparison with the `reasoning_effort` re-test and the tool-call budget probe, the dotted-name
+       checker (lunch-break item), and the 0.2.10 leftovers (crown-in-compare; the backdrop and the thumbnail
+       textures probably to 0.2.11).
