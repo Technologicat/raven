@@ -5,7 +5,7 @@
 **The layering is the part worth copying, and it is the only part.** Each layer imports downward and no
 further, and that has held while the package grew — which is the property that made this the reference for
 the rest of Raven. The module *sizes* are no longer exemplary and should not be read as endorsed: against
-the project's ~700-line guideline, `chat_controller.py` is ~5.2k and `app.py` ~3.6k (and `llmclient.py` was ~2.8k until the tools moved out of it).
+the project's ~700-line guideline, `chat_controller.py` is ~5.5k and `app.py` ~4.0k (and `llmclient.py` was ~2.8k until the tools moved out of it).
 The growth is recent rather than gradual — `chat_controller.py` gained 44% in the three weeks to
 2026-08-24, and the layer map below had been recording sizes 30–45% low for that whole period.
 
@@ -35,9 +35,9 @@ number claims a precision that the next commit removes. The previous exact figur
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~3.8k), minichat.py (~750, minimal reference client),
+Layer 5 - Applications:     app.py (~4.0k), minichat.py (~750, minimal reference client),
                             indexer.py (~150, the `raven-indexer` CLI)
-Layer 4 - Controller/GUI:   chat_controller.py (~5.2k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
+Layer 4 - Controller/GUI:   chat_controller.py (~5.5k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
                             chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~370),
                             chatlog_search.py (~390)
 Layer 4 - Scripting:        agent.py (~710), the headless sibling of the controller
