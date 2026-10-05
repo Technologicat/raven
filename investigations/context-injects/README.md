@@ -20,6 +20,7 @@ why they were never part of the suite.
 | `absent_fact.py` | Asked something the retrieved documents do not answer, what does the model do? |
 | `rag_placement.py` | At realistic corpus scale, does retrieved material still have to sit at the front of the history? |
 | `backend_capabilities.py` | What does a given backend's HTTP API actually support, as opposed to advertise? |
+| `reminder_placement.py` | The grounding reminder sent only with material (A), or always, worded conditionally (C′): does it change the answers, and what does A cost the KV cache? See below. |
 
 `assembled_shape.py` is worth a note: the write-up does not name it, and it was recovered only by noticing it
 landed in the same commit (`ef0ce0c`). It is listed here so that never has to be rediscovered.
@@ -98,6 +99,49 @@ old numbers: the full variant sweep, three or more samples per arm, across the f
 member of it.
 
 Raw output: `absent_fact-2026-08-11.txt` (`.txt` rather than `.log`, which `.gitignore` excludes).
+
+## 2026-10-05: the grounding reminder, sent only with material or always
+
+`reminder_placement.py`, five models on LM Studio (Qwen 3.6 35B-A3B, Qwen 3.5 9B, Qwen 3.6 27B, Gemma 4
+26B-A4B, Qwen 3.8 27B), 12 samples per scenario per arm (T=0 ×3, T=1 ×9). Arm **A** is what shipped: "Base
+claims about the provided documents on those documents…" added to the system message only when the turn had
+material. Arm **C′** sends "When documents, attachments or tool results are in the conversation, base claims
+about them on them. Answer general questions normally." on every turn.
+
+| Scenario | Wanted | A | C′ |
+|---|---|---|---|
+| *general*: "Who wrote Hamlet?", nothing retrieved | an answer | 59 / 60 | 59 / 60 |
+| *absent*: asked about Kuiper-9, given the Kuiper-7 document | a decline | 58 / 60, 2 empty | 60 / 60 |
+| *present*: asked about Kuiper-7, given that document | its figure | 60 / 60 | 60 / 60 |
+
+- **No reply invented a figure**, in either arm. The script's regex left many declines "unclear"; every one
+  was read, and every one says Kuiper-9 is not there and offers Kuiper-7's figure as Kuiper-7's.
+- The two *general* misses are one runaway each on Qwen 3.6 27B, deliberating past the 16k cap over how to
+  word "William Shakespeare". The two empty replies are Gemma under A at T=1.
+- **C′ does not bring back Q4's over-deliberation.** Median reasoning length is close between the arms on
+  every model, and on Gemma C′'s is about half of A's.
+
+**The cache scenario does not measure what it was meant to**, and the reason is a finding of its own. Its
+second turn's prompt parts from the first turn's at message 2 in *both* arms: the per-turn clock inject, a
+synthetic tool exchange placed before the latest user message and not stored, sits where the next turn has
+the previous user message. So without something between turns re-warming the cache, every turn reprocesses
+the previous exchange. Librarian's GUI hides this with its context prefill between turns; a batch run
+through `agent.turn` has no such step. Under A the prompt parts at message 0 instead, as expected.
+
+The cost of A is shown by a live turn instead (2026-10-05, Qwen 3.8 27B): after a prefill of 1406 tokens, a
+turn with an attached PDF reprocessed its whole ~5530-token prompt in 3.68 s, about what the whole prompt
+takes at this model's ~1500 tokens/s against ~2.7 s for the PDF's part alone. A's reminder had changed
+message 0. In a long chat that is the whole context, on the first turn that grounds in anything.
+
+**Decided** (maintainer, 2026-10-05): **C′, as standing text** in `prompts/interaction.md` rather than an
+inject, since it no longer varies; the conditional inject is gone. Not measured: the same words as a bullet
+in the card rather than as a line of their own at the head of the system message, which is where C′ sat
+here. Still conditional in the system message, and so still a cache miss when it appears: the notice that
+the tool budget is spent, on the round that spends it.
+
+Data: `reminder_placement-summary.jsonl`, one row per sample — the reply, its verdict, reasoning *length*,
+and the generation figures with their phases. The raw `reminder_placement.jsonl` the script writes keeps
+every prompt and reasoning trace in full, which carry the local user profile card, so it stays local.
 
 ## Related
 

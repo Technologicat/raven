@@ -1,0 +1,3 @@
+# Every prompt and reasoning trace in full, which carry the local user profile card. The committed
+# summary keeps what the analysis uses; see the README.
+reminder_placement.jsonl
