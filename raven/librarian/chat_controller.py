@@ -666,17 +666,31 @@ class DPGChatMessage:
                 self.add_paragraph(text, is_thought)
                 return
             paragraph = self.paragraphs[-1]
-
-            # The mutex guarantees this section runs in the same frame.
-            #     https://github.com/hoffstadt/DearPyGui/discussions/1002
-            # TODO: Grabbing the mutex here causes the app to randomly hang during `on_llm_progress`. Debug why. Just disabling this for now.
-            # with dpg.mutex():
-            if "widget" in paragraph:
-                dpg.delete_item(paragraph.pop("widget"))
+            maybe_old = paragraph.get("widget")
             paragraph["text"] = text
             paragraph["is_thought"] = is_thought
             paragraph["rendered"] = False
-            self._render_text()
+            # The replacement is built hidden, just before the old widget, and `WidgetSwap` shows the one and
+            # deletes the other in the same frame. Deleting first and building after left frames with the
+            # paragraph missing, so the log shortened and sprang back as each chunk arrived.
+            swapped = False
+            with guiutils.nonexistent_ok(parent_gone_ok=True):
+                maybe_parent = self._prepare_paragraph(paragraph) if maybe_old is not None else None
+                if maybe_parent is not None and maybe_parent == dpg.get_item_parent(maybe_old):
+                    old_rows, old_height = paragraph["rows"], dpg.get_item_rect_size(maybe_old)[1]
+                    new = self._build_paragraph_widget(len(self.paragraphs) - 1, paragraph,
+                                                       parent=maybe_parent, before=maybe_old, show=False)
+                    gui_animation.WidgetSwap.swap(self.parent_view.gui_parent, maybe_old, new,
+                                                  height_change=dpg_markdown.predict_height_change(old_rows, old_height, paragraph["rows"]),
+                                                  commanded_y_scroll=self.parent_view._commanded_y_scroll)
+                    paragraph["widget"] = new
+                    paragraph["rendered"] = True
+                    swapped = True
+            # No widget to swap, blank text, a paragraph that changed between thought and reply (a different
+            # container, so not a swap), or a parent gone mid-build: delete what there is and render afresh.
+            if not swapped:
+                self._drop_paragraph_widget(paragraph)
+                self._render_text()
 
         # As in `add_paragraph`, and outside the lock for the same reason. Here rather than only at a
         # paragraph break because this is where a reply's words actually arrive: the caller rate-limits it
@@ -929,32 +943,40 @@ class DPGChatMessage:
                 if paragraph["rendered"]:
                     continue
                 assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
-                text = paragraph["text"].strip()
-                if text:  # don't bother if text is blank
-                    # Replace known XML tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
-                    #
-                    # Both pairs are fallbacks for output that arrived broken, which is why neither is dead
-                    # code despite normal traffic never reaching them. A well-formed tool call is parsed out
-                    # by the backend and never lands in the text; what lands here is a confabulated or
-                    # malformed one its parser did not recognize. Likewise reasoning is separated into
-                    # `reasoning_content` before render, so inline `<think>` means a backend that did not
-                    # separate it. In both cases this is the only thing standing between the reader and a
-                    # silently dropped tag.
-                    text = text.replace("<tool_call>", "**>>>Tool call>>>**")
-                    text = text.replace("</tool_call>", "**<<<Tool call<<<**")
-                    text = text.replace("<think>", "**>>>Thinking>>>**")
-                    text = text.replace("</think>", "**<<<Thinking<<<**")
-
-                    chat_text_w = self.get_chat_text_width()
-                    paragraph["display_text"] = text
-                    if paragraph["is_thought"]:
-                        paragraph["wrap"] = chat_text_w - gui_config.toolbutton_w
-                        parent = self._thought_bubble()
-                    else:
-                        paragraph["wrap"] = chat_text_w
-                        parent = self.gui_text_group
-                    paragraph["widget"] = self._build_paragraph_widget(idx, paragraph, parent=parent)
+                maybe_parent = self._prepare_paragraph(paragraph)
+                if maybe_parent is not None:  # don't bother if text is blank
+                    paragraph["widget"] = self._build_paragraph_widget(idx, paragraph, parent=maybe_parent)
                 paragraph["rendered"] = True
+
+    def _prepare_paragraph(self, paragraph: dict) -> str | int | None:
+        """Set `paragraph`'s `display_text` and `wrap` from its text; return the container it goes in, or `None` if it is blank.
+
+        Call holding `paragraphs_lock`.
+        """
+        text = paragraph["text"].strip()
+        if not text:
+            return None
+        # Replace known XML tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
+        #
+        # Both pairs are fallbacks for output that arrived broken, which is why neither is dead
+        # code despite normal traffic never reaching them. A well-formed tool call is parsed out
+        # by the backend and never lands in the text; what lands here is a confabulated or
+        # malformed one its parser did not recognize. Likewise reasoning is separated into
+        # `reasoning_content` before render, so inline `<think>` means a backend that did not
+        # separate it. In both cases this is the only thing standing between the reader and a
+        # silently dropped tag.
+        text = text.replace("<tool_call>", "**>>>Tool call>>>**")
+        text = text.replace("</tool_call>", "**<<<Tool call<<<**")
+        text = text.replace("<think>", "**>>>Thinking>>>**")
+        text = text.replace("</think>", "**<<<Thinking<<<**")
+
+        chat_text_w = self.get_chat_text_width()
+        paragraph["display_text"] = text
+        if paragraph["is_thought"]:
+            paragraph["wrap"] = chat_text_w - gui_config.toolbutton_w
+            return self._thought_bubble()
+        paragraph["wrap"] = chat_text_w
+        return self.gui_text_group
 
     def _build_paragraph_widget(self, idx: int, paragraph: dict, *,
                                 parent: str | int, before: str | int = 0, show: bool = True) -> int:
@@ -3316,10 +3338,10 @@ class DPGLinearizedChatView:
         #   - *Chasing a target that moved while we waited.* Retargeting covers it, on a better trigger: the
         #     target moves when content arrives, and content arriving is exactly when `follow_tail` fires. Event
         #     driven, rather than polled against a fixed attempt budget.
-        #   - *Recovering from a DPG clamp.* Same event. `replace_last_paragraph` is the only clamp source (it
-        #     swaps a paragraph by delete-then-add, and the `dpg.mutex()` that would make the pair atomic is
-        #     disabled because holding it hangs the app), and every one of its call sites is inside the
-        #     streaming chunk handler — so a clamp can only happen while streaming, which is precisely when
+        #   - *Recovering from a DPG clamp.* Same event. `replace_last_paragraph` is the only clamp source: it
+        #     swaps a paragraph in through `WidgetSwap`, but falls back to delete-then-add when the paragraph
+        #     moves between thinking trace and reply, and every one of its call sites is inside the streaming
+        #     chunk handler — so a clamp can only happen while streaming, which is precisely when
         #     `follow_tail` retargets per chunk.
         #
         # None of that depends on the scroll being *animated*: it depends on retargeting, which works the same
