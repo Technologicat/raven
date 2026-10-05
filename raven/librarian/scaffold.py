@@ -1406,11 +1406,16 @@ def ai_turn(llm_settings: env,
             # back - would be indistinguishable from it. An attachment still grounds a reply either way, so
             # it is read regardless. Absent means "nothing to say", which beats a third state.
             #
+            # And only on a message with text. One that only asks for tools makes no claims, so "nothing
+            # retrieved" would be true of it and say nothing. One that answers in part *and* asks for more
+            # does make claims, standing on what was retrieved before it, so it gets a verdict like a reply.
+            #
             # Not a guard: it does not withhold the reply. The guard it replaces could not tell a question
             # about the documents from a general-knowledge aside, and in the default configuration answered
             # "what is 2+2?" with "No matches in document database."
             attachment_grounds = _attachment_is_present(message_history)
-            if documents_available or attachment_grounds:
+            makes_claims = bool(chatutil.content_to_text(out.data["content"]).strip())
+            if (documents_available or attachment_grounds) and makes_claims:
                 payload["generation_metadata"]["grounded"] = bool(tool_context.grounded or attachment_grounds)
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,

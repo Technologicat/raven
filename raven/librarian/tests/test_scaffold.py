@@ -650,6 +650,43 @@ class TestAITurnRAG:
                                  docs_query="What is X?")
         assert forest.get_payload(final_head)["generation_metadata"]["grounded"] is True
 
+    @staticmethod
+    def _tool_round_then_reply(monkeypatch, llm_settings, populated_forest, asking_text):
+        """Run a turn whose first message asks for a document search, with `asking_text` beside the call, and
+        whose second answers. No automatic search, so nothing is retrieved before the first. Returns the two
+        assistant payloads."""
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Search the documents for X")
+        responses = iter([make_invoke_result(content=asking_text, tool_calls=[tool_call("search_documents", "call_0")]),
+                          make_invoke_result(content="X is foo.")])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(responses))
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda *a, **kw: [make_tool_response(content="No matches.", function_name="search_documents")])
+        final_head = run_ai_turn(forest, llm_settings, user_head,
+                                 retriever=FakeRetriever(results=[]),
+                                 docs_query=None)
+        assistant_payloads = [forest.get_payload(node_id) for node_id in forest.linearize_up(final_head)
+                              if forest.get_payload(node_id)["message"]["role"] == "assistant"]
+        asking, answering = assistant_payloads[-2], assistant_payloads[-1]
+        assert asking["message"]["tool_calls"], "fixture: the second-to-last assistant message should ask for a tool"
+        assert "grounded" in answering["generation_metadata"], "control: the reply itself does get a verdict"
+        return asking, answering
+
+    def test_a_message_only_asking_for_tools_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
+        """The verdict is about a message's claims, and one that only asks for tools makes none. With no
+        automatic search such a message has nothing retrieved before it, which is the case that put the
+        marker on a bare tool call."""
+        asking, _ = self._tool_round_then_reply(monkeypatch, llm_settings, populated_forest, asking_text="")
+        assert "grounded" not in asking["generation_metadata"]
+
+    def test_a_partial_reply_beside_tool_calls_records_a_verdict(self, monkeypatch, llm_settings, populated_forest):
+        """A model may answer in part and ask for more in the same message. The part it answered makes
+        claims, standing on what was retrieved before it (here, nothing)."""
+        asking, _ = self._tool_round_then_reply(monkeypatch, llm_settings, populated_forest,
+                                                asking_text="X is probably foo; let me check.")
+        assert asking["generation_metadata"]["grounded"] is False
+
     def test_documents_off_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
         """With documents off there is nothing worth saying: "no sources retrieved" would only report the
         switch the user just set, and would be indistinguishable from the case that *is* worth reporting -

@@ -578,8 +578,8 @@ class DPGChatMessage:
                     grounding_tooltip = dpg.add_tooltip(grounding_marker)
                     dpg.add_text("Nothing was retrieved for this reply: no document matches,\n"
                                  "no attachments, no tool results.\n\n"
-                                 "The absence of this marker means something *was* retrieved -\n"
-                                 "not that the reply relied on it.",
+                                 "Without this marker, something was retrieved for the reply.\n"
+                                 "That does not mean the reply relied on it.",
                                  parent=grounding_tooltip)
 
         # If there is no linked chat node, this is a live streaming chat message, so the GUI widget should end here - it doesn't need the datastore control buttons or end spacers.
