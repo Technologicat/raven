@@ -474,8 +474,9 @@ left out, as it reads the uncommitted `pdm.lock`.
 about 9 s), reading the list from the workflow so the two cannot drift. So a push preceded by a full test run
 has passed them. CI's own test job runs `pytest raven/`, which leaves them to the lint job.
 
-**And every push runs them, through a `pre-push` hook** (since 2026-10-05, `scripts/pre-push`), so there is
-no need to run `pytest scripts/tests/` by hand before pushing, and no point running it twice. It was the step
+**And every push runs them, through a `pre-push` hook** (since 2026-10-05, `scripts/pre-push`), together with
+ruff and pycodestyle as the lint job runs them — so there is no need to run any of it by hand before pushing,
+and no point running it twice. It was the step
 most often skipped, three times in one day, each time a module map caught a minute later in CI. Git reaches
 the script through a global `pre-push` dispatcher in the maintainer's git configuration, which runs a
 repository's `scripts/pre-push` when it has one; on a machine without that dispatcher the hook does not run,

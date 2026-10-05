@@ -1333,13 +1333,13 @@ def ai_turn(llm_settings: env,
                                                             head_node_id=head_node_id,
                                                             exclude_document_ids=[]))
                 docs_query_status, docs_query, maybe_query_cost = _write_docs_query(llm_settings=llm_settings,
-                                                                  datastore=datastore,
-                                                                  head_node_id=head_node_id,
-                                                                  tool_context=tool_context,
-                                                                  maybe_tool_names=maybe_tool_names,
-                                                                  tools_enabled=any_tools_available,
-                                                                  use_character_card=use_character_card,
-                                                                  maybe_abort=maybe_abort)
+                                                                                    datastore=datastore,
+                                                                                    head_node_id=head_node_id,
+                                                                                    tool_context=tool_context,
+                                                                                    maybe_tool_names=maybe_tool_names,
+                                                                                    tools_enabled=any_tools_available,
+                                                                                    use_character_card=use_character_card,
+                                                                                    maybe_abort=maybe_abort)
                 _notify("on_docs_query", on_docs_query, docs_query_status, docs_query)
                 if maybe_query_cost is not None:
                     autosearch_costs["query"] = maybe_query_cost

@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 #
-# Before a push: the repository checks CI's lint job runs (`scripts/tests/`, about ten seconds).
+# Before a push: what CI's lint job checks. The linters, then the repository checks (`scripts/tests/`),
+# about fifteen seconds in all.
 #
 # Called by the global `pre-push` dispatcher in the maintainer's git configuration, which runs a
 # repository's `scripts/pre-push` when there is one. A local run of these checks was the step most often
-# skipped before a push, and CI then went red on a module map or a doc link a minute later; as a hook it
-# cannot be skipped by forgetting. `git push --no-verify` skips it on purpose.
+# skipped before a push, and CI then went red a minute later; as a hook it cannot be skipped by forgetting.
+# `git push --no-verify` skips it on purpose.
+#
+# The two lint commands are read out of the workflow rather than copied, so they cannot drift from what CI
+# runs. pycodestyle is given the tracked files only: run on `.` as CI does, it would also read gitignored
+# local files that CI never sees. ruff skips those by itself.
 #
 # The project's own interpreter, so that a push from an editor without the venv activated runs the same
 # checks a terminal would.
@@ -13,8 +18,24 @@
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
+cd "$root"
 python="$root/.venv/bin/python"
 [ -x "$python" ] || python=python
+workflow=.github/workflows/ci.yml
 
-echo "pre-push: running the repository checks (scripts/tests)..." >&2
-exec "$python" -m pytest -q -p no:cacheprovider "$root/scripts/tests"
+ruff_cmd="$(sed -n 's/^ *run: \(ruff check \. --ignore [A-Z0-9,]*\)$/\1/p' "$workflow")"
+pycodestyle_cmd="$(sed -n 's/^ *run: python -m \(pycodestyle .*\) \.$/\1/p' "$workflow")"
+if [ -z "$ruff_cmd" ] || [ -z "$pycodestyle_cmd" ]; then
+    echo "pre-push: could not find the ruff and pycodestyle commands in $workflow; update this script." >&2
+    exit 1
+fi
+
+read -ra ruff_args <<< "$ruff_cmd"  # words, as the workflow's shell splits them
+read -ra pycodestyle_args <<< "$pycodestyle_cmd"
+
+echo "pre-push: $ruff_cmd" >&2
+"$python" -m "${ruff_args[@]}"
+echo "pre-push: $pycodestyle_cmd (tracked files)" >&2
+git ls-files -z '*.py' | xargs -0 "$python" -m "${pycodestyle_args[@]}"
+echo "pre-push: the repository checks (scripts/tests)..." >&2
+exec "$python" -m pytest -q -p no:cacheprovider scripts/tests
