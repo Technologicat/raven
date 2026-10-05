@@ -566,9 +566,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          under 2% (maintainer's choice over a second prefill request, measured at double the work).
          `investigations/prefill-by-model/`. Checked live the same evening: a follow-up on a ~10.6k-token
          prompt spent 1.56 s in prompt processing, against ~7 s for the whole.
-       - **Open, not urgent: rounds within a turn may miss the cache too** — one live round after a tool call,
-         and the maintainer's ~80k-token-PDF chat reprocessing nearly every round. Not measured; the candidate
-         and the probe to use are in `investigations/prefill-by-model/`.
+       - **Open, not urgent: rounds within a turn may miss the cache too** — one live round after a tool call
+         looked like it. Not measured; the candidate and the probe to use are in
+         `investigations/prefill-by-model/`. The maintainer's ~80k-token-PDF chat, reprocessed every turn with no
+         tool calls, is most likely the between-turns fault fixed today; worth retesting at that size.
        - **For 6 October: with the chat graph showing, Ctrl+N sometimes brings the avatar back after its glitch
          effect has already ended** (maintainer, seen live), so the switch to the new chat happens without it.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,

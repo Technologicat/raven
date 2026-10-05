@@ -136,9 +136,12 @@ and the new message.
 **Open: rounds within a turn.** The fix above is about the step between turns. Within a turn, each round's
 prompt is the previous round's plus the model's tool call and the result, and whether the backend reuses it
 was not measured. One live round after a tool call (image chat, 2026-10-05, before the fix) spent 1.85 s on a
-prompt of about 4.5k tokens, which looks like the whole of it; and the maintainer saw nearly every round of a
-turn reprocessed in full in a chat with an ~80k-token PDF attached. For that case one candidate, untested:
-an attachment that does not fit whole is cut down to what is left of the context, which shrinks as tool
-results pile up, so the excerpt, early in the prompt, could change every round. `probe_raven_prompts.py` is
-the shape of the probe to measure it with.
+prompt of about 4.5k tokens, which looks like the whole of it. One candidate, untested: an attachment that
+does not fit whole is cut down to what is left of the context, which shrinks as tool results pile up, so the
+excerpt, early in the prompt, could change every round. `probe_raven_prompts.py` is the shape of the probe to
+measure it with.
+
+The maintainer's earlier observation of a chat with an ~80k-token PDF attached, its whole prompt reprocessed
+every time, was turn by turn with no tool calls, so it is most likely the between-turns fault fixed above. Not
+retested at that size.
 
