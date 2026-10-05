@@ -304,13 +304,14 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
         models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])
         loaded = [m for m in models if m.get("state") == "loaded"]
         if loaded:
-            record = loaded[0]
+            record = loaded[0]  # with several loaded, the first LM Studio lists; `n_loaded` lets a caller say so
             # A record with no `type` at all is "cannot tell", not "cannot see": a bare `== "vlm"` would
             # hard-refuse image attachment on the strength of a field that was never there. Every record
             # this LM Studio returns carries one, so this is the shape of the answer rather than a
             # workaround for an observed gap.
             maybe_model_type = record.get("type")
             return env(label=_format_lmstudio_model_label(record),
+                       n_loaded=len(loaded),
                        model_id=record.get("id"),
                        context_length=record.get("loaded_context_length"),
                        is_vlm=(maybe_model_type == "vlm") if maybe_model_type is not None else None,
@@ -362,9 +363,10 @@ def setup(backend_url: str,
                       LM Studio (id, quant, context), the GGUF filename on ooba, or "No model information is
                       available" when a generic backend can't disambiguate (never a guess). See `_resolve_model_info`.
 
-        `model_id: str | None`: The model id sent in each request's `model` field — `config.llm_model`, which
-                                LM Studio's JIT loads on demand — or `None`, to send none and have the backend
-                                answer with whatever it has loaded. Distinct from `model`, the display identity.
+        `model_id: str | None`: The model id sent in each request's `model` field: `config.llm_model`, which
+                                LM Studio's JIT loads on demand, or else the model loaded now, kept current by
+                                `follow_model_swap`. `None` when neither is known, and then no name is sent.
+                                Distinct from `model`, the display identity.
 
         `backend_flavor: str`: Which OpenAI-compatible backend this is — "oobabooga", "lmstudio", or "generic".
                                Autodetected (or forced via `config.llm_backend_flavor`); gates a few request details.
@@ -456,6 +458,9 @@ def setup(backend_url: str,
     model_info = _resolve_model_info(backend_url, backend_flavor)
     if backend_flavor == "lmstudio" and model_info.loaded and not quiet:
         _warn_if_lmstudio_parallel(backend_url)
+        if getattr(model_info, "n_loaded", 1) > 1 and not librarian_config.llm_model:
+            logger.warning(f"setup: the backend has {model_info.n_loaded} models loaded; using '{model_info.label}', the first it lists. "
+                           f"Set '{librarian_config.__name__}.llm_model' to choose, or unload the others.")
     return configure(model_info=model_info,
                      backend_flavor=backend_flavor,
                      backend_url=backend_url,
@@ -583,8 +588,8 @@ def follow_model_swap(settings: env) -> bool:
 
     Cheap enough to call before every turn: one request, and nothing more unless the model changed. Only what
     describes the model is updated — its identity, context window, whether it sees images, whether it is
-    loaded — together with what was fitted to the old one, the token-count calibration and the local
-    tokenizer. Everything else in `settings` is left alone, including any per-run overrides a caller has set.
+    loaded, and the name requests carry unless `config.llm_model` sets one — together with what was fitted
+    to the old one, the token-count calibration and the local tokenizer. Everything else in `settings` is left alone, including any per-run overrides a caller has set.
 
     Does nothing when the backend does not answer: the turn then meets that failure itself, and recovering
     from it is `reconnect`'s job.
@@ -601,7 +606,16 @@ def follow_model_swap(settings: env) -> bool:
         return False
 
     logger.info(f"follow_model_swap: the backend's model changed from '{settings.model}' to '{info.label}'; following it.")
+    if getattr(info, "n_loaded", 1) > 1:
+        logger.warning(f"follow_model_swap: the backend has {info.n_loaded} models loaded; using '{info.label}', the first it lists. "
+                       f"Set '{librarian_config.__name__}.llm_model' to choose, or unload the others.")
     settings.model = info.label
+    if not librarian_config.llm_model:  # a configured model stays the one named
+        settings.model_id = info.model_id
+        if info.model_id is not None:
+            settings.request_data["model"] = info.model_id
+        else:
+            settings.request_data.pop("model", None)
     settings.context_length = context_length
     settings.model_is_vlm = info.is_vlm
     settings.model_is_loaded = info.loaded
@@ -830,10 +844,11 @@ def configure(model_info: env,
     Returns the same `env` as `setup`; see its docstring for the fields.
     """
     model = model_info.label  # human-facing identity for the character card (never a guess)
-    # Only a model the user chose is named in requests. Naming the one that happened to be loaded at startup
-    # would pin it: after a model swap in the backend, LM Studio would load the old one back on demand, or
-    # fail to where it no longer fits. With no name, the backend answers with whatever it has loaded.
-    request_model = librarian_config.llm_model
+    # The configured model if there is one, else the one loaded now. A name is needed either way: LM Studio
+    # refuses a request that names none while two models are loaded. The loaded one is re-read before every
+    # turn (`follow_model_swap`), so a swap in the backend is followed rather than undone — a name fixed at
+    # startup made LM Studio load the old model back, or fail where it no longer fit.
+    request_model = librarian_config.llm_model or model_info.model_id
 
     # Context window: report the *loaded* length, never the model's theoretical max. When the backend doesn't
     # expose it (ooba doesn't here; a generic backend can't), default conservatively to 64k and warn — smaller
@@ -919,7 +934,7 @@ def configure(model_info: env,
                                                      [model, request_model])
 
     settings = env(user=user, char=char, model=model,
-                   model_id=request_model,  # model id sent in requests (`config.llm_model`), or None to send none
+                   model_id=request_model,  # model id sent in requests; see the docstring
                    backend_flavor=backend_flavor,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)

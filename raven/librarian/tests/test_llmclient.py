@@ -1744,13 +1744,13 @@ class TestConnectAndReconnect:
         assert llmclient.backend_status(settings) is llmclient.backend_has_no_model
 
 
-    @pytest.mark.parametrize("configured", [None, "chosen-model"], ids=["unset", "set"])
-    def test_only_a_configured_model_is_named_in_requests(self, monkeypatch, configured):
-        # Unset is the case that matters: naming the model that was loaded at startup would pin it, so that
-        # after a swap LM Studio loads the old one back. Set is the control, where naming it is the point.
+    @pytest.mark.parametrize("configured, named", [(None, "a-model"), ("chosen-model", "chosen-model")], ids=["unset", "set"])
+    def test_requests_name_the_configured_model_or_else_the_loaded_one(self, monkeypatch, configured, named):
+        # A name is always sent when one is known: LM Studio refuses a nameless request while two models are
+        # loaded. Unset names the loaded model, which `follow_model_swap` keeps current.
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", configured)
         settings = self._good_settings()
-        assert settings.request_data.get("model") == configured
+        assert settings.request_data.get("model") == named
 
 
 class TestFollowModelSwap:
@@ -1778,11 +1778,19 @@ class TestFollowModelSwap:
         assert settings.tokens_per_character == 0.5, "the calibration was reset with no model change"
 
     def test_a_swapped_model_is_followed_and_overrides_survive(self, settings, monkeypatch):
-        self._backend_has(monkeypatch, label="b-model", context_length=8192, is_vlm=False)
+        self._backend_has(monkeypatch, label="b-model", model_id="b-model", context_length=8192, is_vlm=False)
         assert llmclient.follow_model_swap(settings) is True
         assert (settings.model, settings.context_length, settings.model_is_vlm) == ("b-model", 8192, False)
+        assert settings.request_data["model"] == "b-model", "requests still name the model that was swapped out"
         assert settings.tokens_per_character == llmclient._DEFAULT_TOKENS_PER_CHARACTER
         assert settings.system_prompt == "a per-run override"
+
+    def test_a_configured_model_stays_the_one_named(self, settings, monkeypatch):
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", "chosen-model")
+        settings.request_data["model"] = "chosen-model"
+        self._backend_has(monkeypatch, label="b-model", model_id="b-model")
+        llmclient.follow_model_swap(settings)
+        assert settings.request_data["model"] == "chosen-model"
 
     def test_an_unknown_context_length_falls_back_to_the_default(self, settings, monkeypatch):
         self._backend_has(monkeypatch, label="b-model", context_length=None)
@@ -3198,3 +3206,4 @@ class TestContinuingAMessageKeepsWhatItAlreadySaid:
                              seed="The seasons: \nUser: name them")
         text = chatutil.content_to_text(out.data["content"])
         assert text == "The seasons: \nUser: name them then", text
+

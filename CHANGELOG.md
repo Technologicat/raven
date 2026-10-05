@@ -118,7 +118,10 @@
 #### Raven-librarian
 
 - **Ctrl+arrows, Ctrl+Home, Ctrl+End and Ctrl+Delete edit text again while you type.** In v0.2.9 the first four also moved the chat to a sibling message, so jumping to the start of a message being typed could switch the conversation under it; and a held Ctrl+Shift+Delete could delete a message, its confirming second press arriving by key repeat. While the message field or the search field has the text cursor, these keys now only edit the text.
-- **Loading a different model in LM Studio mid-session no longer brings the old one back.** In v0.2.9 Librarian asked for the model that was loaded when it started, so LM Studio loaded that one again, or failed where it no longer fit. It now names a model only if one is set in its configuration, and before each reply it checks which model is loaded, so the context size and image support it works with are the new model's.
+- **Loading a different model in LM Studio mid-session no longer brings the old one back.**
+  - In v0.2.9 Librarian asked for the model that was loaded when it started, so LM Studio loaded that one again, or failed where it no longer fit.
+  - Before each reply it now checks which model is loaded and asks for that one, unless its configuration names a model, so the context size and image support it works with are the new model's too.
+  - With several models loaded, it uses the first LM Studio lists, and says so in its log.
 - **The chat log no longer jumps while the AI is writing.** Each update to the paragraph being written removed it and drew it again, so for a frame the log was shorter and the text below sprang down and back. The updated paragraph now replaces the old one in the same frame.
 - **A missing or unreadable avatar settings file now ends the app cleanly.** In v0.2.9 the app reported the error and then ran on with every button dead, hung when closed, and left its avatar on the server until the server was restarted. It now exits with status 255, releasing the avatar.
 - **A failed web search or fetch no longer counts as material retrieved.** A refused, timed-out or unreadable fetch, and a search with no results or no answer from the engine, left a reply without its [no sources retrieved] marker, and the AI was asked to base its claims on material that was not there.
