@@ -1312,7 +1312,7 @@ def ai_turn(llm_settings: env,
         _notify("on_docs_start", on_docs_start)
         try:
             if write_docs_query:
-                _notify("on_docs_progress", on_docs_progress, "Writing a query…")
+                _notify("on_docs_progress", on_docs_progress, "Writing auto-search query…")
                 # The list the reply's prompt will carry is only known after the search, which removes from
                 # it what the search found; this one is what the conversation held before. They usually
                 # agree, and where they do not, the cached prefix ends at that inject rather than at the
