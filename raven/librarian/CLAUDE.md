@@ -1,11 +1,11 @@
 # Librarian — CLAUDE.md
 
-~30k lines across 24 modules.
+~34k lines across 29 modules.
 
 **The layering is the part worth copying, and it is the only part.** Each layer imports downward and no
 further, and that has held while the package grew — which is the property that made this the reference for
 the rest of Raven. The module *sizes* are no longer exemplary and should not be read as endorsed: against
-the project's ~700-line guideline, `chat_controller.py` is ~5.5k and `app.py` ~4.0k (and `llmclient.py` was ~2.8k until the tools moved out of it).
+the project's ~700-line guideline, `app.py` is ~4.0k and `chat_controller.py` ~3.0k, the latter after its message classes moved out to `chatmessage.py` (~2.5k) (and `llmclient.py` was ~2.8k until the tools moved out of it).
 The growth is recent rather than gradual — `chat_controller.py` gained 44% in the three weeks to
 2026-08-24, and the layer map below had been recording sizes 30–45% low for that whole period.
 
@@ -37,7 +37,7 @@ time anyone noticed. Re-measure before quoting one.
 ```
 Layer 5 - Applications:     app.py (~4.0k), minichat.py (~750, minimal reference client),
                             indexer.py (~150, the `raven-indexer` CLI)
-Layer 4 - Controller/GUI:   chat_controller.py (~5.5k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
+Layer 4 - Controller/GUI:   chat_controller.py (~3.0k), chatmessage.py (~2.5k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
                             chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~370),
                             chatlog_search.py (~390)
 Layer 4 - Scripting:        agent.py (~710), the headless sibling of the controller
@@ -102,7 +102,9 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`agent.py`** — The scripting surface: the agent loop with the events turned inside out. `turn()` runs one assistant turn — optionally posting the user's message first, and building an in-memory `chattree.Forest` if not given one — and returns a `TurnRecord` instead of a node id. It takes **no callbacks**: what a frontend gets as events, a script gets as the record. `describe_turn()` builds the same record by walking a stored branch, which is how a saved `PersistentForest` from an earlier batch is analyzed with the same counting the live path uses. The record fixes in one place the walk every probe used to write out longhand — notably the vocabulary (a **round** is one assistant message asking for tools, however many *calls* it asks for) and the span (one turn, not the whole branch). Two defaults differ from the apps on purpose: `internet_enabled=False`, because a run with tools enabled makes real network calls; and the automatic search runs only when a retriever is supplied. Per-run overrides are fields on `llm_settings` (see `chatutil.default_formatters`), never module globals. `record.generation is None` is how an unattended batch tells a backend failure from a reply — `ai_turn` materializes the failure as an assistant message, which is right for a watching human and invisible at 3 a.m. `use_character_card=False` with `tools_enabled=False` is the other shape this surface offers: no character, no greeting, no per-turn injects, and the character-independent half of the configuration (`llmclient._setup_system_prompt`) as the only system text — which Raven ships empty, so the task instruction is then the root of the chat. That is what the batch extraction tools use (`papers.pdf2bib`, `visualizer.importer`), whose outputs are parsed rather than read.
 
-- **`chat_controller.py`** — GUI controller, the bridge between scaffold and DearPyGui. Classes: `DPGChatMessage` (base, thread-safe MD rendering), `DPGCompleteChatMessage` (stored nodes, with copy/reroll/continue/speak/edit/branch/delete/navigate buttons), `DPGStreamingChatMessage` (live-updating during generation), `DPGLinearizedChatView` (message container). `DPGChatController` wires everything: `chat_exchange()` → `user_turn()` + `ai_turn()` in background thread. Handles avatar emotion updates; delegates TTS with lipsync and subtitles to `raven.client.avatar_controller.DPGAvatarController`. Closures for button callbacks.
+- **`chatmessage.py`** — One chat message as drawn in the chat log. `DPGChatMessage` (base, thread-safe MD rendering), `DPGCompleteChatMessage` (stored nodes, with copy/reroll/continue/speak/edit/branch/delete/navigate buttons), `DPGStreamingChatMessage` (live-updating during generation). A message reaches its view and the controller only through `parent_view`, never by importing them, which is what lets it live apart from them.
+
+- **`chat_controller.py`** — GUI controller, the bridge between scaffold and DearPyGui. Classes: `DPGLinearizedChatView` (lays out the messages from `chatmessage`), `TailFollowSample`. `DPGChatController` wires everything: `chat_exchange()` → `user_turn()` + `ai_turn()` in background thread. Handles avatar emotion updates; delegates TTS with lipsync and subtitles to `raven.client.avatar_controller.DPGAvatarController`. Closures for button callbacks.
 
 - **`app.py`** — Main GUI entry point. Two-column layout: left = chat panel + input controls, right = avatar panel + mode toggles. Bottom toolbar for global actions. Help card (F1). Startup sequence: DPG init → server/LLM connection → state load → RAG load → GUI build → event loop. Hotkeys (Enter, Ctrl+N/G/S/R/U, F1/F8/F11). Animations: pulsating indicators, button flashes. Dynamic resize handler.
 

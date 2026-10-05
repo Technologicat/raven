@@ -1009,7 +1009,7 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 ## Current State
 
 ### Well-structured (target style)
-- `raven/librarian/` - Clean module separation (~22.8k lines across 20 modules, measured 2026-08-29). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is ~5.1k lines and `llmclient.py` ~2.4k — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict, and the largest of them is tolerated rather than endorsed; see the guideline below. See `raven/librarian/CLAUDE.md` for the layer map.
+- `raven/librarian/` - Clean module separation (~34k lines across 29 modules, measured 2026-10-05). Note it has outgrown the per-module guideline below in several places — `app.py` is ~4.0k lines, `chat_controller.py` ~3.0k and `chatmessage.py` ~2.5k — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict, and the largest of them is tolerated rather than endorsed; see the guideline below. See `raven/librarian/CLAUDE.md` for the layer map.
 
 ### Needs refactoring
 
@@ -1023,15 +1023,17 @@ rather than whether the line count has.
 
 **Two things stop that becoming "big is fine here".** First, watch the units — this codebase is ~40%
 docstrings and comments, so a total line count roughly doubles the SLOC, and the figures we quote are
-usually totals. `chat_controller.py` is 5090 lines and **2046 SLOC**; `raven/papers/deduplicate.py` is 1225
+usually totals. `chat_controller.py` was 5090 lines and **2046 SLOC** on 2026-08-29; `raven/papers/deduplicate.py` is 1225
 and 556. Second, density does not predict the right size either: the tempting story is that Raven is the
 prose-heavy opposite of the macro projects, and *most of `chat_controller.py` looks Kolmogorov-hard*
 (Juha, 2026-08-29). Raven has both kinds.
 
 **`chat_controller.py` is tolerated rather than endorsed** — "tolerated for now until we figure out a
-better solution, if ever" (Juha, 2026-08-29). Its layers hold, which is why it has not been split, but that
-is an open acknowledgement that nobody has a decomposition worth the disruption. Do not cite it as licence
-for the next large module. `raven/papers/deduplicate.py`, by contrast, is genuinely settled: 556 SLOC sits
+better solution, if ever" (Juha, 2026-08-29). Its layers hold, which is why it had not been split, but that
+was an open acknowledgement that nobody had a decomposition worth the disruption. One turned up on
+2026-10-05, after it had grown past 5.4k: the message classes, which reach the view and controller only
+through attributes, moved out to `chatmessage.py`. Do not cite either size as licence for the next large
+module. `raven/papers/deduplicate.py`, by contrast, is genuinely settled: 556 SLOC sits
 inside the guideline, and splitting it would move prose around rather than simplify anything (Juha,
 2026-08-28, settling exactly that question about the deduplicator).
 

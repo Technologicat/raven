@@ -23,7 +23,7 @@ import pytest
 pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still reaches the ML stack; see above
 
 from raven.common import bgtask  # noqa: E402
-from raven.librarian import chat_controller, chatutil  # noqa: E402
+from raven.librarian import chat_controller, chatmessage, chatutil  # noqa: E402
 
 
 class TestWhichSearchMatchesShowInFull:
@@ -31,7 +31,7 @@ class TestWhichSearchMatchesShowInFull:
 
     @staticmethod
     def _message(show_full_text=False, expanded_parts=()):
-        message = chat_controller.DPGCompleteChatMessage.__new__(chat_controller.DPGCompleteChatMessage)
+        message = chatmessage.DPGCompleteChatMessage.__new__(chatmessage.DPGCompleteChatMessage)
         message.show_full_text = show_full_text
         message.expanded_parts = set(expanded_parts)
         return message
@@ -72,11 +72,11 @@ class TestOnlyALiveReplyRechecksAnAwaitedTrace:
         return asked
 
     def test_a_stored_message_does_not_recheck(self):
-        assert self._rechecks(chat_controller.DPGCompleteChatMessage) == []
+        assert self._rechecks(chatmessage.DPGCompleteChatMessage) == []
 
     def test_a_live_reply_does(self):
         # The control: without it, a recheck that had stopped working altogether would pass the test above.
-        assert self._rechecks(chat_controller.DPGStreamingChatMessage) == ["n1"]
+        assert self._rechecks(chatmessage.DPGStreamingChatMessage) == ["n1"]
 
 
 class TestDemolishIsATeardown:
@@ -110,7 +110,7 @@ class TestDemolishIsATeardown:
                 deleted.append((args, kwargs))
         monkeypatch.setattr(chat_controller.dpg, "delete_item", fake_delete_item)
 
-        message = object.__new__(chat_controller.DPGChatMessage)
+        message = object.__new__(chatmessage.DPGChatMessage)
         message.paragraphs_lock = threading.RLock()
         message.paragraphs = [{"text": "hi", "is_thought": False, "rendered": True, "widget": 11}]
         message.owned_handler_registries = []
@@ -173,7 +173,7 @@ class TestRemovingAMessageByNode:
     def _view_showing(monkeypatch, *messages):
         """A bare view whose chat history is `messages`, plus the list `demolish` records into."""
         demolished = []
-        for cls in (chat_controller.DPGStreamingChatMessage, chat_controller.DPGCompleteChatMessage):
+        for cls in (chatmessage.DPGStreamingChatMessage, chatmessage.DPGCompleteChatMessage):
             monkeypatch.setattr(cls, "demolish", lambda self: demolished.append(self))
 
         view = object.__new__(chat_controller.DPGLinearizedChatView)
@@ -182,7 +182,7 @@ class TestRemovingAMessageByNode:
         return view, demolished
 
     def test_the_live_message_goes(self, monkeypatch):
-        live = self._message(chat_controller.DPGStreamingChatMessage, "ai")
+        live = self._message(chatmessage.DPGStreamingChatMessage, "ai")
         view, demolished = self._view_showing(monkeypatch, live)
 
         view.remove_streaming_message_for("ai")
@@ -191,7 +191,7 @@ class TestRemovingAMessageByNode:
         assert demolished == [live]
 
     def test_the_stored_message_that_replaced_it_stays(self, monkeypatch):
-        stored = self._message(chat_controller.DPGCompleteChatMessage, "ai")
+        stored = self._message(chatmessage.DPGCompleteChatMessage, "ai")
         view, demolished = self._view_showing(monkeypatch, stored)
 
         view.remove_streaming_message_for("ai")
@@ -205,7 +205,7 @@ class TestRemovingAMessageByNode:
         Without this, a fixture in which nothing could be removed at all would satisfy the assertion above
         for the wrong reason — and the distinction the two calls draw is the entire point of having both.
         """
-        stored = self._message(chat_controller.DPGCompleteChatMessage, "ai")
+        stored = self._message(chatmessage.DPGCompleteChatMessage, "ai")
         view, demolished = self._view_showing(monkeypatch, stored)
 
         view.remove_message_for("ai")
