@@ -222,7 +222,7 @@ def api_avatar_load():
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
     Optionally, there may be more file attachments, one for each add-on cel. The attachment name
-    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.modules.avatarutil`,
     and for animefx cels, `raven.server.config`.
 
     Output is JSON::
@@ -258,7 +258,7 @@ def api_avatar_reload():
     The "file" attachment should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
     Optionally, there may be more file attachments, one for each add-on cel. The attachment name
-    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.modules.avatarutil`,
     and for animefx cels, `raven.server.config`.
 
     The "json" attachment should contain the API call parameters as JSON:
@@ -550,7 +550,7 @@ def api_avatar_set_overrides():
 
     To unset overrides, set `"overrides": {}` or omit it.
 
-    See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
+    See `raven.avatar.pose_editor` for available morphs. Value range for most morphs is [0, 1],
     and for morphs taking also negative values, it is [-1, 1].
 
     No outputs.

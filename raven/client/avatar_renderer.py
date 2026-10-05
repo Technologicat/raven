@@ -134,7 +134,7 @@ class DPGAvatarRenderer:
 
         You can optionally call `configure_live_texture` once at setup to pre-seed the size, then connect to Raven-server and start
         displaying the avatar video stream by calling `start`. You will need to provide the avatar instance ID of
-        the avatar session to connect to; you get this ID by calling `raven.client.api.load_avatar`.
+        the avatar session to connect to; you get this ID by calling `raven.client.api.avatar_load`.
 
         For a complete usage example, see `raven.avatar.settings_editor.app`.
         """

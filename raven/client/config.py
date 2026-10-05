@@ -113,9 +113,8 @@ stt_vu_peak_hold = 1.0  # seconds
 # parameterize the in-process fallback's compute device, used when `<svc>_allow_local`
 # is `True` AND the server isn't reachable.
 #
-# Same shape as `raven.server.config.enabled_modules` and as `raven.librarian.config.devices`,
-# which stays separate because Librarian's RAG backend may legitimately want a different model
-# and device from an importer's. Validated by `raven.common.deviceinfo.validate` during
+# Same shape as `raven.server.config.enabled_modules`. One map for the whole constellation:
+# Librarian's RAG backend reads it too, and only the *models* stay per-app. Validated by `raven.common.deviceinfo.validate` during
 # `raven.client.api.initialize` (CUDA → CPU fallback, `device_name` injection).
 #
 # **Read these only after that validation.** A dtype is written here by its name in Torch, which keeps this

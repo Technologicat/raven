@@ -617,7 +617,7 @@ sized out of the problem**: `dpg.configure_item(tooltip, width=...)` raises `wid
 
 **And a hidden item is not laid out at all**, keeping whatever metrics it last had — its own width stays at
 the *old* text's 37 while hidden, however long it stays hidden. Which is why
-`raven.client.avatar_controller.reposition_subtitle` parks the subtitle offscreen at
+`raven.client.avatar_controller.DPGAvatarController.reposition_subtitle` parks the subtitle offscreen at
 `(main_window_w, main_window_h)` rather than hiding it: it needs the thing drawn in order to measure it.
 It then `split_frame()`s so layout catches up, reads the now-correct size, positions the widget, and
 `split_frame()`s again — the standard shape for needing a size before you can place something, subject to

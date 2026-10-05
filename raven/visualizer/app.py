@@ -428,7 +428,7 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is instal
         # and then edit the theme's colors per-frame (just before render).
         #
         # Convert animation cycle position to animation control channel value.
-        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
+        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.Animator.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         alpha_search = plotter.compute_highlight_alpha(animation_pos,
                                                        len(unbox(search.search_result_data_idxs_box)),

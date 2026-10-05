@@ -188,7 +188,7 @@ class Animator:
                 elif action is action_cancel:
                     pass  # when cancelled, do nothing, just remove the animation
                 else:  # a programming error, but not one worth the app: drop it, as for any other fault
-                    logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel'); dropping it.")
+                    logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} returned unknown action {action}, expected `action_continue`, `action_finish` or `action_cancel`; dropping it.")
             # The rebuild has to honour whatever the loop itself did to the registry, which is why it is
             # not simply `running_animations`. A snapshot alone would resurrect an animation cancelled
             # mid-loop — it is still in the snapshot, so it renders after its cancellation and comes back

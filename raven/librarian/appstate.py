@@ -290,7 +290,7 @@ def _refresh_greeting(llm_settings: env,
                 logger.info(f"_refresh_greeting: Found currently configured AI greeting for current AI character '{llm_settings.char}' at AI message node '{greeting_node_id}' under system prompt node '{system_prompt_node_id}'.")
                 break
         else:  # Currently configured greeting not found under the system prompt node -> create new node for it
-            logger.info(f"_refresh_greeting: Currently configured AI greeting text (see `raven.llmclient.config`) for current AI character '{llm_settings.char}' not found under system prompt node '{system_prompt_node_id}'. Creating new AI greeting node for it.")
+            logger.info(f"_refresh_greeting: Currently configured AI greeting text (see `raven.librarian.config`) for current AI character '{llm_settings.char}' not found under system prompt node '{system_prompt_node_id}'. Creating new AI greeting node for it.")
             greeting_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
                                                                                      message=greeting_message),
                                                      parent_id=system_prompt_node_id)

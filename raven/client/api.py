@@ -299,7 +299,7 @@ def avatar_start_talking(instance_id: str) -> None:
     **This is the fallback, not the alternative.** When timestamped phoneme data is available, use
     `raven.client.tts.tts_speak_lipsynced` instead - it drives the mouth morphs from the actual phonemes,
     and looks like speech rather than like a mouth opening and closing at random. For how an application
-    wires that up, see `raven.client.avatar_controller.speak_task`.
+    wires that up, see `raven.client.avatar_controller.DPGAvatarController.speak_task`.
 
     What this is for is the case where phoneme timestamps do not exist: most speech synthesizers do not
     expose them, and without them there is nothing to drive a lipsync from. Randomizing the mouth is then
