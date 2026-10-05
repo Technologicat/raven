@@ -127,7 +127,8 @@ against 1.5 s); *cut, then whole* lost most of it (1.11 s). Chosen instead (main
 to the cut, plus Raven's estimate of the rest, shown as exact while the estimated part is under 2% of the
 whole. A local tokenizer (`llm_tokenizer_path`) makes the readout exact regardless.
 
-**Live in Librarian** (2026-10-05, Qwen 3.8 27B, two PDFs attached): the turn that brought the PDFs in spent
+**Live in Librarian** (2026-10-05, Qwen 3.8 27B; two chats with a PDF each and one with an image all
+behaved this way, figures from one of the PDF chats): the turn that brought the PDF in spent
 5.63 s in prompt processing, all of it new material; the follow-up after it, on a prompt of about 10.6k
 tokens, 1.56 s, where the whole prompt takes about 7 s. The rest is the last exchange, a 1043-token reply
 and the new message.

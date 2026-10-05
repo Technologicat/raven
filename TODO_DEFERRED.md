@@ -5968,26 +5968,6 @@ truncation.
 
 Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
 
-## A clickable chip in the chat log gives no hover cue
-
-*Cluster: ? · Cost: S–M (maintainer's estimate) · Gate: 0.2.10 · Filed: 2026-08-04*
-
-0.2.8 made inline attachments and fetched documents click-to-open (`DPGChatMessage._make_clickable`, an item
-handler registry per cluster, owned by the message so `demolish` can delete it — a registry does not live
-under the container group and is not collected with the widgets).
-
-For a *thumbnail* that is enough: an image already looks like a clickable object. For a **text chip** — a
-document glyph plus a filename — it is not. Nothing about a line of text says it responds to a click, so the
-affordance is currently carried entirely by a tooltip, which only pays off for a reader who hovers and waits.
-
-What it wants is a hover highlight. DPG exposes no mouse-cursor change to lean on, so the cue has to be
-visual, and a plain `add_text` has no hovered state in a theme. Two routes: poll `is_item_hovered` and
-recolor (cheap, but a per-frame check per chip), or rebuild the chip on a widget that has a native hovered
-state — `add_selectable` is the idiomatic ImGui answer and comes with the highlight for free, at the cost of
-its default full-width span, which would have to be sized to the text.
-
-Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on click.
-
 ## A crash during ingest loses the whole run, however long it was
 
 *Cluster: ? · Cost: ? · Gate: the per-document LLM pass: a resumable job is the remedy · Filed: 2026-08-06 · See also: `briefs/per-document-llm-pass-brief.md`*
