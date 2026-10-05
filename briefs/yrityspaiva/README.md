@@ -453,3 +453,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        - **Related, later:** telling the model what the database holds. A summary must be rebuilt whenever
          the database changes; a cheap one needs no LLM (counts, file types, distinctive terms from the BM25
          index) and could run at commit, globally now and per scope once scopes exist.
+     - **DOCUMENTS' stages checked live** with each stage slowed to 1.5 s through `--repl`: the automatic
+       search steps through them and ends on *Done*. The model's own search was not reached, the automatic
+       search answering first; to retest once the automatic search can be switched off. The loose
+       document-ID match has not met a live case yet (Qwen sent the `.bib` this time): watch for it.
+     - **Not extending `GlyphAtlasRefresh` to every font**: the glyph drop's likely mechanism is a race in
+       DPG's `present()`, and the refresh repairs only when its batch grows the atlas. To be fixed in DPG
+       after the event: `TODO_DEFERRED.md`, "The Markdown renderer drops text".
