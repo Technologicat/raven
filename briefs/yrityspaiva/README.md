@@ -506,3 +506,13 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          the first grounded turn reprocesses the whole conversation; pre-existing, and the query request does
          not add to it. Moving the reminder to the per-turn injects would end it, but changes the inject shape
          `investigations/context-injects/` measured: the maintainer's call, not yet made.
+     - **(f), the prefill comparison, done** (`investigations/prefill-by-model/`), with LM Studio driven over
+       its REST API on the personal machine:
+       - The A3B MoE processes a prompt at 2.5–3 times the rate of the dense 27Bs; 3.8 is about 12% slower
+         than 3.6 at 27B. Friday's 9.7 s for 3.8 is the Documents confound. Batch size is no lever.
+       - `usage.prompt_tokens` is the whole prompt on a cache hit, on both endpoints, so a count saved per node
+         would mean what it says.
+       - **Qwen 3.8 at low effort is usable interactively**: the circle prompt took 61 reasoning tokens and
+         4.2 s. The deferred re-test of `reasoning_effort` is closed on that.
+       - Several models' stored LM Studio defaults had `parallel: 4`, a configuration mistake (maintainer):
+         the probes pin it to 1; the defaults are the maintainer's to fix.

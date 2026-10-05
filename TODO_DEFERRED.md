@@ -6331,35 +6331,6 @@ in the datastore — but it is also the kind of thing a reader would expect to s
 
 Discovered while fixing the cancelled-reroll case (2026-08-27).
 
-## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
-
-*Cluster: llm-backends · Cost: S · Gate: 0.2.10 — needs the maintainer at the keyboard · Filed: 2026-08-27*
-
-Qwen 3.8 thinks for so long that it is unusable for interactive chat, and `reasoning_effort: "none"` is the
-lever meant to fix that. Whether it works is still unknown, because the test that said it did not was itself
-faulty: the override went into the chat template as an *unquoted* Jinja `set`, which is a silent no-op, so
-the run measured a model that had never been told anything.
-
-So the question is open rather than answered, and it is cheap to settle: put the **quoted** prefix back, run
-the circle prompt, then remove it and run the same prompt again. Only the maintainer can do it — it needs
-the template edited in LM Studio and the model reloaded.
-
-**Not exhibit work**: Qwen 3.6 is fine there (Juha, 2026-08-27). What is at stake is whether 3.8 becomes
-usable for interactive chat at all, which is worth knowing before it is the current release rather than
-after.
-
-Raised by Juha (2026-08-26), carried across two compactions before being written down — which is why it is
-here rather than in a session note.
-
-**Its prompt processing is slow too, which is a separate cost from the thinking.** From `generation_metadata`
-in the chat datastore, 2026-10-01: 3.8 (27B) has a median prefill of 9.7 s over 27 replies, against 0.8 s
-for 3.6 (35B-A3B) over 235. It generates at about 54 t/s against 100, but the prefill brings it to about
-22 t/s overall against 74. The metadata records no prompt length, so this is a time, not a rate. One
-unchecked possibility: going by its name, 3.8 is a dense model and 3.6 a MoE with about 3B active
-parameters, which may account for the gap on its own. Otherwise usable (Juha, 2026-10-01).
-
-**Those figures are confounded and may show nothing about 3.8.** The *Documents* toggle had been left on for the 3.8 replies, so each prompt carried 50 document matches; the metadata does not say what the 3.6 replies carried (Juha, 2026-10-02). Wanted: clean runs of 3.6 35B-A3B, 3.6 27B and 3.8 27B on the same prompts, *Documents* off.
-
 ## A transient postprocessor effect cannot ease in or out
 
 *Cluster: avatar-effects · Cost: ? · Gate: a design decision about where the envelope lives · Filed: 2026-08-26*
