@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Before a push: the repository checks CI's lint job runs (`scripts/tests/`, about ten seconds).
+#
+# Called by the global `pre-push` dispatcher in the maintainer's git configuration, which runs a
+# repository's `scripts/pre-push` when there is one. A local run of these checks was the step most often
+# skipped before a push, and CI then went red on a module map or a doc link a minute later; as a hook it
+# cannot be skipped by forgetting. `git push --no-verify` skips it on purpose.
+#
+# The project's own interpreter, so that a push from an editor without the venv activated runs the same
+# checks a terminal would.
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+python="$root/.venv/bin/python"
+[ -x "$python" ] || python=python
+
+echo "pre-push: running the repository checks (scripts/tests)..." >&2
+exec "$python" -m pytest -q -p no:cacheprovider "$root/scripts/tests"
