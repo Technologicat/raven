@@ -558,6 +558,11 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
            synthetic exchange before the user's message, the one inject whose *position* matters.
          - **What `system.md` should hold for the batch tools** (`raven-pdf2bib`, the importer), which get it and
            nothing else: the grounding instruction might help them. A separate decision, for later.
+       - **Open: Librarian's turns still miss the warmed cache.** The prefill now sends what the turn begins
+         with (fixed and verified from the request bodies), yet the turn is processed whole; the backend
+         reuses an extended prompt fine with plain prompts, on all three models tried, so the cause is in the
+         content of Raven's prompts. Next: bisect with Raven's own builders against the backend, starting with
+         the clock's synthetic tool exchange directly after the last reply. `investigations/prefill-by-model/`.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
          then the systems check.
        - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;

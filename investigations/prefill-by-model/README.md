@@ -16,6 +16,10 @@ every prompt.
   OpenAI-compatible endpoint's `usage.prompt_tokens` changes on a repeat; and the circle prompt with
   thinking on.
 - **`results.jsonl`** — every response, whole, with every load's reported configuration.
+- **`probe_extend.py`** — per model and prefix length: a cold request, an identical repeat, the same messages
+  *extended* by a reply and a new question (Librarian's turn after its prefill), and a changed last message.
+  `--parts` and `--tools` switch on the two ways Raven's requests differ in form. Writes
+  `extend_results.jsonl`.
 
 ## Prompt processing
 
@@ -59,3 +63,43 @@ The circle prompt ("draw an svg of a circle", from Simon Willison's
 effort spent minutes on it): **61 reasoning tokens, 4.2 s in all**, answering with a plain circle. Thinking
 on, no `reasoning_effort` sent, the effort set to low in the server's chat template (the maintainer's edit;
 LM Studio takes no chat-template arguments from the client, so it cannot be set per request).
+
+## A cached prompt is reused when extended, so Librarian's turns are missing it for another reason
+
+**What was seen in Librarian** (2026-10-05, Qwen 3.8 27B): the context prefill between turns warmed the
+cache, and the turn after it still processed its whole prompt. Part of that was Librarian's: the prefill sent
+the stored system message, a turn sends it wrapped in the setup notice, the date and the model, so the two
+differed at message 0. Fixed the same day (`scaffold.build_prefill_prompt`), and checked by recording the
+request bodies in the running app: prefill and turn then agreed in every message and field but `max_tokens`.
+
+**The turn still processed everything.** Measured from inside the app with Raven's own prompt builders, on
+the chat's branch (one image) and on a text-only greeting branch:
+
+| Branch | prefix | prefix again | prefix + a short message | that again |
+|---|---|---|---|---|
+| with an image, 6357 → 6443 tokens | 2.87 s | 0.50 s | 5.73 s | 0.43 s |
+| text only, 1947 → 2034 tokens | 1.02 s | 0.38 s | 2.23 s | 0.29 s |
+
+A prefill ending in a placeholder user message, so the reply above it rendered as it would in the turn, did
+not help either (0.92 s, then 1.01 s for the turn).
+
+**`probe_extend.py` says the backend is not the reason.** With plain prompts, all three models reuse an
+extended prompt at every length tried, from about 2k to 24k tokens:
+
+| Model | cold, ~2k → ~24k tokens | repeat | extend | changed last message |
+|---|---|---|---|---|
+| Qwen 3.8 27B (hybrid, MTP on) | 1.81 → 15.32 s | 0.26–0.38 s | 0.61–0.87 s | 0.45–0.65 s |
+| Qwen 3.6 27B (hybrid) | 1.63 → 13.57 s | 0.25 s | 0.56–0.57 s | 0.41–0.42 s |
+| Gemma 4 26B-A4B (sliding window) | 0.67 → 4.70 s | 0.07 s | 0.19–0.21 s | 0.13–0.15 s |
+
+So an architecture that resumes only from checkpoints, considered first, is not it; nor is the prompt's
+length. On Qwen 3.8 the extension stays cheap with Raven's form of request too: content as a list of parts,
+a tool definition, both together, and through `/v1` streaming with a one-token cap and a `seed` (0.60–0.75 s
+against 1.9–5.4 s cold).
+
+**What is left is the content of Raven's prompts.** The leading suspect, untested: a turn's extension begins
+with the clock's synthetic tool exchange, an assistant message with a tool call, directly after the prefix's
+last assistant message, and a chat template may render an assistant message differently when another follows
+it, moving the divergence back into the prefix. Next step: bisect with Raven's own builders against the
+backend (`build_prefill_prompt`, then `build_turn_prompt` with the clock off, persona prefixes stripped, the
+card shortened) until the extension turns cheap.
