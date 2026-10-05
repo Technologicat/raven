@@ -45,7 +45,7 @@ Layer 3 - Orchestration:    scaffold.py (~1.7k)
 Layer 2 - Backends:         llmclient.py (~2.7k), llmtools.py (~1.3k), hybridir.py (~2.0k)
 Layer 1 - Utilities:        chatutil.py (~2.0k), chatsearch.py (~130), appstate.py (~580), cleanup.py (~290),
                             imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~3.2k),
-                            userprofile.py (~200), messagetext.py (~470)
+                            userprofile.py (~200), messagetext.py (~500)
 Layer 0 - Foundation:       config.py (~900), chattree.py (~1.5k), sidecarstore.py (~150),
                             gguftokenizer.py (~350)
 ```
