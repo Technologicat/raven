@@ -6540,3 +6540,27 @@ support. The `/api/v1/models` listing carries more per model, seen 2026-10-05:
 LM Studio only; `/api/v0` stays the fallback for an LM Studio that lacks v1.
 
 Raised while adding the max-concurrency warning (2026-10-05).
+
+## Librarian: a `gui` subpackage, separating the DearPyGui modules from the data model
+
+*Cluster: librarian-structure · Cost: M (mechanical move; the review surface is the cost) · Gate: 0.2.11 · Filed: 2026-10-05*
+
+`raven/librarian/` holds its DearPyGui modules beside the data model and the backend: `chatmessage` next to
+`chatutil`, `chatgraph_panel` next to `chatgraph`. The rest of Raven splits on GUI against non-GUI, so the
+shape to try first is a `raven/librarian/gui/` subpackage holding `app`, `chat_controller`, `chatmessage`,
+`chatgraph_panel`, `chattextures`, `chatlog_search`, `audio_input_panel`, `revision_panel` and
+`cleanup_dialog`. Everything else is free of DPG.
+
+- **The move is mechanical** (files, imports, the console-script entry point in `pyproject.toml`), and the
+  repository checks catch stragglers in the docs. Verify it the way the `chatmessage` split was verified
+  (2026-10-05): definitions' ASTs identical before and after, comment lines all accounted for.
+- **One pair resists the split**: `chatgraph` is pure layout, `chatgraph_panel` its GUI, and the two read as
+  one feature. Worth asking whether a grouping by feature serves Librarian better than GUI/non-GUI, before
+  choosing.
+- **Naming, while files are moving anyway**: the package mixes `chat_controller`, `chatgraph_panel`,
+  `chatlog_search` with `chatutil`, `chatmessage`, `chattree`. The underscore placement was not designed
+  (Juha): run together, two short words or an abbreviation read fine, three words or long ones do not. That
+  is a reasonable reader's rule and a hard one for a programmer to remember, so a rename here would want one
+  rule that can be applied without judgement.
+
+Raised during the `chatmessage` split (2026-10-05, Juha).
