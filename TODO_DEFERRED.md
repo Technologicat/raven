@@ -4027,6 +4027,24 @@ upstream once we can reproduce it, fix it, and show the fix working. So:
 Extending `GlyphAtlasRefresh` to every font an app loads (raised 2026-10-02) was dropped: it does not reach
 this mechanism, and heals only when its batch happens to grow the atlas.
 
+**Sighting, 2026-10-05, after startup: so a clean start does not mean a clean run.** Raven-cherrypick, help
+card page 2, opened for the first time minutes after launch and well after `GlyphAtlasRefresh` had logged
+done. Blank were exactly the glyphs that page was the first to need: bold `c`, `S`, `f`, `+`, `1`, `–`, `9`
+(**Esc** drawn `Es`, **Shift+1–9** drawn `hi t`) and the regular face's `:`. Bold `E`, `s`, `h`, `i`, `t`,
+already used elsewhere, drew fine. Two faces in one batch fits the mechanism above, the whole page's new
+glyphs being measured by the renderer's worker at once. Two things tried through `--repl`, neither
+conclusive:
+
+- `GlyphAtlasRefresh` run again repaired nothing, which says nothing: its batch was already in the atlas, so
+  it could not grow it.
+- 95 glyphs at a fresh 200 px size, drawn nearly transparent in a new window, repaired nothing either. But
+  whether that grew the atlas was not checked (DPG exposes no atlas size), nor that the text was drawn at
+  all, so this is a negative from an instrument that never produced a positive. The probe in step 1 wants an
+  atlas-size reading for exactly this reason.
+
+So the operator's remedy at the top of this item, restart until the card comes up clean, covers only what
+was drawn at startup: a card page or a message drawn later can still come out damaged.
+
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
 `--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can
 be interrogated instead of killed, which is what this bug most needed and never had — it is not
