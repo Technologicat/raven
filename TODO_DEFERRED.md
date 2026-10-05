@@ -6185,9 +6185,32 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
-## Markdown decorations sometimes land beside their text: a timing race, still open (the hidden-page fault is fixed)
+## Markdown decorations stay where their text was when the layout above them moves (the hidden-page fault is fixed)
 
-*Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+*Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work · Filed: 2026-08-27 · Updated: 2026-10-05 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+
+**2026-10-05: a deterministic reproduction, and it is not a timing race.** Librarian, `--repl`: a reply whose
+list of document IDs carries a code span per line, below a thinking trace. Opening the trace drew the reply's
+grey code backgrounds over the trace text, and the reply's own IDs bare; closing the trace put them back. It
+recurs every time on that message (toggled three times, Juha).
+
+- **Every decoration was exactly 1018 px above its text**, the height of the opened trace. Recorded y 7055
+  against the text's 8073, the same difference for all 23 spans; the sizes all matched. So the measurement
+  was right when it was taken, and the layout moved afterwards.
+- **The mechanism is the positioning.** `Code.render` creates its group at `pos=dpg.get_item_pos(text_group)`,
+  an absolute position in the window, recorded once. Content inserted above the paragraph moves the text and
+  not the group. Underline, strikethrough and the two block variants position themselves the same way, so
+  they presumably share it; only the code spans were seen.
+- **Why it is rare**: it takes decorated text below something that changes height after the text was laid
+  out — opening a thinking trace is the one found, and code spans in a reply are uncommon.
+- **It also fits the 2026-08-27 discriminator below**, which was read as timing: re-rendering a message
+  measures again, so it puts the box right whichever the cause was. Whether that sighting was this, or a real
+  race, is not known; the horizontal offset it showed would need a change of width rather than of height.
+- **Apparatus**: `investigations/dpg-markdown-decorations/probe_live_offsets.py`, run in the app through its
+  REPL, prints each visible decoration's recorded position and size against its text group's now.
+- **What a fix has to do** is follow the text rather than measure it better: re-run the decorations when the
+  layout above them changes, or the third candidate further down, a span drawn as one inline item carrying
+  quad and text together so that DPG lays out both.
 
 **Bump to 0.2.10 if it does not fall quickly** (Juha, 2026-08-27). It rides with the renderer work because
 that is when this code is open anyway; it is not worth hunting a timing fault on its own account with the
@@ -6209,7 +6232,7 @@ and the decoration lands somewhere the text is not.
 **Observed 2026-08-27** in a chat reply, screenshot in hand: an inline-code background for `SL-CAI` drawn as
 an empty grey box a couple of words to the right of the text, on the same line — while `RL-CAI` one line
 below was decorated correctly. So it is intermittent rather than systematic, which is what a settling race
-looks like from outside.
+looks like from outside. (Or a layout change after measuring: see 2026-10-05 above.)
 
 **The discriminator has been run, and it is a timing fault.** Re-rendering the same message put the box in
 its right place (Juha, 2026-08-27), so the measurement is premature rather than aimed at the wrong widget —

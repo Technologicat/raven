@@ -1113,10 +1113,11 @@ Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fit
 - Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at ~1.5k lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
 - Visualizer's remaining test gap is the two content builds and the widget geometry around them, which need a running app rather than a DPG context; the rest of the package is covered (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
 - DearPyGui_Markdown decorations sometimes land beside their text — tracked in `TODO_DEFERRED.md`, "Markdown
-  decorations sometimes land beside their text". All five of them are drawlists positioned from a
-  measurement that nothing waits for, and the intermittent timing race is what is still open; the hidden-page
-  fault (decorations on a help card's later pages) and the URL colour sitting one character off were both
-  fixed on 2026-09-17
+  decorations stay where their text was when the layout above them moves". All five of them are drawlists
+  placed at an absolute position measured once, so they stay behind when content above them changes height
+  (reproduced deterministically 2026-10-05, opening a thinking trace above a reply with code spans); the
+  hidden-page fault (decorations on a help card's later pages) and the URL colour sitting one character off
+  were both fixed on 2026-09-17
 - Hindsight integration pending (PDM dependency conflicts; likely separate container with optional backend, keeping BM25+vector backend as primary)
 - TTS engine expansion limited by phoneme timestamp requirement
 - Many `# TODO: DRY duplicate definitions for labels` scattered through Visualizer `app.py`

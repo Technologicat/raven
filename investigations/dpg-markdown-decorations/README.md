@@ -116,6 +116,15 @@ checks, above.
 Both need a display, and map a window for a few seconds. Prints to stdout — **do not pipe it**, and note it
 leaves via `os._exit`, the renderer's worker thread not participating in DPG teardown.
 
+## A third fault: decorations do not follow their text (2026-10-05)
+
+`probe_live_offsets.py` asks a running app, through its REPL, where each visible decoration was put and
+where its text is now. On a Librarian reply whose code spans sat below a thinking trace, opening the trace
+left every decoration exactly 1018 px above its text, that being the trace's height, with every size
+correct. A decoration's group is placed at an absolute position recorded once, so text that moves leaves it
+behind. Deterministic on that message; the write-up is in `TODO_DEFERRED.md`, "Markdown decorations stay
+where their text was when the layout above them moves".
+
 ## A second finding, which this probe fell into first
 
 Building **wrapped** Markdown before the first frame used to hang the process rather than fail. A face
