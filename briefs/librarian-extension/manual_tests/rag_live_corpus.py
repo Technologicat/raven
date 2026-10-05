@@ -49,8 +49,7 @@ import sys
 from unpythonic import dyn, timer
 from unpythonic.env import env
 
-from raven.common import docextract
-
+from raven.client import api as client_api, config as client_config
 from raven.librarian import agent, chattree, chatutil, config as librarian_config, hybridir, llmclient, scaffold
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else librarian_config.llm_backend_url
@@ -100,13 +99,11 @@ def load_retriever():
         return None
     try:
         with timer() as tim:
-            retriever, _scanner = hybridir.setup(docs_dir=docs_dir,
-                                                 recursive=librarian_config.llm_docs_dir_recursive,
-                                                 db_dir=db_dir,
-                                                 exts=librarian_config.llm_docs_exts,
-                                                 callback=docextract.extract_text,
-                                                 embedding_model_name=librarian_config.qa_embedding_model,
-                                                 local_model_loader_fallback=True)
+            # The opener the apps use, so that this probes the store as Librarian sees it. It embeds through
+            # Raven-server, as Librarian does, so the client API is initialized first, as `raven-indexer` does.
+            client_api.initialize(raven_server_url=client_config.raven_server_url,
+                                  raven_api_key_file=client_config.raven_api_key_file)
+            retriever, _scanner = hybridir.open_document_store(docs_dir=docs_dir, db_dir=db_dir)
     except Exception as exc:  # noqa: BLE001 -- a missing index or an absent server means "skip", not "crash"
         report("A load", None, f"could not open the document store ({type(exc).__name__}: {exc})")
         return None
@@ -160,20 +157,22 @@ def check_tools(retriever, hits):
     tool_context = scaffold.make_tool_context(llm_settings=None, retriever=retriever)
     document_id = hits[0]["document_id"]
     with dyn.let(tool_context=tool_context):
-        search_output, search_metadata = llmclient.search_documents_wrapper(QUERIES[0])
+        search_output, search_metadata = llmclient.search_documents(QUERIES[0])
+        # A list of content parts, one per match after a header, or a canonical string when there are none.
+        search_text = search_output if isinstance(search_output, str) else chatutil.content_to_text(search_output)
         if not search_metadata.get("grounding"):
-            report("C tools", False, f"search_documents declared no grounding: {search_output[:120]!r}")
+            report("C tools", False, f"search_documents declared no grounding: {search_text[:120]!r}")
             return
-        if document_id not in search_output:
+        if document_id not in search_text:
             report("C tools", False, "search_documents output does not name the document it matched")
             return
 
         tool_context.llm_settings = _settings_for_budget()
-        fetch_output, fetch_metadata = llmclient.fetch_document_wrapper(document_id)
+        fetch_output, fetch_metadata = llmclient.fetch_document(document_id)
         if not fetch_metadata.get("grounding"):
             report("C tools", False, f"fetch_document declared no grounding: {fetch_output[:160]!r}")
             return
-        span_output, _ = llmclient.fetch_document_wrapper(document_id, offset=10, length=50)
+        span_output, _ = llmclient.fetch_document(document_id, offset=10, length=50)
     if "characters 10 to 60" not in span_output:
         report("C tools", False, f"a requested span was not honoured: {span_output[:160]!r}")
         return
@@ -224,7 +223,7 @@ def check_budget(retriever, hits):
         tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=retriever)
         tool_context.used_tokens = used_tokens
         with dyn.let(tool_context=tool_context):
-            output, metadata = llmclient.fetch_document_wrapper(document_id)
+            output, metadata = llmclient.fetch_document(document_id)
         (served if metadata.get("grounding") else refused).append(f"{fill:.0%}")
     report("E budget", bool(served),
            f"document is {length} characters; served at {served or 'no fill level'}, "

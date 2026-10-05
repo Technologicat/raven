@@ -13,7 +13,7 @@ are comparable: same three hydrogen-electrolysis matches, same question about a 
 What differs is everything below the question. `absent_fact.py` hand-builds one wire history and posts it
 once; this drives the real agent loop through `raven.librarian.agent.turn`, so the whole path is under
 test — the tool is advertised by `llmclient.setup`, dispatched through `perform_tool_calls`, answered by
-`search_documents_wrapper` reading the retriever out of `dyn.tool_context`, and fed back into the loop as a
+`search_documents` reading the retriever out of `dyn.tool_context`, and fed back into the loop as a
 real `role="tool"` node. Nothing here is faked except the retriever, because retrieval *quality* is not what
 is being measured and a stub keeps this probe independent of raven-server.
 
