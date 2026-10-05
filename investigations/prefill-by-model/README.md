@@ -109,11 +109,14 @@ turn after it:
 | with the reply to a user message | 1.9 s | 2.2 s |
 | **at that user message, before the reply** | 1.4 s | **0.65–0.70 s** |
 
-So the clock's exchange is not it. A conversation's final assistant message is rendered differently from one
-with more after it (the template's handling of the latest turn), so a prefill ending at a reply parts from the
-next turn *inside* that reply, and a turn that parts from the cached prompt anywhere before its end is
-processed from the start. Ending at the last user message, the next turn extends the cached prompt, as
-`probe_extend.py`'s shape does. **Fixed**: `scaffold.build_prefill_prompt` cuts the branch after its last
+So the clock's exchange is not it, and ending at the last user message, as `probe_extend.py`'s prompts do,
+is what works. **Why is not established.** A template renders a conversation's final reply differently from
+one with more after it, so a prefill ending at the reply parts from the turn inside that reply, which accounts
+for that row. It does not account for the placeholder prefill measured from inside the app, which parts from
+the turn only at the message after the reply and was processed whole too. Nor is it a rule that parting before
+the cached prompt's end means starting over: `probe_extend.py`'s *tail* requests part inside the last user
+message and stay cheap on all three models. Something about the hybrid models' recurrent state and where the
+backend can resume it is a plausible part of the answer, and only a guess. **Fixed**: `scaffold.build_prefill_prompt` cuts the branch after its last
 user message, or after the system message when there is none yet. The last exchange is reprocessed each turn,
 the rest reused.
 

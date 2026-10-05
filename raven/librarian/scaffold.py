@@ -702,12 +702,12 @@ def build_prefill_prompt(llm_settings: env,
     # The system message as a turn sends it: it opens the prompt, so a prefill that sent the stored one
     # unwrapped warmed a prefix no turn ever sends.
     #
-    # And cut after the last user message. A chat template renders the conversation's final assistant
-    # message differently from one with more after it, so a prefill ending at HEAD, the AI's reply, parts
-    # from the next turn inside that reply - and measured on LM Studio (Qwen 3.8, 2026-10-05), a turn that
-    # parts from the cached prompt anywhere before its end is processed from the start. Cut at the last
-    # user message, the next turn extends the cached prompt instead, and pays for the last exchange only
-    # (`investigations/prefill-by-model/`).
+    # And cut after the last user message. Measured on LM Studio (Qwen 3.8, 2026-10-05): after a prefill
+    # ending at HEAD, the AI's reply, the next turn was processed from the start, as it was after a prefill
+    # ending in a placeholder user message; after one ending at the last user message, the next turn
+    # reused it and paid for the last exchange only (`investigations/prefill-by-model/`). Why the first two
+    # fail is not established - a template renders the conversation's final reply differently from one with
+    # more after it, which accounts for the first and not the second.
     return _with_system_injects(llm_settings=llm_settings,
                                 history=history[:prefill_cut_index(history) + 1],
                                 use_character_card=use_character_card,
