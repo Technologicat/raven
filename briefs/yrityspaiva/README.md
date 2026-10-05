@@ -541,6 +541,15 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          callback thread in `_load_initial_animator_settings` (confirm how that thread handles `SystemExit`
          first); the chat chip's hover cue if time allows. All three want a live check. The backdrop and the
          thumbnail grid's textures are re-gated to 0.2.11.
+         - **Done the same afternoon**, all three checked live: crown-in-compare; the `sys.exit` leak (on that
+           thread `SystemExit` reaches `PyErr_Print`, which starts finalization there and blocks for good, so
+           the app ran on with no callbacks and hung at close); and, raised from it, **avatar heartbeats**, so
+           the server unloads an avatar whose client stopped checking in (power loss, a dropped network). Keyed
+           on instance IDs rather than a client ID (maintainer's preference: no new identity). The reply's
+           `unknown` list is the hook for reconnect support later.
+         - **The heartbeat ships in 0.2.10 only if it runs clean until release day; otherwise 0.2.11**
+           (maintainer). The reaper's stall guard and the heartbeat's short read timeout were added after the
+           live run, so the server wants a restart on the final code for that run.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
          then the systems check.
        - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;

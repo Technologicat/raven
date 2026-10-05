@@ -328,5 +328,11 @@ class TestAvatar:
             api.avatar_stop_talking(instance_id)
             api.avatar_stop(instance_id)
             api.avatar_start(instance_id)
+
+            # Held instances are reported to the server automatically; the server names those it does not have.
+            assert instance_id in api._held_instances
+            assert api.avatar_heartbeat([instance_id, "not-an-instance"]) == ["not-an-instance"]
         finally:
             api.avatar_unload(instance_id)
+        assert instance_id not in api._held_instances, "an unloaded instance is still being reported as held"
+        assert api.avatar_heartbeat([instance_id]) == [instance_id]

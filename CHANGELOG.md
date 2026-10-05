@@ -39,6 +39,11 @@
   - A web search or page fetch that was stopped also stops on *Raven-server*, where it used to run to its end.
 - **The INTERNET indicator says what a web search or page fetch is doing**, such as *Opening DuckDuckGo…* or *Rendering the page…*, as DOCUMENTS does for a document search, and ends on *Done*.
 
+#### Raven-server
+
+- **The server releases an avatar whose client went away without unloading it**: a crash, a power loss, a dropped network. A client now checks in every 10 seconds for each avatar it holds, and one not heard from for 2 minutes has its avatar unloaded (`avatar_session_timeout` in the server config). In v0.2.9 such an avatar held its VRAM until the server was restarted.
+  - **A stalled server does not count its own absence against its clients**: after a stall, every avatar gets a fresh 2 minutes.
+
 #### Raven-avatar
 
 - **The debug overlay breaks the avatar's render time down**, into posing, upscaling and postprocessing, the cel machinery, and the rest. Timed on the GPU itself, so the numbers are true without slowing the renderer. Toggle the overlay with **Ctrl+Shift+M**.

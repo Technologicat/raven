@@ -320,6 +320,34 @@ def api_avatar_unload():
     avatar.unload(data["instance_id"])
     return "OK"
 
+@app.route("/api/avatar/heartbeat", methods=["POST"])
+def api_avatar_heartbeat():
+    """Tell the server that this client still holds the given avatar instances.
+
+    An instance whose client has not checked in for `avatar_session_timeout` seconds (server config) is
+    unloaded. `raven.client.api` sends this every 10 s for every instance it has loaded and not unloaded.
+
+    Input is JSON::
+
+        {"instance_ids": ["one_instance_id", "another", ...]}
+
+    Output is JSON::
+
+        {"unknown": [...]}
+
+    listing those of the given IDs that are not loaded here — typically held from before a server restart.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if ("instance_ids" not in data or not isinstance(data["instance_ids"], list)
+            or not all(isinstance(x, str) for x in data["instance_ids"])):
+        abort(400, 'api_avatar_heartbeat: "instance_ids" is required, as a list of strings')
+
+    # No per-call DEBUG line: every client with an avatar sends this every few seconds.
+    return jsonify({"unknown": avatar.heartbeat(data["instance_ids"])})
+
 @app.route("/api/avatar/load_emotion_templates", methods=["POST"])
 def api_avatar_load_emotion_templates():
     """Load custom emotion templates for avatar, or reset to defaults.

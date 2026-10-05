@@ -16,6 +16,8 @@ __all__ = ["init_module",
            "load",
            "reload",
            "unload",
+           "heartbeat",
+           "reap_stale_instances",
            "load_emotion_templates",
            "load_animator_settings",
            "start",
@@ -97,6 +99,11 @@ _model = None
 _poser = None  # THA3 engine instance (as returned by `load_poser`)
 
 _avatar_instances = {}  # {instance_id0: {"animator": <Animator object>, "encoder": <Encoder object>}, ...}
+_last_seen_ns = {}  # {instance_id0: time.monotonic_ns() of its last `load` or `heartbeat`, ...}
+
+# How often the reaper looks for instances whose client has stopped checking in. The timeout itself is
+# `avatar_session_timeout` in the server config; this only bounds how far past it a reap can land.
+_REAPER_INTERVAL = 10.0  # seconds
 
 # --------------------------------------------------------------------------------
 # Module startup, status check, and auto-cleanup for server shutdown time.
@@ -141,6 +148,8 @@ def init_module(config_module_name: str, device: str, model: str) -> None:
         _device = device
         _model = model
         module_initialized = True
+
+        threading.Thread(target=_reaper, name="avatar_reaper", daemon=True).start()
 
     except RuntimeError:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} See server log for details.")
@@ -220,6 +229,7 @@ def load(stream: BinaryIO, cel_streams: Dict[str, BinaryIO]) -> str:
 
         raise
 
+    _last_seen_ns[instance_id] = time.monotonic_ns()
     plural_s = "s" if len(_avatar_instances) != 1 else ""
     logger.info(f"load: created avatar instance '{instance_id}' (now have {len(_avatar_instances)} instance{plural_s})")
 
@@ -289,10 +299,71 @@ def unload(instance_id: str) -> None:
     except Exception:
         pass
 
-    _avatar_instances.pop(instance_id)
+    # `None` defaults: the reaper and a client's own unload can arrive together, and both get past the check above.
+    _avatar_instances.pop(instance_id, None)
+    _last_seen_ns.pop(instance_id, None)
 
     plural_s = "s" if len(_avatar_instances) != 1 else ""
     logger.info(f"unload: deleted avatar instance '{instance_id}' (now have {len(_avatar_instances)} instance{plural_s})")
+
+def heartbeat(instance_ids: List[str]) -> List[str]:
+    """Record that a client still holds `instance_ids`. Return those of them that are not loaded.
+
+    A client that stops calling this for `avatar_session_timeout` seconds has its instances unloaded, which is
+    what releases an avatar whose client went away without saying so — a crash, a power loss, a dropped
+    network. The unknown ones in the return value are typically from before a server restart.
+    """
+    if not module_initialized:
+        raise RuntimeError("heartbeat: Module not initialized. Please call `init_module` before using the API.")
+
+    now = time.monotonic_ns()
+    unknown = []
+    for instance_id in instance_ids:
+        if instance_id in _avatar_instances:
+            _last_seen_ns[instance_id] = now
+        else:
+            unknown.append(instance_id)
+    return unknown
+
+def reap_stale_instances(timeout: float) -> List[str]:
+    """Unload every instance not seen for more than `timeout` seconds. Return the IDs unloaded."""
+    now = time.monotonic_ns()
+    stale = [instance_id for instance_id, seen in list(_last_seen_ns.items())  # a copy: requests mutate it meanwhile
+             if now - seen > timeout * 10**9]
+    for instance_id in stale:
+        logger.warning(f"reap_stale_instances: avatar instance '{instance_id}': no heartbeat for {timeout:0.0f} s, unloading it")
+        unload(instance_id)
+    return stale
+
+def _forgive_all() -> None:
+    """Count every loaded instance as seen just now, after a server stall, so that the heartbeats the server
+    could not receive while stalled do not get its clients' avatars unloaded."""
+    now = time.monotonic_ns()
+    for instance_id in list(_last_seen_ns):
+        _last_seen_ns[instance_id] = now
+
+def _reaper() -> None:
+    last_tick = time.monotonic_ns()
+    while module_initialized:
+        time.sleep(_REAPER_INTERVAL)
+        now = time.monotonic_ns()
+        stalled_for = (now - last_tick) / 10**9 - _REAPER_INTERVAL
+        last_tick = now
+        try:
+            _reaper_step(stalled_for, _server_config.avatar_session_timeout)
+        except Exception as exc:  # one bad unload must not end the reaping for the rest of the server's life
+            logger.error(f"_reaper: {type(exc)}: {exc}")
+
+def _reaper_step(stalled_for: float, timeout: float) -> None:
+    """One wakeup of the reaper, `stalled_for` seconds later than it asked to wake."""
+    # A reaper that wakes far later than it asked to was not running, and neither, likely, was the rest of the
+    # server: swapping, suspended, stopped in a debugger. The heartbeats missed meanwhile are the server's
+    # absence rather than the clients', so they are forgiven rather than acted on.
+    if stalled_for > _REAPER_INTERVAL:
+        logger.warning(f"_reaper_step: the server was stalled for {stalled_for:0.0f} s; not counting that against any client")
+        _forgive_all()
+        return
+    reap_stale_instances(timeout)
 
 def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[str, Dict[str, float]]]] = None) -> None:
     """Load emotion templates. This is the API function that dispatches to the specified animator instance.

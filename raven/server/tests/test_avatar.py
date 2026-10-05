@@ -116,3 +116,61 @@ class TestTriggerAnimefx:
     def test_an_unknown_effect_is_refused(self, fx_animator):
         with pytest.raises(ValueError):
             fx_animator.trigger_animefx("no such effect")
+
+
+class _FakePart:
+    """Stands in for an `Animator` or `Encoder`: `unload` only calls `exit` on them."""
+    def __init__(self):
+        self.exited = False
+
+    def exit(self):
+        self.exited = True
+
+
+@pytest.fixture
+def instances(monkeypatch, clock):
+    """Two fake instances, loaded at the clock's start, in a module that believes it is initialized."""
+    monkeypatch.setattr(avatar, "module_initialized", True)
+    table = {iid: {"animator": _FakePart(), "encoder": _FakePart()} for iid in ("kept", "abandoned")}
+    monkeypatch.setattr(avatar, "_avatar_instances", table)
+    monkeypatch.setattr(avatar, "_last_seen_ns", {iid: clock[0] for iid in table})
+    return table
+
+
+class TestHeartbeat:
+    def test_an_instance_kept_alive_survives_and_an_abandoned_one_is_unloaded(self, instances, clock):
+        abandoned = instances["abandoned"]
+        for _ in range(4):  # 4 × 50 s, well past a 120 s timeout, with "kept" checking in throughout
+            clock[0] += 50 * SECOND
+            assert avatar.heartbeat(["kept"]) == []
+            avatar.reap_stale_instances(timeout=120.0)
+        assert "abandoned" not in avatar._avatar_instances, "a client that never checked in kept its instance"
+        assert abandoned["animator"].exited and abandoned["encoder"].exited
+        assert "kept" in avatar._avatar_instances, "an instance whose client checked in every 50 s was unloaded"
+
+    def test_nothing_is_reaped_before_the_timeout(self, instances, clock):
+        clock[0] += 119 * SECOND
+        assert avatar.reap_stale_instances(timeout=120.0) == []
+        clock[0] += 2 * SECOND
+        assert sorted(avatar.reap_stale_instances(timeout=120.0)) == ["abandoned", "kept"], \
+            "past the timeout nothing was reaped, so this fixture cannot tell a reap from no reaper"
+
+    def test_unknown_ids_are_reported_and_not_recorded(self, instances):
+        assert avatar.heartbeat(["kept", "from-before-a-restart"]) == ["from-before-a-restart"]
+        assert "from-before-a-restart" not in avatar._last_seen_ns
+
+    def test_an_unload_forgets_the_instance_so_the_reaper_does_not_try_again(self, instances, clock):
+        avatar.unload("kept")
+        assert "kept" not in avatar._last_seen_ns
+        clock[0] += 200 * SECOND
+        assert avatar.reap_stale_instances(timeout=120.0) == ["abandoned"]
+
+    def test_a_stalled_server_forgives_the_heartbeats_it_missed(self, instances, clock):
+        clock[0] += 200 * SECOND  # the server was away for 200 s, and so heard from nobody
+        avatar._reaper_step(stalled_for=190.0, timeout=120.0)
+        assert sorted(avatar._avatar_instances) == ["abandoned", "kept"], "a stalled server reaped clients that never left"
+        avatar._reaper_step(stalled_for=0.0, timeout=120.0)
+        assert sorted(avatar._avatar_instances) == ["abandoned", "kept"], "the stall was not forgiven, only postponed"
+        clock[0] += 121 * SECOND  # and silence after the server is back is counted again
+        avatar._reaper_step(stalled_for=0.0, timeout=120.0)
+        assert avatar._avatar_instances == {}, "after a stall, the reaper never reaped again"

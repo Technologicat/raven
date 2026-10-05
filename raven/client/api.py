@@ -44,7 +44,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "raven_server_available", "test_connection",
            "tts_server_available",
            "modules",
-           "avatar_load", "avatar_reload", "avatar_unload",
+           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
            "avatar_start", "avatar_stop",
@@ -77,6 +77,8 @@ import json
 import pathlib
 import re
 import requests
+import threading
+import time
 from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING, Any
 
@@ -211,7 +213,9 @@ def avatar_load(filename: pathlib.Path | str) -> str:
     util.yell_on_error(response)
 
     output = response.json()
-    return output["instance_id"]
+    instance_id = output["instance_id"]
+    _hold(instance_id)
+    return instance_id
 
 def avatar_reload(instance_id: str, filename: pathlib.Path | str) -> None:
     """Send a new character image to an existing avatar instance."""
@@ -239,11 +243,68 @@ def avatar_unload(instance_id: str) -> None:
     it may not, if it was restarted while this client was running.
     """
     util.require()
+    _held_instances.discard(instance_id)  # first: an unload that fails still means this client is done with it
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
+
+def avatar_heartbeat(instance_ids: list[str]) -> list[str]:
+    """Tell the server this client still holds `instance_ids`. Return those of them the server does not have.
+
+    Sent automatically, every `HEARTBEAT_INTERVAL` seconds, for every instance loaded through `avatar_load`
+    and not yet unloaded, so a client need not call this itself. The server unloads an instance whose client
+    stops checking in.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_ids": instance_ids}
+    # The read timeout is a beat's length: a server that cannot answer within one has missed that beat, and
+    # waiting the default five minutes would hold up the next ones behind it.
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/heartbeat", json=data, headers=headers,
+                             timeout=(util.api_config.network_timeout.connect, HEARTBEAT_INTERVAL))
+    util.yell_on_error(response)
+    return response.json()["unknown"]
+
+HEARTBEAT_INTERVAL = 10.0  # seconds; the server's `avatar_session_timeout` should be several of these
+
+_held_instances: set[str] = set()  # loaded through `avatar_load`, not yet unloaded
+_heartbeat_lock = threading.Lock()
+_heartbeat_thread: threading.Thread | None = None
+
+def _hold(instance_id: str) -> None:
+    """Start reporting `instance_id` to the server, starting the heartbeat thread if this is the first."""
+    global _heartbeat_thread
+    _held_instances.add(instance_id)
+    with _heartbeat_lock:  # two first loads at once must not start two threads
+        if _heartbeat_thread is None:
+            _heartbeat_thread = threading.Thread(target=_heartbeat_loop, name="avatar_heartbeat", daemon=True)
+            _heartbeat_thread.start()
+
+def _heartbeat_loop() -> None:
+    failing = False  # log a run of failures once, and its end once, rather than every beat
+    while True:
+        time.sleep(HEARTBEAT_INTERVAL)
+        # No lock: `sorted` copies the set in one C-level pass, and an instance loaded or unloaded meanwhile is
+        # simply reported, or not, one beat late.
+        instance_ids = sorted(_held_instances)
+        if not instance_ids:
+            continue
+        try:
+            unknown = avatar_heartbeat(instance_ids)
+        except Exception as exc:
+            if not failing:
+                logger.warning(f"_heartbeat_loop: cannot reach the server, retrying every {HEARTBEAT_INTERVAL:0.0f} s: {type(exc)}: {exc}")
+                failing = True
+            continue
+        if failing:
+            logger.info("_heartbeat_loop: reaching the server again")
+            failing = False
+        for instance_id in unknown:
+            logger.warning(f"_heartbeat_loop: the server no longer has avatar instance '{instance_id}'; no longer reporting it")
+            _held_instances.discard(instance_id)
 
 def avatar_load_emotion_templates(instance_id: str, emotions: dict) -> None:
     util.require()

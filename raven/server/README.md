@@ -48,6 +48,7 @@
         - [POST "/api/avatar/load"](#post-apiavatarload)
         - [POST "/api/avatar/reload"](#post-apiavatarreload)
         - [POST "/api/avatar/unload"](#post-apiavatarunload)
+        - [POST "/api/avatar/heartbeat"](#post-apiavatarheartbeat)
         - [POST "/api/avatar/load_emotion_templates"](#post-apiavatarload_emotion_templates)
         - [POST "/api/avatar/load_animator_settings"](#post-apiavatarload_animator_settings)
         - [POST "/api/avatar/start"](#post-apiavatarstart)
@@ -665,6 +666,10 @@ Output is JSON:
 Here the important string is the instance ID the new avatar instance. Use this instance ID in the
 other avatar API endpoints to target the operations to this instance.
 
+The client must then check in with `/api/avatar/heartbeat` for as long as it holds the instance: one not
+heard of for `avatar_session_timeout` seconds (server config, 2 minutes by default) is unloaded.
+`raven.client.api` does this by itself.
+
 
 ### POST "/api/avatar/reload"
 
@@ -700,6 +705,26 @@ Input is JSON:
 Here the important string is the instance ID you got from `api_avatar_load`.
 
 No outputs.
+
+
+### POST "/api/avatar/heartbeat"
+
+Tell the server that this client still holds the given avatar instances. This is what releases the avatar of
+a client that went away without unloading it — a crash, a power loss, a dropped network: an instance not
+heard of for `avatar_session_timeout` seconds (server config) is unloaded.
+
+Send it every few seconds, whether or not the avatar is animating. `raven.client.api` sends it every 10
+seconds for every instance it has loaded and not unloaded.
+
+Input is JSON:
+
+    {"instance_ids": ["some_important_string", ...]}
+
+Output is JSON:
+
+    {"unknown": [...]}
+
+listing those of the given IDs that are not loaded on this server, typically held from before a server restart.
 
 
 ### POST "/api/avatar/load_emotion_templates"

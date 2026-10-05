@@ -219,6 +219,12 @@ translation_models = {
 #
 talkinghead_models = "OktayAlpk/talking-head-anime-3"  # ~900 MB
 
+# Seconds an avatar instance is kept after its client last checked in. Clients check in every 10 s while
+# they hold an instance, paused or not, so this releases the avatar of a client that went away without
+# unloading it: a crash, a power loss, a dropped network. A client stopped for longer than this — at a
+# debugger breakpoint, or on a suspended laptop — loses its avatar too, which is why it is generous.
+avatar_session_timeout = 120.0
+
 # Default configuration for the pixel-space postprocessor, to make the AI's avatar
 # look more cyberpunk via pixel-space glitch artistry.
 #
