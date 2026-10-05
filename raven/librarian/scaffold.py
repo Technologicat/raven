@@ -1279,6 +1279,10 @@ def ai_turn(llm_settings: env,
             logger.error(f"ai_turn: {error_message}")
             raise ValueError(error_message)
 
+    # First, so that everything this turn reads about the model — its context window for the budget, whether it
+    # sees images, its name in the per-turn note — describes the one that will answer.
+    llmclient.follow_model_swap(llm_settings)
+
     documents_available = docs_enabled and retriever is not None
 
     if tool_context is None:  # normal case; `retry_tool_calls` passes the context it already started

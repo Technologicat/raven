@@ -116,6 +116,7 @@
 
 #### Raven-librarian
 
+- **Loading a different model in LM Studio mid-session no longer brings the old one back.** In v0.2.9 Librarian asked for the model that was loaded when it started, so LM Studio loaded that one again, or failed where it no longer fit. It now names a model only if one is set in its configuration, and before each reply it checks which model is loaded, so the context size and image support it works with are the new model's.
 - **The chat log no longer jumps while the AI is writing.** Each update to the paragraph being written removed it and drew it again, so for a frame the log was shorter and the text below sprang down and back. The updated paragraph now replaces the old one in the same frame.
 - **A missing or unreadable avatar settings file now ends the app cleanly.** In v0.2.9 the app reported the error and then ran on with every button dead, hung when closed, and left its avatar on the server until the server was restarted. It now exits with status 255, releasing the avatar.
 - **A failed web search or fetch no longer counts as material retrieved.** A refused, timed-out or unreadable fetch, and a search with no results or no answer from the engine, left a reply without its [no sources retrieved] marker, and the AI was asked to base its claims on material that was not there.

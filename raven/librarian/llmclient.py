@@ -25,7 +25,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
 
            # For frontends that open a window whether or not a backend answers
            "backend_unreachable", "backend_has_no_model", "backend_ready",
-           "connect", "describe_backend_status", "backend_status", "reconnect",
+           "connect", "describe_backend_status", "backend_status", "reconnect", "follow_model_swap",
            "configure",
 
            # Counting what a prompt costs
@@ -310,7 +310,6 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
             # this LM Studio returns carries one, so this is the shape of the answer rather than a
             # workaround for an observed gap.
             maybe_model_type = record.get("type")
-            _warn_if_lmstudio_parallel(backend_url)
             return env(label=_format_lmstudio_model_label(record),
                        model_id=record.get("id"),
                        context_length=record.get("loaded_context_length"),
@@ -363,8 +362,9 @@ def setup(backend_url: str,
                       LM Studio (id, quant, context), the GGUF filename on ooba, or "No model information is
                       available" when a generic backend can't disambiguate (never a guess). See `_resolve_model_info`.
 
-        `model_id: str | None`: The model id sent in each request's `model` field (LM Studio JIT loads it on
-                                   demand), or `None`. Distinct from `model`, which is the display identity.
+        `model_id: str | None`: The model id sent in each request's `model` field — `config.llm_model`, which
+                                LM Studio's JIT loads on demand — or `None`, to send none and have the backend
+                                answer with whatever it has loaded. Distinct from `model`, the display identity.
 
         `backend_flavor: str`: Which OpenAI-compatible backend this is — "oobabooga", "lmstudio", or "generic".
                                Autodetected (or forced via `config.llm_backend_flavor`); gates a few request details.
@@ -454,6 +454,8 @@ def setup(backend_url: str,
     # `configure`, which is pure. That is the split, and it is why it is drawn here.
     backend_flavor = librarian_config.llm_backend_flavor or detect_backend_flavor(backend_url)
     model_info = _resolve_model_info(backend_url, backend_flavor)
+    if backend_flavor == "lmstudio" and model_info.loaded and not quiet:
+        _warn_if_lmstudio_parallel(backend_url)
     return configure(model_info=model_info,
                      backend_flavor=backend_flavor,
                      backend_url=backend_url,
@@ -575,6 +577,44 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
     for name in fresh:
         settings[name] = fresh[name]
     return backend_status(settings)
+
+def follow_model_swap(settings: env) -> bool:
+    """Bring `settings` up to date if the backend has loaded a different model since. Return whether it had.
+
+    Cheap enough to call before every turn: one request, and nothing more unless the model changed. Only what
+    describes the model is updated — its identity, context window, whether it sees images, whether it is
+    loaded — together with what was fitted to the old one, the token-count calibration and the local
+    tokenizer. Everything else in `settings` is left alone, including any per-run overrides a caller has set.
+
+    Does nothing when the backend does not answer: the turn then meets that failure itself, and recovering
+    from it is `reconnect`'s job.
+    """
+    if not settings.backend_is_reachable:
+        return False
+    try:
+        info = _resolve_model_info(settings.backend_url, settings.backend_flavor)
+    except requests.exceptions.RequestException:
+        return False
+    context_length = info.context_length if info.context_length is not None else _DEFAULT_CONTEXT_LENGTH
+    if (info.label, context_length, info.is_vlm, info.loaded) == (settings.model, settings.context_length,
+                                                                  settings.model_is_vlm, settings.model_is_loaded):
+        return False
+
+    logger.info(f"follow_model_swap: the backend's model changed from '{settings.model}' to '{info.label}'; following it.")
+    settings.model = info.label
+    settings.context_length = context_length
+    settings.model_is_vlm = info.is_vlm
+    settings.model_is_loaded = info.loaded
+    settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
+    settings.tokenizer = None
+    if settings.backend_flavor == "lmstudio" and info.loaded:
+        _warn_if_lmstudio_parallel(settings.backend_url)
+    tokenizer_source = None
+    if librarian_config.llm_tokenizer_path:
+        tokenizer_source = _resolve_tokenizer_source(librarian_config.llm_tokenizer_path,
+                                                     [settings.model, settings.model_id])
+    _start_tokenizer_load(settings, tokenizer_source)
+    return True
 
 
 # --------------------------------------------------------------------------------
@@ -790,14 +830,17 @@ def configure(model_info: env,
     Returns the same `env` as `setup`; see its docstring for the fields.
     """
     model = model_info.label  # human-facing identity for the character card (never a guess)
-    request_model = librarian_config.llm_model or model_info.model_id  # id sent in requests (LM Studio JIT), or None
+    # Only a model the user chose is named in requests. Naming the one that happened to be loaded at startup
+    # would pin it: after a model swap in the backend, LM Studio would load the old one back on demand, or
+    # fail to where it no longer fits. With no name, the backend answers with whatever it has loaded.
+    request_model = librarian_config.llm_model
 
     # Context window: report the *loaded* length, never the model's theoretical max. When the backend doesn't
     # expose it (ooba doesn't here; a generic backend can't), default conservatively to 64k and warn — smaller
     # than that isn't useful for discussing a scientific fulltext, so we can assume at least that much.
     context_length = model_info.context_length
     if context_length is None:
-        context_length = 64 * 1024
+        context_length = _DEFAULT_CONTEXT_LENGTH
         if not quiet:
             logger.warning(f"configure: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
 
@@ -876,7 +919,7 @@ def configure(model_info: env,
                                                      [model, request_model])
 
     settings = env(user=user, char=char, model=model,
-                   model_id=request_model,  # model id sent in requests (LM Studio JIT), or None
+                   model_id=request_model,  # model id sent in requests (`config.llm_model`), or None to send none
                    backend_flavor=backend_flavor,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
@@ -986,6 +1029,7 @@ def _start_tokenizer_load(settings: env, tokenizer_source: str | None) -> None:
 # "num_predict": 800,
 # "num_ctx": 65536,
 
+_DEFAULT_CONTEXT_LENGTH = 64 * 1024  # tokens; assumed when the backend does not report the loaded length
 _DEFAULT_TOKENS_PER_CHARACTER = 0.27  # tokens per character; rough English/markup default, refined from real usage
 _tokenizer_cache = {}  # path -> loaded tokenizer (or None if loading failed); avoids reloading the same tokenizer
 

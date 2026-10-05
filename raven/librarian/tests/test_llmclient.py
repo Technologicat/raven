@@ -1545,15 +1545,18 @@ class TestModelInfoResolution:
         assert info.model_id == "qwen3.5-4b"
         assert info.context_length == 131072
 
-    @pytest.mark.parametrize("parallel, warns", [(4, True), (1, False)], ids=["concurrency 4", "concurrency 1"])
-    def test_lmstudio_max_concurrency_above_one_is_warned_about(self, monkeypatch, caplog, parallel, warns):
-        # Concurrency 1 is the control: the same listing, and no warning.
+    @pytest.mark.parametrize("parallel, quiet, warns", [(4, False, True), (1, False, False), (4, True, False)],
+                             ids=["concurrency 4", "concurrency 1", "concurrency 4, quiet"])
+    def test_lmstudio_max_concurrency_above_one_is_warned_about(self, monkeypatch, caplog, parallel, quiet, warns):
+        # Concurrency 1 is the control: the same listing, and no warning. Quiet is what a polling `reconnect`
+        # passes, which asks every few seconds and must not repeat the warning each time.
+        monkeypatch.setattr(llmclient.librarian_config, "llm_backend_flavor", "lmstudio")
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "loaded_context_length": 131072}]},
             "/api/v1/models": {"models": [{"key": "qwen3.5-4b",
                                            "loaded_instances": [{"id": "qwen3.5-4b", "config": {"parallel": parallel}}]}]}}))
         with caplog.at_level(logging.WARNING, logger="raven.librarian.llmclient"):
-            llmclient._resolve_model_info("http://x", "lmstudio")
+            llmclient.setup("http://x", quiet=quiet)
         assert any("max concurrency" in record.getMessage() for record in caplog.records) is warns
 
     def test_lmstudio_without_the_v1_listing_says_nothing(self, monkeypatch, caplog):
@@ -1740,6 +1743,58 @@ class TestConnectAndReconnect:
         settings = llmclient.connect("http://x", quiet=True)
         assert llmclient.backend_status(settings) is llmclient.backend_has_no_model
 
+
+    @pytest.mark.parametrize("configured", [None, "chosen-model"], ids=["unset", "set"])
+    def test_only_a_configured_model_is_named_in_requests(self, monkeypatch, configured):
+        # Unset is the case that matters: naming the model that was loaded at startup would pin it, so that
+        # after a swap LM Studio loads the old one back. Set is the control, where naming it is the point.
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", configured)
+        settings = self._good_settings()
+        assert settings.request_data.get("model") == configured
+
+
+class TestFollowModelSwap:
+    """`follow_model_swap` updates what describes the model, and leaves the rest of the settings alone."""
+
+    @pytest.fixture
+    def settings(self, monkeypatch):
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+        settings = llmclient.configure(model_info=env(label="a-model", model_id=None, context_length=4096,
+                                                      is_vlm=True, loaded=True),
+                                       backend_flavor="generic",
+                                       backend_url="http://x",
+                                       quiet=True)
+        settings.tokens_per_character = 0.5  # as calibrated against the old model's tokenizer
+        settings.system_prompt = "a per-run override"
+        return settings
+
+    def _backend_has(self, monkeypatch, **info):
+        fields = dict(label="a-model", model_id=None, context_length=4096, is_vlm=True, loaded=True) | info
+        monkeypatch.setattr(llmclient, "_resolve_model_info", lambda backend_url, flavor: env(**fields))
+
+    def test_the_same_model_changes_nothing(self, settings, monkeypatch):
+        self._backend_has(monkeypatch)
+        assert llmclient.follow_model_swap(settings) is False
+        assert settings.tokens_per_character == 0.5, "the calibration was reset with no model change"
+
+    def test_a_swapped_model_is_followed_and_overrides_survive(self, settings, monkeypatch):
+        self._backend_has(monkeypatch, label="b-model", context_length=8192, is_vlm=False)
+        assert llmclient.follow_model_swap(settings) is True
+        assert (settings.model, settings.context_length, settings.model_is_vlm) == ("b-model", 8192, False)
+        assert settings.tokens_per_character == llmclient._DEFAULT_TOKENS_PER_CHARACTER
+        assert settings.system_prompt == "a per-run override"
+
+    def test_an_unknown_context_length_falls_back_to_the_default(self, settings, monkeypatch):
+        self._backend_has(monkeypatch, label="b-model", context_length=None)
+        llmclient.follow_model_swap(settings)
+        assert settings.context_length == llmclient._DEFAULT_CONTEXT_LENGTH
+
+    def test_a_backend_that_does_not_answer_changes_nothing(self, settings, monkeypatch):
+        def _refuse(backend_url, flavor):
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "_resolve_model_info", _refuse)
+        assert llmclient.follow_model_swap(settings) is False
+        assert settings.model == "a-model"
 
 # ---------------------------------------------------------------------------
 # Token counting tiers + usage calibration (brief 02 §7)
