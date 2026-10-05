@@ -518,5 +518,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          the probes pin it to 1; the defaults are the maintainer's to fix.
      - **The tool-call budget re-run, done**: at cap 20, 24 of 24 follow-ups answered across qwen3.6-35b-a3b and
        qwen3.8-27b (`investigations/tool_budget/`). The probe had rotted in three places and was repaired first.
-       Its per-sample data carries copyrighted abstracts, so today's is gitignored, and July's tracked copies
-       are the maintainer's call. Whether the `TODO.md` item closes is too.
+       Its per-sample data carries copyrighted abstracts: today's is gitignored and July's untracked, the history
+       left as it is, a rewrite costing every commit ID since July and two release tags (maintainer). The
+       `TODO.md` item is closed as not needed, its two-budget design archived in
+       `briefs/done/tool-call-budget.md` (maintainer).
+     - **The dotted-name checker, done** (`scripts/check_dotted_names.py`, in CI): ten stale references fixed;
+       names absent on purpose are marked `(planned)` or `(stale)` in place, a marker the maintainer chose
+       over a path exemption, the history case being `(stale)` because some of those names never existed.
