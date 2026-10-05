@@ -1959,7 +1959,8 @@ def phase_report(*,
     `dt`: the whole invocation's wall time.
     `t0`: `perf_counter` at its start — `timer.t0`, so that the phases and the `dt` they are stored beside
           are measured off one clock and compose exactly.
-    `t_first_token`: when the first generated text arrived on any channel, or `None` if none did.
+    `t_first_token`: when the first generated output arrived — text on any channel, or the first piece of a
+                     tool call still being generated — or `None` if none did.
     `t_first_content`: when the visible answer began, or `None` if it never did.
     `maybe_thinking_tokens`: the thinking trace's token count, or `None` if the model did not think.
     `thinking_tokens_exact`: whether that count is a count rather than an estimate.
@@ -1972,7 +1973,7 @@ def phase_report(*,
     of thinking because nothing is being generated during it — how long it takes says how much of the prompt
     the backend's cache did not already hold, which is a different fact about the turn.
     """
-    if t_first_token is None:  # nothing was generated as text: a round that asked for a tool and said nothing
+    if t_first_token is None:  # nothing timed was generated: e.g. a round whose only output was a call sent whole
         return None
 
     # An event flushed out of the parser at stream end is timestamped after the timer has already stopped,
@@ -2024,6 +2025,11 @@ def _notify(what: str, maybe_callback: Callable | None, *args, _default: Any = N
     # `netutil.Aborted` is the caller stopping this invocation on purpose, arriving through whichever frame
     # happens to be on the stack — so swallowing it here would leave Cancel doing nothing.
     return utils.notify(what, maybe_callback, *args, _default=_default, _reraise=(netutil.Aborted,), **kwargs)
+
+def _tool_call_delta_has_arguments(tool_call_deltas: list[dict]) -> bool:
+    """Whether any of a stream delta's tool-call pieces already carries arguments."""
+    return any(((piece.get("function") or {}).get("arguments") or "") for piece in tool_call_deltas)
+
 
 def _backend_error_message(body: str, max_length: int = 400) -> str | None:
     """The backend's own explanation from an error response's `body`, or `None` if it gave none.
@@ -2345,7 +2351,7 @@ def invoke(settings: env,
 
     # Phase boundaries within this call, for `phase_report` below. Sampled off `perf_counter` because that
     # is the clock `timer` uses, so the phases and the `dt` they are reported beside compose exactly.
-    t_first_token = None            # first generated text on any channel: prompt processing ended here
+    t_first_token = None            # first generated text on any channel, or a call's first piece: prompt processing ended here
     t_first_content = None          # first text of the visible answer: thinking ended here
     n_chunks_at_first_content = None  # ...and this is how many text-bearing deltas it took to get there
 
@@ -2380,8 +2386,8 @@ def invoke(settings: env,
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
         nonlocal t_first_token, t_first_content, n_chunks_at_first_content, llm_output_text
         etype = parsed_event["type"]
-        # A tool call is not text and does not end prompt processing: its deltas arrive through the
-        # structured accumulator, which is also why they are not counted as chunks.
+        # A completed tool call is not timed here: its first delta already ended prompt processing, in the
+        # stream loop, and its deltas are not text, which is also why they are not counted as chunks.
         if etype in ("content", "reasoning") and t_first_token is None:
             t_first_token = time.perf_counter()
         if etype == "content":
@@ -2470,6 +2476,13 @@ def invoke(settings: env,
                 reasoning_chunk = delta.get("reasoning_content") or ""  # native reasoning channel (llama.cpp / LM Studio)
 
                 if delta.get("tool_calls"):
+                    # A call's first piece ends prompt processing, if nothing generated came before it — but
+                    # only a piece without the arguments, which is the call still being generated. LM Studio
+                    # sends the name as the call starts and the arguments later (measured 2026-10-05). A
+                    # call that arrives with its arguments already in it may be a record sent after
+                    # generation ended, and timing from it would count the whole request as prompt processing.
+                    if t_first_token is None and not _tool_call_delta_has_arguments(delta["tool_calls"]):
+                        t_first_token = time.perf_counter()
                     _accumulate_tool_call_delta(tool_call_acc, delta["tool_calls"])
 
                 # Count a delta as a chunk when it carried any generated text (content or reasoning): keeps the

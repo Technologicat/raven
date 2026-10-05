@@ -2335,6 +2335,33 @@ class TestModelWrittenDocsQuery:
         assert retriever.calls == []
         assert forest.get_payload(final_head)["generation_metadata"]["docs_query_failed"] is True
 
+    def test_the_first_message_records_where_the_automatic_search_took_time(self, monkeypatch, llm_settings, populated_forest):
+        # The query request and the search ran before the first model call, so they are in no message's own
+        # figures; the first message carries them. The query's figures are its `invoke` result's.
+        answer = self._query_call("airfoil stall")
+        answer.n_tokens, answer.dt = 7, 0.25
+        forest, final_head, _, _, _ = self._run(monkeypatch, llm_settings, populated_forest, answer)
+        autosearch = forest.get_payload(final_head)["generation_metadata"]["autosearch"]
+        assert autosearch["query"] == {"dt": 0.25, "n_tokens": 7}
+        assert autosearch["search"]["dt"] >= 0.0
+
+    def test_no_search_records_the_query_alone(self, monkeypatch, llm_settings, populated_forest):
+        forest, final_head, _, _, _ = self._run(monkeypatch, llm_settings, populated_forest,
+                                                make_invoke_result(content="N/A"))
+        assert set(forest.get_payload(final_head)["generation_metadata"]["autosearch"]) == {"query"}
+
+    def test_a_failed_query_request_has_no_cost_to_record(self, monkeypatch, llm_settings, populated_forest):
+        forest, final_head, _, _, _ = self._run(monkeypatch, llm_settings, populated_forest,
+                                                ConnectionError("backend went away"))
+        assert "autosearch" not in forest.get_payload(final_head)["generation_metadata"]
+
+    def test_a_search_on_the_message_itself_records_the_search_alone(self, monkeypatch, llm_settings, populated_forest):
+        # Without the written query there is no query request, and the search still took its time.
+        forest, final_head, _, _, _ = self._run(monkeypatch, llm_settings, populated_forest,
+                                                make_invoke_result(content="Here is what I found."),
+                                                write_docs_query=False)
+        assert set(forest.get_payload(final_head)["generation_metadata"]["autosearch"]) == {"search"}
+
     def test_a_stop_during_the_query_request_stops_the_turn(self, monkeypatch, llm_settings, populated_forest):
         with pytest.raises(netutil.Aborted):
             self._run(monkeypatch, llm_settings, populated_forest, netutil.Aborted())

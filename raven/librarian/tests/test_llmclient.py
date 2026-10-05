@@ -1289,10 +1289,22 @@ class TestInvokeReportsPhases:
         assert "thinking" not in out.phases
         assert "prefill" in out.phases
 
-    def test_a_round_that_only_asks_for_a_tool_reports_nothing(self, monkeypatch, invoke_settings):
-        # The tool-call deltas are not text: nothing was generated on either channel, so there are no
-        # phases to describe — and calling the whole call "prompt processing" would be a wrong answer
-        # rather than a missing one.
+    def test_a_call_streamed_as_it_is_generated_ends_prompt_processing(self, monkeypatch, invoke_settings):
+        # The shape LM Studio sends: the name as the call starts, the arguments later.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None,
+                                    "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                                                    "function": {"name": "get_current_time", "arguments": ""}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "{}"}}]}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("time?"), tools_enabled=True)
+        assert out.data["tool_calls"]  # the fixture did produce a call, so this is not a vacuous pass
+        assert set(out.phases) == {"prefill"}, "a call is not thinking"
+
+    def test_a_call_sent_whole_is_not_timed(self, monkeypatch, invoke_settings):
+        # A call arriving with its arguments may be a record sent after generation ended, and calling the
+        # whole request "prompt processing" would be a wrong answer rather than a missing one.
         _fake_stream(monkeypatch, [
             {"choices": [{"delta": {"role": "assistant", "content": None,
                                     "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
@@ -1301,7 +1313,7 @@ class TestInvokeReportsPhases:
             {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
         ])
         out = llmclient.invoke(invoke_settings, _history("time?"), tools_enabled=True)
-        assert out.data["tool_calls"]  # the fixture did produce a call, so this is not a vacuous pass
+        assert out.data["tool_calls"]
         assert out.phases is None
 
 

@@ -61,6 +61,9 @@
 
 #### Raven-librarian
 
+- **The figures under a reply say how long the auto-search took.**
+  - Hovering the token-count line of a turn's first message shows, in a table of its own below the reply's breakdown, the query request's prompt processing, the time spent writing the query, and the time the search itself took.
+  - A message that only calls a tool now has a breakdown too, with its prompt processing apart from the call, where the backend streams the call as it is written (LM Studio does).
 - **A reply names the model writing it while it is being written**, in the grey line above it, as a finished reply already did.
 - **Clickable names in the chat log highlight under the mouse**: an attached file's name, a document from the knowledge base, the revision link above an edited message. The button that does the same as clicking the name now sits right beside it.
 - **Hovering the icon of the system prompt or of a tool result says which it is**, as hovering an AI or user message's icon names who wrote it. In v0.2.9 those two icons had no tooltip.

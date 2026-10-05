@@ -13,6 +13,7 @@ __all__ = ["format_chat_message_for_clipboard",
            "format_message_metadata_line", "format_message_metadata_parts",
            "format_generation_stats",
            "phase_breakdown_rows",
+           "autosearch_rows",
            "node_is_unfinished",
            "incompleteness_note",
            "docs_match_snippet", "collapse_docs_match",
@@ -248,6 +249,29 @@ def phase_breakdown_rows(generation_metadata: dict, *,
         rows.append(row("Answer", total_dt - prefill_dt, total_tokens))
     rows.append(row("Total", total_dt, total_tokens))
     return rows
+
+def autosearch_rows(generation_metadata: dict) -> list[tuple[str, str, str, str]] | None:
+    """Where the automatic document search's time went, as `(label, time, tokens, speed)` rows like
+    `phase_breakdown_rows`'. `None` when this message records none.
+
+    Recorded on a turn's first message, the search having run before its first model call, so none of this
+    is in the message's own figures. Up to three rows: the query request's prompt processing (where it could
+    be timed), the model writing the query, and the search itself, which has no tokens.
+    """
+    maybe_autosearch = generation_metadata.get("autosearch")
+    if not maybe_autosearch:
+        return None
+    rows = []
+    if (query := maybe_autosearch.get("query")) is not None:
+        writing_dt = query["dt"]
+        if (maybe_prefill_dt := query.get("prefill_dt")) is not None:
+            rows.append(("Prompt processing", f"{maybe_prefill_dt:0.2f}", "", ""))
+            writing_dt -= maybe_prefill_dt
+        speed = f"{query['n_tokens'] / writing_dt:0.2f}" if writing_dt >= 0.005 else ""
+        rows.append(("Writing the search query", f"{writing_dt:0.2f}", f"{query['n_tokens']}", speed))
+    if (search := maybe_autosearch.get("search")) is not None:
+        rows.append(("Searching the documents", f"{search['dt']:0.2f}", "", ""))
+    return rows or None
 
 def node_is_unfinished(datastore: chattree.Forest, node_id: str) -> bool:
     """Whether `node_id` holds a reply that never finished arriving.

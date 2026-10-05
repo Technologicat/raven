@@ -15,6 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import json
+import time
 
 from typing import Any, Callable, Collection, TYPE_CHECKING
 
@@ -204,12 +205,14 @@ def _write_docs_query(llm_settings: env,
                       maybe_tool_names: Collection[str] | None,
                       tools_enabled: bool,
                       use_character_card: bool,
-                      maybe_abort: netutil.Abort | None) -> tuple[str, str | None]:
-    """Helper for `ai_turn`. Ask the model for the automatic document search's query; return `(status, maybe_query)`.
+                      maybe_abort: netutil.Abort | None) -> tuple[str, str | None, dict | None]:
+    """Helper for `ai_turn`. Ask the model for the automatic document search's query.
 
-    `status` is `"written"` (with the query, which the model gives by calling `search_documents`),
-    `"not_needed"` (anything but a search: an N/A, another tool, or text; no search this turn), or `"failed"`
-    (nothing usable came back: a backend error, or a search with no query).
+    Returns `(status, maybe_query, maybe_cost)`. `status` is `"written"` (with the query, which the model
+    gives by calling `search_documents`), `"not_needed"` (anything but a search: an N/A, another tool, or
+    text; no search this turn), or `"failed"` (nothing usable came back: a backend error, or a search with
+    no query). `maybe_cost` is `{"dt": seconds, "n_tokens": count}` for the request, plus `"prefill_dt"` when
+    its prompt processing could be timed; `None` when no answer came back to measure.
 
     The request is the turn's own prompt with the latest user message replaced by the instruction in
     `prompts/search_query.md`, the message quoted after it. Only on the wire; the datastore is untouched.
@@ -233,7 +236,7 @@ def _write_docs_query(llm_settings: env,
             break
     else:
         logger.warning("_write_docs_query: no user message to write a query for.")
-        return ("failed", None)
+        return ("failed", None, None)
     message_text = chatutil.content_to_text(history[position]["content"])
     instruction = f"{llm_settings.search_query_instruction}\n\n> " + "\n> ".join(message_text.splitlines())
     history[position] = {"role": "user", "content": [chatutil.text_content_part(instruction)]}
@@ -253,7 +256,7 @@ def _write_docs_query(llm_settings: env,
         raise
     except Exception as exc:
         logger.warning(f"_write_docs_query: the request failed: {type(exc)}: {exc}")
-        return ("failed", None)
+        return ("failed", None, None)
     # The query arrives as a `search_documents` call, which the model is asked for: the tool is in the
     # request anyway, and a model offered a search tool reaches for it, so the answer goes the way it pulls.
     # The call is not run; its query is what the automatic search runs with.
@@ -262,6 +265,9 @@ def _write_docs_query(llm_settings: env,
     # better move than a search, such as reading a document the conversation already named, which the
     # reply's own round can make), or text answering the message instead. None of those runs anything here.
     # A failure is only nothing usable at all: a backend error, or a search with no query in it.
+    cost = {"dt": out.dt, "n_tokens": out.n_tokens}
+    if out.phases is not None:  # prompt processing, where the backend's stream lets it be timed
+        cost["prefill_dt"] = out.phases["prefill"]["dt"]
     for tool_call in out.data.get("tool_calls") or []:
         function = tool_call.get("function") or {}
         if function.get("name") != "search_documents":
@@ -275,16 +281,16 @@ def _write_docs_query(llm_settings: env,
         query = " ".join(str(arguments.get("query", "")).split()) if isinstance(arguments, dict) else ""
         if not query:
             logger.warning("_write_docs_query: the model called `search_documents` with no query.")
-            return ("failed", None)
+            return ("failed", None, cost)
         logger.info(f"_write_docs_query: query '{query}'")
-        return ("written", query)
+        return ("written", query, cost)
     if out.data.get("tool_calls"):
         names = [(tool_call.get("function") or {}).get("name", "?") for tool_call in out.data["tool_calls"]]
         logger.info(f"_write_docs_query: the model reached for {', '.join(names)} rather than a search; no search this turn.")
     else:
         text = chatutil.content_to_text(out.data["content"]).strip()
         logger.info(f"_write_docs_query: no search this turn; the model wrote: '{text[:200]}'")
-    return ("not_needed", None)
+    return ("not_needed", None, cost)
 
 def _grounding_was_declared(content: list[dict],
                             maybe_metadata: dict | None) -> bool:
@@ -1312,6 +1318,7 @@ def ai_turn(llm_settings: env,
     # from `docs_query` and the conversation, or says the message needs no search.
     docs_query_status = None
     docs_matches = []  # bound before the `try` so the `finally` can report it even if the search raises
+    autosearch_costs = {}  # where the automatic search's time went, for the turn's first message
     if documents_available and docs_query is not None:
         _notify("on_docs_start", on_docs_start)
         try:
@@ -1325,7 +1332,7 @@ def ai_turn(llm_settings: env,
                     retriever, _collect_consulted_documents(datastore=datastore,
                                                             head_node_id=head_node_id,
                                                             exclude_document_ids=[]))
-                docs_query_status, docs_query = _write_docs_query(llm_settings=llm_settings,
+                docs_query_status, docs_query, maybe_query_cost = _write_docs_query(llm_settings=llm_settings,
                                                                   datastore=datastore,
                                                                   head_node_id=head_node_id,
                                                                   tool_context=tool_context,
@@ -1334,11 +1341,15 @@ def ai_turn(llm_settings: env,
                                                                   use_character_card=use_character_card,
                                                                   maybe_abort=maybe_abort)
                 _notify("on_docs_query", on_docs_query, docs_query_status, docs_query)
+                if maybe_query_cost is not None:
+                    autosearch_costs["query"] = maybe_query_cost
             if docs_query is not None:
+                search_t0 = time.perf_counter()
                 docs_matches = _search_docs(retriever=retriever,
                                             query=docs_query,
                                             k=docs_num_results,
                                             on_progress=lambda text: _notify("on_docs_progress", on_docs_progress, text))
+                autosearch_costs["search"] = {"dt": time.perf_counter() - search_t0}
         finally:
             # Ensure `on_docs_done` always fires - including when the search raises mid-flight - so GUI
             # state (e.g. `_docs_reading`) recovers cleanly.
@@ -1556,6 +1567,9 @@ def ai_turn(llm_settings: env,
             # The first message of the turn says so, being where the search would have gone; once is enough.
             if docs_query_status == "failed" and round_index == 0:
                 payload["generation_metadata"]["docs_query_failed"] = True
+            # Its time too, which is in no message's own figures: it ran before the first model call.
+            if autosearch_costs and round_index == 0:
+                payload["generation_metadata"]["autosearch"] = autosearch_costs
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,
                                         "results": docs_matches}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)

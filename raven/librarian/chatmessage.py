@@ -410,10 +410,11 @@ class DPGChatMessage:
                 ended_in_tool_call = bool(ai_message_node_payload["message"].get("tool_calls"))
                 breakdown_rows = messagetext.phase_breakdown_rows(generation_metadata,
                                                                   ended_in_tool_call=ended_in_tool_call)
+                autosearch_rows = messagetext.autosearch_rows(generation_metadata)
                 # Absent on a node written before the model was recorded, which is why this is asked for
                 # rather than indexed.
                 maybe_model = generation_metadata.get("model")
-                if maybe_model is not None or breakdown_rows is not None:
+                if maybe_model is not None or breakdown_rows is not None or autosearch_rows is not None:
                     stats_tooltip = dpg.add_tooltip(stats_widget)
                     # Which model produced *this* message, said per message rather than once for the
                     # app. In a branching chat the siblings of one node can come from different models,
@@ -425,24 +426,22 @@ class DPGChatMessage:
                     if breakdown_rows is not None:
                         dpg.add_text("Where this reply's time went.", parent=stats_tooltip)
                         dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
-                        # A table, because the labels differ in length and the font is proportional:
-                        # padded spaces put the figures at four different x positions, which reads as
-                        # four unrelated lines rather than as a column to compare down.
-                        breakdown_table = dpg.add_table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
-                                                        borders_innerH=False, borders_outerH=False,
-                                                        borders_innerV=False, borders_outerV=False,
-                                                        parent=stats_tooltip)
-                        for column_label in ("", "time [s]", "tokens", "speed [t/s]"):
-                            dpg.add_table_column(label=column_label, parent=breakdown_table)
-                        for cells in breakdown_rows:
-                            row = dpg.add_table_row(parent=breakdown_table)
-                            for cell in cells:
-                                dpg.add_text(cell, parent=row)
+                        self._add_figures_table(breakdown_rows, parent=stats_tooltip)
                         dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
                         dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W, parent=stats_tooltip)
-                        if ended_in_tool_call:
+                        # Only after thinking: without it, the call's time is its own row's.
+                        if ended_in_tool_call and generation_metadata["phases"].get("thinking") is not None:
                             dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
                             dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W, parent=stats_tooltip)
+                    # A table of its own rather than more rows above: the auto-search ran before this message's
+                    # model call, so its time is not in the figures above, and the first table's total must
+                    # stay the line it explains.
+                    if autosearch_rows is not None:
+                        if maybe_model is not None or breakdown_rows is not None:
+                            dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                        dpg.add_text("Before it, the auto-search:", parent=stats_tooltip)
+                        dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                        self._add_figures_table(autosearch_rows, parent=stats_tooltip)
 
                 # Say when nothing was retrieved for this reply. Recorded only when the documents were in
                 # play, or an attachment was present; absent means there is nothing to say, which is why
@@ -1088,6 +1087,21 @@ class DPGChatMessage:
         dpg.add_item_clicked_handler(parent=registry, button=dpg.mvMouseButton_Left, callback=callback)
         for item in items:
             dpg.bind_item_handler_registry(item, registry)
+
+    def _add_figures_table(self, rows: list[tuple[str, str, str, str]], *, parent: str | int) -> None:
+        """Add a table of `(label, time, tokens, speed)` rows to `parent`, as a message's figures tooltip shows them."""
+        # A table, because the labels differ in length and the font is proportional: padded spaces put the
+        # figures at different x positions, which reads as unrelated lines rather than as a column to compare.
+        table = dpg.add_table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
+                              borders_innerH=False, borders_outerH=False,
+                              borders_innerV=False, borders_outerV=False,
+                              parent=parent)
+        for column_label in ("", "time [s]", "tokens", "speed [t/s]"):
+            dpg.add_table_column(label=column_label, parent=table)
+        for cells in rows:
+            row = dpg.add_table_row(parent=table)
+            for cell in cells:
+                dpg.add_text(cell, parent=row)
 
     def _add_clickable_text(self, text: str, *, parent: str | int, action: Callable[[], None],
                             color: tuple[int, int, int] | None = None) -> int | str:

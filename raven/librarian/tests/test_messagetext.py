@@ -109,6 +109,27 @@ class TestFormatMessageMetadataLine:
         assert line == "2026-09-04 07:52:48 R1", "a message the user typed was credited to a producer"
 
 
+class TestAutosearchRows:
+    """The automatic search's own figures, shown apart from the message's because they are not in them."""
+
+    def test_both_steps_are_reported(self):
+        rows = messagetext.autosearch_rows({"autosearch": {"query": {"dt": 0.5, "n_tokens": 10}, "search": {"dt": 0.25}}})
+        assert rows == [("Writing the search query", "0.50", "10", "20.00"),
+                        ("Searching the documents", "0.25", "", "")]
+
+    def test_timed_prompt_processing_is_split_out_of_the_query(self):
+        rows = messagetext.autosearch_rows({"autosearch": {"query": {"dt": 2.0, "n_tokens": 30, "prefill_dt": 1.5}}})
+        assert rows == [("Prompt processing", "1.50", "", ""),
+                        ("Writing the search query", "0.50", "30", "60.00")]
+
+    def test_a_turn_that_needed_no_search_reports_the_query_alone(self):
+        rows = messagetext.autosearch_rows({"autosearch": {"query": {"dt": 0.5, "n_tokens": 10}}})
+        assert [label for label, *_ in rows] == ["Writing the search query"]
+
+    def test_a_message_without_an_automatic_search_has_no_rows(self):
+        assert messagetext.autosearch_rows({"n_tokens": 5, "dt": 0.1}) is None
+
+
 class TestDocumentBody:
     """What a tool result *actually* says, as against the excerpt of it the log has room for.
 
