@@ -2314,13 +2314,21 @@ class TestModelWrittenDocsQuery:
         assert retriever.calls == []
         assert "docs_query_failed" not in forest.get_payload(final_head)["generation_metadata"]
 
-    @pytest.mark.parametrize("answer", [make_invoke_result(content="", tool_calls=[tool_call("search_documents", "call_0")]),
-                                        make_invoke_result(content="airfoil stall"),
+    @pytest.mark.parametrize("answer", [make_invoke_result(content="You're welcome."),
                                         make_invoke_result(content="N/A Wait, I need to actually perform the search."),
-                                        make_invoke_result(content=""),
+                                        make_invoke_result(content="")],
+                             ids=["a reply to the message", "deliberation after N/A", "nothing"])
+    def test_anything_but_a_search_call_means_no_search(self, monkeypatch, llm_settings, populated_forest, answer):
+        # The call is the only affirmative signal. A query written as text is not one either: free text is
+        # where a model that hesitates does its deliberating, and there is no telling the two apart.
+        forest, final_head, retriever, _, query_events = self._run(monkeypatch, llm_settings, populated_forest, answer)
+        assert query_events == [("not_needed", None)]
+        assert retriever.calls == []
+        assert "docs_query_failed" not in forest.get_payload(final_head)["generation_metadata"]
+
+    @pytest.mark.parametrize("answer", [make_invoke_result(content="", tool_calls=[tool_call("search_documents", "call_0")]),
                                         ConnectionError("backend went away")],
-                             ids=["a search with no query", "a query as text",
-                                  "deliberation after N/A", "nothing", "a backend error"])
+                             ids=["a search with no query", "a backend error"])
     def test_no_usable_query_means_no_search_and_a_note(self, monkeypatch, llm_settings, populated_forest, answer):
         forest, final_head, retriever, _, query_events = self._run(monkeypatch, llm_settings, populated_forest, answer)
         assert query_events == [("failed", None)]

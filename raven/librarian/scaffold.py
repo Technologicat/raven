@@ -208,8 +208,8 @@ def _write_docs_query(llm_settings: env,
     """Helper for `ai_turn`. Ask the model for the automatic document search's query; return `(status, maybe_query)`.
 
     `status` is `"written"` (with the query, which the model gives by calling `search_documents`),
-    `"not_needed"` (the model answered N/A, or called some other tool: no search this turn), or `"failed"` (no
-    usable answer: a backend error, a search with no query, or text other than N/A).
+    `"not_needed"` (anything but a search: an N/A, another tool, or text; no search this turn), or `"failed"`
+    (nothing usable came back: a backend error, or a search with no query).
 
     The request is the turn's own prompt with the latest user message replaced by the instruction in
     `prompts/search_query.md`, the message quoted after it. Only on the wire; the datastore is untouched.
@@ -256,11 +256,12 @@ def _write_docs_query(llm_settings: env,
         return ("failed", None)
     # The query arrives as a `search_documents` call, which the model is asked for: the tool is in the
     # request anyway, and a model offered a search tool reaches for it, so the answer goes the way it pulls.
-    # The call is not run; its query is what the automatic search runs with. A call to any *other* tool is the
-    # model saying it has a better move than a search (reading a document the conversation already named,
-    # say), and the reply's own round can make it, so that means no search rather than a failure; the call is
-    # not run here either, being unthought. Free text other than N/A is no usable answer: with thinking off,
-    # that is where a model that hesitates does its deliberating.
+    # The call is not run; its query is what the automatic search runs with.
+    #
+    # The call is the only affirmative signal, so anything else means no search: an N/A, another tool (a
+    # better move than a search, such as reading a document the conversation already named, which the
+    # reply's own round can make), or text answering the message instead. None of those runs anything here.
+    # A failure is only nothing usable at all: a backend error, or a search with no query in it.
     for tool_call in out.data.get("tool_calls") or []:
         function = tool_call.get("function") or {}
         if function.get("name") != "search_documents":
@@ -280,17 +281,10 @@ def _write_docs_query(llm_settings: env,
     if out.data.get("tool_calls"):
         names = [(tool_call.get("function") or {}).get("name", "?") for tool_call in out.data["tool_calls"]]
         logger.info(f"_write_docs_query: the model reached for {', '.join(names)} rather than a search; no search this turn.")
-        return ("not_needed", None)
-    text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
-                          text=chatutil.content_to_text(out.data["content"]),
-                          thoughts_mode="discard",
-                          markup=None,
-                          add_persona=False).strip()
-    if text.rstrip(".").upper() == "N/A":
-        logger.info("_write_docs_query: the model says this message needs no search.")
-        return ("not_needed", None)
-    logger.warning(f"_write_docs_query: no query and no N/A; the model wrote: '{text[:200]}'")
-    return ("failed", None)
+    else:
+        text = chatutil.content_to_text(out.data["content"]).strip()
+        logger.info(f"_write_docs_query: no search this turn; the model wrote: '{text[:200]}'")
+    return ("not_needed", None)
 
 def _grounding_was_declared(content: list[dict],
                             maybe_metadata: dict | None) -> bool:
@@ -1103,8 +1097,8 @@ def ai_turn(llm_settings: env,
 
                      Called once the model has answered the request for a query, before any search; only with
                      `write_docs_query`. `status` is `"written"` (with the query, which the search then runs),
-                     `"not_needed"` (the model said the message needs no search, or reached for another
-                     tool instead, and none runs), or `"failed"`
+                     `"not_needed"` (the model chose no search: an N/A, another tool, or text instead of a
+                     query, and none runs), or `"failed"`
                      (no usable answer, and no search runs). Between `on_docs_start` and `on_docs_done`.
 
     `on_docs_done`: 1-argument callable, with argument `matches: list[dict]`. For the exact format,
