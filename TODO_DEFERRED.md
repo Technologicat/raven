@@ -2865,7 +2865,7 @@ Raised by Juha (2026-07-29), right after the cleanup dialog landed.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
-*Cluster: ? · Cost: S for the port · Gate: 0.2.10 for the port; the speedup later · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
+*Cluster: ? · Cost: S for the port · Gate: 0.2.11 (re-gated 2026-10-05: rendering paths, not in the week of the demo) for the port; the speedup later · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
 
 **Decided 2026-10-01: do the port, for 0.2.10** (maintainer). One resampler fewer is a maintainability gain
 in its own right, whatever the speed. The speedup half below stays open, for later.
@@ -5473,7 +5473,7 @@ as a safeguard or as a nuisance.
 
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
-*Cluster: performance · Cost: S · Gate: 0.2.10 if it investigates as S and breaks nothing; else later · Filed: 2026-08-14*
+*Cluster: performance · Cost: S · Gate: 0.2.11 (re-gated 2026-10-05: rendering paths, not in the week of the demo) if it investigates as S and breaks nothing; else later · Filed: 2026-08-14*
 
 `ThumbnailGrid.set_thumbnail` creates a **dynamic** DPG texture per thumbnail, so a Cherrypick folder of a
 few hundred images registers a few hundred of them. `raven.cherrypick.preload`'s own docstring records the

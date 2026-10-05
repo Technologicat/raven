@@ -525,3 +525,27 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **The dotted-name checker, done** (`scripts/check_dotted_names.py`, in CI): ten stale references fixed;
        names absent on purpose are marked `(planned)` or `(stale)` in place, a marker the maintainer chose
        over a path exemption, the history case being `(stale)` because some of those names never existed.
+     - **Open at the end of 2026-10-05, for the next session** (decided with the maintainer):
+       - **The reminder-placement probe is running** (`investigations/context-injects/reminder_placement.py`,
+         results in `reminder_placement.jsonl` beside it, a stream log too). Arms A (as shipped: the reminder
+         in the system message only when grounded) and C′ (the conditional wording in the probe, always on, as
+         the system prompt); C was skipped (maintainer). Five models, 84 turns each; the run resumes if
+         restarted. The positive control passed for "general" (A sends nothing, C′ its wording); check the
+         same for "absent" and "present" (A must carry its reminder). Not "What is 2+2?": `calculate`
+         grounds it, so it is "Who wrote Hamlet?". Then decide A or C′, implement the winner (S), and correct
+         the comments in `scaffold.py` and `chatutil.py` that put the 5–37× of Q4's *old* wording on "a
+         reminder sent with nothing to ground in"; Q4 measured today's wording clean in that condition.
+         Afterwards, reload qwen3.8-27b at 128k (`parallel` 1) on the personal machine: the probe unloads
+         every model it measured.
+       - **Then, in order:** Cherrypick's crown-in-compare; the avatar instance leaked by `sys.exit` on DPG's
+         callback thread in `_load_initial_animator_settings` (confirm how that thread handles `SystemExit`
+         first); the chat chip's hover cue if time allows. All three want a live check. The backdrop and the
+         thumbnail grid's textures are re-gated to 0.2.11.
+       - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
+         then the systems check.
+       - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;
+         the toggle row and the Chat graph checkbox moved today (maintainer).
+       - **`briefs/roadmap-overview-2026-10.md` stays put**: the gates are done, but the clusters have not
+         been read through for the autumn's overall priorities yet (maintainer).
+       - **After the event**: the per-document pass (built on `agent.ask_record`; `extract_fields.py` its first
+         user, the other `ask_record` scripts moved over after), the DPG glyph-race fix and upstream report.
