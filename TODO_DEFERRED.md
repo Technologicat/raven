@@ -3846,7 +3846,7 @@ Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juh
 
 ## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: ? · Gate: none — mitigated by the startup atlas refresh · Filed: 2026-07-19 · Updated: 2026-09-30*
+*Cluster: markdown-renderer · Cost: M (probe), then S (the DPG fix) · Gate: after the Yrityspäivä event · Filed: 2026-07-19 · Updated: 2026-10-05*
 
 **Not scheduled before the exhibit, though not ruled out either** (Juha, 2026-09-09): two and a half weeks
 left and a queue ahead of it, so it goes if there is time and not otherwise. The atlas hypothesis below predicts the outcome
@@ -3971,6 +3971,61 @@ Librarian, DPG 2.3.1, `--repl`. The avatar's subtitle font (font id 71, size 48,
   damage was confined to one font.
 - Probes in the session log only; the shape is the one above, `add_text` items in a DPG window bound to the
   font id, driven through `--repl`, screenshotted with `import -window` (no focus needed).
+
+**2026-10-05: a mechanism, read from DPG's and ImGui's source, that fits every sighting.** Not yet
+reproduced, so a hypothesis; but a specific one, and testable.
+
+- **The race.** DPG 2.3.1 on Linux (`src/mvViewport_linux.cpp`, `mvRenderFrame`) takes its context mutex
+  for `NewFrame` and for rendering the items, and releases it before `present()`
+  (`src/mvGraphics_linux.cpp`), which calls `ImGui::Render()` and `ImGui_ImplOpenGL3_RenderDrawData` with no
+  lock. The backend's `UpdateTexture` is where pending glyphs are uploaded: it walks `tex->Updates`, uploads
+  each rect, then sets the texture's status to OK.
+- **What a background measurement does meanwhile.** `dpg.get_text_size` holds the mutex, which excludes
+  nothing in `present()`. In ImGui 1.92 (DPG 2.3.1 pins 1.92.5, docking branch), `CalcTextSize` bakes a
+  glyph it has not seen, writing its pixels into the CPU-side atlas and queuing the rect
+  (`ImFontAtlasTextureBlockQueueUpload`: status to `WantUpdates`, rect appended to `tex->Updates`).
+- **The loss.** A rect queued after the backend's loop and before its `SetStatus(OK)` is left in a list now
+  marked done, and the next `NewFrame` (`ImFontAtlasUpdateNewFrame`) clears the list of any texture whose
+  status is OK. The glyph has its metrics, so it keeps its advance width, and never reaches the GPU: blank,
+  for the rest of the run.
+- **Why it fits.**
+  - Drawing the glyph again does not repair it: it is already baked, so nothing queues it again.
+  - A batch of new glyphs repairs it only when the batch makes the atlas *grow*: a grown atlas is a new
+    texture, created whole from the CPU pixels, lost glyph included. 2026-09-24's batch healed and
+    2026-10-02's did not, which fits a batch that grew the atlas and one that fit inside it.
+    `GlyphAtlasRefresh`'s repair is that accident.
+  - No usable rate: the window is microseconds per frame, and is hit only while a background thread is
+    measuring a glyph never seen at that size.
+  - Who measures off the render thread: `dpg_markdown`'s layout, from its worker thread (about twenty
+    `get_text_size` sites in the vendored renderer), and since 2026-10-01 the subtitle card cutter
+    (`avatar_controller`, `width_of`), which measures in the subtitle font as each sentence starts speaking
+    — the font of 2026-10-02's specimen, the first sighting outside the Markdown faces.
+- **A second hazard in the same window, unverified**: an append that reallocates `tex->Updates` while the
+  backend iterates it is a use-after-free rather than a blank glyph, which may bear on this cluster's
+  segfaults.
+- **Ruled out on the way**: GL pixel-store state left by other code (ImGui #8802) — 1.92.5's backend sets
+  `GL_UNPACK_ROW_LENGTH` and `GL_UNPACK_ALIGNMENT` itself before each upload, and DPG uses the stock
+  backend on Linux (FreeType only on Windows). No ImGui fix after 1.92.5 addresses this; the missing lock is
+  DPG's, so a newer ImGui would not help.
+- **Same signature elsewhere**: egui lost glyph-atlas deltas the same way, CPU-cached and never uploaded
+  ([rigstats #199](https://github.com/dvalfrid/rigstats/issues/199)); its workaround is a periodic forced
+  rebuild.
+
+**Decided** (Juha, 2026-10-05): **fix it in DPG, not around it in Raven.** A Raven-side lock around
+`render_dearpygui_frame()` plus a measuring wrapper would make every measurement wait for the frame to end,
+and the Markdown renderer is slow enough already; a lock in `present()` costs nothing comparable. Report
+upstream once we can reproduce it, fix it, and show the fix working. So:
+
+1. **A reproduction probe**: a background thread measuring text at sizes never used before (a new size bakes
+   every glyph anew) while the render loop runs, then the glyphs drawn and captured with
+   `dpg.output_frame_buffer` and blank cells counted. The negative control is the same run without the
+   thread. That gives the rate this bug has never had, which every fix needs to be measured against.
+2. **The fix**: the mutex taken in `present()` around the backend's render, built locally and run through
+   the probe.
+3. **Upstream**: an issue and a PR, with the probe's numbers before and after.
+
+Extending `GlyphAtlasRefresh` to every font an app loads (raised 2026-10-02) was dropped: it does not reach
+this mechanism, and heals only when its batch happens to grow the atlas.
 
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
 `--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can
