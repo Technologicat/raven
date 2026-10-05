@@ -178,6 +178,10 @@ _INDICATOR_MIN_SHOW_TIME = 0.5
 # How long an indicator saying "Done" stays up after its work ends, in seconds, however long the work took.
 _INDICATOR_DONE_LINGER = 0.5
 
+# The same for a closing line that reports something other than success ("No search needed"), which has more
+# to say and so more to read.
+_INDICATOR_NOTICE_LINGER = 2.0
+
 # Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
 # The set `llmtools.perform_tool_calls` runs one at a time, which is what keeps that light truthful.
 web_access_tool_names = llmclient.NETWORK_TOOL_NAMES
@@ -571,6 +575,15 @@ class DPGChatMessage:
                 #
                 # A marker, not a warning: on a general question this state is correct and expected, since
                 # no document database answers "what is 2+2?". Hence the muted colour rather than a red one.
+                # Said under the message for whoever reads the chat later; DOCUMENTS said it at the time.
+                if generation_metadata.get("docs_query_failed"):
+                    query_note = dpg.add_text("[no document search]",
+                                              color=(170, 145, 90),
+                                              parent=text_vertical_layout_group)
+                    query_tooltip = dpg.add_tooltip(query_note)
+                    dpg.add_text("The automatic search of your documents did not run before this reply:\n"
+                                 "the AI was asked for a search query, and gave no usable one.",
+                                 parent=query_tooltip)
                 if generation_metadata.get("grounded") is False:
                     grounding_marker = dpg.add_text("[no sources retrieved]",
                                                     color=(170, 145, 90),
@@ -4168,10 +4181,11 @@ class DPGChatController:
         dpg.set_value(self.docs_access_progress_text_widget, "")
         self.indicator_hold.show(self.docs_access_indicator_widget)
 
-    def _hide_docs_access_indicator(self) -> None:
-        """Hide DOCUMENTS, saying "Done" on its way out."""
-        dpg.set_value(self.docs_access_progress_text_widget, "Done")
-        self.indicator_hold.hide(self.docs_access_indicator_widget, linger=_INDICATOR_DONE_LINGER)
+    def _hide_docs_access_indicator(self, maybe_notice: str | None = None) -> None:
+        """Hide DOCUMENTS, saying "Done" on its way out, or `maybe_notice` for a longer while if given."""
+        dpg.set_value(self.docs_access_progress_text_widget, maybe_notice or "Done")
+        self.indicator_hold.hide(self.docs_access_indicator_widget,
+                                 linger=(_INDICATOR_NOTICE_LINGER if maybe_notice else _INDICATOR_DONE_LINGER))
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
@@ -4893,6 +4907,7 @@ class DPGChatController:
                         self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
                 def on_docs_start() -> None:
+                    task_env.docs_notice = None
                     if self.gui_updates_safe:
                         start_turn_data_eyes()
                         if self.indicator_glow_animation is not None:
@@ -4903,9 +4918,14 @@ class DPGChatController:
                     if self.gui_updates_safe:
                         dpg.set_value(self.docs_access_progress_text_widget, text)
 
+                def on_docs_query(status: str, maybe_query: str | None) -> None:
+                    # What DOCUMENTS says on its way out, when there was no search to report "Done" for.
+                    task_env.docs_notice = {"not_needed": "No search needed",
+                                            "failed": "No search: query failed"}.get(status)
+
                 def on_docs_done(matches: list[dict]) -> None:
                     if self.gui_updates_safe:
-                        self._hide_docs_access_indicator()
+                        self._hide_docs_access_indicator(getattr(task_env, "docs_notice", None))
                         stop_turn_data_eyes()
 
                 def on_llm_start(node_id: str) -> None:
@@ -5275,6 +5295,7 @@ class DPGChatController:
                 # override re-runs one denied tool call on a new branch, then continues via `ai_turn`.
                 common_callbacks = dict(on_docs_start=on_docs_start,
                                         on_docs_progress=on_docs_progress,
+                                        on_docs_query=on_docs_query,
                                         on_docs_done=on_docs_done,
                                         on_llm_start=on_llm_start,
                                         on_prompt_ready=on_prompt_ready,  # debug/info hook
@@ -5299,6 +5320,7 @@ class DPGChatController:
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=(docs_query if self.app_state["autosearch_enabled"] else None),
+                                                            write_docs_query=librarian_config.docs_query_written_by_model,
                                                             docs_num_results=librarian_config.docs_num_results,
                                                             thinking_enabled=self.app_state["thinking_enabled"],
                                                             maybe_abort=task_env.maybe_abort,

@@ -1,6 +1,7 @@
 """Unit tests for raven.librarian.scaffold (user_turn, ai_turn)."""
 
 import copy
+import json
 import threading
 
 import pytest  # noqa: F401 -- fixtures and marks below
@@ -71,10 +72,10 @@ def make_denial_response(host="blocked.com", tool_call_id="call_0"):
                tool_metadata={"webfetch_denied_host": host})
 
 
-def tool_call(name, call_id, index="0"):
+def tool_call(name, call_id, index="0", arguments="{}"):
     """An OpenAI-format tool call request, as it appears in an assistant message's `tool_calls`."""
     return {"type": "function",
-            "function": {"name": name, "arguments": "{}"},
+            "function": {"name": name, "arguments": arguments},
             "id": call_id,
             "index": index}
 
@@ -146,7 +147,7 @@ def populated_forest(llm_settings):
 
 
 # All callbacks that `ai_turn` accepts, in order.
-_AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_progress", "on_docs_done",
+_AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_progress", "on_docs_query", "on_docs_done",
                       "on_prompt_ready",
                       "on_llm_start", "on_llm_progress", "on_llm_done",
                       "on_tools_start",
@@ -162,6 +163,7 @@ def run_ai_turn(forest, llm_settings, head, *,
                 docs_query=None,
                 docs_num_results=None,
                 markup=None,
+                write_docs_query=False,
                 **callbacks):
     """Call `scaffold.ai_turn` with `None` defaults for unspecified callbacks."""
     cb_kwargs = {name: callbacks.get(name, None) for name in _AI_TURN_CALLBACKS}
@@ -175,6 +177,7 @@ def run_ai_turn(forest, llm_settings, head, *,
                             docs_query=docs_query,
                             docs_num_results=docs_num_results,
                             markup=markup,
+                            write_docs_query=write_docs_query,
                             **cb_kwargs)
 
 
@@ -2207,3 +2210,131 @@ class TestPromptAssemblyFromOutside:
         scaffold.build_turn_prompt(llm_settings=settings, history=history,
                                    docs_query=None, docs_matches=[], tool_context=tool_context)
         assert history == before
+
+
+class TestModelWrittenDocsQuery:
+    """`write_docs_query`: the model writes the automatic search's query, or says there should be none."""
+
+    MESSAGE = "Let's run a test: search the documents for airfoils, then fetch one."
+
+    @staticmethod
+    def _query_call(query):
+        """The answer the request asks for: a `search_documents` call carrying the query."""
+        return make_invoke_result(content="", tool_calls=[tool_call("search_documents", "call_0",
+                                                                    arguments=json.dumps({"query": query}))])
+
+    def _run(self, monkeypatch, llm_settings, populated_forest, query_answer, *, write_docs_query=True):
+        """Run a turn whose first request is the query request, answered by `query_answer` (an
+        `invoke` result, or an exception to raise). Returns `(forest, final_head, retriever, invocations,
+        query_events)`."""
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text=self.MESSAGE)
+        invocations = []
+
+        def fake_invoke(**kw):
+            invocations.append(kw)
+            if kw.get("purpose") == "search query":
+                if isinstance(query_answer, BaseException):
+                    raise query_answer
+                return query_answer
+            return make_invoke_result(content="Here is what I found.")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        retriever = FakeRetriever(results=[sample_rag_match()])
+        query_events = []
+        final_head = run_ai_turn(forest, llm_settings, user_head,
+                                 retriever=retriever,
+                                 docs_query=self.MESSAGE,
+                                 write_docs_query=write_docs_query,
+                                 on_docs_query=lambda status, maybe_query: query_events.append((status, maybe_query)))
+        return forest, final_head, retriever, invocations, query_events
+
+    def test_the_written_query_is_what_gets_searched(self, monkeypatch, llm_settings, populated_forest):
+        forest, final_head, retriever, invocations, query_events = self._run(
+            monkeypatch, llm_settings, populated_forest, self._query_call("airfoil stall"))
+        assert query_events == [("written", "airfoil stall")]
+        assert [call["q"] for call in retriever.calls] == ["airfoil stall"]
+        assert forest.get_payload(final_head)["retrieval"]["query"] == "airfoil stall"
+
+    def test_the_query_request_is_the_turns_prompt_with_the_message_replaced(self, monkeypatch, llm_settings, populated_forest):
+        _, _, _, invocations, _ = self._run(monkeypatch, llm_settings, populated_forest,
+                                            self._query_call("airfoil stall"))
+        query_request, reply_request = invocations[0], invocations[1]
+        assert query_request["purpose"] == "search query"
+        assert query_request["thinking_enabled"] is False
+        # The same tools as the reply's request, since they sit at the top of the prompt and a different
+        # list there would leave the backend nothing of its cache to reuse.
+        assert query_request["tool_names"] == reply_request["tool_names"]
+        assert query_request["tools_enabled"] == reply_request["tools_enabled"]
+        last = query_request["history"][-1]
+        assert last["role"] == "user"
+        text = chatutil.content_to_text(last["content"])
+        assert text.startswith(llm_settings.search_query_instruction)
+        assert self.MESSAGE in text, "the message is quoted after the instruction"
+        # Everything before the user's message is the reply's own prompt, up to where the search results go,
+        # except that the search's matches add the grounding reminder to the reply's system message. That one
+        # difference exists on a branch with nothing grounded before this turn, as this fixture is.
+        reply_history = reply_request["history"]
+        n_before_message = len(query_request["history"]) - 1
+        assert query_request["history"][1:n_before_message] == reply_history[1:n_before_message]
+        reminder = llm_settings.formatters.reminder_to_use_information_from_context_only()
+        query_system = chatutil.content_to_text(query_request["history"][0]["content"])
+        reply_system = chatutil.content_to_text(reply_history[0]["content"])
+        assert reminder not in query_system and reminder in reply_system, "fixture: the search should have grounded the reply"
+        assert reply_system.replace(reminder, "").rstrip() == query_system.rstrip()
+
+    def test_n_a_means_no_search(self, monkeypatch, llm_settings, populated_forest):
+        forest, final_head, retriever, _, query_events = self._run(
+            monkeypatch, llm_settings, populated_forest, make_invoke_result(content="N/A"))
+        assert query_events == [("not_needed", None)]
+        assert retriever.calls == []
+        assert "docs_query_failed" not in forest.get_payload(final_head)["generation_metadata"]
+
+    def test_a_query_of_n_a_is_still_a_query(self, monkeypatch, llm_settings, populated_forest):
+        # Only plain text means "no search"; "N/A" inside the call is something to search for.
+        forest, _, retriever, _, query_events = self._run(monkeypatch, llm_settings, populated_forest,
+                                                          self._query_call("N/A"))
+        assert query_events == [("written", "N/A")]
+        assert [call["q"] for call in retriever.calls] == ["N/A"]
+
+    def test_n_a_after_the_persona_is_still_n_a(self, monkeypatch, llm_settings, populated_forest):
+        persona = llm_settings.personas["assistant"]
+        _, _, retriever, _, query_events = self._run(monkeypatch, llm_settings, populated_forest,
+                                                     make_invoke_result(content=f"{persona}: N/A"))
+        assert query_events == [("not_needed", None)]
+        assert retriever.calls == []
+
+    def test_another_tool_means_no_search_rather_than_a_failure(self, monkeypatch, llm_settings, populated_forest):
+        # A follow-up naming a document already in the conversation wants it read, not searched for.
+        forest, final_head, retriever, _, query_events = self._run(
+            monkeypatch, llm_settings, populated_forest,
+            make_invoke_result(content="", tool_calls=[tool_call("fetch_document", "call_0")]))
+        assert query_events == [("not_needed", None)]
+        assert retriever.calls == []
+        assert "docs_query_failed" not in forest.get_payload(final_head)["generation_metadata"]
+
+    @pytest.mark.parametrize("answer", [make_invoke_result(content="", tool_calls=[tool_call("search_documents", "call_0")]),
+                                        make_invoke_result(content="airfoil stall"),
+                                        make_invoke_result(content="N/A Wait, I need to actually perform the search."),
+                                        make_invoke_result(content=""),
+                                        ConnectionError("backend went away")],
+                             ids=["a search with no query", "a query as text",
+                                  "deliberation after N/A", "nothing", "a backend error"])
+    def test_no_usable_query_means_no_search_and_a_note(self, monkeypatch, llm_settings, populated_forest, answer):
+        forest, final_head, retriever, _, query_events = self._run(monkeypatch, llm_settings, populated_forest, answer)
+        assert query_events == [("failed", None)]
+        assert retriever.calls == []
+        assert forest.get_payload(final_head)["generation_metadata"]["docs_query_failed"] is True
+
+    def test_a_stop_during_the_query_request_stops_the_turn(self, monkeypatch, llm_settings, populated_forest):
+        with pytest.raises(netutil.Aborted):
+            self._run(monkeypatch, llm_settings, populated_forest, netutil.Aborted())
+
+    def test_without_it_the_message_is_the_query(self, monkeypatch, llm_settings, populated_forest):
+        # The control: no query request at all, and the search runs on the message as given.
+        _, _, retriever, invocations, query_events = self._run(
+            monkeypatch, llm_settings, populated_forest, make_invoke_result(content="unused"), write_docs_query=False)
+        assert [kw.get("purpose", "turn") for kw in invocations] == ["turn"]
+        assert query_events == []
+        assert [call["q"] for call in retriever.calls] == [self.MESSAGE]

@@ -488,3 +488,21 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        prefill comparison with the `reasoning_effort` re-test and the tool-call budget probe, the dotted-name
        checker (lunch-break item), and the 0.2.10 leftovers (crown-in-compare; the backdrop and the thumbnail
        textures probably to 0.2.11).
+     - **The model-written query, built and checked live** (the automatic search's part 2, decided this
+       morning):
+       - **The model answers by calling `search_documents`**, which is not run: its `query` is what the
+         automatic search runs with. Asked for free text with the tool on offer, Qwen 3.8 either deliberated in
+         the reply (thinking off puts the hesitation there) or called the tool anyway, so the design follows its
+         pull (maintainer). Strict parsing: the call means a query, plain N/A means no search, other free text
+         is a failure. A query of "N/A" inside the call is searched for.
+       - **A call to any other tool means no search**, not a failure: on a follow-up naming a paper already
+         listed, it reached for `fetch_document`, which is the right move.
+         - **Not built, for later**: run that call as the turn's first round instead of discarding it. Only
+           worth it with Thinking off, where the reply's first round is just as unthought and would repeat the
+           same call; with Thinking on, re-asking lets that round think (maintainer).
+       - Timings by feel and from the log: 2.5–5.6 s for the query request, against the 30–60 s that 50
+         injected matches cost every turn; the prior held. Prefill and generation to be split in (f).
+       - **The grounding reminder sits in the system message**, so on a branch with nothing grounded before,
+         the first grounded turn reprocesses the whole conversation; pre-existing, and the query request does
+         not add to it. Moving the reminder to the per-turn injects would end it, but changes the inject shape
+         `investigations/context-injects/` measured: the maintainer's call, not yet made.

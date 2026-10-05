@@ -450,6 +450,25 @@ docs_num_results = 50
 # `TODO` above `_build_full_id_to_record_index` in `hybridir.py`.
 docs_max_result_length = 2000
 
+# Raven-librarian and Raven-minichat: How the automatic document search gets its query.
+#
+# `True`: the LLM writes it. Before the reply, one short extra request asks the model for a search query for
+# your latest message, with the conversation in view — or for "N/A" when the message needs nothing from the
+# documents, in which case there is no search. The request runs with thinking off, and shares everything up to
+# your message with the reply that follows, so a backend that caches prompts processes only the tail of it —
+# provided the model's thinking switch sits at the end of the prompt, as Qwen's does. Gemma 4's sits at the top
+# of the conversation, which makes this request cost a full prompt processing; consider `False` there.
+#
+# `False`: your latest message, as written, is the query. No extra request, but a message that is an
+# instruction rather than a question ("search the documents for airfoils, then fetch one") makes for a poor query.
+#
+# The instruction the model is given is `prompts/search_query.md`.
+docs_query_written_by_model = True
+
+# Most tokens the model may spend writing that query. A query is a line; this only stops a model that ignores
+# the instruction from writing an essay.
+docs_query_max_tokens = 64
+
 # How many previously consulted documents to list back to the LLM (`list_consulted_documents`).
 #
 # The automatic search injects its matches for one turn and then drops them, so a follow-up question

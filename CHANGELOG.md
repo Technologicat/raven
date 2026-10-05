@@ -20,6 +20,7 @@
 
 #### Raven-librarian
 
+- **The AI writes the query for the automatic document search**, from your message and the conversation, in a short extra request before replying. A message that needs nothing from the documents gets no search at all. Previously your whole message was the query. `docs_query_written_by_model` in `raven.librarian.config` switches back.
 - **Auto-search: the search of your documents before each reply can be switched off on its own** (`Alt+A`), beside *Documents*. With it off, the AI keeps its document tools and searches when you ask it to or when it sees the need, and a turn no longer waits for the prompt processing the injected matches cost. In `raven-minichat`, `!autosearch`.
 - **Ctrl+Shift+click on a message's copy button copies its node ID alone**, for reporting a message that misbehaves.
 - **Messages can be edited.**

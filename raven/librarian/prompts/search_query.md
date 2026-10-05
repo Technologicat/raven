@@ -1,0 +1,3 @@
+[System information: Before you answer, Raven runs an automatic search of {user}'s document database for material relevant to the message below, and gives you its results together with the message. Choose that search's query now, by calling `search_documents` with it: a few keywords or a short question covering what the message is asking about, with any names and references resolved from the conversation so far. If the message needs nothing from the documents — small talk, a general question, a task on material already in this conversation — reply with exactly N/A instead, and call no tool.]
+
+The message:

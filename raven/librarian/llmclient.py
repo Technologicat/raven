@@ -809,6 +809,7 @@ def configure(model_info: env,
     system_prompt = _setup_system_prompt(template_vars)
     character_card = _setup_character_card(template_vars)
     user_card = _setup_user_card(template_vars)
+    search_query_instruction = _format_prompt("search_query", template_vars)
     greeting = librarian_config.llm_greeting
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
@@ -869,6 +870,7 @@ def configure(model_info: env,
                    user_card=user_card,
                    stopping_strings=stopping_strings,
                    greeting=greeting,
+                   search_query_instruction=search_query_instruction,  # what the automatic search's query is written from; see `scaffold.ai_turn`
                    tools=TOOLS,  # for inspection
                    tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
                    document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database

@@ -197,6 +197,101 @@ def _search_docs(retriever: "hybridir.HybridIR",
                            return_extra_info=False,
                            on_progress=on_progress)
 
+def _write_docs_query(llm_settings: env,
+                      datastore: chattree.Forest,
+                      head_node_id: str,
+                      tool_context: env,
+                      maybe_tool_names: Collection[str] | None,
+                      tools_enabled: bool,
+                      use_character_card: bool,
+                      maybe_abort: netutil.Abort | None) -> tuple[str, str | None]:
+    """Helper for `ai_turn`. Ask the model for the automatic document search's query; return `(status, maybe_query)`.
+
+    `status` is `"written"` (with the query, which the model gives by calling `search_documents`),
+    `"not_needed"` (the model answered N/A, or called some other tool: no search this turn), or `"failed"` (no
+    usable answer: a backend error, a search with no query, or text other than N/A).
+
+    The request is the turn's own prompt with the latest user message replaced by the instruction in
+    `prompts/search_query.md`, the message quoted after it. Only on the wire; the datastore is untouched.
+    `netutil.Aborted` is raised through, being the user's Stop rather than a failure.
+    """
+    # Everything above the user's message is the prompt the reply will be sent - the same injects in the same
+    # order, and the same tools, which sit at the very top - so a backend that caches prompts reuses all of it.
+    # Thinking off. Where the chat template puts that switch decides what it costs: Qwen's sits at the end of
+    # the prompt and costs nothing of the cache, while Gemma 4's sits at the top of the conversation, so there
+    # this request is processed whole.
+    history = build_turn_prompt(llm_settings=llm_settings,
+                                history=chatutil.linearize_chat(datastore=datastore, node_id=head_node_id),
+                                docs_query=None,
+                                docs_matches=[],
+                                tool_context=tool_context,
+                                tools_are_spent=False,
+                                tools_enabled=tools_enabled,
+                                use_character_card=use_character_card)
+    for position in range(len(history) - 1, -1, -1):
+        if history[position]["role"] == "user":
+            break
+    else:
+        logger.warning("_write_docs_query: no user message to write a query for.")
+        return ("failed", None)
+    message_text = chatutil.content_to_text(history[position]["content"])
+    instruction = f"{llm_settings.search_query_instruction}\n\n> " + "\n> ".join(message_text.splitlines())
+    history[position] = {"role": "user", "content": [chatutil.text_content_part(instruction)]}
+
+    try:
+        out = llmclient.invoke(settings=llm_settings,
+                               history=history,
+                               tools_enabled=tools_enabled,
+                               tool_names=maybe_tool_names,
+                               thinking_enabled=False,
+                               max_tokens=librarian_config.docs_query_max_tokens,
+                               datastore=datastore,
+                               calibrate=False,
+                               maybe_abort=maybe_abort,
+                               purpose="search query")
+    except netutil.Aborted:
+        raise
+    except Exception as exc:
+        logger.warning(f"_write_docs_query: the request failed: {type(exc)}: {exc}")
+        return ("failed", None)
+    # The query arrives as a `search_documents` call, which the model is asked for: the tool is in the
+    # request anyway, and a model offered a search tool reaches for it, so the answer goes the way it pulls.
+    # The call is not run; its query is what the automatic search runs with. A call to any *other* tool is the
+    # model saying it has a better move than a search (reading a document the conversation already named,
+    # say), and the reply's own round can make it, so that means no search rather than a failure; the call is
+    # not run here either, being unthought. Free text other than N/A is no usable answer: with thinking off,
+    # that is where a model that hesitates does its deliberating.
+    for tool_call in out.data.get("tool_calls") or []:
+        function = tool_call.get("function") or {}
+        if function.get("name") != "search_documents":
+            continue
+        arguments = function.get("arguments") or {}
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments)
+            except json.JSONDecodeError:
+                arguments = {}
+        query = " ".join(str(arguments.get("query", "")).split()) if isinstance(arguments, dict) else ""
+        if not query:
+            logger.warning("_write_docs_query: the model called `search_documents` with no query.")
+            return ("failed", None)
+        logger.info(f"_write_docs_query: query '{query}'")
+        return ("written", query)
+    if out.data.get("tool_calls"):
+        names = [(tool_call.get("function") or {}).get("name", "?") for tool_call in out.data["tool_calls"]]
+        logger.info(f"_write_docs_query: the model reached for {', '.join(names)} rather than a search; no search this turn.")
+        return ("not_needed", None)
+    text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                          text=chatutil.content_to_text(out.data["content"]),
+                          thoughts_mode="discard",
+                          markup=None,
+                          add_persona=False).strip()
+    if text.rstrip(".").upper() == "N/A":
+        logger.info("_write_docs_query: the model says this message needs no search.")
+        return ("not_needed", None)
+    logger.warning(f"_write_docs_query: no query and no N/A; the model wrote: '{text[:200]}'")
+    return ("failed", None)
+
 def _grounding_was_declared(content: list[dict],
                             maybe_metadata: dict | None) -> bool:
     """Whether one tool result counts as material to answer from, per what produced it.
@@ -905,6 +1000,7 @@ def ai_turn(llm_settings: env,
             markup: str | None,
             on_docs_start: Callable | None,
             on_docs_progress: Callable | None,
+            on_docs_query: Callable | None,
             on_docs_done: Callable | None,
             on_prompt_ready: Callable | None,
             on_llm_start: Callable | None,
@@ -920,7 +1016,8 @@ def ai_turn(llm_settings: env,
             tools_enabled: bool = True,
             thinking_enabled: bool = True,
             maybe_abort: netutil.Abort | None = None,
-            use_character_card: bool = True) -> str:
+            use_character_card: bool = True,
+            write_docs_query: bool = False) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -971,6 +1068,9 @@ def ai_turn(llm_settings: env,
                   a warning will be logged every time `docs_query` is supplied (because a query requires
                   a retriever).
 
+                  With `write_docs_query`, this is the message the query is written *for* rather than the
+                  query itself.
+
     `docs_num_results`: How many `docs_query` results to return, at most. Used only if `docs_query` is supplied.
 
                         If not supplied, use the default of `_search_docs`, which see.
@@ -997,6 +1097,15 @@ def ai_turn(llm_settings: env,
 
                         Called while the document database is being searched, between `on_docs_start` and
                         `on_docs_done`.
+
+    `on_docs_query`: 2-argument callable, with arguments `status: str, maybe_query: str | None`. The return
+                     value is ignored.
+
+                     Called once the model has answered the request for a query, before any search; only with
+                     `write_docs_query`. `status` is `"written"` (with the query, which the search then runs),
+                     `"not_needed"` (the model said the message needs no search, or reached for another
+                     tool instead, and none runs), or `"failed"`
+                     (no usable answer, and no search runs). Between `on_docs_start` and `on_docs_done`.
 
     `on_docs_done`: 1-argument callable, with argument `matches: list[dict]`. For the exact format,
                     see `raven.librarian.hybridir.HybridIR.query`; this is the return value from that.
@@ -1160,6 +1269,12 @@ def ai_turn(llm_settings: env,
 
                    `None` (default) means the turn runs to completion once started.
 
+    `write_docs_query`: Whether the model writes the automatic search's query from `docs_query` and the
+                        conversation, in one short request with thinking off before the reply; see
+                        `on_docs_query` for what can come of it. `False` (default) searches with
+                        `docs_query` as given. A query that could not be written means no search this turn,
+                        and the reply records `docs_query_failed` in its `generation_metadata`.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Sanity check
@@ -1172,24 +1287,6 @@ def ai_turn(llm_settings: env,
 
     documents_available = docs_enabled and retriever is not None
 
-    # Search document database if requested
-    if documents_available and docs_query is not None:
-        _notify("on_docs_start", on_docs_start)
-        docs_matches = []  # bound before the `try` so the `finally` can report it even if the search raises
-        try:
-            docs_matches = _search_docs(retriever=retriever,
-                                        query=docs_query,
-                                        k=docs_num_results,
-                                        on_progress=lambda text: _notify("on_docs_progress", on_docs_progress, text))
-        finally:
-            # Ensure `on_docs_done` always fires - including when the search raises mid-flight - so GUI
-            # state (e.g. `_docs_reading`) recovers cleanly.
-            _notify("on_docs_done", on_docs_done, docs_matches)
-    else:
-        if retriever is None and docs_query is not None:
-            logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
-        docs_matches = []
-
     if tool_context is None:  # normal case; `retry_tool_calls` passes the context it already started
         # The retriever goes in only when the documents are actually in play, so that its presence is the
         # single gate the document tools read. Fails closed: a model that calls a tool we did not advertise
@@ -1198,19 +1295,6 @@ def ai_turn(llm_settings: env,
                                          retriever=(retriever if documents_available else None))
         # Material an earlier turn's tools brought in is still sitting in the context, so it still grounds.
         tool_context.grounded = _branch_grounding_is_present(datastore, head_node_id)
-    if docs_matches:  # the auto-search grounds this turn as much as a tool call would
-        tool_context.grounded = True
-
-    # What this branch has already read, for the model to ask about and for the inject to push. Computed
-    # once per turn, from the branch as it stood when the turn began: a document a tool reaches for later in
-    # this same turn is still written out in full further down the history, so listing it as well would say
-    # the same thing twice in the one place that has to stay compact.
-    if documents_available:
-        tool_context.consulted_documents = llmclient.label_documents(
-            retriever,
-            _collect_consulted_documents(datastore=datastore,
-                                         head_node_id=head_node_id,
-                                         exclude_document_ids=[match["document_id"] for match in docs_matches]))
 
     # Which tools to offer this turn (`None` = all of them; see the helper for why that reading is the
     # permissive one). Shared with the GUI's context prefill, which must warm the same list.
@@ -1226,10 +1310,64 @@ def ai_turn(llm_settings: env,
     # combination of the two that means "no tools at all".
     any_tools_available = tools_enabled and ((maybe_tool_names is None) or bool(maybe_tool_names))
 
+    # Search the document database if requested. With `write_docs_query`, the model first writes the query
+    # from `docs_query` and the conversation, or says the message needs no search.
+    docs_query_status = None
+    docs_matches = []  # bound before the `try` so the `finally` can report it even if the search raises
+    if documents_available and docs_query is not None:
+        _notify("on_docs_start", on_docs_start)
+        try:
+            if write_docs_query:
+                _notify("on_docs_progress", on_docs_progress, "Writing a query…")
+                # The list the reply's prompt will carry is only known after the search, which removes from
+                # it what the search found; this one is what the conversation held before. They usually
+                # agree, and where they do not, the cached prefix ends at that inject rather than at the
+                # user's message.
+                tool_context.consulted_documents = llmclient.label_documents(
+                    retriever, _collect_consulted_documents(datastore=datastore,
+                                                            head_node_id=head_node_id,
+                                                            exclude_document_ids=[]))
+                docs_query_status, docs_query = _write_docs_query(llm_settings=llm_settings,
+                                                                  datastore=datastore,
+                                                                  head_node_id=head_node_id,
+                                                                  tool_context=tool_context,
+                                                                  maybe_tool_names=maybe_tool_names,
+                                                                  tools_enabled=any_tools_available,
+                                                                  use_character_card=use_character_card,
+                                                                  maybe_abort=maybe_abort)
+                _notify("on_docs_query", on_docs_query, docs_query_status, docs_query)
+            if docs_query is not None:
+                docs_matches = _search_docs(retriever=retriever,
+                                            query=docs_query,
+                                            k=docs_num_results,
+                                            on_progress=lambda text: _notify("on_docs_progress", on_docs_progress, text))
+        finally:
+            # Ensure `on_docs_done` always fires - including when the search raises mid-flight - so GUI
+            # state (e.g. `_docs_reading`) recovers cleanly.
+            _notify("on_docs_done", on_docs_done, docs_matches)
+    elif retriever is None and docs_query is not None:
+        logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
+
+    if docs_matches:  # the auto-search grounds this turn as much as a tool call would
+        tool_context.grounded = True
+
+    # What this branch has already read, for the model to ask about and for the inject to push. Computed
+    # once per turn, from the branch as it stood when the turn began: a document a tool reaches for later in
+    # this same turn is still written out in full further down the history, so listing it as well would say
+    # the same thing twice in the one place that has to stay compact.
+    if documents_available:
+        tool_context.consulted_documents = llmclient.label_documents(
+            retriever,
+            _collect_consulted_documents(datastore=datastore,
+                                         head_node_id=head_node_id,
+                                         exclude_document_ids=[match["document_id"] for match in docs_matches]))
+
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     completed_tool_rounds = 0  # rounds in which tools actually ran
+    round_index = -1  # of this round in the turn, from 0; counted at the top of the loop
     refused_tool_rounds = 0  # rounds declined because the budget was already spent
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
+        round_index += 1
         # Backstop against a model that keeps rephrasing a search that keeps finding nothing. Past the cap
         # the tools stay in the schema and any call is *refused* instead: changing the loadout mid-turn
         # invalidates the backend's KV cache from that point on, and a history calling a tool the current
@@ -1417,6 +1555,9 @@ def ai_turn(llm_settings: env,
             makes_claims = bool(chatutil.content_to_text(out.data["content"]).strip())
             if (documents_available or internet_enabled or attachment_grounds) and makes_claims:
                 payload["generation_metadata"]["grounded"] = bool(tool_context.grounded or attachment_grounds)
+            # The first message of the turn says so, being where the search would have gone; once is enough.
+            if docs_query_status == "failed" and round_index == 0:
+                payload["generation_metadata"]["docs_query_failed"] = True
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,
                                         "results": docs_matches}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
@@ -1490,6 +1631,7 @@ def retry_tool_calls(llm_settings: env,
                      maybe_abort: netutil.Abort | None = None,
                      on_docs_start: Callable | None = None,
                      on_docs_progress: Callable | None = None,
+                     on_docs_query: Callable | None = None,
                      on_docs_done: Callable | None = None,
                      on_prompt_ready: Callable | None = None,
                      on_llm_start: Callable | None = None,
@@ -1610,6 +1752,7 @@ def retry_tool_calls(llm_settings: env,
                    maybe_abort=maybe_abort,
                    on_docs_start=on_docs_start,
                    on_docs_progress=on_docs_progress,
+                   on_docs_query=on_docs_query,
                    on_docs_done=on_docs_done,
                    on_prompt_ready=on_prompt_ready,
                    on_llm_start=on_llm_start,

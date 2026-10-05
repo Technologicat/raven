@@ -291,6 +291,7 @@ def turn(llm_settings: env,
          docs_enabled: bool = True,
          on_progress: Callable | None = None,
          docs_query: str | None | sym = from_user_message,
+         write_docs_query: bool = False,
          docs_num_results: int | None = None,
          continue_: bool = False,
          markup: str | None = None) -> TurnRecord:
@@ -458,6 +459,11 @@ def turn(llm_settings: env,
                   still offering the document tools — the shape a continuation turn has, and the control
                   arm for measuring what the automatic search is worth.
 
+    `write_docs_query`: Whether the model writes the search query from `docs_query` first, as the apps do
+                        when `librarian_config.docs_query_written_by_model` is on; see `scaffold.ai_turn`.
+                        `False` (default) searches with `docs_query` as given, so a script decides its own
+                        query unless it asks otherwise.
+
     `on_progress`: Called while the model streams, with a typed event — see `llmclient.invoke`'s
                    `on_progress`, which this becomes. `None` (default) is silence.
 
@@ -542,9 +548,10 @@ def turn(llm_settings: env,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,
                                      docs_query=docs_query,
+                                     write_docs_query=write_docs_query,
                                      docs_num_results=docs_num_results,
                                      markup=markup,
-                                     on_docs_start=None, on_docs_progress=None, on_docs_done=None,
+                                     on_docs_start=None, on_docs_progress=None, on_docs_query=None, on_docs_done=None,
                                      on_prompt_ready=prompts.append,
                                      on_llm_start=None, on_llm_progress=on_progress, on_llm_done=None,
                                      on_tools_start=None,

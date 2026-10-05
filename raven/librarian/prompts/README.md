@@ -12,6 +12,7 @@ copy of the original. Raven logs which one it loaded, at INFO.
 |---|---|
 | `system.md` | Instructions that hold regardless of who or what is at either end of the conversation. Ships **empty** — see below. |
 | `interaction.md` | The shared half of every character card: the facts about the deployment, and how to behave. Spliced into a character's own card wherever it writes `{interaction}`. |
+| `search_query.md` | The instruction that asks the model for the automatic document search's query, sent in place of your latest message on that one request. Your message is appended after it, quoted. |
 
 **Neither participant's own card is here**, because each travels with whoever it describes:
 

@@ -604,6 +604,15 @@ def minimal_chat_client(backend_url) -> None:
             node_id_history = datastore.linearize_up(app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(node_id_history)
 
+            def on_docs_query(status: str, maybe_query: str | None) -> None:
+                if status == "written":
+                    print(colorizer.colorize(f"[searching the documents for: {maybe_query}]", colorizer.Style.DIM))
+                elif status == "not_needed":
+                    print(colorizer.colorize("[no document search: the AI judged this message needs none]", colorizer.Style.DIM))
+                else:
+                    print(colorizer.colorize("[no document search: the search query could not be written]",
+                                             colorizer.Style.DIM, colorizer.Fore.YELLOW))
+
             def on_llm_start(node_id: str) -> None:
                 # The node id is what a frontend that re-reads the chat needs; a terminal prints as the
                 # text arrives and never looks back, so it wants only the header.
@@ -704,11 +713,13 @@ def minimal_chat_client(backend_url) -> None:
                                                 internet_enabled=app_state["internet_enabled"],
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=(docs_query if app_state["autosearch_enabled"] else None),
+                                                write_docs_query=librarian_config.docs_query_written_by_model,
                                                 docs_num_results=librarian_config.docs_num_results,
                                                 thinking_enabled=app_state["thinking_enabled"],
                                                 markup="ansi",
                                                 on_docs_start=None,
                                                 on_docs_progress=None,
+                                                on_docs_query=on_docs_query,
                                                 on_docs_done=None,
                                                 on_llm_start=on_llm_start,
                                                 on_prompt_ready=None,  # debug/info hook
