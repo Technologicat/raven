@@ -3663,8 +3663,10 @@ def app_shutdown() -> None:
     if avatar_instance_id is not None:
         try:
             api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
+            logger.info(f"app_shutdown: unloaded avatar instance {avatar_instance_id}")
         except requests.exceptions.ConnectionError:  # server has gone bye-bye
-            pass
+            logger.warning(f"app_shutdown: server unreachable, so avatar instance {avatar_instance_id} was not unloaded. "
+                           f"Harmless if the server has stopped; if it is still running, it keeps the instance until restarted.")
     logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
 
@@ -3692,11 +3694,12 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=lambda path: (o
 
 # Load default animator settings from disk. A step of `_finish_startup`.
 _animator_settings = None
-def _load_initial_animator_settings() -> None:
+def _load_initial_animator_settings() -> bool:
+    """Return whether the app can go on; on `False` it should quit, the error having been reported."""
     global _animator_settings
 
     if _shutting_down:  # window closed before this deferred startup callback even started
-        return
+        return True
 
     animator_json_path = avatar.assets_path("settings", "animator.json")
 
@@ -3706,11 +3709,11 @@ def _load_initial_animator_settings() -> None:
     except FileNotFoundError:
         print(colorizer.colorize(f"AI avatar animator default config file not found at '{animator_json_path}'.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Please run `raven-avatar-settings-editor` once to create it.")
         logger.error(f"_load_initial_animator_settings: AI avatar animator default config file not found at '{animator_json_path}'. Please run `raven-avatar-settings-editor` once to create it.")
-        sys.exit(255)
+        return False
     except BaseException:  # yes, also Ctrl+C
         print(colorizer.colorize("Failed to load AI avatar animator default config file.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " See the Librarian log for details.")
         logger.exception("_load_initial_animator_settings: Failed")
-        sys.exit(255)
+        return False
 
     animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)
     # Sized to the panel from the start, so the server is not first set up at a size the resize below would change.
@@ -3724,7 +3727,7 @@ def _load_initial_animator_settings() -> None:
     # may have closed the window while we were here. Everything below starts the avatar and creates DPG widgets
     # (e.g. `configure_backdrop` -> `add_raw_texture`); doing that against a context being torn down segfaults.
     if _shutting_down:
-        return
+        return True
 
     # Through the controller rather than straight at the API, so that it knows what the avatar's settings
     # are. Anything that changes them *temporarily* - the branch-switch glitch - has to put them back, and
@@ -3738,6 +3741,7 @@ def _load_initial_animator_settings() -> None:
                                            new_blur_state=animator_settings["backdrop_blur"])
     _animator_settings = animator_settings  # for access from GUI event handlers
     _resize_gui()  # force GUI resize just in case (app startup on 1920x1080 screen)
+    return True
 
 def _build_initial_chat_view() -> None:
     """Build the chat log, and put the keyboard where `startup_keyboard_home` says. A step of `_finish_startup`."""
@@ -3865,7 +3869,16 @@ def _finish_startup(sender, app_data) -> None:
     # One callback rather than one frame each: frame callbacks all run on DPG's single callback thread, so a
     # later one could not start before an earlier one returned anyway, and separate numbers only spread the
     # order across the file.
-    _load_initial_animator_settings()  # the avatar's settings, its stream, and the backdrop
+    if not _load_initial_animator_settings():  # the avatar's settings, its stream, and the backdrop
+        # Quit through the render loop, as a window close does, so that the main thread's teardown runs and
+        # releases the avatar instance. Not `sys.exit`: on this thread DPG hands the `SystemExit` to
+        # `PyErr_Print`, which begins interpreter finalization here, and that blocks for good waiting on the
+        # main thread — taking DPG's only callback thread with it, so the app runs on with no callbacks and
+        # hangs in `destroy_context` when closed.
+        global exitcode
+        exitcode = 255
+        dpg.stop_dearpygui()
+        return
 
     # Before the chat view, which is the slow step: the watch decides the panel's occupant, and until the
     # stream's first frame that is the chat graph. It is also what puts the graph back if the user left it

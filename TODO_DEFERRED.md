@@ -5753,51 +5753,6 @@ roadmap. Wanted this year; can wait until after the exhibit.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
-## Librarian leaks its server-side avatar instance when it doesn't exit normally
-
-*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29*
-
-Librarian releases its avatar instance in `app_shutdown` (`raven/librarian/app.py`), which is registered with
-`atexit`. That covers the normal exit, but `atexit` handlers run only when the interpreter shuts down cleanly —
-so every abnormal exit leaves an orphaned instance on the server, holding VRAM and a render slot until the
-server process is restarted. Observed: seven stale instances accumulated on the server during one session of
-GUI testing.
-
-Two paths reach it, and the first is by far the common one:
-
-- **A signal kills the process.** Librarian installs no `signal` handlers at all, so `SIGTERM` (plain `kill`,
-  a session manager logging out, a supervisor stopping the app) terminates it at the C level with no Python
-  cleanup — `app_shutdown` never runs. **Nor does anything else in the constellation** (checked 2026-09-03:
-  no `import signal` and no `signal.signal` anywhere under `raven/`), which says where the fix goes — the
-  shared two-phase shutdown helper this cluster already wants, rather than a handler per app. This is what produced the seven instances: the test-harness `kill`s
-  during this session.
-
-  **Answered and fixed 2026-09-03.** The 2026-08-04 report — a plain `kill` did *nothing*, no shutdown, no
-  exit, no log output, the process alive eight minutes later — was accurate, and the culprit was **SDL**.
-  It installs its own `SIGINT` and `SIGTERM` handlers when it initializes, and `pygame.mixer.init()` alone
-  is enough (measured); SDL's handler pushes a quit event onto the SDL event queue, which Raven never pumps,
-  using SDL for audio only. So the signal was caught and discarded. `raven.common.audio.player` now sets
-  `SDL_NO_SIGNAL_HANDLERS` before importing pygame — the hint rather than installing over SDL afterwards,
-  because `set_frequency` re-initializes the mixer at runtime and SDL reinstalls its handlers each time —
-  and `raven.common.quitsignal` installs a handler that asks the render loop to stop, so the ordinary
-  teardown runs. `SIGINT` needed nothing: CPython's handler survives SDL, and the loops already catch
-  `KeyboardInterrupt`.
-
-  **Every GUI app is wired since 2026-10-01**, and a test in `raven/common/tests/test_quitsignal.py` finds
-  any render loop without it. A signal now takes the same path as a window close, which is only as sound
-  as each app's teardown — the audit this cluster's shared-helper item is for.
-- **`sys.exit` from a non-main thread.** `_load_initial_animator_settings` calls `sys.exit(255)` on two error
-  paths, and by its own comment it runs on DPG's callback thread. `sys.exit` outside the main thread raises
-  `SystemExit` in *that* thread only, so it neither runs `atexit` nor actually exits the process. Both paths
-  are reached after `avatar_instance_id` is assigned, so both leak. (That this leaves the process running
-  rather than exiting is inferred from how `SystemExit` propagates out of a worker thread; worth confirming
-  against DPG's callback dispatch before fixing, since the fix differs depending on the answer.)
-
-Worth keeping the unload best-effort in either case — the server may legitimately be gone first, which
-`app_shutdown` already handles by swallowing `ConnectionError`.
-
-Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
-
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
 *Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`", "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14"*

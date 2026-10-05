@@ -111,6 +111,7 @@
 #### Raven-librarian
 
 - **The chat log no longer jumps while the AI is writing.** Each update to the paragraph being written removed it and drew it again, so for a frame the log was shorter and the text below sprang down and back. The updated paragraph now replaces the old one in the same frame.
+- **A missing or unreadable avatar settings file now ends the app cleanly.** In v0.2.9 the app reported the error and then ran on with every button dead, hung when closed, and left its avatar on the server until the server was restarted. It now exits with status 255, releasing the avatar.
 - **A failed web search or fetch no longer counts as material retrieved.** A refused, timed-out or unreadable fetch, and a search with no results or no answer from the engine, left a reply without its [no sources retrieved] marker, and the AI was asked to base its claims on material that was not there.
 - **Subtitles follow the window's size.** In v0.2.9 they kept the width of the window the app started in, so after going fullscreen they stayed narrow, even for a reply spoken again. A resize now applies from the next sentence.
 - **The DOCUMENTS indicator lights while the AI searches the document database itself or reads a document from it**, as it does for the automatic search. In v0.2.9 it stayed dark for everything the AI did there on its own.
