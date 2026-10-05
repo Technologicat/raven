@@ -1680,6 +1680,7 @@ def api_webfetch():
 
         {"content": "...",        # extracted text/markdown, or a canonical user-facing message for a refusal/limit
          "url": "...",            # the effective URL after rewriting (e.g. arXiv abstract -> HTML form)
+         "fetched": true,         # true if "content" is the page's own content; false for a refusal/limit
          "spaSuspected": false,   # true if neither fetch tier could extract usable content
          "title": "..."}          # the page title on a successful fetch; null for a refusal or a titleless page
 

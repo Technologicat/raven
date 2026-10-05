@@ -907,8 +907,9 @@ def webfetch_fetch(url: str, output_format: str = "markdown",
     two-tier fetch (requests + readability, then a headless browser for JS-rendered pages),
     SSRF / scheme blocking, URL rewriting, and content normalization.
 
-    Returns the server's result dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
-    `content` is the extracted text (or a canonical user-facing message for a refusal / limit).
+    Returns the server's result dict `{"content": str, "url": str, "fetched": bool, "spaSuspected": bool,
+    "title": str | None}`. `content` is the extracted text (or a canonical user-facing message for a refusal /
+    limit), and `fetched` says which.
     `title` is the page title on a successful fetch, `None` for a refusal or a titleless page.
 
     `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`. Its read

@@ -167,6 +167,7 @@ class TestFetchOutcome:
         result = webfetch.fetch("https://slow.example/p")
         assert result["content"] == webfetch.CANONICAL_PAGE_TIMEOUT.format(url="https://slow.example/p")
         assert not result["spaSuspected"]
+        assert result["fetched"] is False
 
     def test_a_page_that_loaded_empty_is_still_a_js_only_page(self, monkeypatch, short_tier1):
         # The control for the one above: the same fixture, and only the Tier 2 outcome differs.
@@ -174,6 +175,7 @@ class TestFetchOutcome:
         result = webfetch.fetch("https://spa.example/p")
         assert result["content"] == webfetch.CANONICAL_SPA_SUSPECTED
         assert result["spaSuspected"]
+        assert result["fetched"] is False
 
     def test_a_server_with_no_browser_says_so(self, monkeypatch, short_tier1):
         # Rather than the JS-only notice, which would blame the site for what the server lacks.
@@ -183,6 +185,15 @@ class TestFetchOutcome:
         result = webfetch.fetch("https://spa.example/p")
         assert result["content"] == webfetch.CANONICAL_NO_BROWSER.format(url="https://spa.example/p")
         assert not result["spaSuspected"]
+        assert result["fetched"] is False
+
+    def test_only_the_page_itself_is_fetched(self, monkeypatch, short_tier1):
+        # The control for the notices above: `fetched` is how the client tells the page from a notice about it.
+        page = "The page's own words. " * 100
+        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format, is_cancelled, on_progress: page)
+        result = webfetch.fetch("https://spa.example/p")
+        assert result["content"] == page
+        assert result["fetched"] is True
 
     def test_a_cancelled_fetch_never_starts_the_browser(self, monkeypatch, short_tier1):
         started = []

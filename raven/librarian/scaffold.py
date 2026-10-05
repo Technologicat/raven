@@ -1400,11 +1400,11 @@ def ai_turn(llm_settings: env,
             # Record whether this reply had anything to stand on besides the model's own knowledge, so the
             # GUI can say so.
             #
-            # Only recorded when the documents are in play, and that condition is the whole content of the
-            # marker's honesty: with documents switched off, "no sources retrieved" would announce what the
-            # user just chose, and the state that is actually worth reporting - documents on, nothing came
-            # back - would be indistinguishable from it. An attachment still grounds a reply either way, so
-            # it is read regardless. Absent means "nothing to say", which beats a third state.
+            # Only recorded when a source is in play - the documents or the internet - and that condition is
+            # the whole content of the marker's honesty: with both switched off, "no sources retrieved" would
+            # announce what the user just chose, and the state that is actually worth reporting - a source on,
+            # nothing came back - would be indistinguishable from it. An attachment still grounds a reply
+            # either way, so it is read regardless. Absent means "nothing to say", which beats a third state.
             #
             # And only on a message with text. One that only asks for tools makes no claims, so "nothing
             # retrieved" would be true of it and say nothing. One that answers in part *and* asks for more
@@ -1415,7 +1415,7 @@ def ai_turn(llm_settings: env,
             # "what is 2+2?" with "No matches in document database."
             attachment_grounds = _attachment_is_present(message_history)
             makes_claims = bool(chatutil.content_to_text(out.data["content"]).strip())
-            if (documents_available or attachment_grounds) and makes_claims:
+            if (documents_available or internet_enabled or attachment_grounds) and makes_claims:
                 payload["generation_metadata"]["grounded"] = bool(tool_context.grounded or attachment_grounds)
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,

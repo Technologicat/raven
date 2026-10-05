@@ -55,7 +55,7 @@ def fake_fetch(monkeypatch):
 
     def _fake(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
         fetched_urls.append(url)
-        return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
+        return {"content": f"CONTENT of {url}", "url": url, "fetched": True, "spaSuspected": False, "title": f"TITLE of {url}"}
 
     monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
     return fetched_urls
@@ -125,7 +125,7 @@ class TestWebfetchWrapperGating:
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
             text, metadata = llmclient.webfetch("https://evil.com/x")  # denial returns (text, metadata)
         assert "not on the configured allowlist" in text
-        assert metadata == {"webfetch_denied_host": "evil.com"}  # structured marker for the GUI override
+        assert metadata == {"webfetch_denied_host": "evil.com", "grounding": False}  # structured marker for the GUI override
         assert fake_fetch == []  # the request never reached the server
 
     def test_auto_allowed_host_fetches(self, monkeypatch, fake_fetch):
@@ -142,7 +142,7 @@ class TestWebfetchWrapperGating:
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         text, metadata = llmclient.webfetch("https://surprise.com/x")
         assert "not on the configured allowlist" in text
-        assert metadata == {"webfetch_denied_host": "surprise.com"}
+        assert metadata == {"webfetch_denied_host": "surprise.com", "grounding": False}
         assert fake_fetch == []
 
     def test_canonical_refusal_names_the_host(self, monkeypatch, fake_fetch):
@@ -319,15 +319,26 @@ class TestWebfetchResultHeader:
         assert "**TITLE of https://x.example/p**" in text
         assert text.rstrip().endswith("CONTENT of https://x.example/p")
 
+    def test_only_a_fetched_page_is_grounding(self, fake_fetch, monkeypatch):
+        # Every refusal is non-empty text, which an undeclared result would count as material.
+        _set_allowlist(monkeypatch, None)
+        _, metadata = llmclient.webfetch("https://x.example/p")
+        assert metadata["grounding"] is True, "control: a fetched page grounds"
+        _set_allowlist(monkeypatch, [])
+        _, metadata = llmclient.webfetch("https://x.example/p")
+        assert "webfetch_denied_host" in metadata, "fixture: the allowlist should have refused"
+        assert metadata["grounding"] is False
+
     def test_a_server_refusal_names_the_url(self, monkeypatch):
         # The URL is the one the server ended up at, which a rewrite can change.
         def _refuse(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
             return {"content": "This site doesn't render its content as static HTML and can't be fetched as text.",
-                    "url": "https://old.x.example/p", "spaSuspected": True, "title": None}
+                    "url": "https://old.x.example/p", "fetched": False, "spaSuspected": True, "title": None}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_refuse))
         _set_allowlist(monkeypatch, None)
-        text, _ = llmclient.webfetch("https://x.example/p")
+        text, metadata = llmclient.webfetch("https://x.example/p")
         assert text.startswith("**Webfetch result for** [https://old.x.example/p](https://old.x.example/p):")
+        assert metadata["grounding"] is False  # a notice about the page, not the page
         assert text.rstrip().endswith("can't be fetched as text.")
         assert text.count("**") == 2, "a refusal has no title, so the header should carry none"
 
@@ -353,7 +364,7 @@ class TestSessionApprovedHosts:
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
             denied_text, denied_metadata = llmclient.webfetch("https://blog.example/post")
             assert "not on the configured allowlist" in denied_text
-            assert denied_metadata == {"webfetch_denied_host": "blog.example"}
+            assert denied_metadata == {"webfetch_denied_host": "blog.example", "grounding": False}
             assert fake_fetch == []  # denied before approval
 
             llmclient.approve_host_for_session("blog.example")
@@ -392,11 +403,11 @@ class TestPerformToolCallsMetadata:
                                 "id": "call_1", "index": "0"}]}
 
     def test_tuple_return_attaches_metadata(self):
-        settings = self._settings(lambda: ("the result text", {"webfetch_denied_host": "example.com"}))
+        settings = self._settings(lambda: ("the result text", {"any_key": "passed through as is"}))
         records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
         assert len(records) == 1
         assert chatutil.content_to_text(records[0].data["content"]) == "the result text"
-        assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
+        assert records[0].tool_metadata == {"any_key": "passed through as is"}
 
     def test_plain_string_return_has_no_metadata(self):
         settings = self._settings(lambda: "just text")
@@ -416,10 +427,10 @@ class TestPerformToolCallsMetadata:
     def test_parts_return_with_metadata_tuple(self):
         # The `(output, metadata)` tuple form composes with a parts-list output, not just a string.
         parts = [chatutil.text_content_part("x")]
-        settings = self._settings(lambda: (parts, {"webfetch_denied_host": "example.com"}))
+        settings = self._settings(lambda: (parts, {"any_key": "passed through as is"}))
         records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
         assert records[0].data["content"] == parts
-        assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
+        assert records[0].tool_metadata == {"any_key": "passed through as is"}
 
 
 class TestPerformToolCallsRefusal:
@@ -779,7 +790,8 @@ class TestWebsearchWrapper:
             {"title": "First", "link": "https://example.com/1", "text": "snippet one"},
             {"title": "Second", "link": "https://example.com/2", "text": "snippet two"},
         ])
-        parts = llmclient.websearch("query")
+        parts, metadata = llmclient.websearch("query")
+        assert metadata == {"grounding": True}
         assert len(parts) == 2
         assert all(p["type"] == "text" for p in parts)
         assert "[First](https://example.com/1)" in parts[0]["text"]
@@ -792,13 +804,13 @@ class TestWebsearchWrapper:
         self._patch_search(monkeypatch, [
             {"title": f"Ti{zwsp}tle", "link": f"https://e.com/{zwsp}x", "text": f"bo{zwsp}dy"},
         ])
-        text = llmclient.websearch("q")[0]["text"]
+        text = llmclient.websearch("q")[0][0]["text"]
         assert zwsp not in text  # removed from title, link, and body
         assert "Title" in text and "body" in text
 
     def test_result_without_title_falls_back_to_bare_url(self, monkeypatch):
         self._patch_search(monkeypatch, [{"link": "https://e.com/x", "text": "body"}])
-        text = llmclient.websearch("q")[0]["text"]
+        text = llmclient.websearch("q")[0][0]["text"]
         assert "<https://e.com/x>" in text
 
     @staticmethod
@@ -838,18 +850,18 @@ class TestWebsearchFailures:
 
     def test_no_results_says_so(self, monkeypatch):
         self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineAnswered": True})
-        assert llmtools.websearch("q") == llmtools.CANONICAL_NO_WEB_RESULTS
+        assert llmtools.websearch("q") == (llmtools.CANONICAL_NO_WEB_RESULTS, {"grounding": False})
 
     def test_an_engine_that_did_not_answer_says_so(self, monkeypatch):
         # Also empty, as the case above is: only the server's flag tells the two apart.
         self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineAnswered": False})
-        assert llmtools.websearch("q") == llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+        assert llmtools.websearch("q") == (llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE, {"grounding": False})
 
     def test_a_timeout_is_an_engine_that_did_not_answer(self, monkeypatch):
         def fake_search(*args, **kwargs):
             raise requests.ReadTimeout("slow")
         self._patch(monkeypatch, fake_search)
-        assert llmtools.websearch("q") == llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+        assert llmtools.websearch("q") == (llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE, {"grounding": False})
 
     @pytest.mark.parametrize("exc", [requests.ConnectionError("refused"),
                                      RuntimeError("While calling Raven-server: HTTP 403 FORBIDDEN")])
@@ -857,8 +869,8 @@ class TestWebsearchFailures:
         def fake_search(*args, **kwargs):
             raise exc
         self._patch(monkeypatch, fake_search)
-        assert llmtools.websearch("q") == llmtools.CANONICAL_WEBSEARCH_UNAVAILABLE.format(
-            reason=f"{type(exc).__name__}: {exc}")
+        assert llmtools.websearch("q") == (llmtools.CANONICAL_WEBSEARCH_UNAVAILABLE.format(
+            reason=f"{type(exc).__name__}: {exc}"), {"grounding": False})
 
     def test_the_call_waits_for_the_web_tool_timeout(self, monkeypatch):
         captured = {}
@@ -924,7 +936,7 @@ class TestWebfetchFailures:
         captured = {}
         def fake_fetch(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
             captured["on_progress"] = on_progress
-            return {"content": "x", "url": url, "title": None}
+            return {"content": "x", "url": url, "fetched": True, "title": None}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=fake_fetch))
         _set_allowlist(monkeypatch, None)
         reporter = lambda text: None  # noqa: E731 -- compared by identity

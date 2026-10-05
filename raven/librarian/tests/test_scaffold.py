@@ -687,10 +687,9 @@ class TestAITurnRAG:
                                                 asking_text="X is probably foo; let me check.")
         assert asking["generation_metadata"]["grounded"] is False
 
-    def test_documents_off_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
-        """With documents off there is nothing worth saying: "no sources retrieved" would only report the
-        switch the user just set, and would be indistinguishable from the case that *is* worth reporting -
-        documents on, nothing came back. Absent beats a third state."""
+    @staticmethod
+    def _verdict_with_sources(monkeypatch, llm_settings, populated_forest, *, docs_enabled, internet_enabled):
+        """Run a turn that retrieves nothing, under the given switches; return the reply's metadata."""
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,
                                        datastore=forest,
@@ -700,8 +699,23 @@ class TestAITurnRAG:
                             lambda **kw: make_invoke_result(content="X is foo."))
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=FakeRetriever(results=[]),
-                                 docs_enabled=False)
-        assert "grounded" not in forest.get_payload(final_head)["generation_metadata"]
+                                 docs_enabled=docs_enabled,
+                                 internet_enabled=internet_enabled)
+        return forest.get_payload(final_head)["generation_metadata"]
+
+    def test_both_sources_off_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
+        """With every source switched off there is nothing worth saying: "no sources retrieved" would only
+        report the switches the user just set, and would be indistinguishable from the case that *is* worth
+        reporting - a source on, nothing came back. Absent beats a third state."""
+        metadata = self._verdict_with_sources(monkeypatch, llm_settings, populated_forest,
+                                              docs_enabled=False, internet_enabled=False)
+        assert "grounded" not in metadata
+
+    def test_the_internet_alone_is_a_source(self, monkeypatch, llm_settings, populated_forest):
+        """With the documents off and the internet on, a reply that retrieved nothing is still worth marking."""
+        metadata = self._verdict_with_sources(monkeypatch, llm_settings, populated_forest,
+                                              docs_enabled=False, internet_enabled=True)
+        assert metadata["grounded"] is False
 
     def test_an_attachment_grounds_a_reply_even_with_documents_off(self, monkeypatch, llm_settings, tmp_path):
         """The documents switch governs the document database, not the whole notion of having something to

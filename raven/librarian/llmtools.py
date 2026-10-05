@@ -289,7 +289,7 @@ CANONICAL_SEARCH_ENGINE_UNAVAILABLE = ("The search engine did not respond. It ma
 CANONICAL_WEBSEARCH_UNAVAILABLE = "Web search is not available right now, because of an internal error: {reason}"
 
 def websearch(query: str,
-              engine: str | None = None) -> list[dict[str, str]] | str:
+              engine: str | None = None) -> tuple[list[dict[str, str]] | str, dict]:
     """Perform a websearch via Raven-server; return the results as content parts, one text part per result.
 
     `engine`: search backend, "duckduckgo" or "google". `None` (the default) uses the configured
@@ -309,6 +309,9 @@ def websearch(query: str,
     `CANONICAL_NO_WEB_RESULTS`, `CANONICAL_SEARCH_ENGINE_UNAVAILABLE` (the engine did not answer, or the
     whole call outlasted `librarian_config.web_tool_timeout`), or `CANONICAL_WEBSEARCH_UNAVAILABLE`
     (Raven-server could not be reached, or refused the request), which names the error.
+
+    Returns `(output, metadata)`, the metadata declaring whether `output` is grounding material: results are,
+    and the canonical strings are not, being non-empty text that retrieved nothing.
     """
     if engine is None:
         engine = librarian_config.websearch_engine
@@ -322,16 +325,16 @@ def websearch(query: str,
                                                  on_progress=getattr(dyn.tool_context, "report_progress", None))  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
     except requests.Timeout:
         logger.warning(f"websearch: no answer within {librarian_config.web_tool_timeout.read} s")
-        return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+        return (CANONICAL_SEARCH_ENGINE_UNAVAILABLE, {"grounding": False})
     except (requests.ConnectionError, RuntimeError) as exc:  # `RuntimeError`: the server answered with an error status
         logger.warning(f"websearch: {type(exc)}: {exc}")
-        return CANONICAL_WEBSEARCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}")
+        return (CANONICAL_WEBSEARCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}"), {"grounding": False})
     if not websearch_results["engineAnswered"]:
         logger.warning(f"websearch: the search engine '{engine}' did not answer")
-        return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+        return (CANONICAL_SEARCH_ENGINE_UNAVAILABLE, {"grounding": False})
     structured_results = websearch_results["data"]
     if not structured_results:
-        return CANONICAL_NO_WEB_RESULTS
+        return (CANONICAL_NO_WEB_RESULTS, {"grounding": False})
 
     def format_result_part(result: dict[str, str]) -> dict[str, str]:
         text = common_text.normalize(result.get("text", ""))
@@ -348,7 +351,7 @@ def websearch(query: str,
         body = f"{heading}\n\n{text}\n" if heading else f"{text}\n"
         return chatutil.text_content_part(body)
 
-    return [format_result_part(result) for result in structured_results]
+    return ([format_result_part(result) for result in structured_results], {"grounding": True})
 
 # Canonical user-facing string for an allowlist refusal — the client-side counterpart to the
 # server-side SSRF / scheme / SPA strings in `raven.server.modules.webfetch`. Pre-templated so the
@@ -418,7 +421,8 @@ def webfetch(url: str) -> tuple[str, dict]:
     keys is present: `fetched_document` when something was fetched, naming the URL the server actually
     landed on and the page title, which is what lets `scaffold` store a long page as an attachment
     rather than dumping it into the chat log; or `webfetch_denied_host` when the allowlist refused,
-    which is what the GUI's "approve this host and retry" override reads off the tool node.
+    which is what the GUI's "approve this host and retry" override reads off the tool node. `grounding` is
+    present on every path, True only when the result is the page's own content.
 
     Reads `dyn.tool_context.webfetch_allowed_hosts` — the per-turn set of hosts the user auto-allowed
     by typing their URLs this turn (and, with `librarian_config.webfetch_trust_search_results`, this
@@ -438,20 +442,20 @@ def webfetch(url: str) -> tuple[str, dict]:
             # Structured return: the canonical refusal for the model, plus metadata the GUI override reads
             # (on the resulting tool node) to offer "approve this host" and re-run with the fetch allowed.
             return (_format_webfetch_result(url, None, CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))),
-                    {"webfetch_denied_host": host})
+                    {"webfetch_denied_host": host, "grounding": False})
 
     api = _client_api()
     try:
-        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
+        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "fetched", "spaSuspected", "title"}
                                     maybe_abort=getattr(dyn.tool_context, "maybe_abort", None),
                                     on_progress=getattr(dyn.tool_context, "report_progress", None))
     except requests.Timeout:
         logger.warning(f"webfetch: no answer within {librarian_config.web_tool_timeout.read} s for '{url}'")
-        result = {"content": CANONICAL_WEBFETCH_TIMEOUT.format(url=url), "url": url, "title": None}
+        result = {"content": CANONICAL_WEBFETCH_TIMEOUT.format(url=url), "url": url, "fetched": False, "title": None}
     except (requests.ConnectionError, RuntimeError) as exc:  # `RuntimeError`: the server answered with an error status
         logger.warning(f"webfetch: {type(exc)}: {exc}")
         result = {"content": CANONICAL_WEBFETCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}"),
-                  "url": url, "title": None}
+                  "url": url, "fetched": False, "title": None}
     if result.get("spaSuspected"):
         logger.info(f"webfetch: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
     # Declare the result a fetched document, so `scaffold` can store a long one as an attachment sidecar
@@ -462,10 +466,13 @@ def webfetch(url: str) -> tuple[str, dict]:
     # Declared on the refusal paths too — the network refusal, the HTTP error, the SPA notice. Those are
     # canonical one-sentence strings and so never reach the size threshold that decides whether to store
     # anything, which makes a special case for them machinery with no effect to have.
+    # Grounding is declared from the server's `fetched`, the one place that knows whether `content` is the
+    # page or a notice about it; every refusal here is non-empty text, which the fallback would count.
     effective_url = result.get("url") or url
     return (_format_webfetch_result(effective_url, result.get("title"), result["content"]),
             {"fetched_document": {"url": effective_url,
-                                  "name": result.get("title") or effective_url}})
+                                  "name": result.get("title") or effective_url},
+             "grounding": result["fetched"]})
 
 
 # ------------------------------------------------------------------------------------------------
