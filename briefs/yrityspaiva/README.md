@@ -548,7 +548,9 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
            on instance IDs rather than a client ID (maintainer's preference: no new identity). The reply's
            `unknown` list is the hook for reconnect support later.
          - **The heartbeat ships in 0.2.10 only if it runs clean until release day; otherwise 0.2.11**
-           (maintainer). The reaper's stall guard and the heartbeat's short read timeout were added after the
+           (maintainer). **Clean through 2026-10-05, so in 0.2.10**, with final tests on 6 October (maintainer).
+           `chat_controller` without the ML stack, last in the 0.2.10 plan above, was moved to 0.2.11 on
+           2026-10-01 (its item in `TODO_DEFERRED.md` says so); not done. The reaper's stall guard and the heartbeat's short read timeout were added after the
            live run, so the server wants a restart on the final code for that run.
        - **The grounding reminder: C′, as standing text in `prompts/interaction.md`** (maintainer, decided on the
          probe's results; `investigations/context-injects/`). The conditional inject is gone. Two follow-ups
