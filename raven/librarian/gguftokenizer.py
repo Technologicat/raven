@@ -76,7 +76,12 @@ _VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, meas
 # no tokenizer. Anywhere in the name, not just at the front: both `mmproj-gemma-4-26B-A4B-it-BF16.gguf` and
 # `Qwen3.5-9B-mmproj-BF16.gguf` are in use, and a projector is also the smaller file, so it wins the
 # size tie-break and disables the feature it was mistaken for.
-_NOT_A_MODEL = re.compile(r"mmproj", re.IGNORECASE)
+#
+# A multi-token-prediction head is the same kind of companion: `mtp-Qwen3.8-27B-Q4_0.gguf` beside the model,
+# a twelfth of its size. That one happens to carry the vocabulary (seen 2026-10-05, chosen and confirmed
+# against the backend), but a head is not the model, and one that does not would leave the estimate in
+# place with the right file beside it. Matched as a word of its own in the name, not as three letters.
+_NOT_A_MODEL = re.compile(r"mmproj|(?<![a-z0-9])mtp(?![a-z0-9])", re.IGNORECASE)
 
 # Round-trip probe. Digits, punctuation runs, non-ASCII letters and newlines are where a mis-assembled
 # byte-level BPE stops being reversible, so they are all in here.

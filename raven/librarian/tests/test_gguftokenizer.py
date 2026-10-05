@@ -50,6 +50,21 @@ def test_a_backend_that_describes_rather_than_names_still_matches(archive):
     assert find_for_model(archive, ["qwen3.5-9b, Q4_K_XL, 128 Ki context"]).name == "Qwen3.5-9B-UD-Q4_K_XL.gguf"
 
 
+def test_a_multi_token_prediction_head_is_not_a_model(tmp_path):
+    """Another companion file under a matching name, and smaller than the model, as a projector is."""
+    root = tmp_path / "archive"
+    make_model(root, "Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q4_K_XL.gguf", size=4096)
+    make_model(root, "Qwen3.8-27B-GGUF", "mtp-Qwen3.8-27B-Q4_0.gguf", size=512)
+    make_model(root, "Qwen3.8-27B-GGUF", "mmproj-BF16.gguf", size=256)
+    assert find_for_model(root, ["qwen3.8-27b@q4_k_xl"]).name == "Qwen3.8-27B-UD-Q4_K_XL.gguf"
+
+
+def test_a_name_merely_containing_the_letters_mtp_is_still_a_model(tmp_path):
+    root = tmp_path / "archive"
+    make_model(root, "Smtpbot-7B", "Smtpbot-7B-Q4_K_M.gguf", size=1024)
+    assert find_for_model(root, ["smtpbot-7b"]).name == "Smtpbot-7B-Q4_K_M.gguf"
+
+
 def test_a_vision_projector_is_not_a_model(archive):
     """It matches the model's name as well as the model does, carries no tokenizer, and is the smaller file."""
     assert "mmproj" not in find_for_model(archive, ["qwen3.5-9b"]).name.lower()
