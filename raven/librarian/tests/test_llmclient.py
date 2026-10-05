@@ -1545,6 +1545,26 @@ class TestModelInfoResolution:
         assert info.model_id == "qwen3.5-4b"
         assert info.context_length == 131072
 
+    @pytest.mark.parametrize("parallel, warns", [(4, True), (1, False)], ids=["concurrency 4", "concurrency 1"])
+    def test_lmstudio_max_concurrency_above_one_is_warned_about(self, monkeypatch, caplog, parallel, warns):
+        # Concurrency 1 is the control: the same listing, and no warning.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "loaded_context_length": 131072}]},
+            "/api/v1/models": {"models": [{"key": "qwen3.5-4b",
+                                           "loaded_instances": [{"id": "qwen3.5-4b", "config": {"parallel": parallel}}]}]}}))
+        with caplog.at_level(logging.WARNING, logger="raven.librarian.llmclient"):
+            llmclient._resolve_model_info("http://x", "lmstudio")
+        assert any("max concurrency" in record.getMessage() for record in caplog.records) is warns
+
+    def test_lmstudio_without_the_v1_listing_says_nothing(self, monkeypatch, caplog):
+        # An older LM Studio answers `/api/v1/models` with its error body; model info resolves as before.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "loaded_context_length": 131072}]}}))
+        with caplog.at_level(logging.WARNING, logger="raven.librarian.llmclient"):
+            info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.model_id == "qwen3.5-4b"
+        assert not caplog.records
+
     def test_oobabooga_filename_label_no_context(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "Qwen3-4B-Thinking.gguf"}}))

@@ -242,6 +242,25 @@ def _format_lmstudio_model_label(model_record: dict) -> str:
         parts.append(f"{si_prefix(ctx, precision=0, binary=True)} context")
     return ", ".join(parts)
 
+def _warn_if_lmstudio_parallel(backend_url: str) -> None:
+    """Log a warning for each model LM Studio has loaded with more than one concurrent slot. Best effort: an LM
+    Studio without the `/api/v1` listing, or any other failure here, logs nothing at WARNING."""
+    # Said rather than changed, the load settings being the user's. Above 1 the setting costs VRAM, the more
+    # so the longer the context, which is what makes a model that should fit run out of memory with no
+    # visible cause.
+    try:
+        models = requests.get(f"{backend_url}/api/v1/models", headers=headers, verify=False,
+                              timeout=librarian_config.llm_network_timeout).json().get("models", [])
+        for model in models:
+            for instance in model.get("loaded_instances") or []:
+                parallel = (instance.get("config") or {}).get("parallel")
+                if isinstance(parallel, int) and parallel > 1:
+                    logger.warning(f"_warn_if_lmstudio_parallel: LM Studio has '{instance.get('id')}' loaded with "
+                                   f"max concurrency {parallel}. Above 1 this costs VRAM, more so with a long "
+                                   "context; if memory runs short, set it to 1 in the model's load settings.")
+    except Exception as exc:
+        logger.debug(f"_warn_if_lmstudio_parallel: could not read LM Studio's load settings: {type(exc)}: {exc}")
+
 def _resolve_model_info(backend_url: str, flavor: str) -> env:
     """Resolve the loaded model's identity and context window for `flavor`.
 
@@ -291,6 +310,7 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
             # this LM Studio returns carries one, so this is the shape of the answer rather than a
             # workaround for an observed gap.
             maybe_model_type = record.get("type")
+            _warn_if_lmstudio_parallel(backend_url)
             return env(label=_format_lmstudio_model_label(record),
                        model_id=record.get("id"),
                        context_length=record.get("loaded_context_length"),
