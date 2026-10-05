@@ -3338,11 +3338,11 @@ class DPGLinearizedChatView:
         #   - *Chasing a target that moved while we waited.* Retargeting covers it, on a better trigger: the
         #     target moves when content arrives, and content arriving is exactly when `follow_tail` fires. Event
         #     driven, rather than polled against a fixed attempt budget.
-        #   - *Recovering from a DPG clamp.* Same event. `replace_last_paragraph` is the only clamp source: it
-        #     swaps a paragraph in through `WidgetSwap`, but falls back to delete-then-add when the paragraph
-        #     moves between thinking trace and reply, and every one of its call sites is inside the streaming
-        #     chunk handler — so a clamp can only happen while streaming, which is precisely when
-        #     `follow_tail` retargets per chunk.
+        #   - *Recovering from a DPG clamp.* Same event. The clamp sources are the streaming chunk handler's:
+        #     `reclassify_all_paragraphs_as_thought`, which deletes a reply's paragraphs and re-renders them
+        #     into the thought bubble, and `replace_last_paragraph`'s delete-then-add fallback (it otherwise
+        #     swaps through `WidgetSwap`) — so a clamp can only happen while streaming, which is precisely
+        #     when `follow_tail` retargets per chunk.
         #
         # None of that depends on the scroll being *animated*: it depends on retargeting, which works the same
         # when `smooth` is off. That is why there is one path here rather than two.
