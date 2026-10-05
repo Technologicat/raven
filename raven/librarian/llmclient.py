@@ -2024,6 +2024,25 @@ def _notify(what: str, maybe_callback: Callable | None, *args, _default: Any = N
     # happens to be on the stack — so swallowing it here would leave Cancel doing nothing.
     return utils.notify(what, maybe_callback, *args, _default=_default, _reraise=(netutil.Aborted,), **kwargs)
 
+def _backend_error_message(body: str, max_length: int = 400) -> str | None:
+    """The backend's own explanation from an error response's `body`, or `None` if it gave none.
+
+    OpenAI-compatible backends put it at `error.message`, and some send `error` as a plain string; a body in
+    any other shape is returned as it is. Either way it is shortened to `max_length` characters.
+    """
+    try:
+        maybe_error = json.loads(body).get("error")
+    except (ValueError, AttributeError):  # not JSON, or JSON that is not an object
+        maybe_error = None
+    maybe_message = maybe_error.get("message") if isinstance(maybe_error, dict) else maybe_error
+    if not isinstance(maybe_message, str):
+        maybe_message = None
+    text = (maybe_message or body or "").strip()
+    if not text:
+        return None
+    return text if len(text) <= max_length else text[:max_length] + "…"
+
+
 def invoke(settings: env,
            history: list[dict],
            on_progress: Callable | None = None,
@@ -2262,7 +2281,9 @@ def invoke(settings: env,
         logger.error(f"{me}: LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
         logger.error(stream_response.text)
         report_template_violations()
-        raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}")
+        maybe_explanation = _backend_error_message(stream_response.text)
+        raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}"
+                           + (f": {maybe_explanation}" if maybe_explanation else ""))
 
     client = sseclient.SSEClient(stream_response)
     def stop_generating():

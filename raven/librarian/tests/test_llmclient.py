@@ -3207,3 +3207,24 @@ class TestContinuingAMessageKeepsWhatItAlreadySaid:
         text = chatutil.content_to_text(out.data["content"])
         assert text == "The seasons: \nUser: name them then", text
 
+
+class TestBackendErrorMessage:
+    """What of an error response's body goes into the chat's error message."""
+
+    def test_the_openai_shape_gives_its_message(self):
+        body = '{"error": {"message": "Multiple models are loaded. Please specify a model.", "type": "invalid_request_error"}}'
+        assert llmclient._backend_error_message(body) == "Multiple models are loaded. Please specify a model."
+
+    def test_an_error_given_as_a_string_is_that_string(self):
+        assert llmclient._backend_error_message('{"error": "model not found"}') == "model not found"
+
+    def test_a_body_in_another_shape_is_shown_as_it_is(self):
+        assert llmclient._backend_error_message("upstream timed out") == "upstream timed out"
+
+    def test_an_empty_body_says_nothing(self):
+        assert llmclient._backend_error_message("  ") is None
+
+    def test_a_long_body_is_shortened(self):
+        text = llmclient._backend_error_message("x" * 1000, max_length=10)
+        assert text == "x" * 10 + "…"
+
