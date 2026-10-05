@@ -1036,7 +1036,13 @@ def _on_key(sender, app_data) -> None:
     compare_running = compare is not None and compare.active
     if ctrl and shift:
         if key == dpg.mvKey_C:
+            # While comparing, it crowns the frame on screen, which is the gesture a reader watching the
+            # cycle reaches for — but only once paused: running, the frame advances several times a
+            # second, and the chord would land on whichever one the key arrived during.
             if not compare_running:
+                _mark_winner()
+            elif compare.paused and not compare.warming_up:
+                compare.select_frame(compare.frame_idx + 1)  # exits onto it, making it `grid.current`
                 _mark_winner()
         elif key == dpg.mvKey_M:
             dpg.show_metrics()
@@ -1779,6 +1785,7 @@ def main() -> int:
         env(key_indent=0, key="Esc", action_indent=0, action="Exit, restoring the image", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Space", action_indent=0, action="Pause / resume", notes=""),
+        env(key_indent=0, key="Ctrl+Shift+C", action_indent=0, action="Crown this one and exit", notes="While paused"),
         env(key_indent=0, key=", / .", action_indent=0, action="Slower / faster", notes=""),
         env(key_indent=0, key="M", action_indent=0, action="Back to the default speed", notes=""),
         helpcard.hotkey_blank_entry,

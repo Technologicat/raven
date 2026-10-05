@@ -91,6 +91,8 @@ another in the same spot on screen: differences that are invisible side by side 
   default speed.
 - **Ctrl+Shift+C** afterwards crowns the image you picked: it becomes a cherry and the rest of the compared
   set become lemons, as one undoable action.
+  - **While paused, it does both at once**: it picks the image on screen and crowns it. While the cycle is
+    running it does nothing, since the image changes faster than a key can be aimed.
 
 <p align="center">
 <img src="../../img/cherrypick-compare.gif" alt="Three images cycling in compare mode, one picked with Shift+2 and then crowned" width="800"/> <br/>

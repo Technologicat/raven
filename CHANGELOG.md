@@ -48,6 +48,10 @@
 - **The pose editor's four morph choosers have keys**: **Ctrl+B** for the eyebrow, **Ctrl+E** the eye, **Ctrl+M** the mouth and **Ctrl+R** the iris, each named on its label.
 - **In both avatar editors, Esc leaves a chooser** the keyboard was browsing, as it does elsewhere in Raven.
 
+#### Raven-cherrypick
+
+- **In compare mode, Ctrl+Shift+C crowns the image on screen while paused**: it becomes a cherry, the rest of the compared set lemons, and compare mode exits onto it. While the cycle runs, the key does nothing.
+
 ### Changed
 
 #### Raven-librarian
