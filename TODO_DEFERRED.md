@@ -6571,3 +6571,21 @@ Expected to fire fairly often on the 4B and 9B size tiers, and on other backends
 channels and never reaches it. That is also the gate: verifying it needs one of those running.
 
 Discovered while fixing the streaming paragraph's jump (2026-10-05).
+
+## Read model capabilities from LM Studio's `/api/v1/models`
+
+*Cluster: llm-backends · Cost: S · Gate: none — an idea, to weigh before building · Filed: 2026-10-05*
+
+Librarian reads LM Studio's `/api/v0/models` for the loaded model's identity, context length and vision
+support. The `/api/v1/models` listing carries more per model, seen 2026-10-05:
+
+- **`capabilities.reasoning`**, with `allowed_options` (`["off", "on"]` on the Qwens) and a `default`. With it
+  the *Thinking* toggle could be greyed out for a model that cannot think, where today it does nothing.
+- **`capabilities.trained_for_tool_use`**, which could back a warning when tools are on and the model was not
+  trained for them.
+- The loaded instance's `config` (context length, batch sizes, `parallel`, flash attention, speculative
+  decoding). `_warn_if_lmstudio_parallel` already reads `parallel` from it, and is the only use so far.
+
+LM Studio only; `/api/v0` stays the fallback for an LM Studio that lacks v1.
+
+Raised while adding the max-concurrency warning (2026-10-05).
