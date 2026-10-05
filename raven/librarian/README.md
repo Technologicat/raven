@@ -808,8 +808,10 @@ Hover the dot and it says so.
   - Permanently destroy the subtree starting at this message (this message and all messages below it, in any branch).
   - Requires two clicks — or two presses of the hotkey — to prevent accidental deletion.
   - Refused while a reply is being written.
+  - Not while the message field or the search field has the text cursor: there Ctrl+Delete deletes a word, and a held key would deliver the confirming second press by itself.
   - The hotkey is deliberately awkward, being one of the two that destroy data. The other is the chat graph's **Shift+Delete**, deliberately a different key, so that a habit from one view cannot delete what the other is pointing at.
 - Navigate chat tree
+  - These keys do not navigate while the message field or the search field has the text cursor. There they edit the text, as in any text field: Ctrl+arrows move by word, Ctrl+Home and Ctrl+End to the ends.
   - Switch to first sibling (Ctrl+Home)
     - Switch to the oldest sibling node at this position (numbered "1")
   - Switch 10 siblings left (Ctrl+Shift+Left)

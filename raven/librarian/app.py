@@ -3177,10 +3177,18 @@ def librarian_hotkeys_callback(sender, app_data):
     # branch, for the same reason F8 is: the callback reads Shift itself, so one binding serves both
     # Ctrl+C and Ctrl+Shift+C, and Shift is what adds the node ID.
     #
-    # Not while the composer holds the caret, where Ctrl+C is ImGui's own copy of the selected text. This
-    # is the only per-message key needing that guard; the rest are chords a text field does not claim.
+    # Not while the composer holds the caret, where Ctrl+C is ImGui's own copy of the selected text.
     elif ctrl_pressed and key == dpg.mvKey_C and not dpg.is_item_active("chat_field"):  # tag
         fire_event_if_exists("copy")
+    # A text field's own chords, while one holds the caret: Ctrl+arrows move by word, Ctrl+Home and Ctrl+End
+    # to the ends of the text, Shift added selects, and Ctrl+Delete deletes a word. The branches below bind
+    # the arrows, Home and End to moving between sibling messages, which reached from a field moved HEAD under
+    # a message being typed; and Ctrl+Shift+Delete to deleting the marked message, whose confirming second
+    # press a held key delivers by auto-repeat. Empty on purpose, like the composer's branch further down:
+    # what it does is withhold the keys from those.
+    elif (ctrl_pressed and key in (dpg.mvKey_Left, dpg.mvKey_Right, dpg.mvKey_Home, dpg.mvKey_End, dpg.mvKey_Delete)
+          and (dpg.is_item_active("chat_field") or dpg.is_item_active("search_field"))):  # tag
+        pass
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Return:
