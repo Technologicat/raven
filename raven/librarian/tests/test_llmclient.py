@@ -1755,7 +1755,6 @@ class TestConnectAndReconnect:
         settings = llmclient.connect("http://x", quiet=True)
         assert llmclient.backend_status(settings) is llmclient.backend_has_no_model
 
-
     @pytest.mark.parametrize("configured, named", [(None, "a-model"), ("chosen-model", "chosen-model")], ids=["unset", "set"])
     def test_requests_name_the_configured_model_or_else_the_loaded_one(self, monkeypatch, configured, named):
         # A name is always sent when one is known: LM Studio refuses a nameless request while two models are
@@ -3319,4 +3318,3 @@ class TestBackendErrorMessage:
     def test_a_long_body_is_shortened(self):
         text = llmclient._backend_error_message("x" * 1000, max_length=10)
         assert text == "x" * 10 + "…"
-
