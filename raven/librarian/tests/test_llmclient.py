@@ -2670,11 +2670,11 @@ class TestFitAttachmentsToContext:
         # rewrite the prompt prefix for no reason.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         texts = ["a" * 1000, "b" * 2000]
-        assert llmclient.fit_attachments_to_context(self.settings(), 500, self.requested(*texts)) == texts
+        assert llmclient.fit_attachments_to_context(self.settings(), "c" * 500, self.requested(*texts)) == texts
 
     def test_an_oversized_attachment_is_cut_to_the_budget(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
-        out = llmclient.fit_attachments_to_context(self.settings(), 1000, self.requested("a" * 200000))
+        out = llmclient.fit_attachments_to_context(self.settings(), "c" * 1000, self.requested("a" * 200000))
         assert len(out[0]) <= 29000  # 30000 minus the conversation, then quantized down
         assert "characters omitted" in out[0]
 
@@ -2683,7 +2683,7 @@ class TestFitAttachmentsToContext:
         # alongside it.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         small = "the short note"
-        out = llmclient.fit_attachments_to_context(self.settings(), 0, self.requested(small, "a" * 200000))
+        out = llmclient.fit_attachments_to_context(self.settings(), "", self.requested(small, "a" * 200000))
         assert out[0] == small
         assert len(out[1]) < 200000
 
@@ -2692,7 +2692,7 @@ class TestFitAttachmentsToContext:
         # leaves. This is the half of the policy that must NOT change when the ceiling is applied to fetches.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        out = llmclient.fit_attachments_to_context(self.settings(), 0, self.requested("a" * 200000))
+        out = llmclient.fit_attachments_to_context(self.settings(), "", self.requested("a" * 200000))
         assert len(out[0]) > 4000  # 10% of the window would have been 4000 characters
 
     def test_a_speculative_document_is_ceilinged_even_when_it_would_fit(self, monkeypatch):
@@ -2701,7 +2701,7 @@ class TestFitAttachmentsToContext:
         # and before the ceiling was wired in here, it did.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+        out = llmclient.fit_attachments_to_context(self.settings(), "",
                                                    [("a" * 20000, llmclient.ATTACHMENT_SPECULATIVE)])
         assert len(out[0]) <= 4000  # 10% of the 40000-character window
         assert "characters omitted" in out[0]
@@ -2713,7 +2713,7 @@ class TestFitAttachmentsToContext:
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
         attachment = "u" * 40000
-        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+        out = llmclient.fit_attachments_to_context(self.settings(), "",
                                                    [("f" * 40000, llmclient.ATTACHMENT_SPECULATIVE),
                                                     (attachment, llmclient.ATTACHMENT_REQUESTED)])
         assert len(out[0]) <= 4000
@@ -2726,22 +2726,22 @@ class TestFitAttachmentsToContext:
         # each one's ceiling, not whether they share.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+        out = llmclient.fit_attachments_to_context(self.settings(), "",
                                                    [("f" * 200000, llmclient.ATTACHMENT_SPECULATIVE),
                                                     ("u" * 200000, llmclient.ATTACHMENT_REQUESTED)])
         assert sum(len(text) for text in out) <= 30000
 
     def test_a_full_conversation_leaves_nothing(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
-        assert llmclient.fit_attachments_to_context(self.settings(), 40000, self.requested("a" * 1000)) == [""]
+        assert llmclient.fit_attachments_to_context(self.settings(), "c" * 40000, self.requested("a" * 1000)) == [""]
 
     def test_the_budget_holds_still_as_the_conversation_grows(self, monkeypatch):
         # Folded attachment text is part of the prompt prefix, so a budget that drifted turn by turn would
         # force a full prompt reprocess every turn, exactly where the prompt is already enormous.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         text = "a" * 200000
-        first = llmclient.fit_attachments_to_context(self.settings(), 1000, self.requested(text))
-        later = llmclient.fit_attachments_to_context(self.settings(), 1600, self.requested(text))
+        first = llmclient.fit_attachments_to_context(self.settings(), "c" * 1000, self.requested(text))
+        later = llmclient.fit_attachments_to_context(self.settings(), "c" * 1600, self.requested(text))
         assert first == later
 
 
@@ -2815,25 +2815,37 @@ class TestFitAttachmentsWithAnExactTokenizer:
         # The negative control first: counted through the ratio, a skewed calibration moves the cut, so this
         # fixture can tell the two paths apart.
         by_ratio = [llmclient.fit_attachments_to_context(env(context_length=10000, tokens_per_character=ratio),
-                                                         0, attachments)
+                                                         "", attachments)
                     for ratio in (0.25, 0.57)]
         assert by_ratio[0] != by_ratio[1], "the ratio does not move the cut here, so this fixture proves nothing"
-        exact = [llmclient.fit_attachments_to_context(self.settings(ratio), 0, attachments) for ratio in (0.25, 0.57)]
+        exact = [llmclient.fit_attachments_to_context(self.settings(ratio), "", attachments) for ratio in (0.25, 0.57)]
         assert exact[0] == exact[1], "with a tokenizer loaded, a skewed ratio still moved the cut"
         assert len(exact[0][0]) <= 30000 and "characters omitted" in exact[0][0]
+
+    def test_the_conversations_share_is_counted_too(self, monkeypatch):
+        # The conversation beside the document is the other half of the budget. Converted through the ratio,
+        # it would move the cut whenever the calibration did, however exactly the document was counted.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        attachments = [("a" * 200000, llmclient.ATTACHMENT_REQUESTED)]
+        exact = [llmclient.fit_attachments_to_context(self.settings(ratio), "c" * 12000, attachments)
+                 for ratio in (0.25, 0.57)]
+        assert exact[0] == exact[1], "the conversation's share still moved with the ratio"
+        # 7500 tokens of budget, 3000 of them the conversation's: the document gets the 4096 left after
+        # rounding down to the quantum, not the 6144 it would get beside an empty conversation.
+        assert len(_QuarterTokenizer().encode(exact[0][0])) <= 4096
 
     def test_a_document_that_fits_by_count_is_not_cut_whatever_the_ratio_says(self, monkeypatch):
         # The case that cut a paper in half: at 0.57 tokens per character this would look like 14250 tokens
         # against a budget of 7500, where it is 6250.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         text = "a" * 25000
-        out = llmclient.fit_attachments_to_context(self.settings(0.57), 0, [(text, llmclient.ATTACHMENT_REQUESTED)])
+        out = llmclient.fit_attachments_to_context(self.settings(0.57), "", [(text, llmclient.ATTACHMENT_REQUESTED)])
         assert out == [text]
 
     def test_a_speculative_document_is_ceilinged_in_tokens(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        out = llmclient.fit_attachments_to_context(self.settings(0.57), 0,
+        out = llmclient.fit_attachments_to_context(self.settings(0.57), "",
                                                    [("a" * 20000, llmclient.ATTACHMENT_SPECULATIVE)])
         # 10% of the window is 1000 tokens, which is 4000 characters of this text. Through the skewed ratio it
         # would have been under 1800, which is what the lower bound tells apart.

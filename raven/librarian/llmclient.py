@@ -1229,8 +1229,7 @@ def count_branch_tokens(settings: env,
                             continue
                     attachments.append((text, attachment_budget_kind(part)))
 
-    conversation_characters = sum(len(segment) for segment in text_segments)
-    fitted_attachments = fit_attachments_to_context(settings, conversation_characters, attachments)
+    fitted_attachments = fit_attachments_to_context(settings, "".join(text_segments), attachments)
     count, is_exact = count_tokens(settings, "".join(text_segments + fitted_attachments))
     if image_tokens:
         count += image_tokens
@@ -1442,7 +1441,7 @@ def attachment_budget_kind(part: dict[str, Any]) -> str:
     return ATTACHMENT_REQUESTED
 
 def fit_attachments_to_context(settings: env,
-                               conversation_characters: int,
+                               conversation_text: str,
                                attachments: list[tuple[str, str]]) -> list[str]:
     """Cut attached-document texts down to what the context window can carry. Returns them in the same order.
 
@@ -1474,10 +1473,9 @@ def fit_attachments_to_context(settings: env,
     precisely the situation where the prompt is already enormous. Rounding down to a coarse step keeps the
     fold byte-identical across a run of turns and costs at most one step of unused budget.
 
-    `conversation_characters`: how many characters of everything *else* the request carries - the messages,
-                              minus the attachment text being sized here. Characters rather than tokens
-                              throughout: this runs on the hot path, once per request, and the truncation
-                              it feeds is in characters anyway, so a token count would be converted back.
+    `conversation_text`: everything *else* the request carries - the messages, minus the attachment text
+                         being sized here. Counted with the tokenizer in `settings` when there is one, and
+                         through the calibrated ratio when there is not.
     """
     if not attachments:
         return []
@@ -1491,12 +1489,12 @@ def fit_attachments_to_context(settings: env,
     if maybe_tokenizer is not None:
         sizes = [_exact_token_count(maybe_tokenizer, text) for text, _kind in attachments]
         window = settings.context_length
-        conversation = conversation_characters * tokens_per_character  # characters * (tokens/character) = tokens
+        conversation = len(maybe_tokenizer.encode(conversation_text))
         quantum = _ATTACHMENT_BUDGET_QUANTUM_TOKENS
     else:
         sizes = [len(text) for text, _kind in attachments]
         window = settings.context_length / tokens_per_character  # tokens / (tokens/character) = characters
-        conversation = conversation_characters
+        conversation = len(conversation_text)
         quantum = _ATTACHMENT_BUDGET_QUANTUM
     budget = int(window * (1.0 - reserve) - conversation)
     # The per-document ceiling is applied to what a speculative attachment *asks for*, before the fair split
@@ -1895,7 +1893,7 @@ def serialize_history_for_wire(settings: env,
 
     # Size all the attachments against one budget, then hand each message back its own share.
     fitted_texts = fit_attachments_to_context(settings,
-                                              conversation_characters=sum(len(text) for text in scrubbed_texts),
+                                              conversation_text="".join(scrubbed_texts),
                                               attachments=[(text, kind) for _, _, text, kind in attachments])
     file_blocks = collections.defaultdict(list)
     for (message_index, name, _, _kind), fitted_text in zip(attachments, fitted_texts):
