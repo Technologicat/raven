@@ -2645,8 +2645,8 @@ def invoke(settings: env,
             # Only from a prompt whose ratio means something. Anything counted in the tokens and not in the
             # characters skews it upward: an image is tokens with no characters at all, and the fixed overhead
             # dominates a short prompt. The skew does not stay in the readout either, because
-            # `fit_attachments_to_context` converts the window into characters with this ratio: after a chat
-            # holding one image (ratio 0.57 against a true 0.26), an attached paper that fit was cut in half.
+            # `fit_attachments_to_context` converts the window into characters with this ratio: after a short
+            # chat holding one image, which more than doubled it, an attached paper that fit was cut in half.
             has_image = any(isinstance(part, dict) and part.get("type") == "image_url"
                             for message in history
                             for part in (message.get("content") or []))
