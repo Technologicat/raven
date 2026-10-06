@@ -169,7 +169,7 @@
 - **An attached document that fits the context window is no longer cut in the middle after looking at a chat with an image.**
   - How much of a document fits is worked out from a running estimate of tokens per character, which a chat holding an image, or a short chat such as a fresh greeting, pushed far too high. A message sent next could then give the AI a paper with part of its middle missing, and say nothing about it. Short prompts and prompts with images no longer change the estimate.
   - The same thing made the prompt processing start over on the first message after switching to a chat with a long document.
-  - With an exact tokenizer (`llm_tokenizer_path`), attached documents are now measured by counting their tokens, so how much of one fits no longer depends on the estimate at all.
+  - With an exact tokenizer (`llm_tokenizer_path`), attached documents and the documents the AI fetches are now measured and cut by counting their tokens, so a shortened one comes out the size it was given, where it could come out well over or under.
 - **An LLM backend that is down no longer causes an error while connecting, when `llm_tokenizer_path` is set.** Looking for the local tokenizer failed when the backend named no model, where it should fall back to estimated token counts.
 - **The avatar's glitch effect is no longer missed when the avatar was asleep (video off).**
   - When a new chat or a branch switch woke the avatar, the glitch ran out before the video came back, so the avatar returned to the new conversation without it. The glitch now starts once the video is back.

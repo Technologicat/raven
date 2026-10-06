@@ -7,6 +7,7 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 
 import http.server
 import json
+import re
 import logging
 import pathlib
 import threading
@@ -2744,10 +2745,60 @@ class TestFitAttachmentsToContext:
         assert first == later
 
 
+class _FakeEncoding:
+    """What `tokenizers.Tokenizer.encode` returns, as far as the budget reads it: a length, and per-token offsets."""
+    def __init__(self, offsets):
+        self.offsets = offsets
+
+    def __len__(self):
+        return len(self.offsets)
+
+
 class _QuarterTokenizer:
     """One token per four characters, so an exact count and a ratio of 0.25 agree, and any other ratio does not."""
     def encode(self, text):
-        return range(len(text) // 4)
+        return _FakeEncoding([(start, min(start + 4, len(text))) for start in range(0, len(text), 4)])
+
+
+class _WordTokenizer:
+    """One token per word, its trailing space included: tokens as long as the words, which is the point."""
+    def encode(self, text):
+        return _FakeEncoding([match.span() for match in re.finditer(r"\S+\s*|\s+", text)])
+
+
+class TestTruncateMiddleTokens:
+    """Cutting at token boundaries, where an average characters-per-token ratio cannot be trusted."""
+
+    # Short words at both ends and long ones in the middle, as a paper's dense references and front matter
+    # sit around its prose: the average ratio is then wrong for exactly the parts a middle cut keeps.
+    text = "a " * 3000 + "abcdefghijklmnopqrstuvwxyz " * 3000 + "b " * 3000
+
+    def test_the_cut_lands_on_the_allowance(self):
+        tokenizer = _WordTokenizer()
+        out = llmclient.truncate_middle_tokens(tokenizer, self.text, 1000)
+        assert out.startswith("a a ") and out.endswith("b b ") and "characters omitted" in out
+        assert 990 <= len(tokenizer.encode(out)) <= 1001, len(tokenizer.encode(out))
+
+    def test_an_average_ratio_misses_on_the_same_text(self):
+        # The negative control: if a ratio cut landed too, this text could not tell the two apart.
+        tokenizer = _WordTokenizer()
+        n = len(tokenizer.encode(self.text))
+        by_ratio = llmclient.truncate_middle(self.text, 1000 * len(self.text) // n)
+        assert len(tokenizer.encode(by_ratio)) > 1500, "the average ratio landed near the allowance here"
+
+    def test_text_that_fits_is_returned_unchanged(self):
+        assert llmclient.truncate_middle_tokens(_WordTokenizer(), "a few words", 10) == "a few words"
+
+    def test_a_budget_smaller_than_the_marker_leaves_nothing(self):
+        assert llmclient.truncate_middle_tokens(_WordTokenizer(), self.text, 3) == ""
+
+    def test_the_head_and_tail_are_the_texts_own_ends(self):
+        # Sliced from the text by the tokens' offsets rather than decoded from the tokens, so what survives is
+        # the original, characters outside ASCII included.
+        text = "äöå 日本語 " * 2000
+        out = llmclient.truncate_middle_tokens(_WordTokenizer(), text, 100)
+        head, tail = out.split("\n\n[...")[0], out.split("...]\n\n")[1]
+        assert text.startswith(head) and text.endswith(tail)
 
 
 class TestFitAttachmentsWithAnExactTokenizer:

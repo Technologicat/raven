@@ -1311,22 +1311,48 @@ def truncate_middle(text: str,
     tail = text[len(text) - tail_length:] if tail_length else ""
     return head + marker_template.format(len(text) - head_length - tail_length) + tail
 
+def truncate_middle_tokens(tokenizer: Any,
+                           text: str,
+                           max_tokens: int) -> str:
+    """Return `text` shortened to at most about `max_tokens` tokens of `tokenizer`, dropping from the middle.
+
+    `truncate_middle`, measured in tokens: the same marker, the same split between head and tail, and the cut
+    made where `tokenizer` puts its token boundaries. The text is sliced at the characters those tokens span,
+    so nothing is decoded and a character is never split. Can come out a token or two over, where the marker
+    meets the text either side of it and the tokenizer merges across the join.
+    """
+    encoding = tokenizer.encode(text)
+    n_tokens = len(encoding)
+    if n_tokens <= max_tokens:
+        return text
+    marker_template = "\n\n[... {} characters omitted ...]\n\n"
+    # Sized against the worst case, as in `truncate_middle`: the count printed in it is at most the full length.
+    keepable = max_tokens - len(tokenizer.encode(marker_template.format(len(text))))
+    if keepable <= 0:  # budget too small to say anything useful in
+        return ""
+    head_tokens = (keepable + 1) // 2  # odd token goes to the head: an opening is worth more than a tail
+    tail_tokens = keepable - head_tokens
+    offsets = encoding.offsets  # (start, end) in characters, per token
+    head_end = offsets[head_tokens - 1][1] if head_tokens else 0
+    tail_start = offsets[n_tokens - tail_tokens][0] if tail_tokens else len(text)
+    return text[:head_end] + marker_template.format(tail_start - head_end) + text[tail_start:]
+
 def fit_text_to_token_budget(settings: env,
                              text: str,
                              budget_tokens: int) -> str:
-    """Return `text` cut down to roughly `budget_tokens`, or `""` if the budget cannot hold anything.
+    """Return `text` cut down to `budget_tokens`, or `""` if the budget cannot hold anything.
 
-    The token-facing front for `truncate_middle`. It exists so that callers never do the unit conversion
-    themselves: the budget is in tokens, the truncation is in characters, and getting that backwards
-    produces a limit wrong by a factor of about four in whichever direction hurts.
-
-    "Roughly" is honest rather than hedging. The conversion uses `settings.tokens_per_character`, the same
-    calibrated estimate `count_tokens` falls back on, which drifts with the text: dense markup and long
-    identifiers tokenize worse than prose. Exactness is not needed here - the reserve that
-    `budget_for_fetched_text` keeps free is far larger than the error.
+    The token-facing front for the two middle truncations, so that callers never do the unit conversion
+    themselves. With a local tokenizer in `settings`, the cut is made at its token boundaries
+    (`truncate_middle_tokens`) and is exact. Without one, the budget is converted to characters through
+    `settings.tokens_per_character`, the calibrated estimate `count_tokens` falls back on, and the result is
+    only roughly that size: dense markup and long identifiers tokenize worse than prose.
     """
     if budget_tokens <= 0:
         return ""
+    maybe_tokenizer = getattr(settings, "tokenizer", None)
+    if maybe_tokenizer is not None:
+        return truncate_middle_tokens(maybe_tokenizer, text, budget_tokens)
     tokens_per_character = settings.tokens_per_character or _DEFAULT_TOKENS_PER_CHARACTER
     return truncate_middle(text, int(budget_tokens / tokens_per_character))  # tokens / (tokens/character) = characters
 
@@ -1486,11 +1512,11 @@ def fit_attachments_to_context(settings: env,
     else:
         budget -= budget % quantum
         allowances = _share_fairly(wanted, budget)
-    # Back to characters, each document at its own exact ratio when it was counted in tokens; in characters
-    # already, `size` is the length and this is the identity. `truncate_middle` is a no-op when the text
-    # already fits its allowance, which is the ordinary case.
-    return [truncate_middle(text, len(text) if allowance >= size else allowance * len(text) // size)
-            for (text, _kind), size, allowance in zip(attachments, sizes, allowances)]
+    # Both truncations are no-ops when the text already fits its allowance, which is the ordinary case.
+    if maybe_tokenizer is not None:
+        return [text if allowance >= size else truncate_middle_tokens(maybe_tokenizer, text, allowance)
+                for (text, _kind), size, allowance in zip(attachments, sizes, allowances)]
+    return [truncate_middle(text, allowance) for (text, _kind), allowance in zip(attachments, allowances)]
 
 
 @functools.lru_cache(maxsize=64)
