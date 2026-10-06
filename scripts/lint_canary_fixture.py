@@ -20,6 +20,9 @@ def canary(value):
     pattern = "\d+"  # W605: invalid escape sequence
     under = helper(1,
         2)  # E128: continuation line under-indented for visual indent
+    if (value and
+        under):  # E129: visually indented line with same indent as next logical line
+        pass
     over = helper(1,
                     2)  # E127: over-indented, which the house allows; must NOT be reported
     return pattern, under, over

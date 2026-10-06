@@ -27,7 +27,7 @@ FIXTURE = pathlib.Path("scripts") / "lint_canary_fixture.py"
 
 # What each linter must report on the fixture, and what it must not.
 EXPECTED = {"ruff": {"F401", "F841", "E711", "SIM201", "W605"},
-            "pycodestyle": {"E128"}}
+            "pycodestyle": {"E128", "E129"}}
 ALLOWED_BY_THE_HOUSE = {"E126", "E127"}
 
 # The blocking ruff run (the advisory one ends in `|| true`), and the pycodestyle run. A `pdm run` prefix is
