@@ -580,6 +580,9 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          been read through for the autumn's overall priorities yet (maintainer).
        - **After the event**: the per-document pass (built on `agent.ask_record`; `extract_fields.py` its first
          user, the other `ask_record` scripts moved over after), the DPG glyph-race fix and upstream report.
+         - **And a look at Qwen 3.8's chat template** (maintainer, 2026-10-06): what its special handling of
+           the last turn does, such that the backend's cache stays warm when the prompt ends on a user message
+           and is lost completely otherwise.
    - **2026-10-06, final tests; 0.2.10 cut the same day** rather than on the 7th as planned (maintainer).
      Each item its own commit:
      - **Ctrl+N's glitch, missed when the chat graph stood in for an idle avatar**: `mark_discontinuity` now
