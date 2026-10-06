@@ -95,6 +95,7 @@
   - In v0.2.9 only a fetched page opened with its address, and a failure was a bare sentence, such as *"This site doesn't render its content as static HTML"*, that did not say which site. Every result now opens with *"Webfetch result for"* and the address.
 - **`llm_tokenizer_path` also takes a bare `tokenizer.json`.**
   - Besides a directory holding one, a HuggingFace repo id and a `.gguf`.
+  - A model archive given as the path is searched for one too, in a directory named for the model. It is tried before a `.gguf` beside it, loading much faster, and the `.gguf` is used when the backend says the `tokenizer.json` counts differently.
   - A HuggingFace tokenizer is now checked against the backend before it is used, as a `.gguf` already was, and refused if it counts differently from the model being served.
 
 #### Raven-avatar

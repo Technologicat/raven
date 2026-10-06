@@ -626,11 +626,11 @@ def follow_model_swap(settings: env) -> bool:
     settings.tokenizer = None
     if settings.backend_flavor == "lmstudio" and info.loaded:
         _warn_if_lmstudio_parallel(settings.backend_url)
-    tokenizer_source = None
+    tokenizer_sources = []
     if librarian_config.llm_tokenizer_path:
-        tokenizer_source = _resolve_tokenizer_source(librarian_config.llm_tokenizer_path,
-                                                     [settings.model, settings.model_id])
-    _start_tokenizer_load(settings, tokenizer_source)
+        tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
+                                                       [settings.model, settings.model_id])
+    _start_tokenizer_load(settings, tokenizer_sources)
     return True
 
 
@@ -931,10 +931,10 @@ def configure(model_info: env,
 
     # Token counting: find the optional local tokenizer for exact counts, and seed the tokens-per-character ratio used
     # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
-    tokenizer_source = None
+    tokenizer_sources = []
     if librarian_config.llm_tokenizer_path:
-        tokenizer_source = _resolve_tokenizer_source(librarian_config.llm_tokenizer_path,
-                                                     [model, request_model])
+        tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
+                                                       [model, request_model])
 
     settings = env(user=user, char=char, model=model,
                    model_id=request_model,  # model id sent in requests; see the docstring
@@ -972,19 +972,22 @@ def configure(model_info: env,
             print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
             print()
 
-    _start_tokenizer_load(settings, tokenizer_source)
+    _start_tokenizer_load(settings, tokenizer_sources)
     return settings
 
 
-def _start_tokenizer_load(settings: env, tokenizer_source: str | None) -> None:
+def _start_tokenizer_load(settings: env, tokenizer_sources: list[str]) -> None:
     """Report which tier `count_tokens` will use, and start loading a local tokenizer if there is one.
+
+    `tokenizer_sources`: what to load from, in the order to try, as `_resolve_tokenizer_sources` gives them.
+    The first that loads and agrees with the backend is kept.
 
     Loading happens on a daemon thread and assigns `settings.tokenizer` when it finishes: reading a GGUF
     takes several seconds, and the counting callers include the GUI's context-fill readout, which runs on the
     thread that also delivers keystrokes. Counts asked for before then use the tier below, so the readout
     starts out approximate and sharpens — the same shape as the backend-figure upgrade it replaces.
     """
-    if tokenizer_source is None:
+    if not tokenizer_sources:
         if settings.backend_flavor == "oobabooga":
             logger.info("_start_tokenizer_load: no local tokenizer configured; token counts will be exact, from the backend's token-count endpoint.")
         else:
@@ -993,12 +996,18 @@ def _start_tokenizer_load(settings: env, tokenizer_source: str | None) -> None:
                         "to a model archive, a .gguf, or a tokenizer.json for exact offline counts.")
         return
 
-    logger.info(f"_start_tokenizer_load: token counts will be exact and offline, from '{tokenizer_source}' (loading in the background).")
+    logger.info(f"_start_tokenizer_load: token counts will be exact and offline, from '{tokenizer_sources[0]}' (loading in the background)"
+                + (f"; if it does not count as the backend does, from {tokenizer_sources[1:]}" if len(tokenizer_sources) > 1 else "."))
 
     def load_it() -> None:
         # The backend is asked to confirm the tokenizer, which is two small requests — one more reason this
         # belongs on a thread of its own rather than in the startup path.
-        settings.tokenizer = _load_local_tokenizer(tokenizer_source, _make_backend_token_counter(settings))
+        backend_counter = _make_backend_token_counter(settings)
+        for source in tokenizer_sources:
+            if (tokenizer := _load_local_tokenizer(source, backend_counter)) is not None:
+                settings.tokenizer = tokenizer
+                return
+        logger.warning(f"_start_tokenizer_load: no local tokenizer could be used, of {tokenizer_sources}; token counts stay estimates.")
 
     threading.Thread(target=load_it, name="llmclient tokenizer load", daemon=True).start()
 
@@ -1051,28 +1060,28 @@ _DEFAULT_CONTEXT_LENGTH = 64 * 1024  # tokens; assumed when the backend does not
 _DEFAULT_TOKENS_PER_CHARACTER = 0.27  # tokens per character; rough English/markup default, refined from real usage
 _tokenizer_cache = {}  # path -> loaded tokenizer (or None if loading failed); avoids reloading the same tokenizer
 
-def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> str | None:
-    """Decide what `path` is pointing at, and return the thing to load from. `None` if there is nothing.
+def _resolve_tokenizer_sources(path: str, model_names: Collection[str]) -> list[str]:
+    """Decide what `path` is pointing at, and return what to load from, in the order to try. Empty if nothing.
 
     Three shapes are accepted, because a user has whichever one their setup produced:
 
       - **A HuggingFace tokenizer**: a directory containing `tokenizer.json`, or anything that is not a
         directory at all, which includes a bare `tokenizer.json` and a repo id — passed through unchanged.
       - **A single `.gguf` file** — the model served by a llama.cpp-family backend.
-      - **A directory to search**, which is the useful one when several models are in rotation: the `.gguf`
-        matching `model_names` is picked out of it (`gguftokenizer.find_for_model`). Point this at the model
-        archive rather than at any one backend's directory, so the answer does not depend on which backend is
-        serving today. The backend may be on another machine; the archive must be reachable from this one by
-        a file path, mounted or local.
+      - **A directory to search**, which is the useful one when several models are in rotation: the
+        tokenizers matching `model_names` are picked out of it, a `tokenizer.json` in a directory named for
+        the model first and then the `.gguf` files, in the order `gguftokenizer.rank_for_model` gives. Point
+        this at the model archive rather than at any one backend's directory, so the answer does not depend
+        on which backend is serving today. The backend may be on another machine; the archive must be
+        reachable from this one by a file path, mounted or local.
 
     Deciding by *content* rather than by a config flag: the user has one path to give, and which kind it is
     is visible from the path itself.
     """
     source = pathlib.Path(path).expanduser()
-    if source.is_dir() and not (source / "tokenizer.json").exists():
-        found = gguftokenizer.find_for_model(source, model_names)
-        return str(found) if found is not None else None
-    return str(source)
+    if source.is_dir() and not (source / gguftokenizer.TOKENIZER_JSON).exists():
+        return [str(found) for found in gguftokenizer.rank_for_model(source, model_names)]
+    return [str(source)]
 
 
 def _make_backend_token_counter(settings: env) -> Callable[[str], int | None]:
@@ -1113,7 +1122,7 @@ def _load_local_tokenizer(path: str, backend_counter: Callable[[str], int | None
         tokenizer = _load_tokenizer_json(path)
         if tokenizer is not None and gguftokenizer.agrees_with_backend(tokenizer, backend_counter) is False:
             logger.warning(f"_load_local_tokenizer: the tokenizer from '{path}' does not count the way the backend does; "
-                           f"falling back to token estimates. Is this the model the backend is serving?")
+                           f"not using it. Is this the model the backend is serving?")
             tokenizer = None
     _tokenizer_cache[path] = tokenizer
     return tokenizer
@@ -1126,13 +1135,13 @@ def _load_tokenizer_json(path: str):
     from tokenizers import Tokenizer  # noqa: PLC0415 -- deferred to first use, as the GGUF path defers it
     source = pathlib.Path(path).expanduser()
     if source.is_dir():
-        source = source / "tokenizer.json"
+        source = source / gguftokenizer.TOKENIZER_JSON
     try:
         if source.is_file():
             return Tokenizer.from_file(str(source))
         return Tokenizer.from_pretrained(path)
     except Exception as exc:  # noqa: BLE001 -- any load failure just means "no local tokenizer; use the estimate"
-        logger.warning(f"_load_tokenizer_json: could not load a tokenizer from '{path}': {type(exc)}: {exc}. Falling back to usage-calibrated token estimates.")
+        logger.warning(f"_load_tokenizer_json: could not load a tokenizer from '{path}': {type(exc)}: {exc}.")
         return None
 
 def _ooba_token_count(backend_url: str, text: str) -> int:

@@ -6,7 +6,7 @@ import pathlib
 import pytest
 
 from .. import gguftokenizer
-from ..gguftokenizer import find_for_model, load, _PROBE_TOLERANCE_TOKENS
+from ..gguftokenizer import find_for_model, load, rank_for_model, _PROBE_TOLERANCE_TOKENS
 
 
 # --------------------------------------------------------------------------------
@@ -54,6 +54,40 @@ def test_an_unreachable_backend_names_no_model_and_finds_nothing(archive):
     """Reported as `None`, it must read as no match: the lookup runs at startup, where raising stops the app."""
     assert find_for_model(archive, [None, None]) is None
     assert find_for_model(archive, [None, "qwen3.5-9b"]).name == "Qwen3.5-9B-UD-Q4_K_XL.gguf"
+
+
+def test_a_tokenizer_json_is_found_by_its_directorys_name(tmp_path):
+    root = tmp_path / "archive"
+    make_model(root, "Qwen3.5-4B", "tokenizer.json", size=100)
+    make_model(root, "Gemma4-26B-A4B", "tokenizer.json", size=100)
+    assert find_for_model(root, ["qwen3.5-4b"]) == root / "Qwen3.5-4B" / "tokenizer.json"
+
+
+def test_a_tokenizer_json_in_a_directory_not_named_for_the_model_is_not_found(tmp_path):
+    """The negative of the one above: a HuggingFace cache keeps it under a commit hash, which names nothing."""
+    root = tmp_path / "archive"
+    make_model(root, "snapshots/d8fb21ca8d905d2832ee8b96c894d3298964346b", "tokenizer.json", size=100)
+    assert find_for_model(root, ["qwen3.5-4b"]) is None
+
+
+def test_a_tokenizer_json_is_tried_first_and_the_ggufs_after_it_largest_first(tmp_path):
+    """The quick reference tokenizer, then the served file to fall back on; nothing that matches less well."""
+    root = tmp_path / "archive"
+    make_model(root, "Qwen3.5-4B", "Qwen3.5-4B-UD-Q4_K_XL.gguf", size=4000)
+    make_model(root, "Qwen3.5-4B", "tokenizer.json", size=100)
+    make_model(root, "Qwen3.5-4B", "Qwen3.5-4B-Q8_0.gguf", size=8000)
+    make_model(root, "Qwen3.5", "Qwen3.5-0.8B.gguf", size=900)  # contained in the name, but a weaker match
+    assert [path.name for path in rank_for_model(root, ["qwen3.5-4b"])] == ["tokenizer.json",
+                                                                            "Qwen3.5-4B-Q8_0.gguf",
+                                                                            "Qwen3.5-4B-UD-Q4_K_XL.gguf"]
+    assert find_for_model(root, ["qwen3.5-4b"]).name == "tokenizer.json"
+
+
+def test_the_name_tokenizer_json_says_nothing_about_the_model(tmp_path):
+    """Scored by its stem, every `tokenizer.json` would match a model whose name contains "tokenizer"."""
+    root = tmp_path / "archive"
+    make_model(root, "Qwen3.5-4B", "tokenizer.json", size=100)
+    assert find_for_model(root, ["some-tokenizer-model"]) is None
 
 
 def test_a_multi_token_prediction_head_is_not_a_model(tmp_path):

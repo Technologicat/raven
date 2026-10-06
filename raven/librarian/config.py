@@ -82,7 +82,9 @@ llm_model = None
 #     the `.gguf` matching whatever the backend reports serving is picked out of it, past the quantization
 #     (a `Q8_0` on disk answers for a loaded `Q4_K_XL`) and through symbolic links. Point it at your model
 #     archive rather than at one backend's folder. The backend may be on another machine; the archive has to
-#     be reachable from this one by a file path, mounted or local.
+#     be reachable from this one by a file path, mounted or local. A `tokenizer.json` is found too, when the
+#     directory it is in is named for the model, and is tried first, loading in a fraction of the time; the
+#     `.gguf` beside it is the fallback, if the backend says the `tokenizer.json` counts differently.
 #   - **A single `.gguf`.** What a llama.cpp-family backend serves; it carries the vocabulary and the merges.
 #   - **A HuggingFace tokenizer**: a `tokenizer.json`, a directory holding one, or a repo id such as
 #     "Qwen/Qwen3.5-4B". Tiny (~10-15 MB) and loads in milliseconds.

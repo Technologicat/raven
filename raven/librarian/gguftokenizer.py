@@ -7,8 +7,11 @@ backend — which matters because a backend's `usage["prompt_tokens"]` is not re
 
 Two jobs, because a machine that keeps several models has to answer "which file" before "which tokenizer":
 
-  - `find_for_model` picks the file whose name matches what the backend says it is serving.
-  - `load` builds a `tokenizers.Tokenizer` from that file.
+  - `rank_for_model` lists the files whose names match what the backend says it is serving, in the order to
+    try them: a `tokenizer.json` beside the model first, if there is one, then the `.gguf` files.
+    `find_for_model` is the first of them.
+  - `load` builds a `tokenizers.Tokenizer` from a `.gguf`. A `tokenizer.json` needs no building, and loads
+    with `tokenizers` itself; `agrees_with_backend` checks either kind.
 
 **Nothing is trusted until something checks it.** A tokenizer assembled from plausible-looking parts
 produces confidently wrong numbers, which is worse than the estimate it replaces, because the readout stops
@@ -31,7 +34,8 @@ were checked against a backend serving that family and agreed exactly — 486 to
 510 against 510 for Gemma, on the probes below.
 """
 
-__all__ = ["find_for_model", "agrees_with_backend", "load"]
+__all__ = ["TOKENIZER_JSON",
+           "rank_for_model", "find_for_model", "agrees_with_backend", "load"]
 
 import logging
 import os
@@ -81,8 +85,11 @@ _VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, meas
 # against the backend), but a head is not the model, and one that does not would leave the estimate in
 # place with the right file beside it. Matched as a word of its own in the name, not as three letters.
 #
-# The size tie-break in `find_for_model` already passes over both, a companion being smaller than its model;
+# The size tie-break in `rank_for_model` already passes over both, a companion being smaller than its model;
 # naming them here also covers a directory holding the companion and not the model.
+# HuggingFace's single-file tokenizer, which a model archive may hold beside or instead of a `.gguf`.
+TOKENIZER_JSON = "tokenizer.json"
+
 _NOT_A_MODEL = re.compile(r"mmproj|(?<![a-z0-9])mtp(?![a-z0-9])", re.IGNORECASE)
 
 # Round-trip probe. Digits, punctuation runs, non-ASCII letters and newlines are where a mis-assembled
@@ -153,7 +160,8 @@ def _match_score(candidate: pathlib.Path, wanted: Collection[str]) -> int:
     """How well `candidate` matches any of the model names in `wanted`. Higher is better; 0 is no match.
 
     A file's own name and its parent directory's are both tried, since a model archive usually spells the
-    identity in the directory and appends the quantization to the file.
+    identity in the directory and appends the quantization to the file. A `tokenizer.json` is named for what
+    it is rather than for whose it is, so only its directory says which model it belongs to.
     """
     # Containment either way, and nothing weaker. Two names agreeing only in part is not evidence that they
     # are the same model: community blends put the publisher first, so a shared opening says the packager is
@@ -161,7 +169,9 @@ def _match_score(candidate: pathlib.Path, wanted: Collection[str]) -> int:
     # cost of being wrong here is one-directional — a missed match falls back to the estimate and says so in
     # the log, where a wrong match silently counts with another model's vocabulary, and would pass the
     # round-trip check in `load` while doing it.
-    names = [_normalize(candidate.stem), _normalize(candidate.parent.name)]
+    names = [_normalize(candidate.parent.name)]
+    if candidate.name != TOKENIZER_JSON:
+        names.append(_normalize(candidate.stem))
     best = 0
     for want in (_normalize(name) for name in wanted if name):
         if not want:
@@ -175,8 +185,8 @@ def _match_score(candidate: pathlib.Path, wanted: Collection[str]) -> int:
     return best
 
 
-def _gguf_files_under(search_root: pathlib.Path):
-    """Yield every `.gguf` under `search_root`, following symlinks, visiting no directory twice."""
+def _tokenizer_files_under(search_root: pathlib.Path):
+    """Yield every `.gguf` and `tokenizer.json` under `search_root`, following symlinks, visiting no directory twice."""
     # Following them is the point: a model archive shared between backends is typically a tree of symlinks
     # into one central copy, and `pathlib.Path.glob("**/*.gguf")` does not follow those — measured on such a
     # tree, it found 2 files where this finds 13. Following symlinks can also walk in circles, hence the
@@ -187,12 +197,16 @@ def _gguf_files_under(search_root: pathlib.Path):
         subdirectories[:] = [name for name in subdirectories
                              if os.path.realpath(os.path.join(directory, name)) not in seen]
         for filename in filenames:
-            if filename.lower().endswith(".gguf"):
+            if filename.lower().endswith(".gguf") or filename == TOKENIZER_JSON:
                 yield pathlib.Path(directory) / filename
 
 
-def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> Optional[pathlib.Path]:
-    """Find the `.gguf` under `search_root` that belongs to the model named by `model_names`. `None` if none does.
+def rank_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> list[pathlib.Path]:
+    """The tokenizers under `search_root` for the model named by `model_names`, in the order to try them.
+
+    A tokenizer is a `.gguf`, or a `tokenizer.json` in a directory named for its model. Only the best-matching
+    ones are returned, a `tokenizer.json` first and then the `.gguf` files, largest first. Empty if nothing
+    matches. The caller is expected to move down the list when one fails `agrees_with_backend`.
 
     `model_names`: what the backend calls the loaded model — pass every spelling available (its label and
                    its id), since backends differ about which one is descriptive.
@@ -202,11 +216,11 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
     # A backend that could not be reached names no model, and reports that as `None`.
     model_names = [name for name in model_names if name]
     if not search_root.is_dir():
-        logger.warning(f"find_for_model: '{search_root}' is not a directory; no local tokenizer.")
-        return None
+        logger.warning(f"rank_for_model: '{search_root}' is not a directory; no local tokenizer.")
+        return []
 
     scored = []
-    for candidate in _gguf_files_under(search_root):
+    for candidate in _tokenizer_files_under(search_root):
         if _NOT_A_MODEL.search(candidate.name):
             continue
         score = _match_score(candidate, model_names)
@@ -214,21 +228,37 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
             scored.append((score, candidate))
 
     if not scored:
-        logger.info(f"find_for_model: nothing under '{search_root}' matches {sorted(set(model_names))}; keeping the token estimate.")
-        return None
+        logger.info(f"rank_for_model: nothing under '{search_root}' matches {sorted(set(model_names))}; keeping the token estimate.")
+        return []
 
-    # Among equally good matches, the largest file. A companion file matches its model's name just as well and
-    # is smaller — a vision projector, a multi-token-prediction head, and whatever kind comes next, which
+    # The best score only. A lower one names another model, which `agrees_with_backend` would catch while the
+    # backend can be asked, and nothing would catch while it cannot.
+    best_score = max(score for score, _path in scored)
+    # A `tokenizer.json` first: the publisher's own tokenizer, for any family, where a `.gguf` is assembled
+    # by this module for the families it knows; and quicker to read (measured 2026-10-06, 0.014 s for a
+    # 0.7 MB one, against 7.9 s for a `.gguf`). The `.gguf` is what the backend actually serves, which is
+    # why it comes next rather than not at all: a `tokenizer.json` from another revision or a base model is
+    # refused by the backend check, and the caller falls through to it.
+    #
+    # Among the `.gguf` files, the largest. A companion file matches its model's name just as well and is
+    # smaller — a vision projector, a multi-token-prediction head, and whatever kind comes next, which
     # `_NOT_A_MODEL` cannot name in advance. Several quantizations of one model carry the same tokenizer
     # (measured: two of them, byte-identical vocabulary and merges), so among those the choice is free, and
     # the load costs the same either way, the tokenizer being read from the metadata at the front of the file
     # (measured 2026-10-06, page cache warm: 7.9 s for a 17.6 GB model and for its 1.4 GB head).
-    scored.sort(key=lambda pair: (-pair[0], -pair[1].stat().st_size, str(pair[1])))
-    best_score, best = scored[0]
-    runners_up = ", ".join(f"{path.name} ({score})" for score, path in scored[1:4])
-    logger.info(f"find_for_model: {sorted(set(model_names))} -> '{best}' (score {best_score})"
-                + (f"; also considered {runners_up}" if runners_up else ""))
-    return best
+    ranked = sorted((path for score, path in scored if score == best_score),
+                    key=lambda path: (path.name != TOKENIZER_JSON, -path.stat().st_size, str(path)))
+    runners_up = [pair for pair in sorted(scored, key=lambda pair: -pair[0]) if pair[0] < best_score]
+    others = ", ".join(f"{path.name} ({score})" for score, path in runners_up[:3])
+    logger.info(f"rank_for_model: {sorted(set(model_names))} -> {[str(path) for path in ranked]} (score {best_score})"
+                + (f"; also considered {others}" if others else ""))
+    return ranked
+
+
+def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> Optional[pathlib.Path]:
+    """The first tokenizer `rank_for_model` would try, or `None` if there is none."""
+    ranked = rank_for_model(search_root, model_names)
+    return ranked[0] if ranked else None
 
 
 def agrees_with_backend(tokenizer: Any,
@@ -343,17 +373,17 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
         return None
     if round_tripped != _SELF_CHECK_SAMPLE:
         logger.warning(f"load: the tokenizer built from '{gguf_path}' failed its round-trip check "
-                       f"({round_tripped!r} != {_SELF_CHECK_SAMPLE!r}); falling back to token estimates.")
+                       f"({round_tripped!r} != {_SELF_CHECK_SAMPLE!r}); not using it.")
         return None
 
     # Then ask the backend whether this tokenizer counts the way it does. That check subsumes the offline
     # list — it is about the model being served rather than about what someone measured once — and it also
-    # catches the thing no amount of care in `find_for_model` can: a file whose *name* matched while its
+    # catches the thing no amount of care in `rank_for_model` can: a file whose *name* matched while its
     # vocabulary belongs to another model. Such a tokenizer builds and round-trips perfectly.
     agrees = agrees_with_backend(tokenizer, backend_counter)
     if agrees is False:
         logger.warning(f"load: the tokenizer built from '{gguf_path.name}' does not count the way the backend does; "
-                       f"falling back to token estimates. Is this the model the backend is serving?")
+                       f"not using it. Is this the model the backend is serving?")
         return None
     if agrees is None and (tokenizer_class, pre) not in _VERIFIED_CONSTRUCTIONS:
         logger.info(f"load: '{gguf_path.name}' is tokenizer class {tokenizer_class!r} with pre-tokenizer {pre!r}, a "

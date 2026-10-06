@@ -2833,6 +2833,24 @@ class TestATokenizerJsonIsATokenizer:
         assert tokenizer is not None
         assert "characters omitted" in llmclient.truncate_middle_tokens(tokenizer, "word " * 1000, 50)
 
+    def test_the_loader_moves_on_to_the_next_source_when_one_is_refused(self, monkeypatch):
+        # The first source fails (refused by the backend, say), the second loads, the third is never tried.
+        tried = []
+
+        def fake_load(path, backend_counter):
+            tried.append(path)
+            return None if path == "first" else f"tokenizer from {path}"
+
+        monkeypatch.setattr(llmclient, "_load_local_tokenizer", fake_load)
+        monkeypatch.setattr(llmclient, "_make_backend_token_counter", lambda settings: None)
+        settings = env(tokenizer=None, backend_flavor="lmstudio")
+        llmclient._start_tokenizer_load(settings, ["first", "second", "third"])
+        deadline = time.monotonic() + 5.0
+        while settings.tokenizer is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert settings.tokenizer == "tokenizer from second"
+        assert tried == ["first", "second"]
+
     def test_a_tokenizer_the_backend_disagrees_with_is_refused(self, tokenizer_json):
         # Counting characters rather than words: far off, as another model's vocabulary would be. The two
         # tests above, with an agreeing backend, are the control.
