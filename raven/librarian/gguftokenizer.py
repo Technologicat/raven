@@ -74,13 +74,15 @@ _VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, meas
 
 # A vision projector rides beside its model under a name that matches the model's just as well, and carries
 # no tokenizer. Anywhere in the name, not just at the front: both `mmproj-gemma-4-26B-A4B-it-BF16.gguf` and
-# `Qwen3.5-9B-mmproj-BF16.gguf` are in use, and a projector is also the smaller file, so it wins the
-# size tie-break and disables the feature it was mistaken for.
+# `Qwen3.5-9B-mmproj-BF16.gguf` are in use.
 #
 # A multi-token-prediction head is the same kind of companion: `mtp-Qwen3.8-27B-Q4_0.gguf` beside the model,
 # a twelfth of its size. That one happens to carry the vocabulary (seen 2026-10-05, chosen and confirmed
 # against the backend), but a head is not the model, and one that does not would leave the estimate in
 # place with the right file beside it. Matched as a word of its own in the name, not as three letters.
+#
+# The size tie-break in `find_for_model` already passes over both, a companion being smaller than its model;
+# naming them here also covers a directory holding the companion and not the model.
 _NOT_A_MODEL = re.compile(r"mmproj|(?<![a-z0-9])mtp(?![a-z0-9])", re.IGNORECASE)
 
 # Round-trip probe. Digits, punctuation runs, non-ASCII letters and newlines are where a mis-assembled
@@ -215,10 +217,13 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
         logger.info(f"find_for_model: nothing under '{search_root}' matches {sorted(set(model_names))}; keeping the token estimate.")
         return None
 
-    # Among equally good matches, the smallest file. One model is often kept at several quantizations, and
-    # those carry the same tokenizer (measured: two quantizations of one model, byte-identical vocabulary and
-    # merges) — so the choice is free, and reading the smaller file is several seconds faster.
-    scored.sort(key=lambda pair: (-pair[0], pair[1].stat().st_size, str(pair[1])))
+    # Among equally good matches, the largest file. A companion file matches its model's name just as well and
+    # is smaller — a vision projector, a multi-token-prediction head, and whatever kind comes next, which
+    # `_NOT_A_MODEL` cannot name in advance. Several quantizations of one model carry the same tokenizer
+    # (measured: two of them, byte-identical vocabulary and merges), so among those the choice is free, and
+    # the load costs the same either way, the tokenizer being read from the metadata at the front of the file
+    # (measured 2026-10-06, page cache warm: 7.9 s for a 17.6 GB model and for its 1.4 GB head).
+    scored.sort(key=lambda pair: (-pair[0], -pair[1].stat().st_size, str(pair[1])))
     best_score, best = scored[0]
     runners_up = ", ".join(f"{path.name} ({score})" for score, path in scored[1:4])
     logger.info(f"find_for_model: {sorted(set(model_names))} -> '{best}' (score {best_score})"

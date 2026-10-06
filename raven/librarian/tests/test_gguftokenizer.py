@@ -102,12 +102,20 @@ def test_a_publisher_prefix_does_not_prevent_a_match(tmp_path):
     assert find_for_model(root, ["TheDrummer-Qwen3.5-9B-Tuned"]) is not None
 
 
-def test_the_smallest_of_equally_good_matches_wins(tmp_path):
-    """Quantizations of one model carry the same tokenizer, so the cheapest to read is the one to read."""
+def test_the_largest_of_equally_good_matches_wins(tmp_path):
+    """A companion file the deny-list has no name for matches as well as its model, and loses on size."""
     root = tmp_path / "archive"
-    make_model(root, "Qwen3.5-9B", "Qwen3.5-9B-Q8_0.gguf", size=9000)
-    make_model(root, "Qwen3.5-9B", "Qwen3.5-9B-Q4_K_XL.gguf", size=4000)
-    assert find_for_model(root, ["qwen3.5-9b"]).name == "Qwen3.5-9B-Q4_K_XL.gguf"
+    make_model(root, "Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q4_K_XL.gguf", size=9000)
+    make_model(root, "Qwen3.8-27B-GGUF", "Qwen3.8-27B-draft-Q4_0.gguf", size=800)
+    assert find_for_model(root, ["qwen3.8-27b@q4_k_xl"]).name == "Qwen3.8-27B-UD-Q4_K_XL.gguf"
+
+
+def test_a_larger_file_of_another_model_does_not_win_on_size(tmp_path):
+    """Size breaks ties between equally good matches, and only those."""
+    root = tmp_path / "archive"
+    make_model(root, "Qwen3.5-9B", "Qwen3.5-9B-UD-Q4_K_XL.gguf", size=4000)
+    make_model(root, "Qwen3.6-27B", "Qwen3.6-27B-UD-Q4_K_XL.gguf", size=9000)
+    assert find_for_model(root, ["qwen3.5-9b"]).name == "Qwen3.5-9B-UD-Q4_K_XL.gguf"
 
 
 def test_a_model_reachable_only_through_a_symlink_is_found(tmp_path):

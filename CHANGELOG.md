@@ -123,7 +123,7 @@
 
 #### Raven-librarian
 
-- **The local tokenizer is read from the model, not from a multi-token-prediction head stored beside it.** Such a head matches the model's name, and as the smaller file it was preferred; one without the model's vocabulary would have left the context-fill readout an estimate.
+- **The local tokenizer is read from the model, not from a multi-token-prediction head stored beside it.** Such a head matches the model's name, and as the smaller file it was preferred; one without the model's vocabulary would have left the context-fill readout an estimate. Among files matching the model's name, the largest is now read, so any other kind of file kept beside a model is passed over too.
 - **Replies start sooner: the backend reuses what it processed before, instead of the whole conversation every turn.**
   - The context prefill between turns prepares the backend for the next reply. It sent the conversation with a different system message than a reply does, and ended it at the AI's last reply, which a chat template renders differently once something follows it; either way, nothing it prepared could be used. It now sends what the next reply begins with, up to your last message.
   - The context-fill readout counts the rest, usually the AI's last reply, itself. With an exact tokenizer (`llm_tokenizer_path`) that count is exact too, unless the reply holds an image. Without an exact tokenizer it is an estimate, and the readout shows `~` when the reply is a noticeable part of the whole.
