@@ -2284,14 +2284,20 @@ class DPGChatController:
         reported = out.usage["prompt_tokens"]
         node_ids = self.datastore.linearize_up(task_env.head_node_id)
         cut_index = scaffold.prefill_cut_index(history)
+        # The tail is the difference of two counts, so both are taken here, together, rather than reusing the
+        # one from before the request: the local tokenizer loads in the background, and a total counted
+        # through the ratio minus a prefix counted with the tokenizer is the gap between two methods, not a
+        # tail. Thousands of tokens, measured on the first prefill after startup.
+        maybe_tokenizer = self.llm_settings.tokenizer
         prefix_estimate = (llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index])[0]
                            if cut_index >= 0 else 0)
         if not llmclient.prompt_size_report_looks_whole(reported, prefix_estimate):
             return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
-        tail_estimate = max(0, estimate - prefix_estimate)
+        branch_estimate = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)[0]
+        both_counted = maybe_tokenizer is not None and self.llm_settings.tokenizer is maybe_tokenizer
+        tail_estimate = max(0, branch_estimate - prefix_estimate)
         total = reported + tail_estimate
-        is_exact = readout_is_exact(tail_estimate, total, history[cut_index + 1:],
-                                    tokenizer_loaded=(self.llm_settings.tokenizer is not None))
+        is_exact = readout_is_exact(tail_estimate, total, history[cut_index + 1:], tokenizer_loaded=both_counted)
         logger.info(f"DPGChatController._context_prefill_entrypoint: prompt size for HEAD '{task_env.head_node_id}': {reported} tokens "
                     f"counted by the backend up to the last user message, plus ~{tail_estimate} estimated after it")
         self._render_context_fill(total, is_exact=is_exact)
