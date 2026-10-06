@@ -2,7 +2,7 @@
 
 **Releases:**
 
-- [0.2.10 (in progress) — *"Algol"* edition](#0210-in-progress--algol-edition)
+- [0.2.10 (6 October 2026) — *"Algol"* edition](#0210-6-october-2026--algol-edition)
 - [0.2.9 (24 September 2026) — *"Pleiades"* edition](#029-24-september-2026--pleiades-edition)
 - [0.2.8 (7 August 2026)](#028-7-august-2026)
 - [0.2.7 (22 April 2026)](#027-22-april-2026)
@@ -14,7 +14,7 @@
 - [0.2.1 (18 June 2025)](#021-18-june-2025)
 - [0.1.x and older](#01x-and-older)
 
-## 0.2.10 (in progress) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
+## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 
 ### Added
 
