@@ -611,6 +611,20 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **Found on the way**: with `llm_tokenizer_path` set, an unreachable backend named its model `None` and
        `gguftokenizer.find_for_model` raised sorting the names (in 0.2.9 too); three local test failures that
        CI could not see, having no override.
+     - **The local tokenizer's picker** (maintainer's lunch-break notes):
+       - `mmproj` was already refused by name, beside yesterday's `mtp`.
+       - Of the files matching the model's name, the largest is preferred, so a companion the deny-list cannot
+         name loses on size. The smallest had been preferred for a faster load, which does not happen: 7.9 s
+         from the 17.6 GB model and from its 1.4 GB head alike.
+       - A `tokenizer.json` is found too, scored by its directory's name, and **tried before the `.gguf`**,
+         which is used when the backend refuses the `tokenizer.json` (maintainer's design, over a fixed
+         preference either way). Only the top-scoring matches are tried. Checked live both ways: another
+         model's `tokenizer.json` refused and the `.gguf` used; Qwen's own kept, loaded in 0.33 s.
+       - Every non-GGUF shape now loads through `tokenizers` and is checked against the backend, as the
+         configuration already claimed. Found on the way: a HuggingFace directory, loaded through
+         `transformers`, made the new token-boundary cut raise.
+       - Qwen 3.8 27B's `tokenizer.json`, from the Hub, is kept at `00_stuff/tokenizers/Qwen3.8-27B/` for
+         testing (gitignored); point `llm_tokenizer_path` at `00_stuff/tokenizers` to use it.
      - **Filed for later**: search inside help cards, which needs the cards' red emphasis recoloured first, and
        matches shown and stepped across pages (`TODO_DEFERRED.md`); the chat search matching attachment and
        database-item filenames, for 0.2.11, the matching and the chat log's painting kept together
