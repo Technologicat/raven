@@ -6544,3 +6544,16 @@ shape to try first is a `raven/librarian/gui/` subpackage holding `app`, `chat_c
   rule that can be applied without judgement.
 
 Raised during the `chatmessage` split (2026-10-05, Juha).
+
+## Help cards: search inside the card
+
+*Cluster: helpcard · Cost: ? · Gate: none · Filed: 2026-10-06*
+
+A search field in the card's toolbar, for finding a hotkey or a phrase without paging through the card.
+
+**It needs the card's highlight colour changed first.** `HelpWindow`'s `highlight_color` defaults to
+`(255, 0, 0)`, the same red as `guiutils.SEARCH_HIGHLIGHT_COLOR`, so a search match would be
+indistinguishable from the card's own emphasis. The new colour goes to the cards' emphasis, and the red
+stays with search, which is what it means everywhere else in Raven.
+
+Raised by Juha during the 0.2.10 release-day live testing (2026-10-06).
