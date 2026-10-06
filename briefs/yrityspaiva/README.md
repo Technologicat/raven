@@ -573,7 +573,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        - **For 6 October: with the chat graph showing, Ctrl+N sometimes brings the avatar back after its glitch
          effect has already ended** (maintainer, seen live), so the switch to the new chat happens without it.
        - **Release day (7 October):** the `release` skill, then whatever still says 0.2.10 re-gated to 0.2.11,
-         then the systems check.
+         then the systems check. *Done on 6 October instead; see that day below.*
        - **README screenshots**: retaken for 0.2.11, not now, including at least one of the animated ones;
          the toggle row and the Chat graph checkbox moved today (maintainer).
        - **`briefs/roadmap-overview-2026-10.md` stays put**: the gates are done, but the clusters have not
@@ -625,6 +625,18 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          `transformers`, made the new token-boundary cut raise.
        - Qwen 3.8 27B's `tokenizer.json`, from the Hub, is kept at `00_stuff/tokenizers/Qwen3.8-27B/` for
          testing (gitignored); point `llm_tokenizer_path` at `00_stuff/tokenizers` to use it.
+     - **0.2.10 "Algol" released**, tag `v0.2.10`. Re-gating found nothing gated on 0.2.10 itself: the gates
+       naming it say "after 0.2.10" or "not for 0.2.10", or were moved to 0.2.11 on 1 October. Brief 12's
+       "scheduled for v0.2.10" was the one stale schedule line, now tied to the drydock (maintainer).
+     - **Systems check: green** (maintainer). For the event:
+       - **The demo runs on the arXiv fulltext corpus** (maintainer): the `documents` and `rag_index` links in
+         `~/.config/raven/librarian/` point at `documents_arxiv_fulltext` and `rag_index_arxiv_fulltext`.
+         Switching means closing Librarian first, as the running app watches `documents/`.
+       - **Librarian runs without `--repl`** at the exhibit, the REPL being unauthenticated code execution.
+       - **`fetch_document`'s token-boundary cut, checked live on that corpus**: a whole-paper fetch came back
+         at 53,021 of 276,102 characters; the same cut recomputed offline is 13,107 tokens against a ceiling
+         of 13,107. Asked to read the paper, Qwen 3.8 fetched it in 5000-character ranges of its own accord,
+         which fit whole; the cut needed an explicit request for the whole document.
      - **What the next releases are for** (maintainer, 2026-10-06):
        - **0.2.11 is a dehydration pass**, fixing the issues deferred in the run-up to Yrityspäivä. So it
          does not take the brief-12 store, which goes with the drydock.
