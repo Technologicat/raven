@@ -580,3 +580,35 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          been read through for the autumn's overall priorities yet (maintainer).
        - **After the event**: the per-document pass (built on `agent.ask_record`; `extract_fields.py` its first
          user, the other `ask_record` scripts moved over after), the DPG glyph-race fix and upstream report.
+   - **2026-10-06, final tests; 0.2.10 cut the same day** rather than on the 7th as planned (maintainer).
+     Each item its own commit:
+     - **Ctrl+N's glitch, missed when the chat graph stood in for an idle avatar**: `mark_discontinuity` now
+       waits for the video through `_when_video_is_back`, as an emotion and an anime effect already did. Its
+       0.4 s floor had run out on a paused avatar. Confirmed live.
+     - **The heartbeat ships in 0.2.10**: the server was restarted on the final code at 14:30, and the avatar
+       session was still alive by Ctrl+P at the end of the afternoon (maintainer).
+     - **The ~80k-token PDF chat**: between turns it now hits the cache, both follow-ups confirmed. The first
+       turn after opening it missed for another reason, found by measuring: the token ratio calibrated from
+       a short prompt holding an image came out at more than twice the true one, and the attachment budget,
+       converting the window to characters with it, cut the paper in the middle in the prefill and not in the
+       turn. Fixed in three steps, each confirmed live:
+       - calibration only from prompts without images and of at least `_CALIBRATION_MIN_PROMPT_TOKENS`;
+       - with an exact tokenizer, the attachment budget in tokens: each attachment counted, the
+         conversation's share counted, and the cut made at token boundaries (`truncate_middle_tokens`, by the
+         tokenizer's character offsets, so nothing is decoded). `fetch_document`'s `fit_text_to_token_budget`
+         too;
+       - the readout calls a tokenizer-counted tail exact (`readout_is_exact`), and counts both halves of the
+         tail together, the first prefill after startup having mixed a ratio count with a tokenizer count.
+       - **Why the token-boundary cut and not a per-document ratio**: measured on the attachments in the
+         maintainer's datastore, a cut at a document's own average ratio landed from −19% to +30% of its
+         allowance at 10% of the document, the ends of a paper tokenizing unlike its middle; by offsets, within
+         one token. The maintainer asked for the measurement before deciding, precision being the point.
+       - Rejected: a separate branch for the token-boundary work, planned as an M; with the per-attachment
+         counting already in, it came out small.
+     - **Found on the way**: with `llm_tokenizer_path` set, an unreachable backend named its model `None` and
+       `gguftokenizer.find_for_model` raised sorting the names (in 0.2.9 too); three local test failures that
+       CI could not see, having no override.
+     - **Filed for later**: search inside help cards, which needs the cards' red emphasis recoloured first, and
+       matches shown and stepped across pages (`TODO_DEFERRED.md`); the chat search matching attachment and
+       database-item filenames, for 0.2.11, the matching and the chat log's painting kept together
+       (maintainer).
