@@ -6551,6 +6551,13 @@ Raised during the `chatmessage` split (2026-10-05, Juha).
 
 A search field in the card's toolbar, for finding a hotkey or a phrase without paging through the card.
 
+**A paged card needs two more things** (Juha, 2026-10-06):
+
+- **Some way to show that other pages have matches**, since the reader sees one page at a time. The
+  toolbar's page buttons are the obvious place for it.
+- **Hopping between matches across pages**, so stepping past the last match on a page turns to the next
+  page holding one.
+
 **It needs the card's highlight colour changed first.** `HelpWindow`'s `highlight_color` defaults to
 `(255, 0, 0)`, the same red as `guiutils.SEARCH_HIGHLIGHT_COLOR`, so a search match would be
 indistinguishable from the card's own emphasis. The new colour goes to the cards' emphasis, and the red
