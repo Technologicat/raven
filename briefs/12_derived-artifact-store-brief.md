@@ -1,8 +1,9 @@
 # Brief: one mechanism for derived artifacts, two stores
 
-**Status, 2026-09-30:** scheduled for v0.2.10. Does not depend on brief 13. Its open questions O1–O6 are to be
-discussed with the maintainer in the near future, before building: in the maintainer's words, an architecture
-cleanup that keeps Raven maintainable and makes it easier to extend.
+**Status, 2026-10-06:** goes with the brief-13 drydock, as the handling of what goes into the unified
+database (maintainer). It does not depend on brief 13 to be built. Its open questions O1–O6 are to be settled
+in the drydock's design session, before building: in the maintainer's words, an architecture cleanup that
+keeps Raven maintainable and makes it easier to extend.
 
 **What:** unify how Raven stores things it *computed from* a source artifact — extracted text, OCR text,
 rescaled images, burst `.bib` records, and eventually embeddings — behind one keying and regeneration
@@ -452,8 +453,6 @@ increment.** A plausible split, to be decided rather than assumed:
 
 Then the ordering constraints:
 
-- **This brief is v0.2.9 work and does not gate v0.2.8.** The release cuts once brief 09, the webfetch
-  attachment work, and the queued UX fixes are in.
 - **Webfetch sidecarring lands *first*, ahead of this brief, and that is fine.** It was planned and scoped
   before this design existed, and the chat-attachment pattern it follows is already the correct pattern for it
   — so it will arrive as another consumer of `sidecarstore`/`textfilestore`, not as a fourth invented scheme.

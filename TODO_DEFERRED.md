@@ -150,11 +150,12 @@ After Yrityspäivä, and near-term. **Item 5 first**: cluster once, in high-D, s
 
 ## Brief 12: the derived artifact store
 
-*Cluster: corpus-pipeline · Cost: ~L · Gate: its open questions O1–O6, to be discussed with the maintainer · Filed: 2026-09-30 · See also: `briefs/12_derived-artifact-store-brief.md`*
+*Cluster: corpus-pipeline · Cost: ~L · Gate: the brief-13 drydock, its open questions O1–O6 settled in the drydock's design session · Filed: 2026-09-30 · Updated: 2026-10-06 · See also: `briefs/12_derived-artifact-store-brief.md`*
 
 One key shape and one regeneration mechanism for everything computed from a source — extracted text, OCR,
-thumbnails, embeddings — in a chat store and a document-DB store. Scheduled for v0.2.10; an architecture
-cleanup that keeps Raven maintainable and extensible. Several items here are waiting on it, the synchronous
+thumbnails, embeddings — in a chat store and a document-DB store. Goes with the brief-13 drydock, as the
+handling of what goes into the unified database (maintainer, 2026-10-06); an architecture cleanup that keeps
+Raven maintainable and extensible. Several items here are waiting on it, the synchronous
 HEAD-change extraction among them.
 
 ## Brief 13: corpus scopes and the unified document DB
