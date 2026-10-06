@@ -36,6 +36,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            # ...and fitting things into what is left
            "budget_for_fetched_text",
            "truncate_middle",
+           "truncate_middle_tokens",
            "fit_text_to_token_budget",
            "attachment_budget_kind",  # which budget a content part is charged against
            "fit_attachments_to_context",
