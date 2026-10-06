@@ -990,7 +990,7 @@ def _start_tokenizer_load(settings: env, tokenizer_source: str | None) -> None:
         else:
             logger.info("_start_tokenizer_load: no local tokenizer configured; token counts will be estimated from a character ratio, "
                         f"and upgraded to the backend's own figure where that looks like the whole prompt. Set '{librarian_config.__name__}.llm_tokenizer_path' "
-                        "to a model archive, a .gguf, or a HuggingFace tokenizer directory for exact offline counts.")
+                        "to a model archive, a .gguf, or a tokenizer.json for exact offline counts.")
         return
 
     logger.info(f"_start_tokenizer_load: token counts will be exact and offline, from '{tokenizer_source}' (loading in the background).")
@@ -1056,8 +1056,8 @@ def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> str | 
 
     Three shapes are accepted, because a user has whichever one their setup produced:
 
-      - **A HuggingFace tokenizer directory** (it contains `tokenizer.json`), or anything that is not a
-        directory at all, which includes a repo id — passed through to `transformers` unchanged.
+      - **A HuggingFace tokenizer**: a directory containing `tokenizer.json`, or anything that is not a
+        directory at all, which includes a bare `tokenizer.json` and a repo id — passed through unchanged.
       - **A single `.gguf` file** — the model served by a llama.cpp-family backend.
       - **A directory to search**, which is the useful one when several models are in rotation: the `.gguf`
         matching `model_names` is picked out of it (`gguftokenizer.find_for_model`). Point this at the model
@@ -1097,9 +1097,10 @@ def _make_backend_token_counter(settings: env) -> Callable[[str], int | None]:
 def _load_local_tokenizer(path: str, backend_counter: Callable[[str], int | None] | None = None):
     """Load (and cache) a local tokenizer for exact token counting, or return `None` on failure.
 
-    `path` is a `.gguf` file, a directory with `tokenizer.json` + `tokenizer_config.json`, or a HF repo id.
-    Failures (missing files, network, version skew, a GGUF whose tokenizer this Raven has not been verified
-    against) are logged and degrade to the calibrated estimate rather than raising.
+    `path` is a `.gguf` file, a `tokenizer.json`, a directory holding one, or a HuggingFace repo id. Every
+    shape gives a `tokenizers.Tokenizer`. Failures (missing files, network, a tokenizer that does not count
+    the way the backend does, a GGUF whose tokenizer this Raven has not been verified against) are logged
+    and degrade to the calibrated estimate rather than raising.
 
     **Slow** — several seconds for a GGUF. Call it off any thread that has to stay responsive; `configure`
     does that for the app's own tokenizer.
@@ -1109,14 +1110,30 @@ def _load_local_tokenizer(path: str, backend_counter: Callable[[str], int | None
     if path.lower().endswith(".gguf"):
         tokenizer = gguftokenizer.load(pathlib.Path(path), backend_counter)
     else:
-        try:
-            from transformers import AutoTokenizer  # noqa: PLC0415 -- heavy import, deferred to first use
-            tokenizer = AutoTokenizer.from_pretrained(path)
-        except Exception as exc:  # noqa: BLE001 -- any load failure just means "no local tokenizer; use the estimate"
-            logger.warning(f"_load_local_tokenizer: could not load tokenizer from '{path}': {type(exc)}: {exc}. Falling back to usage-calibrated token estimates.")
+        tokenizer = _load_tokenizer_json(path)
+        if tokenizer is not None and gguftokenizer.agrees_with_backend(tokenizer, backend_counter) is False:
+            logger.warning(f"_load_local_tokenizer: the tokenizer from '{path}' does not count the way the backend does; "
+                           f"falling back to token estimates. Is this the model the backend is serving?")
             tokenizer = None
     _tokenizer_cache[path] = tokenizer
     return tokenizer
+
+def _load_tokenizer_json(path: str):
+    """A `tokenizers.Tokenizer` from a `tokenizer.json`, a directory holding one, or a HuggingFace repo id. `None` on failure."""
+    # Through `tokenizers` rather than `transformers` for all three, so that every local tokenizer is the same
+    # kind of object: `transformers` answers `encode` with a bare list of ids, and the token-boundary
+    # truncation needs the character offsets a `tokenizers.Encoding` carries.
+    from tokenizers import Tokenizer  # noqa: PLC0415 -- deferred to first use, as the GGUF path defers it
+    source = pathlib.Path(path).expanduser()
+    if source.is_dir():
+        source = source / "tokenizer.json"
+    try:
+        if source.is_file():
+            return Tokenizer.from_file(str(source))
+        return Tokenizer.from_pretrained(path)
+    except Exception as exc:  # noqa: BLE001 -- any load failure just means "no local tokenizer; use the estimate"
+        logger.warning(f"_load_tokenizer_json: could not load a tokenizer from '{path}': {type(exc)}: {exc}. Falling back to usage-calibrated token estimates.")
+        return None
 
 def _ooba_token_count(backend_url: str, text: str) -> int:
     """Exact token count from oobabooga's `/v1/internal/token-count` endpoint."""

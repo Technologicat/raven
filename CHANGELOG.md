@@ -93,6 +93,8 @@
 - **The AI can fetch a document by part of its ID**: without the file extension, or without the leading folders, as long as that names only one document. A name that fits several gets a list of them, to fetch again by the full ID. In v0.2.9 only the exact ID worked, and an AI that dropped the extension had to spend a round finding out.
 - **A webfetch result says which address it is for, when the fetch failed too.**
   - In v0.2.9 only a fetched page opened with its address, and a failure was a bare sentence, such as *"This site doesn't render its content as static HTML"*, that did not say which site. Every result now opens with *"Webfetch result for"* and the address.
+- **`llm_tokenizer_path` also takes a bare `tokenizer.json`**, besides a directory holding one, a HuggingFace repo id and a `.gguf`.
+  - A HuggingFace tokenizer is now checked against the backend before it is used, as a `.gguf` already was, and refused if it counts differently from the model being served.
 
 #### Raven-avatar
 

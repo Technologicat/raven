@@ -31,7 +31,7 @@ were checked against a backend serving that family and agreed exactly — 486 to
 510 against 510 for Gemma, on the probes below.
 """
 
-__all__ = ["find_for_model", "load"]
+__all__ = ["find_for_model", "agrees_with_backend", "load"]
 
 import logging
 import os
@@ -231,9 +231,13 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
     return best
 
 
-def _agrees_with_backend(tokenizer: Any,
-                         backend_counter: Optional[Callable[[str], Optional[int]]]) -> Optional[bool]:
-    """Does `tokenizer` count the way the backend does? `True`, `False`, or `None` if it could not be asked."""
+def agrees_with_backend(tokenizer: Any,
+                        backend_counter: Optional[Callable[[str], Optional[int]]]) -> Optional[bool]:
+    """Does `tokenizer` count the way the backend does? `True`, `False`, or `None` if it could not be asked.
+
+    `tokenizer`: a `tokenizers.Tokenizer`, however it was built. `backend_counter`: `text -> the backend's
+    token count for it`, framing included.
+    """
     if backend_counter is None:
         return None
 
@@ -253,7 +257,7 @@ def _agrees_with_backend(tokenizer: Any,
         backend_short = backend_counter(short_probe)
         backend_long = backend_counter(long_probe)
     except Exception as exc:  # noqa: BLE001 -- an unreachable backend is a "cannot say", not a failure here
-        logger.info(f"_agrees_with_backend: could not ask the backend to count: {type(exc)}: {exc}.")
+        logger.info(f"agrees_with_backend: could not ask the backend to count: {type(exc)}: {exc}.")
         return None
     if backend_short is None or backend_long is None:
         return None
@@ -271,7 +275,7 @@ def _agrees_with_backend(tokenizer: Any,
     # worth catching are the ones that grow with the text.
     disagreement = abs(backend_difference - local_difference)
     agrees = disagreement <= _PROBE_TOLERANCE_TOKENS
-    logger.info(f"_agrees_with_backend: backend counted {backend_difference} tokens of added text where this "
+    logger.info(f"agrees_with_backend: backend counted {backend_difference} tokens of added text where this "
                 f"tokenizer counts {local_difference} ({'agreed' if agrees else 'DISAGREED'}, "
                 f"tolerance {_PROBE_TOLERANCE_TOKENS}).")
     return agrees
@@ -346,7 +350,7 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
     # list — it is about the model being served rather than about what someone measured once — and it also
     # catches the thing no amount of care in `find_for_model` can: a file whose *name* matched while its
     # vocabulary belongs to another model. Such a tokenizer builds and round-trips perfectly.
-    agrees = _agrees_with_backend(tokenizer, backend_counter)
+    agrees = agrees_with_backend(tokenizer, backend_counter)
     if agrees is False:
         logger.warning(f"load: the tokenizer built from '{gguf_path.name}' does not count the way the backend does; "
                        f"falling back to token estimates. Is this the model the backend is serving?")

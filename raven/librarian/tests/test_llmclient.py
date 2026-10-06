@@ -2801,6 +2801,45 @@ class TestTruncateMiddleTokens:
         assert text.startswith(head) and text.endswith(tail)
 
 
+class TestATokenizerJsonIsATokenizer:
+    """Every non-GGUF shape of `llm_tokenizer_path` loads as a `tokenizers.Tokenizer`, checked against the backend."""
+
+    @pytest.fixture
+    def tokenizer_json(self, tmp_path):
+        tokenizers = pytest.importorskip("tokenizers")
+        tokenizer = tokenizers.Tokenizer(tokenizers.models.WordLevel({"[UNK]": 0, "word": 1}, unk_token="[UNK]"))
+        tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
+        path = tmp_path / "some-model" / "tokenizer.json"
+        path.parent.mkdir()
+        tokenizer.save(str(path))
+        return path
+
+    @staticmethod
+    def agreeing_backend(tokenizer_json):
+        """Counts as the tokenizer does, plus a fixed framing, as a chat template adds."""
+        tokenizers = pytest.importorskip("tokenizers")
+        same = tokenizers.Tokenizer.from_file(str(tokenizer_json))
+        return lambda text: len(same.encode(text)) + 7
+
+    def test_a_bare_file_loads_and_cuts_by_offsets(self, tokenizer_json):
+        tokenizer = llmclient._load_local_tokenizer(str(tokenizer_json), self.agreeing_backend(tokenizer_json))
+        assert tokenizer is not None, "a bare tokenizer.json was refused"
+        out = llmclient.truncate_middle_tokens(tokenizer, "word " * 1000, 50)
+        assert "characters omitted" in out and len(tokenizer.encode(out)) <= 51
+
+    def test_a_directory_holding_one_loads_and_cuts_by_offsets(self, tokenizer_json):
+        # Loaded through `transformers`, this shape answered `encode` with a bare list, and cutting with it raised.
+        tokenizer = llmclient._load_local_tokenizer(str(tokenizer_json.parent), self.agreeing_backend(tokenizer_json))
+        assert tokenizer is not None
+        assert "characters omitted" in llmclient.truncate_middle_tokens(tokenizer, "word " * 1000, 50)
+
+    def test_a_tokenizer_the_backend_disagrees_with_is_refused(self, tokenizer_json):
+        # Counting characters rather than words: far off, as another model's vocabulary would be. The two
+        # tests above, with an agreeing backend, are the control.
+        # The directory rather than the bare file, so a loader that cannot open the file at all cannot pass this.
+        assert llmclient._load_local_tokenizer(str(tokenizer_json.parent), lambda text: len(text)) is None
+
+
 class TestFitAttachmentsWithAnExactTokenizer:
     """With a tokenizer loaded, the attachments are counted, and the calibrated ratio stops deciding the cut."""
 

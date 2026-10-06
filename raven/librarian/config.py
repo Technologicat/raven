@@ -84,7 +84,7 @@ llm_model = None
 #     archive rather than at one backend's folder. The backend may be on another machine; the archive has to
 #     be reachable from this one by a file path, mounted or local.
 #   - **A single `.gguf`.** What a llama.cpp-family backend serves; it carries the vocabulary and the merges.
-#   - **A HuggingFace tokenizer directory** (`tokenizer.json` + `tokenizer_config.json`) or repo id, e.g.
+#   - **A HuggingFace tokenizer**: a `tokenizer.json`, a directory holding one, or a repo id such as
 #     "Qwen/Qwen3.5-4B". Tiny (~10-15 MB) and loads in milliseconds.
 #
 # A `.gguf` is slower to read (~7 s, in the GGUF reader rather than in the tokenizer), so it is loaded on a
