@@ -26,6 +26,28 @@ from raven.common import bgtask  # noqa: E402
 from raven.librarian import chat_controller, chatmessage, chatutil  # noqa: E402
 
 
+class TestWhenTheContextFillReadoutIsExact:
+    """The backend counts everything up to the last user message; the readout adds the rest from a local count."""
+
+    reply = [{"role": "assistant", "content": [chatutil.text_content_part("a long reply")]}]
+    with_image = [{"role": "assistant", "content": [chatutil.text_content_part("look"),
+                                                    chatutil.image_content_part("sidecar:abc.png")]}]
+
+    def test_a_negligible_tail_is_exact_however_it_was_counted(self):
+        assert chat_controller.readout_is_exact(100, 10000, self.reply, tokenizer_loaded=False)
+
+    def test_a_large_estimated_tail_is_not(self):
+        # The negative control for the case below: the same tail, estimated through the ratio.
+        assert not chat_controller.readout_is_exact(3000, 10000, self.reply, tokenizer_loaded=False)
+
+    def test_a_large_counted_tail_is_exact(self):
+        # A short conversation's last reply is easily over 2% of it; with a tokenizer it is counted, not guessed.
+        assert chat_controller.readout_is_exact(3000, 10000, self.reply, tokenizer_loaded=True)
+
+    def test_an_image_in_the_tail_keeps_it_an_estimate(self):
+        assert not chat_controller.readout_is_exact(3000, 10000, self.with_image, tokenizer_loaded=True)
+
+
 class TestWhichSearchMatchesShowInFull:
     """A collapsed document search shows a match whole when the reader opened it, or opened them all."""
 

@@ -6,7 +6,8 @@ that controls chatting with the AI.
 
 # TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
-__all__ = ["TailFollowSample",
+__all__ = ["readout_is_exact",
+           "TailFollowSample",
            "DPGLinearizedChatView",
            "DPGChatController"]
 
@@ -176,6 +177,23 @@ document_access_tool_names = llmclient.DOCUMENT_TOOL_NAMES
 # The part of the context-fill figure that may be estimated while the readout still calls it exact: the tail
 # after the last user message, which the prefill does not send (see `scaffold.build_prefill_prompt`).
 _NEGLIGIBLE_TAIL_FRACTION = 0.02
+
+def readout_is_exact(tail_tokens: int, total_tokens: int, tail: list[dict], tokenizer_loaded: bool) -> bool:
+    """Whether the context-fill readout may show `total_tokens` as exact, the backend having counted all but `tail`.
+
+    `tail_tokens`: the local count of `tail`, the messages after the last user message.
+    `tail`: those messages, as `chatutil.linearize_chat` gives them.
+    `tokenizer_loaded`: whether the local count came from a tokenizer rather than from the ratio.
+
+    True when the tail is too small to matter, or was counted rather than estimated: with a tokenizer and no
+    image in it, its count is exact short of the chat template's few tokens of framing per message.
+    """
+    if tail_tokens <= _NEGLIGIBLE_TAIL_FRACTION * total_tokens:
+        return True
+    tail_has_images = any(isinstance(part, dict) and part.get("type") == "image_url"
+                          for message in tail
+                          for part in (message.get("content") or []))
+    return tokenizer_loaded and not tail_has_images
 
 @dataclasses.dataclass(frozen=True)
 class TailFollowSample:
@@ -2272,10 +2290,11 @@ class DPGChatController:
             return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
         tail_estimate = max(0, estimate - prefix_estimate)
         total = reported + tail_estimate
-        tail_is_negligible = tail_estimate <= _NEGLIGIBLE_TAIL_FRACTION * total
+        is_exact = readout_is_exact(tail_estimate, total, history[cut_index + 1:],
+                                    tokenizer_loaded=(self.llm_settings.tokenizer is not None))
         logger.info(f"DPGChatController._context_prefill_entrypoint: prompt size for HEAD '{task_env.head_node_id}': {reported} tokens "
                     f"counted by the backend up to the last user message, plus ~{tail_estimate} estimated after it")
-        self._render_context_fill(total, is_exact=tail_is_negligible)
+        self._render_context_fill(total, is_exact=is_exact)
 
     def chat_exchange(self, user_message_text: str, staged_images: list[env] | None = None,
                       staged_files: list[env] | None = None) -> None:
