@@ -2633,25 +2633,25 @@ class TestShareCharacters:
     """Max-min fair allocation of one budget over several attachments."""
 
     def test_everyone_gets_what_they_asked_for_when_it_fits(self):
-        assert llmclient._share_characters([10, 20, 30], budget=100) == [10, 20, 30]
+        assert llmclient._share_fairly([10, 20, 30], budget=100) == [10, 20, 30]
 
     def test_equal_appetites_split_evenly(self):
-        assert llmclient._share_characters([500, 500], budget=100) == [50, 50]
+        assert llmclient._share_fairly([500, 500], budget=100) == [50, 50]
 
     def test_a_modest_item_is_served_in_full_and_its_leftovers_raise_the_rest(self):
         # The point of max-min fairness over equal shares: cutting the 10-character item to 50 would free
         # characters nobody was asking for, and the 500-character one would be no better off for it.
-        assert llmclient._share_characters([10, 500], budget=100) == [10, 90]
+        assert llmclient._share_fairly([10, 500], budget=100) == [10, 90]
 
     def test_order_does_not_matter(self):
         # Two callers walk the same attachments in opposite directions and must agree.
-        forwards = llmclient._share_characters([10, 500, 60], budget=100)
-        backwards = llmclient._share_characters([60, 500, 10], budget=100)
+        forwards = llmclient._share_fairly([10, 500, 60], budget=100)
+        backwards = llmclient._share_fairly([60, 500, 10], budget=100)
         assert forwards == list(reversed(backwards))
 
     def test_no_budget_gives_nobody_anything(self):
-        assert llmclient._share_characters([100, 200], budget=0) == [0, 0]
-        assert llmclient._share_characters([100, 200], budget=-500) == [0, 0]
+        assert llmclient._share_fairly([100, 200], budget=0) == [0, 0]
+        assert llmclient._share_fairly([100, 200], budget=-500) == [0, 0]
 
 
 class TestFitAttachmentsToContext:
@@ -2743,6 +2743,52 @@ class TestFitAttachmentsToContext:
         first = llmclient.fit_attachments_to_context(self.settings(), 1000, self.requested(text))
         later = llmclient.fit_attachments_to_context(self.settings(), 1600, self.requested(text))
         assert first == later
+
+
+class _QuarterTokenizer:
+    """One token per four characters, so an exact count and a ratio of 0.25 agree, and any other ratio does not."""
+    def encode(self, text):
+        return range(len(text) // 4)
+
+
+class TestFitAttachmentsWithAnExactTokenizer:
+    """With a tokenizer loaded, the attachments are counted, and the calibrated ratio stops deciding the cut."""
+
+    # 10000 tokens of window, 25% reserved: 7500 tokens for attachments, 30000 characters at 4 per token.
+    def settings(self, tokens_per_character):
+        return env(context_length=10000, tokens_per_character=tokens_per_character, tokenizer=_QuarterTokenizer())
+
+    def test_the_cut_does_not_move_with_the_ratio(self, monkeypatch):
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        text = "a" * 200000
+        attachments = [(text, llmclient.ATTACHMENT_REQUESTED)]
+        # The negative control first: counted through the ratio, a skewed calibration moves the cut, so this
+        # fixture can tell the two paths apart.
+        by_ratio = [llmclient.fit_attachments_to_context(env(context_length=10000, tokens_per_character=ratio),
+                                                         0, attachments)
+                    for ratio in (0.25, 0.57)]
+        assert by_ratio[0] != by_ratio[1], "the ratio does not move the cut here, so this fixture proves nothing"
+        exact = [llmclient.fit_attachments_to_context(self.settings(ratio), 0, attachments) for ratio in (0.25, 0.57)]
+        assert exact[0] == exact[1], "with a tokenizer loaded, a skewed ratio still moved the cut"
+        assert len(exact[0][0]) <= 30000 and "characters omitted" in exact[0][0]
+
+    def test_a_document_that_fits_by_count_is_not_cut_whatever_the_ratio_says(self, monkeypatch):
+        # The case that cut a paper in half: at 0.57 tokens per character this would look like 14250 tokens
+        # against a budget of 7500, where it is 6250.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        text = "a" * 25000
+        out = llmclient.fit_attachments_to_context(self.settings(0.57), 0, [(text, llmclient.ATTACHMENT_REQUESTED)])
+        assert out == [text]
+
+    def test_a_speculative_document_is_ceilinged_in_tokens(self, monkeypatch):
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        out = llmclient.fit_attachments_to_context(self.settings(0.57), 0,
+                                                   [("a" * 20000, llmclient.ATTACHMENT_SPECULATIVE)])
+        # 10% of the window is 1000 tokens, which is 4000 characters of this text. Through the skewed ratio it
+        # would have been under 1800, which is what the lower bound tells apart.
+        assert 3500 < len(out[0]) <= 4000
+        assert "characters omitted" in out[0]
 
 
 class TestAttachmentBudgetKind:

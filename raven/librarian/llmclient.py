@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 import collections
 import copy
+import functools
 import io
 import json
 import os
@@ -1337,6 +1338,7 @@ CANONICAL_ATTACHMENT_OMITTED = "[Attached file: {name} - not shown, because ther
 # How coarsely the shared attachment budget is rounded down, in characters (~2200 tokens at the default
 # ratio). Purely a stability measure; see `fit_attachments_to_context`.
 _ATTACHMENT_BUDGET_QUANTUM = 8192
+_ATTACHMENT_BUDGET_QUANTUM_TOKENS = 2048  # the same step in tokens, for a budget counted with an exact tokenizer
 
 # The smallest prompt, in tokens, that `invoke` refines `tokens_per_character` from. The chat template and the
 # tool specifications are a fixed cost counted in the backend's `prompt_tokens` and not in the characters it is
@@ -1344,9 +1346,9 @@ _ATTACHMENT_BUDGET_QUANTUM = 8192
 # and two-thirds of a greeting's.
 _CALIBRATION_MIN_PROMPT_TOKENS = 8192
 
-def _share_characters(wanted: list[int],
-                      budget: int) -> list[int]:
-    """Split `budget` characters over items wanting `wanted` characters each. Returns the allowances.
+def _share_fairly(wanted: list[int],
+                  budget: int) -> list[int]:
+    """Split `budget` over items wanting `wanted` each, in whatever unit both are in. Returns the allowances.
 
     Max-min fair (the classic water-filling allocation): raise a common level until the budget runs out,
     and let anything that wanted less than the level through untouched. So a short attachment alongside a
@@ -1455,23 +1457,46 @@ def fit_attachments_to_context(settings: env,
         return []
     tokens_per_character = settings.tokens_per_character or _DEFAULT_TOKENS_PER_CHARACTER
     reserve = _clamped_fraction(librarian_config.context_reserve_fraction, "context_reserve_fraction")
-    window_characters = settings.context_length / tokens_per_character  # tokens / (tokens/character) = characters
-    budget = int(window_characters * (1.0 - reserve)) - conversation_characters
+    # The budget is worked out in tokens where the attachments can be counted exactly, and in characters
+    # through the calibrated ratio where they cannot. The exact count matters for more than precision: it is
+    # a fixed function of the text, where the ratio moves with every request that calibrates it, and a cut
+    # that moves rewrites the prompt prefix from the middle of the document onward.
+    maybe_tokenizer = getattr(settings, "tokenizer", None)
+    if maybe_tokenizer is not None:
+        sizes = [_exact_token_count(maybe_tokenizer, text) for text, _kind in attachments]
+        window = settings.context_length
+        conversation = conversation_characters * tokens_per_character  # characters * (tokens/character) = tokens
+        quantum = _ATTACHMENT_BUDGET_QUANTUM_TOKENS
+    else:
+        sizes = [len(text) for text, _kind in attachments]
+        window = settings.context_length / tokens_per_character  # tokens / (tokens/character) = characters
+        conversation = conversation_characters
+        quantum = _ATTACHMENT_BUDGET_QUANTUM
+    budget = int(window * (1.0 - reserve) - conversation)
     # The per-document ceiling is applied to what a speculative attachment *asks for*, before the fair split
-    # rather than after it. Clamping the demand instead of the allowance means the characters a ceilinged
-    # document does not get are released to the others, which is what the water-filling is for - clamping
-    # afterwards would leave them unused.
+    # rather than after it. Clamping the demand instead of the allowance means the room a ceilinged document
+    # does not get is released to the others, which is what the water-filling is for - clamping afterwards
+    # would leave it unused.
     ceiling = int(_clamped_fraction(librarian_config.docs_fetch_max_fraction_of_context,
-                                    "docs_fetch_max_fraction_of_context") * window_characters)
-    wanted = [min(len(text), ceiling) if kind == ATTACHMENT_SPECULATIVE else len(text)
-              for text, kind in attachments]
+                                    "docs_fetch_max_fraction_of_context") * window)
+    wanted = [min(size, ceiling) if kind == ATTACHMENT_SPECULATIVE else size
+              for size, (_text, kind) in zip(sizes, attachments)]
     if sum(wanted) <= budget:
         allowances = wanted  # everything fits; a ceilinged document is still cut to its ceiling
     else:
-        budget -= budget % _ATTACHMENT_BUDGET_QUANTUM
-        allowances = _share_characters(wanted, budget)
-    # `truncate_middle` is a no-op when the text already fits its allowance, which is the ordinary case.
-    return [truncate_middle(text, allowance) for (text, _kind), allowance in zip(attachments, allowances)]
+        budget -= budget % quantum
+        allowances = _share_fairly(wanted, budget)
+    # Back to characters, each document at its own exact ratio when it was counted in tokens; in characters
+    # already, `size` is the length and this is the identity. `truncate_middle` is a no-op when the text
+    # already fits its allowance, which is the ordinary case.
+    return [truncate_middle(text, len(text) if allowance >= size else allowance * len(text) // size)
+            for (text, _kind), size, allowance in zip(attachments, sizes, allowances)]
+
+
+@functools.lru_cache(maxsize=64)
+def _exact_token_count(tokenizer: Any, text: str) -> int:
+    """How many tokens `tokenizer` makes of `text`. Memoized, the same attached document being sized on every request."""
+    return len(tokenizer.encode(text))
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
