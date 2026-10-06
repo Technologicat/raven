@@ -625,6 +625,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          `transformers`, made the new token-boundary cut raise.
        - Qwen 3.8 27B's `tokenizer.json`, from the Hub, is kept at `00_stuff/tokenizers/Qwen3.8-27B/` for
          testing (gitignored); point `llm_tokenizer_path` at `00_stuff/tokenizers` to use it.
+     - **What the next releases are for** (maintainer, 2026-10-06):
+       - **0.2.11 is a dehydration pass**, fixing the issues deferred in the run-up to Yrityspäivä. So it
+         does not take the brief-12 store, which goes with the drydock.
+       - **The drydock is 0.3.0**: after it, Raven will not be recognizable for what it was.
      - **Filed for later**: search inside help cards, which needs the cards' red emphasis recoloured first, and
        matches shown and stepped across pages (`TODO_DEFERRED.md`); the chat search matching attachment and
        database-item filenames, for 0.2.11, the matching and the chat log's painting kept together
