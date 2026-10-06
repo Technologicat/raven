@@ -166,6 +166,8 @@
   - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
   - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
   - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
+- **The avatar's glitch effect is no longer missed when the avatar was asleep (video off).**
+  - When a new chat or a branch switch woke the avatar, the glitch ran out before the video came back, so the avatar returned to the new conversation without it. The glitch now starts once the video is back.
 - **Resizing the window no longer makes the avatar flicker.** Each change of size briefly showed a stretched copy of the last frame, then the old size again, before the new one.
 - **Keyword search in the knowledge base now finds numbers, model names and some proper names it used to miss.**
   - In v0.2.9 numbers and words containing digits (`2024`, `Qwen3`, `H2O`) were left out of the keyword index altogether, and some names were indexed under a mangled form (`Elsevier` as `elsevi`), so searching for them found nothing through keywords. The semantic half of the search was not affected.

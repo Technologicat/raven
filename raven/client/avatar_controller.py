@@ -705,12 +705,21 @@ class DPGAvatarController:
 
         Does nothing if no animator settings have been loaded through `load_animator_settings`, there being
         no chain to overlay and nothing to restore afterwards.
+
+        If the avatar's video is off, the effect starts once it is back; see `_when_video_is_back`.
         """
         if effect is None:
             effect = DEFAULT_DISCONTINUITY_EFFECT
         if not effect:  # configured off, or nothing to add
             return
+        # Waiting matters more here than for an emotion: the floor is a fraction of a second, so an effect
+        # started on a sleeping avatar is over before its first frame arrives, and the avatar then wakes
+        # into the new conversation without it.
+        self._when_video_is_back(config, key="discontinuity", what="the discontinuity effect",
+                                 action=lambda: self._start_discontinuity_effect(config, effect, floor, ceiling))
 
+    def _start_discontinuity_effect(self, config: env, effect: list, floor: float, ceiling: float) -> None:
+        """Start or extend the effect. The body of `mark_discontinuity`, run once the video is there."""
         with config._animator_settings_lock:
             if config._animator_settings is None:
                 logger.warning("mark_discontinuity: no animator settings loaded for this instance; skipping.")

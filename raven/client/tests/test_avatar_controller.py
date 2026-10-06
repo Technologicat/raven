@@ -123,6 +123,9 @@ def effect_config(monkeypatch):
     monkeypatch.setattr(controller, "ping", lambda config: None, raising=False)
 
     config = env(avatar_instance_id="test-instance",
+                 avatar_renderer=None,  # no stream, so the effect starts at once rather than waiting for video
+                 _video_wait_lock=threading.Lock(),
+                 _pending_on_video={},
                  _animator_settings_lock=threading.RLock(),
                  _animator_settings=None,
                  _effect_timer=None,
@@ -516,3 +519,42 @@ def test_an_effect_waits_for_the_video_beside_an_emotion_and_neither_replaces_th
     renderer.first_frame_received = True
     assert _wait_for(lambda: len(sent) == 2), f"not everything pending arrived: {sent}"
     assert sent == ["joy", "fx notice"]
+
+
+def _with_animator_settings(controller, config, monkeypatch):
+    """Give an `emotion_config` instance a loaded chain, recording what `mark_discontinuity` sends."""
+    loaded = []
+    monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
+                        lambda instance_id, settings: loaded.append(chain_of(settings)))
+    config._animator_settings_lock = threading.RLock()
+    config._animator_settings = {"postprocessor_chain": [["bloom", {"threshold": 0.5}]]}
+    config._effect_timer = None
+    config._effect_started_at = None
+    return loaded
+
+
+def test_a_discontinuity_on_an_awake_avatar_starts_at_once(emotion_config, monkeypatch):
+    controller, config, renderer, _sent = emotion_config
+    loaded = _with_animator_settings(controller, config, monkeypatch)
+    controller.mark_discontinuity(config, floor=10.0)
+    assert len(loaded) == 1 and len(loaded[0]) > 1, f"the effect was not started at once: {loaded}"
+    config._effect_timer.cancel()
+
+
+def test_a_discontinuity_on_a_sleeping_avatar_waits_for_its_video(emotion_config, monkeypatch):
+    """Started at once, the effect would run its floor out before the first frame, and be seen by nobody."""
+    controller, config, renderer, _sent = emotion_config
+    loaded = _with_animator_settings(controller, config, monkeypatch)
+    config._idle_paused = True
+    renderer.animator_running = False
+    renderer.first_frame_received = False
+
+    controller.mark_discontinuity(config, floor=10.0)
+    assert renderer.actions == ["resume"], "the avatar was not woken"
+    time.sleep(0.2)
+    assert loaded == [], "the effect was started while the video was still off"
+
+    renderer.first_frame_received = True
+    assert _wait_for(lambda: loaded), "the effect never started once the video was back"
+    assert loaded[0][0] == "bloom" and len(loaded[0]) > 1, f"what was sent carried no effect: {loaded[0]}"
+    config._effect_timer.cancel()
