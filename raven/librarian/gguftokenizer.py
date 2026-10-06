@@ -235,10 +235,10 @@ def rank_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> l
     # backend can be asked, and nothing would catch while it cannot.
     best_score = max(score for score, _path in scored)
     # A `tokenizer.json` first: the publisher's own tokenizer, for any family, where a `.gguf` is assembled
-    # by this module for the families it knows; and quicker to read (measured 2026-10-06, 0.014 s for a
-    # 0.7 MB one, against 7.9 s for a `.gguf`). The `.gguf` is what the backend actually serves, which is
-    # why it comes next rather than not at all: a `tokenizer.json` from another revision or a base model is
-    # refused by the backend check, and the caller falls through to it.
+    # by this module for the families it knows; and quicker to read (measured 2026-10-06, 0.33 s for Qwen
+    # 3.8's 12.8 MB one, against 7.9 s for its `.gguf`). The `.gguf` is what the backend actually serves,
+    # which is why it comes next rather than not at all: a `tokenizer.json` from another revision or a base
+    # model is refused by the backend check, and the caller falls through to it.
     #
     # Among the `.gguf` files, the largest. A companion file matches its model's name just as well and is
     # smaller — a vision projector, a multi-token-prediction head, and whatever kind comes next, which
