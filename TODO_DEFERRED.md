@@ -6564,3 +6564,25 @@ indistinguishable from the card's own emphasis. The new colour goes to the cards
 stays with search, which is what it means everywhere else in Raven.
 
 Raised by Juha during the 0.2.10 release-day live testing (2026-10-06).
+
+## Librarian's chat search: match attachment and database-item filenames
+
+*Cluster: librarian-search · Cost: M (matching alone S) · Gate: 0.2.11 · Filed: 2026-10-06*
+
+The search reads a message's text parts only: `chatutil.content_to_text` skips attachment parts, so a
+filename never reaches `chatsearch._counts_for`, and searching for a PDF's name finds nothing unless a
+reply happened to mention it.
+
+- **Matching**: attachment filenames as a third searchable text beside the message and its thinking trace,
+  with a count of their own in `MatchCounts`. Small, and enough for the chat graph.
+- **The chat log**: the counts are promised to be the hits the renderer paints, so a filename match needs a
+  highlight on the attachment chip, and stepping through matches has to be able to land on a chip, where it
+  now lands only in Markdown text (`chatlog_search`'s match containers). This is the M.
+- **Database items** (the per-match handles of a `search_documents` result, `fetch_document`'s): not
+  checked whether the text the model gets carries the path. If it does, these may already match and only
+  the handle's highlight is missing.
+
+**The two halves go together** (Juha): matching without painting would light graph boxes that the log then
+cannot step to.
+
+Raised by Juha while looking for a chat by its attachment, during 0.2.10's release-day testing (2026-10-06).
