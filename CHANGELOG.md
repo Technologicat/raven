@@ -93,7 +93,8 @@
 - **The AI can fetch a document by part of its ID**: without the file extension, or without the leading folders, as long as that names only one document. A name that fits several gets a list of them, to fetch again by the full ID. In v0.2.9 only the exact ID worked, and an AI that dropped the extension had to spend a round finding out.
 - **A webfetch result says which address it is for, when the fetch failed too.**
   - In v0.2.9 only a fetched page opened with its address, and a failure was a bare sentence, such as *"This site doesn't render its content as static HTML"*, that did not say which site. Every result now opens with *"Webfetch result for"* and the address.
-- **`llm_tokenizer_path` also takes a bare `tokenizer.json`**, besides a directory holding one, a HuggingFace repo id and a `.gguf`.
+- **`llm_tokenizer_path` also takes a bare `tokenizer.json`.**
+  - Besides a directory holding one, a HuggingFace repo id and a `.gguf`.
   - A HuggingFace tokenizer is now checked against the backend before it is used, as a `.gguf` already was, and refused if it counts differently from the model being served.
 
 #### Raven-avatar
@@ -125,7 +126,9 @@
 
 #### Raven-librarian
 
-- **The local tokenizer is read from the model, not from a multi-token-prediction head stored beside it.** Such a head matches the model's name, and as the smaller file it was preferred; one without the model's vocabulary would have left the context-fill readout an estimate. Among files matching the model's name, the largest is now read, so any other kind of file kept beside a model is passed over too.
+- **The local tokenizer is read from the model, not from a multi-token-prediction head stored beside it.**
+  - Such a head matches the model's name, and as the smaller file it was preferred; one without the model's vocabulary would have left the context-fill readout an estimate.
+  - Among files matching the model's name, the largest is now read, so any other kind of file kept beside a model is passed over too.
 - **Replies start sooner: the backend reuses what it processed before, instead of the whole conversation every turn.**
   - The context prefill between turns prepares the backend for the next reply. It sent the conversation with a different system message than a reply does, and ended it at the AI's last reply, which a chat template renders differently once something follows it; either way, nothing it prepared could be used. It now sends what the next reply begins with, up to your last message.
   - The context-fill readout counts the rest, usually the AI's last reply, itself. With an exact tokenizer (`llm_tokenizer_path`) that count is exact too, unless the reply holds an image. Without an exact tokenizer it is an estimate, and the readout shows `~` when the reply is a noticeable part of the whole.
@@ -172,7 +175,8 @@
   - How much of a document fits is worked out from a running estimate of tokens per character, which a chat holding an image, or a short chat such as a fresh greeting, pushed far too high. A message sent next could then give the AI a paper with part of its middle missing, and say nothing about it. Short prompts and prompts with images no longer change the estimate.
   - The same thing made the prompt processing start over on the first message after switching to a chat with a long document.
   - With an exact tokenizer (`llm_tokenizer_path`), attached documents and the documents the AI fetches are now measured and cut by counting their tokens, so a shortened one comes out the size it was given, where it could come out well over or under.
-- **An LLM backend that is down no longer causes an error while connecting, when `llm_tokenizer_path` is set.** Looking for the local tokenizer failed when the backend named no model, where it should fall back to estimated token counts.
+- **An LLM backend that is down no longer causes an error while connecting, when `llm_tokenizer_path` is set.**
+  - Looking for the local tokenizer failed when the backend named no model, where it should fall back to estimated token counts.
 - **The avatar's glitch effect is no longer missed when the avatar was asleep (video off).**
   - When a new chat or a branch switch woke the avatar, the glitch ran out before the video came back, so the avatar returned to the new conversation without it. The glitch now starts once the video is back.
 - **Resizing the window no longer makes the avatar flicker.** Each change of size briefly showed a stretched copy of the last frame, then the old size again, before the new one.
