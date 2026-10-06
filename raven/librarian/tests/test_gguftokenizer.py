@@ -50,6 +50,12 @@ def test_a_backend_that_describes_rather_than_names_still_matches(archive):
     assert find_for_model(archive, ["qwen3.5-9b, Q4_K_XL, 128 Ki context"]).name == "Qwen3.5-9B-UD-Q4_K_XL.gguf"
 
 
+def test_an_unreachable_backend_names_no_model_and_finds_nothing(archive):
+    """Reported as `None`, it must read as no match: the lookup runs at startup, where raising stops the app."""
+    assert find_for_model(archive, [None, None]) is None
+    assert find_for_model(archive, [None, "qwen3.5-9b"]).name == "Qwen3.5-9B-UD-Q4_K_XL.gguf"
+
+
 def test_a_multi_token_prediction_head_is_not_a_model(tmp_path):
     """Another companion file under a matching name, and smaller than the model, as a projector is."""
     root = tmp_path / "archive"

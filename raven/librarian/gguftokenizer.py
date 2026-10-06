@@ -197,6 +197,8 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
 
     Symlinks are followed, so `search_root` may be a tree of links into a central model archive.
     """
+    # A backend that could not be reached names no model, and reports that as `None`.
+    model_names = [name for name in model_names if name]
     if not search_root.is_dir():
         logger.warning(f"find_for_model: '{search_root}' is not a directory; no local tokenizer.")
         return None
