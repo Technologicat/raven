@@ -2294,6 +2294,9 @@ class DPGChatController:
         if not llmclient.prompt_size_report_looks_whole(reported, prefix_estimate):
             return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
         branch_estimate = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)[0]
+        # A tokenizer that finishes loading between the two counts still mixes the methods. That window is a few
+        # milliseconds, and it is left open rather than locked: the tail is then not taken as counted, so the
+        # readout falls back to the size test and marks a large mixed tail as the estimate it is.
         both_counted = maybe_tokenizer is not None and self.llm_settings.tokenizer is maybe_tokenizer
         tail_estimate = max(0, branch_estimate - prefix_estimate)
         total = reported + tail_estimate
