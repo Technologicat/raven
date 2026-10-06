@@ -166,6 +166,9 @@
   - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
   - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
   - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
+- **An attached document that fits the context window is no longer cut in the middle after looking at a chat with an image.**
+  - How much of a document fits is worked out from a running estimate of tokens per character, which a chat holding an image, or a short chat such as a fresh greeting, pushed far too high. A message sent next could then give the AI a paper with part of its middle missing, and say nothing about it. Short prompts and prompts with images no longer change the estimate.
+  - The same thing made the prompt processing start over on the first message after switching to a chat with a long document.
 - **An LLM backend that is down no longer causes an error while connecting, when `llm_tokenizer_path` is set.** Looking for the local tokenizer failed when the backend named no model, where it should fall back to estimated token counts.
 - **The avatar's glitch effect is no longer missed when the avatar was asleep (video off).**
   - When a new chat or a branch switch woke the avatar, the glitch ran out before the video came back, so the avatar returned to the new conversation without it. The glitch now starts once the video is back.

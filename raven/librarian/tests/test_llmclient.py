@@ -1890,11 +1890,39 @@ class TestUsageCalibration:
             sent["chars"] = sum(len(chatutil.content_to_text(m.get("content"))) for m in history)
         _fake_stream(monkeypatch, [
             {"choices": [{"delta": {"content": "ok"}}]},
-            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11}},
+            {"choices": [], "usage": {"prompt_tokens": 10000, "completion_tokens": 1, "total_tokens": 10001}},
             "[DONE]",
         ])
-        llmclient.invoke(invoke_settings, _history("x" * 40), tools_enabled=False, on_prompt_ready=capture)
-        assert invoke_settings.tokens_per_character == pytest.approx(10 / sent["chars"])
+        llmclient.invoke(invoke_settings, _history("x" * 40000), tools_enabled=False, on_prompt_ready=capture)
+        assert invoke_settings.tokens_per_character == pytest.approx(10000 / sent["chars"])
+
+    # The two below are what the ratio must not learn from, and the test above is their positive control:
+    # the same prompt, calibrated, once nothing disqualifies it.
+
+    def test_a_short_prompt_leaves_the_ratio_alone(self, monkeypatch, invoke_settings):
+        # A short prompt's count is mostly the chat template and the tool specifications, so the ratio it
+        # implies is far too high; carried into the attachment budget, it cuts documents that fit.
+        invoke_settings.tokens_per_character = 0.26
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "ok"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 1599, "completion_tokens": 1, "total_tokens": 1600}},
+            "[DONE]",
+        ])
+        llmclient.invoke(invoke_settings, _history("x" * 4500), tools_enabled=False)
+        assert invoke_settings.tokens_per_character == 0.26, "a greeting-sized prompt recalibrated the ratio"
+
+    def test_a_prompt_with_an_image_leaves_the_ratio_alone(self, monkeypatch, invoke_settings):
+        # An image is counted in the tokens and has no characters to divide by.
+        invoke_settings.tokens_per_character = 0.26
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "ok"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 20000, "completion_tokens": 1, "total_tokens": 20001}},
+            "[DONE]",
+        ])
+        history = [{"role": "user", "content": [chatutil.text_content_part("x" * 40000),
+                                                chatutil.image_content_part("data:image/png;base64,AAAA")]}]
+        llmclient.invoke(invoke_settings, history, tools_enabled=False)
+        assert invoke_settings.tokens_per_character == 0.26, "a prompt carrying an image recalibrated the ratio"
 
     def test_mismatched_tokenizer_warns(self, monkeypatch, caplog, invoke_settings):
         # Tokenizer counts 100 tokens for the content alone; backend reports only 50 for the full prompt ->

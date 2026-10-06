@@ -1338,6 +1338,12 @@ CANONICAL_ATTACHMENT_OMITTED = "[Attached file: {name} - not shown, because ther
 # ratio). Purely a stability measure; see `fit_attachments_to_context`.
 _ATTACHMENT_BUDGET_QUANTUM = 8192
 
+# The smallest prompt, in tokens, that `invoke` refines `tokens_per_character` from. The chat template and the
+# tool specifications are a fixed cost counted in the backend's `prompt_tokens` and not in the characters it is
+# divided by; measured 2026-10-06 at about 425 tokens with four tools, which is under 5% of a prompt this size
+# and two-thirds of a greeting's.
+_CALIBRATION_MIN_PROMPT_TOKENS = 8192
+
 def _share_characters(wanted: list[int],
                       budget: int) -> list[int]:
     """Split `budget` characters over items wanting `wanted` characters each. Returns the allowances.
@@ -2585,7 +2591,15 @@ def invoke(settings: env,
     if usage is not None and usage.get("prompt_tokens"):
         prompt_content = "".join(chatutil.content_to_text(message.get("content")) for message in history)
         if prompt_content:
-            if calibrate:
+            # Only from a prompt whose ratio means something. Anything counted in the tokens and not in the
+            # characters skews it upward: an image is tokens with no characters at all, and the fixed overhead
+            # dominates a short prompt. The skew does not stay in the readout either, because
+            # `fit_attachments_to_context` converts the window into characters with this ratio: after a chat
+            # holding one image (ratio 0.57 against a true 0.26), an attached paper that fit was cut in half.
+            has_image = any(isinstance(part, dict) and part.get("type") == "image_url"
+                            for message in history
+                            for part in (message.get("content") or []))
+            if calibrate and not has_image and usage["prompt_tokens"] >= _CALIBRATION_MIN_PROMPT_TOKENS:
                 settings.tokens_per_character = usage["prompt_tokens"] / len(prompt_content)
             if settings.tokenizer is not None:
                 tokenizer_count = len(settings.tokenizer.encode(prompt_content))
