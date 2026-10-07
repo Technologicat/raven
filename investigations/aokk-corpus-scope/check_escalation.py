@@ -23,10 +23,11 @@ Three inputs, all beside this script:
 
 import argparse
 import collections
-import csv
 import json
 import pathlib
 import sys
+
+from raven.common import tabular
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -61,10 +62,8 @@ def main() -> int:
     # inflates the unflagged group with rescues that already existed, which is invisible except that the
     # record is missing from the old drop list.
     before_rows = {}
-    for line in (HERE / "dropped-before-escalating-titles.tsv").read_text(encoding="utf-8").splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 9 and parts[0] != "key":
-            before_rows[parts[0]] = {"source": parts[5], "why": parts[7], "title": parts[8]}
+    for row in tabular.read_table(HERE / "dropped-before-escalating-titles.tsv"):
+        before_rows[row["key"]] = {"source": row["source"], "why": row["why"], "title": row["title"]}
     todays = {key for key, row in before_rows.items() if row["source"] == "title"}
 
     escalated = {}
@@ -75,12 +74,15 @@ def main() -> int:
 
     # No flags would put every escalated record in "not flagged" and still print a comparison, which reads
     # as a result. So both ways of getting none — no file, or a file whose rows do not match — stop here.
-    path = HERE / "contested.tsv"
-    if not path.exists():
-        print(f"{path} not found; write it first with `score_review.py --contested`", file=sys.stderr)
+    # In whichever format it was written, or saved in after marking.
+    candidates = [HERE / f"contested.{fmt}" for fmt in tabular.FORMATS]
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
+        print(f"no contested.tsv, .xlsx or .ods in {HERE}; write it first with `score_review.py --contested`",
+              file=sys.stderr)
         return 1
     contested = set()
-    for row in csv.DictReader(path.read_text(encoding="utf-8").splitlines(), delimiter="\t"):
+    for row in tabular.read_table(path):
         if row.get("cell") == "drop/high/title":
             contested.add(row["key"])
     if not contested:

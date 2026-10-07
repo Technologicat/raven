@@ -62,9 +62,9 @@ from bibtexparser.model import Entry
 from unpythonic import timer
 from unpythonic.env import env
 
-from raven.common import nlptools
+from raven.common import nlptools, tabular
 from raven.librarian import agent, config as librarian_config, llmclient
-from raven.papers import bibtex
+from raven.papers import bibtex, utils as papers_utils
 from raven.visualizer import config as visualizer_config
 
 # The question the corpus is supposed to answer, quoted into both prompts so the two passes judge the
@@ -113,7 +113,7 @@ SPACY_MODEL = "en_core_web_sm"
 # against the occasional record whose "abstract" field holds a whole introduction.
 ABSTRACT_CHARS = 4000
 
-# How much of an abstract the pilot TSV shows, so that a title too thin to judge from can still be
+# How much of an abstract the pilot review table shows, so that a title too thin to judge from can still be
 # adjudicated by hand without opening the .bib.
 ABSTRACT_PREVIEW_CHARS = 300
 
@@ -235,9 +235,10 @@ markdown fences.
 
 
 def load_records(bib_path: pathlib.Path) -> list[env]:
-    """Every record of a `.bib`, as `env(key, title, abstract)`, in file order.
+    """Every record of a `.bib`, as `env(key, title, venue, abstract, link)`, in file order.
 
-    `abstract` is the empty string where the record has none. Braces are stripped from the title — BibTeX
+    `abstract` is the empty string where the record has none. `link` is where to read the paper — by DOI,
+    else by `url`, else empty (see `raven.papers.utils.paper_url`). Braces are stripped from the title — BibTeX
     uses them to protect capitalization, and they are noise in a prompt and in a TSV alike.
     """
     library = bibtex.parse_file(str(bib_path), split_names=False)
@@ -249,7 +250,9 @@ def load_records(bib_path: pathlib.Path) -> list[env]:
         records.append(env(key=entry.key,
                            title=_clean(title.replace("{", "").replace("}", "")),
                            venue=_venue(fields),
-                           abstract=_clean(abstract)))
+                           abstract=_clean(abstract),
+                           link=papers_utils.paper_url(fields["doi"].value if "doi" in fields else None,
+                                                       fields["url"].value if "url" in fields else None)))
     return records
 
 
@@ -563,28 +566,31 @@ def needs_escalation(answer: dict, record: env) -> bool:
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
-def write_review_tsv(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
+def write_review_table(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
     """A hand-checkable table: one row per record, an empty first column to mark disagreements in.
+
+    TSV, `.xlsx` or `.ods`, by `path`'s extension.
 
     Sorted so that the four cells of verdict × confidence are contiguous, because the two kinds of error
     are not equally bad — a false drop loses a study silently, a false keep costs a reader one line — and
     they are only countable separately if they can be read separately.
     """
-    with path.open("w", encoding="utf-8") as f:
-        f.write("mark\tn\tkey\tverdict\tconfidence\tno_ai\tnot_edu\twrong_level\tabstract\tescalates"
-                "\twhy\ttitle\tvenue\tabstract_head\n")
-        ordered = sorted(rows, key=lambda row: (verdict_of(row[1]),
-                                                CONFIDENCE_ORDER[row[1]["confidence"]],
-                                                row[0].key))
-        for n, (record, answer) in enumerate(ordered, start=1):
-            def shown(value):
-                return {True: "yes", False: "no", None: "?"}[value]
-            preview = record.abstract[:ABSTRACT_PREVIEW_CHARS]
-            f.write(f"\t{n}\t{record.key}\t{verdict_of(answer)}\t{answer['confidence']}\t"
-                    f"{shown(answer['no_ai'])}\t{shown(answer['not_education'])}\t"
-                    f"{shown(answer['wrong_level'])}\t{describe_abstract(record)}\t"
-                    f"{'yes' if needs_escalation(answer, record) else 'no'}\t"
-                    f"{answer['why']}\t{record.title}\t{record.venue}\t{preview}\n")
+    ordered = sorted(rows, key=lambda row: (verdict_of(row[1]),
+                                            CONFIDENCE_ORDER[row[1]["confidence"]],
+                                            row[0].key))
+    tabular.write_table(path, [],
+                        ("mark", "n", "key", "verdict", "confidence", "no_ai", "not_edu", "wrong_level",
+                         "abstract_kind", "escalates", "why", "title", "venue", "abstract_head"),
+                        [("", n, record.key, verdict_of(answer), answer["confidence"],
+                          shown(answer["no_ai"]), shown(answer["not_education"]), shown(answer["wrong_level"]),
+                          describe_abstract(record), "yes" if needs_escalation(answer, record) else "no",
+                          answer["why"], record.title, record.venue, record.abstract[:ABSTRACT_PREVIEW_CHARS])
+                         for n, (record, answer) in enumerate(ordered, start=1)])
+
+
+def shown(value: bool | None) -> str:
+    """A tri-state answer as a table shows it."""
+    return {True: "yes", False: "no", None: "?"}[value]
 
 
 def summarize(rows: list[tuple[env, dict]]) -> None:
@@ -612,7 +618,7 @@ def write_outputs(records: list[env], done: dict[str, dict],
     """
     library = bibtex.parse_file(str(bib_path), split_names=False)
     # A record leaves the bibliography for one reason here — the model judged it off topic — and the
-    # reason is in `dropped.tsv` beside it. Records that cannot be screened at all, having no abstract,
+    # reason is in the drop list beside it. Records that cannot be screened at all, having no abstract,
     # are `raven-siftbib`'s business and are expected to be gone before this runs.
     judged_off_topic = {key for key, answer in done.items() if verdict_of(answer) == "drop"}
     dropped_keys = judged_off_topic
@@ -628,34 +634,37 @@ def write_outputs(records: list[env], done: dict[str, dict],
     kept_path.write_text(bibtex.write_string(kept), encoding="utf-8")
 
     by_key = {record.key: record for record in records}
-    with dropped_path.open("w", encoding="utf-8") as f:
-        f.write("key\tno_ai\tnot_edu\twrong_level\tconfidence\tsource\tabstract\twhy\ttitle\n")
-        # Least-defended first, because this list is read top-down and never to the end. A run over a
-        # corpus this size drops hundreds of records, so the order decides which of them a reader
-        # actually sees: the shakiest verdicts, not the alphabetically luckiest.
-        #
-        # Two keys, in this order. Confidence, obviously. Then whether the record was judged from its
-        # abstract or only from its title — a drop that pass 2 never re-examined rests on less evidence
-        # than one that did, whatever the model said about its own certainty.
-        #
-        # `CONFIDENCE_ORDER` runs the other way, grouping the review TSV most-certain first, so it is
-        # negated here. Note only two of its three values can appear at all: a low-confidence answer is
-        # an `unknown` verdict and is kept, so it never reaches this list.
-        def least_defended(key):
-            answer = done[key]
-            return (-CONFIDENCE_ORDER[answer["confidence"]],
-                    0 if answer["source"] == "title" else 1,
-                    key)
+    # Least-defended first, because this list is read top-down and never to the end. A run over a
+    # corpus this size drops hundreds of records, so the order decides which of them a reader
+    # actually sees: the shakiest verdicts, not the alphabetically luckiest.
+    #
+    # Two keys, in this order. Confidence, obviously. Then whether the record was judged from its
+    # abstract or only from its title — a drop that pass 2 never re-examined rests on less evidence
+    # than one that did, whatever the model said about its own certainty.
+    #
+    # `CONFIDENCE_ORDER` runs the other way, grouping the review table most-certain first, so it is
+    # negated here. Note only two of its three values can appear at all: a low-confidence answer is
+    # an `unknown` verdict and is kept, so it never reaches this list.
+    def least_defended(key):
+        answer = done[key]
+        return (-CONFIDENCE_ORDER[answer["confidence"]],
+                0 if answer["source"] == "title" else 1,
+                key)
 
-        for key in sorted(judged_off_topic, key=least_defended):
-            answer = done[key]
-            record = by_key.get(key)
-            def shown(value):
-                return {True: "yes", False: "no", None: "?"}[value]
-            f.write(f"{key}\t{shown(answer['no_ai'])}\t{shown(answer['not_education'])}\t"
-                    f"{shown(answer['wrong_level'])}\t{answer['confidence']}\t{answer['source']}\t"
-                    f"{describe_abstract(record) if record else '?'}\t{answer['why']}\t"
-                    f"{record.title if record else ''}\n")
+    def dropped_row(key):
+        answer = done[key]
+        record = by_key.get(key)
+        return (key, shown(answer["no_ai"]), shown(answer["not_education"]), shown(answer["wrong_level"]),
+                answer["confidence"], answer["source"], describe_abstract(record) if record else "?",
+                answer["why"], record.title if record else "", record.link if record else "",
+                record.abstract if record else "")
+
+    # The record's whole abstract rides along, and a link to the paper, so that a reviewer can judge a drop
+    # from the table alone. `abstract_kind` is what the judge had to go on: none, a teaser, or the full text.
+    tabular.write_table(dropped_path, [],
+                        ("key", "no_ai", "not_edu", "wrong_level", "confidence", "source", "abstract_kind",
+                         "why", "title", "link", "abstract"),
+                        [dropped_row(key) for key in sorted(judged_off_topic, key=least_defended)])
 
     unknown = sum(1 for answer in done.values() if verdict_of(answer) == "unknown")
     unanswered = len(records) - len(done)
@@ -671,7 +680,7 @@ def main() -> int:
     parser.add_argument("--bib", required=True, help="the .bib to judge")
     parser.add_argument("--pilot", type=int, default=None, metavar="N",
                         help="calibration run: judge a random sample of N records from their titles only, "
-                             "and write a TSV to hand-check. Does not write the filtered .bib")
+                             "and write a table to hand-check. Does not write the filtered .bib")
     parser.add_argument("--seed", type=int, default=42, help="which random sample --pilot takes")
     parser.add_argument("--thin", action="store_true",
                         help="calibration run over every record whose title is under the informative bound, "
@@ -695,6 +704,8 @@ def main() -> int:
                              "tokens, most of it thinking, so the default has room and still fails a "
                              "runaway several times sooner")
     parser.add_argument("--out-dir", default=None, help="where the outputs go (default: beside this script)")
+    parser.add_argument("--format", default="tsv", choices=tabular.FORMATS,
+                        help="format of the tables written: TSV, Excel or OpenDocument")
     opts = parser.parse_args()
 
     # `bibtexparser` logs a warning per record it cannot read, which would bury the progress report.
@@ -749,9 +760,9 @@ def main() -> int:
         would_escalate = sum(1 for record, answer in rows if needs_escalation(answer, record))
         print(f"  pass 2 would take {would_escalate} of these "
               f"({100 * would_escalate / max(len(rows), 1):.0f}%)")
-        tsv_path = out_dir / f"{run_name}.tsv"
-        write_review_tsv(rows, tsv_path)
-        print(f"\nwrote {tsv_path} — put an x in the first column of every row you disagree with")
+        table_path = out_dir / f"{run_name}.{opts.format}"
+        write_review_table(rows, table_path)
+        print(f"\nwrote {table_path} — put an x in the first column of every row you disagree with")
         return 0
 
     if not opts.no_escalate:
@@ -791,7 +802,7 @@ def main() -> int:
     summarize([(by_key[key], answer) for key, answer in done.items() if key in by_key])
     write_outputs(records, done, bib_path,
                   out_dir / f"{bib_path.stem}_in_scope.bib",
-                  out_dir / "dropped.tsv")
+                  out_dir / f"dropped.{opts.format}")
     return 0
 
 

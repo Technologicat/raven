@@ -39,8 +39,9 @@ import sys
 import bibtexparser
 from bibtexparser.model import Entry
 
+from raven.common import tabular
 from raven.common import utils as common_utils
-from raven.papers import bibtex
+from raven.papers import bibtex, utils as papers_utils
 
 TIER_A = "wrong level, quoted"
 TIER_B1 = "not education, corroborated"
@@ -107,9 +108,11 @@ def main() -> int:
                         help="the extraction JSONL (default: the newest extracted-*.jsonl beside this "
                              "script, since the filename names the instrument that wrote it)")
     parser.add_argument("--out-dir", default=None, help="where the outputs go (default: beside this)")
+    parser.add_argument("--format", default="tsv", choices=tabular.FORMATS,
+                        help="format of the two tables written: TSV, Excel or OpenDocument")
     parser.add_argument("--remove-uncorroborated", action="store_true",
                         help="also remove tier B2, which this refuses to do by default. Read "
-                             "`held-for-review.tsv` before reaching for it: that tier is where the "
+                             "the held-for-review table before reaching for it: that tier is where the "
                              "extraction's errors land, and its mistakes are false drops")
     parser.add_argument("--remove-outside-institutions", action="store_true",
                         help="also remove workplace training and informal learning. A scope decision "
@@ -170,22 +173,29 @@ def main() -> int:
     titles = {entry.key: common_utils.normalize_whitespace(
                   common_utils.unicodize_basic_markup(entry.fields_dict["title"].value))
               for entry in library.entries if "title" in entry.fields_dict}
+    # The whole abstract and a link to the paper, so that a held record can be judged from the table alone.
+    abstracts = {entry.key: common_utils.normalize_whitespace(
+                     common_utils.unicodize_basic_markup(entry.fields_dict["abstract"].value))
+                 for entry in library.entries if "abstract" in entry.fields_dict}
+    links = {entry.key: papers_utils.paper_url(
+                 entry.fields_dict["doi"].value if "doi" in entry.fields_dict else None,
+                 entry.fields_dict["url"].value if "url" in entry.fields_dict else None)
+             for entry in library.entries}
 
-    def write_table(path: pathlib.Path, keys, header: str) -> None:
-        with path.open("w", encoding="utf-8") as f:
-            f.write(header)
-            for key in sorted(keys, key=lambda k: (tiers[k], k)):
-                fields = extracted[key]
-                title = titles.get(key, "")
-                f.write(f"\t{tiers[key]}\t{key}\t{fields['level']}\t{fields['population']}\t"
-                        f"{fields['human_learning']}\t{fields['evidence']}\t{fields['ai_role']}\t"
-                        f"{title}\n")
+    def write_tier_table(path: pathlib.Path, keys) -> None:
+        tabular.write_table(path, [],
+                            ("mark", "tier", "key", "level", "population", "human_learning", "evidence",
+                             "ai_role", "title", "link", "abstract"),
+                            [("", tiers[key], key, extracted[key]["level"], extracted[key]["population"],
+                              extracted[key]["human_learning"], extracted[key]["evidence"],
+                              extracted[key]["ai_role"], titles.get(key, ""), links.get(key, ""),
+                              abstracts.get(key, ""))
+                             for key in sorted(keys, key=lambda k: (tiers[k], k))])
 
-    columns = "mark\ttier\tkey\tlevel\tpopulation\thuman_learning\tevidence\tai_role\ttitle\n"
-    audit_path = out_dir / "filtered-out.tsv"
-    write_table(audit_path, doomed, columns)
-    held_path = out_dir / "held-for-review.tsv"
-    write_table(held_path, held, columns)
+    audit_path = out_dir / f"filtered-out.{opts.format}"
+    write_tier_table(audit_path, doomed)
+    held_path = out_dir / f"held-for-review.{opts.format}"
+    write_tier_table(held_path, held)
 
     print(f"\nwrote {out_path}  ({len(kept.entries)} of {len(library.entries)} records kept)")
     print(f"wrote {audit_path}  ({len(doomed)} removed, with the fields that removed them)")

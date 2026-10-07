@@ -35,7 +35,6 @@ uniform control and still be useless on the boundary, which is the only place th
 """
 
 import argparse
-import csv
 import json
 import logging
 import pathlib
@@ -45,6 +44,7 @@ import sys
 from unpythonic import timer
 from unpythonic.env import env
 
+from raven.common import tabular
 from raven.librarian import agent, config as librarian_config, llmclient
 
 # Kept in step with `judge_scope.SCOPE_QUESTION` by hand rather than imported, because the two scripts ask
@@ -86,10 +86,9 @@ def load_records(bib_path: pathlib.Path) -> dict[str, env]:
     return {record.key: record for record in judge_scope.load_records(bib_path)}
 
 
-def read_keys(tsv_path: pathlib.Path) -> list[str]:
-    """The citekeys listed in a TSV, in file order, skipping the `#` header lines a run writes."""
-    lines = [line for line in tsv_path.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
-    return [row["key"] for row in csv.DictReader(lines, delimiter="\t") if row.get("key")]
+def read_keys(path: pathlib.Path) -> list[str]:
+    """The citekeys listed in a table — TSV, `.xlsx` or `.ods` — in row order."""
+    return [row["key"] for row in tabular.read_table(path) if row.get("key")]
 
 
 def read_confidences(jsonl_path: pathlib.Path) -> dict[str, str]:
@@ -178,7 +177,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--bib", required=True, help="the .bib the records come from")
-    parser.add_argument("--dropped", required=True, help="the run's dropped.tsv, least-defended first")
+    parser.add_argument("--dropped", required=True, help="the run's drop list (TSV, .xlsx or .ods), least-defended first")
     parser.add_argument("--kept", default=None,
                         help="the run's in-scope .bib, to draw the control group from")
     parser.add_argument("--limit", type=int, default=300, metavar="N",
@@ -205,8 +204,17 @@ def main() -> int:
     parser.add_argument("--backend-url", default=None,
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--model", default=None, help="model id to review with")
-    parser.add_argument("--out", default=None, help="where the review TSV goes")
+    parser.add_argument("--out", default=None,
+                        help="where the review table goes; TSV, .xlsx or .ods by its extension")
+    parser.add_argument("--format", default="tsv", choices=tabular.FORMATS,
+                        help="format of the review table, when --out does not name it")
     opts = parser.parse_args()
+    # Checked now rather than at the end, which comes after every model call the review makes.
+    if opts.out:
+        try:
+            tabular.format_of(opts.out)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
     here = pathlib.Path(__file__).resolve().parent
@@ -264,12 +272,12 @@ def main() -> int:
 
     # Named for the slice it reviewed, so a second run over the next slice cannot silently overwrite the
     # first one's answers — which are expensive and not reproducible, the model being free to differ.
-    default_name = f"drop-review-{opts.skip}-{opts.skip + opts.limit}.tsv"
+    default_name = f"drop-review-{opts.skip}-{opts.skip + opts.limit}.{opts.format}"
     out_path = pathlib.Path(opts.out) if opts.out else here / default_name
-    with out_path.open("w", encoding="utf-8") as f:
-        f.write("group\tbelongs\tkey\tcase\ttitle\n")
-        for row in sorted(rows, key=lambda r: (r["belongs"] != "yes", r["group"], r["key"])):
-            f.write(f"{row['group']}\t{row['belongs']}\t{row['key']}\t{row['case']}\t{row['title']}\n")
+    columns = ("group", "belongs", "key", "case", "title")
+    tabular.write_table(out_path, [], columns,
+                        [[row[column] for column in columns]
+                         for row in sorted(rows, key=lambda r: (r["belongs"] != "yes", r["group"], r["key"]))])
 
     print(f"\nwrote {out_path}")
     _report(rows)

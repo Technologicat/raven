@@ -22,10 +22,11 @@ per stratum and pooling two sampling designs would give a rate describing neithe
 
 import argparse
 import collections
-import csv
 import json
 import pathlib
 import sys
+
+from raven.common import tabular
 
 # Below this, the two groups are close enough that the reviewer is not telling them apart, and nothing it
 # says about any single record carries weight. It is `review_drops`' own threshold, restated where the
@@ -44,7 +45,8 @@ def load_answers(path: pathlib.Path) -> dict[str, dict]:
 
 
 def load_rows(path: pathlib.Path) -> list[dict]:
-    return list(csv.DictReader(path.read_text(encoding="utf-8").splitlines(), delimiter="\t"))
+    """The rows of a review table: TSV, `.xlsx` or `.ods`."""
+    return tabular.read_table(path)
 
 
 def cell_of(row: dict, answers: dict[str, dict]) -> str:
@@ -112,9 +114,7 @@ def report_coverage(slices: list[tuple[pathlib.Path, list[dict]]], dropped_path:
     only symptom is a coverage claim that is quietly wrong. Cheap to check, so it is checked rather than
     computed by hand.
     """
-    lines = [line for line in dropped_path.read_text(encoding="utf-8").splitlines()
-             if not line.startswith("#")]
-    all_keys = [row["key"] for row in csv.DictReader(lines, delimiter="\t") if row.get("key")]
+    all_keys = [row["key"] for row in tabular.read_table(dropped_path) if row.get("key")]
     seen = collections.Counter(row["key"] for _, rows in slices for row in rows
                                if row["group"] == "dropped")
     covered = sum(1 for key in all_keys if key in seen)
@@ -139,29 +139,36 @@ def write_contested(rows: list[dict], answers: dict[str, dict], path: pathlib.Pa
     """
     contested = [row for row in rows if row["group"] == "dropped" and row["belongs"] == "yes"]
     contested.sort(key=lambda row: (CELL_PRIORITY.get(cell_of(row, answers), 9), row["key"]))
-    with path.open("w", encoding="utf-8") as f:
-        f.write("mark\tcell\ttest\tkey\ttitle\tjudge_said\treviewer_said\n")
-        for row in contested:
-            answer = answers.get(row["key"], {})
-            tests = ",".join(name for name in ("no_ai", "not_education", "wrong_level")
-                             if answer.get(name) is True)
-            f.write(f"\t{cell_of(row, answers)}\t{tests}\t{row['key']}\t{row['title']}\t"
-                    f"{answer.get('why', '')}\t{row['case']}\n")
+
+    def contested_row(row):
+        answer = answers.get(row["key"], {})
+        tests = ",".join(name for name in ("no_ai", "not_education", "wrong_level")
+                         if answer.get(name) is True)
+        return ("", cell_of(row, answers), tests, row["key"], row["title"], answer.get("why", ""), row["case"])
+
+    tabular.write_table(path, [], ("mark", "cell", "test", "key", "title", "judge_said", "reviewer_said"),
+                        [contested_row(row) for row in contested])
     return len(contested)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("reviews", nargs="+", help="one or more drop-review TSVs")
+    parser.add_argument("reviews", nargs="+", help="one or more drop-review tables (TSV, .xlsx or .ods)")
     parser.add_argument("--judged", default=None, metavar="PATH",
                         help="the judge's state JSONL (default: judged.jsonl beside this script)")
-    parser.add_argument("--dropped", nargs="?", const="dropped.tsv", default=None, metavar="PATH",
+    parser.add_argument("--dropped", nargs="?", const=True, default=None, metavar="PATH",
                         help="the full drop list, to report how much of it these slices cover and whether "
-                             "they overlap. A mistyped --skip is invisible in the rates")
-    parser.add_argument("--contested", nargs="?", const="contested.tsv", default=None, metavar="PATH",
+                             "they overlap. A mistyped --skip is invisible in the rates. Without a "
+                             "PATH, dropped.<format> beside this script")
+    parser.add_argument("--contested", nargs="?", const=True, default=None, metavar="PATH",
                         help="also write the hand-check list: every dropped record a case was made for, "
-                             "across all slices given, worst cell first, with an empty column to mark in")
+                             "across all slices given, worst cell first, with an empty column to mark in. "
+                             "TSV, .xlsx or .ods by the extension; without a PATH, contested.<format> "
+                             "beside this script")
+    parser.add_argument("--format", default="tsv", choices=tabular.FORMATS,
+                        help="format of the tables named by default: the drop list read, the contested "
+                             "list written")
     opts = parser.parse_args()
 
     here = pathlib.Path(__file__).resolve().parent
@@ -183,12 +190,12 @@ def main() -> int:
               "  control rate would describe neither. Read each slice's own separation above.")
 
     if opts.dropped:
-        dropped = pathlib.Path(opts.dropped)
+        dropped = pathlib.Path(f"dropped.{opts.format}" if opts.dropped is True else opts.dropped)
         report_coverage(slices, dropped if dropped.is_absolute() or dropped.parent != pathlib.Path(".")
                         else here / dropped)
 
     if opts.contested:
-        path = pathlib.Path(opts.contested)
+        path = pathlib.Path(f"contested.{opts.format}" if opts.contested is True else opts.contested)
         if not path.is_absolute() and path.parent == pathlib.Path("."):
             path = here / path
         n = write_contested([row for _, rows in slices for row in rows], answers, path)

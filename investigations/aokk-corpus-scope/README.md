@@ -756,6 +756,16 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `filtered-out.tsv` | every record the filter removed, with the fields and the quoted evidence that removed it |
 | `held-for-review.tsv` | the tiers held back for a person, sorted by tier: `not_applicable` with nothing corroborating it, where the extraction's errors land when it makes them, and the learning that happens outside an institution, where the scope question is |
 
+**Every table here can be a spreadsheet instead.** Each script that writes tables takes `--format tsv|xlsx|ods`,
+and an explicit output path chooses by its extension; every script that reads one accepts any of the three,
+so a hand-check list can be marked up in Excel or LibreOffice and read back as it was saved. The work is
+`raven.common.tabular`.
+
+**The tables the team reviews carry each record's link and full abstract** — `dropped`, `filtered-out` and
+`held-for-review`, as the dedup and sift audits do — so that a record can be judged from the table alone.
+The link is the DOI's, else the record's `url`, else empty. In `dropped`, the column saying what the judge
+had to go on (none, a teaser, the full text) is `abstract_kind`.
+
 ## Reproducing
 
 ```bash
