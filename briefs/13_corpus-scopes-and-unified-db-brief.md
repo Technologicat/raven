@@ -278,6 +278,11 @@ when it runs. Everything in this section is [P] and wants arguing with.
 - **[N] The TOC is the Visualizer link, once the DBs are unified** (Juha, 2026-09-29, on the first bullet
   above: "perfect after we unify the DBs"). So the cluster-keyword TOC is the agreed direction, gated on
   unification rather than a proposal still to be argued.
+- **[P] An interim TOC that needs neither unification nor an LLM** (raised 2026-10-05, with the
+  model-written search query). Counts, file types and distinctive terms from the BM25 index, rebuilt at
+  `commit` — the one moment the database is known to have changed — globally now and per scope once scopes
+  exist. Coarser than cluster keywords, but available before them, and the wording trap above applies to it
+  unchanged.
 
 ### 4a. With a TOC, the automatic search goes away
 
@@ -382,6 +387,9 @@ Collected so the session has an agenda rather than a pile:
 5. **Migration.** Existing hybridir datastores and existing Visualizer datasets both predate all of this.
 6. **Whether the DB moves behind the server**, and what local mode does then. See *Where the database
    lives*.
+7. **How big the build is, before it is scheduled** (maintainer, 2026-10-01). This is the drydock, 0.3.0,
+   and by the maintainer's recollection at least L and fairly monolithic. If it sizes XL, stretch goals
+   split off it rather than the schedule stretching to fit.
 
 ## The release this lands in has a name waiting for it
 

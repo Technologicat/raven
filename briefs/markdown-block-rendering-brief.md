@@ -27,6 +27,10 @@ are slack: worth doing if the sprint leaves time, and costing the exhibit nothin
 **What is actually wanted is bigger than the sprint.** Fenced code blocks, and LaTeX equation rendering —
 that is a multi-week build, not a corner to be cut into the fortnight before an exhibit.
 
+**LaTeX is wanted; where it goes is open** (maintainer, 2026-10-01): in the renderer's feature build, or as
+a separate extension later. With it in, this is probably the second-largest build on the list after the
+drydock (maintainer's estimate).
+
 **And Librarian is a long-term build rather than an annual demo.** Once a year at Researchers' Night is not
 what it is for, so the polish has the rest of the year to happen in. The usual caveat applies — other
 priorities may take over, which is development as usual. Worth knowing that the queued Visualizer work is

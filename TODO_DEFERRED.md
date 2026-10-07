@@ -27,6 +27,70 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Bring `prompts/interaction.md` up to date
+
+*Cluster: prompts · Cost: S · Gate: the maintainer's wording · Filed: 2026-10-07*
+
+The card's standing text is now where the grounding and conversational reminders live (0.2.10), but they
+sit among bullets carried over unrevised from the 2024 system prompt (maintainer, 2026-10-07). The most
+visibly dated is the knowledge-cutoff line, which says the cutoff is "most likely within the year 2024".
+Read it through as a whole: which bullets still describe the system, which a current model needs, and
+whether the order still makes sense with the reminders in it.
+
+## Retest DOCUMENTS' stages on the model's own document search
+
+*Cluster: librarian-indicators · Cost: S · Gate: a live session with the maintainer · Filed: 2026-10-07 · See also: `briefs/yrityspaiva/README.md`, 2026-10-05*
+
+DOCUMENTS' progress stages were checked live on 2026-10-05, each stage slowed to 1.5 s through `--repl`,
+and the automatic search stepped through them and ended on *Done*. The model's own `search_documents` call
+was never reached, the automatic search having answered first. Auto-search can now be switched off
+(`Alt+A`), so the same check can reach the tool path. The loose document-ID match (an ID missing its
+extension) has not met a live case yet either; watch for it on the same occasion.
+
+## Run the query request's tool call as the turn's first round
+
+*Cluster: librarian-rag · Cost: M · Gate: tentative · Filed: 2026-10-07*
+
+The automatic search asks the model for a query by offering `search_documents`. When the model reaches for
+another tool instead — `fetch_document` on a follow-up naming a paper already listed — that means no
+search, and the call is discarded. Running it as the reply's first round instead would save a model call.
+Only worth it with Thinking off, where the reply's first round is just as unthought and would repeat the
+same call; with Thinking on, re-asking lets that round think (maintainer, 2026-10-05).
+
+## What `system.md` should say for the batch tools
+
+*Cluster: prompts · Cost: S · Gate: a decision by the maintainer, tentative · Filed: 2026-10-07*
+
+`raven-pdf2bib` and the Visualizer's importer get `prompts/system.md` and nothing else: no character card,
+so no `interaction.md` and none of its grounding instruction. That instruction might help them. A separate
+decision from the one that moved it into `interaction.md` (maintainer, 2026-10-05).
+
+## Rounds within a turn may miss the backend's cache
+
+*Cluster: prefill · Cost: ? · Gate: a measurement · Filed: 2026-10-07 · See also: `investigations/prefill-by-model/`*
+
+Between turns the cache now holds (fixed 2026-10-05: the prefill ends at the last user message). Within a
+turn, one live round after a tool call looked like it reprocessed more than it should. Not measured; the
+candidate and the probe to measure it with are in `investigations/prefill-by-model/`.
+
+## What Qwen 3.8's chat template does with the last turn
+
+*Cluster: prefill · Cost: ? · Gate: none · Filed: 2026-10-07 · See also: "Rounds within a turn may miss the backend's cache"*
+
+The 2026-10-05 cache fix works because the backend's cache stays warm when the prompt ends on a user
+message and is lost completely otherwise; the template renders the AI's last reply differently once
+something follows it. Read the template to see exactly what its special handling of the last turn does,
+so that the fix rests on the mechanism rather than on the observation (maintainer, 2026-10-06). Likely the
+same reading answers the item on rounds within a turn.
+
+## Reconnect a client to its avatar after the server forgot it
+
+*Cluster: avatar-sessions · Cost: ? · Gate: tentative · Filed: 2026-10-07*
+
+The avatar heartbeat (0.2.10) unloads an avatar whose client stopped checking in, keyed on instance IDs.
+The heartbeat's reply carries an `unknown` list, the instance IDs the server no longer holds, which is the
+hook for a client to reload its avatar and carry on instead of failing. Not built.
+
 ## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
 
 *Cluster: dependencies · Cost: M · Gate: before the lab installation, after 0.2.10 · Filed: 2026-10-01 · See also: "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`", "Replace `torchaudio.functional.resample`, and drop torchaudio", `briefs/design/lab-assistant-hci-sketch.md`*
@@ -409,6 +473,9 @@ The pass of 2026-09-24 refreshed Librarian, the Visualizer, Raven-cherrypick and
   Librarian shot showing the lower right of the window predates that. One caption also says so in words and
   wants rewording with its picture: `raven/librarian/README.md`, the chat graph standing in for a sleeping
   avatar, which places INTERNET "at the top left" of the panel.
+- **And again on 2026-10-05**: the toggle row changed (Auto-search took Chat graph's slot) and the Chat graph
+  checkbox moved to the right end of the row above the panel. Retake for 0.2.11, including at least one of
+  the animated ones (maintainer).
 
 ## An override cannot set a setting to `None` unless it ships as `None`
 
