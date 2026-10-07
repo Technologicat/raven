@@ -815,7 +815,9 @@ different reasons, so their rates are reported apart and `contested.tsv` is orde
 came from. Read the control comparison before any of it.
 
 Needs an LLM backend; `--backend-url` and `--model` point it elsewhere. The calibration runs above were
-made against `qwen3.6-35b-a3b`, which is the model the numbers in this file describe.
+made against `qwen3.6-35b-a3b`, which is the model the numbers in this file describe. So were the full
+runs: the model was kept the same throughout the pipeline, the dedup judge, the scope judge and the
+extraction alike (maintainer, 2026-10-07).
 
 A hand-check table has an empty first column: put an `x` in it on every row you disagree with. The rows
 are sorted so that the cells of verdict × confidence are contiguous, because the two kinds of error are
