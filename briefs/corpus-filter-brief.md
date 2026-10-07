@@ -107,6 +107,13 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    into the new tools, so that the finished toolset can be run over the prototype's corpus and produce
    clean, stage-numbered reports without paying for the LLM passes again. The motive is the methodology
    section, which needs exact numbers from a pipeline that can be named.
+   - **A run whose answers are all saved connects to nothing** (maintainer, 2026-10-07). The backend is
+     contacted at the first question actually asked, never up front, so a replay works with no LLM
+     running. `raven-deduplicate --judge` is the pattern: `_apply_judge` hands the passes a memoized
+     connect-on-first-use function, which `_ask_judge` resolves, and a test with a control pins it. The
+     prototype's `judge_scope.py` and `extract_fields.py` connect up front, so their replays need a
+     backend; left as they are, being prototypes this brief replaces. `regenerate_reports.py` sidesteps
+     it by replaying through `write_outputs`.
    - **Replayed answers carry the prototype's instrument, not the new tool's.** A report built from them
      must say which instrument made each decision; stamping them with the new tool's fingerprint would
      present the prototype's judge as the new one. So the import names the source instrument, and the
