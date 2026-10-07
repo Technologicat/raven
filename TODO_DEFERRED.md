@@ -83,15 +83,16 @@ not a special case. In order:
 wrong tool, and a third document tool adds a choice of the same kind.
 
 - **`fetch_document` resolves by rules 1–3**, and on failure offers rule 4's suggestions: a fetch is
-  unambiguously a request by name, so suggestions there can only help.
+  unambiguously a request by name, so suggestions there can only help. *Agreed* (maintainer).
 - **The search puts a document first only when the *whole* query resolves by rules 1–3**, labelled as a name
   match with a pointer to `fetch_document`; the content results follow. A query that is a filename is a
-  lookup, so leading with it is safe.
+  lookup, so leading with it is safe. *Agreed in principle* (maintainer): it may be what the model needs,
+  and there may be complications nobody has thought of yet, so watch for them while building it.
 - **Rule 4 never enters a search.** A fuzzy name hit says nothing about whether the user wanted that file,
-  and ranked against content matches it is noise.
-- **Open for Friday**: rule 3 on a generic word — `survey` against `survey_2023.pdf` and
-  `survey_methods.pdf`. Whether such a query leads with name matches, or only when exactly one name
-  matches, is a call to make against the file names of a real corpus.
+  and ranked against content matches it is noise. *Agreed* (maintainer).
+- **Open for Friday, with no candidate answer yet**: rule 3 on a generic word — `survey` against
+  `survey_2023.pdf` and `survey_methods.pdf`. Whether such a query leads with name matches, or only when
+  exactly one name matches, or something else, is a call to make against the file names of a real corpus.
 
 ## Bring `prompts/interaction.md` up to date
 
