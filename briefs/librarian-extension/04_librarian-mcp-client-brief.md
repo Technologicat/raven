@@ -312,10 +312,25 @@ The `enabled` flag (default `True` if absent) lets the user flip a flaky server 
 removing its entry — the equivalent of commenting out a line of config, but expressed in
 config data.
 
+**How `headers` reaches the SDK** (checked against `mcp` 2.3.0, 2026-10-07). The two HTTP
+transports take it differently:
+- `streamable_http_client(url, http_client=...)` has no `headers` parameter of its own. Headers and
+  auth go on the `httpx2.AsyncClient` passed in, and `mcp.shared._httpx_utils.create_mcp_http_client(headers=..., auth=...)`
+  builds one with the timeouts the transports expect.
+- `sse_client(url, headers=..., auth=...)` takes both directly.
+
+Either way the SDK merges its own MCP headers (session id, protocol version) on top of ours. It
+follows redirects itself, and only within the endpoint's origin, so a key is not forwarded to
+another host. A per-service API key is therefore just an entry in `headers`. For a credential
+that has to be computed per request, `auth=` takes an `httpx2.Auth`, and `mcp.client.auth.oauth2`
+covers the spec's OAuth flow if a server ever requires it.
+
 Secrets in `config.py` is consistent with `llm_api_key` (Raven's existing pattern; fine for
 localhost). When sharing configs or onboarding more users eventually wants secrets out of source,
 the natural move is the same shape in an external JSON file (`~/.config/raven/mcp.json` or
-similar) — defer until needed.
+similar) — defer until needed. Note that `~/.config/raven/overrides.json` already exists as the
+machine-local layer over every config module, so a key set there stays out of the tracked
+`config.py` with no new mechanism.
 
 **Static at startup, not live-reloadable in v0.** Tearing down and restarting an MCP transport
 (subprocess or HTTP session) is invasive enough that hot-reload isn't worth it before there's a
@@ -409,9 +424,45 @@ Raven-server, the MCP server reaches it the same way every other app does. Until
 process reading the index needs an answer on concurrent access. Note the SDK's server app is ASGI
 (Starlette) while Raven-server is Flask (WSGI), so it doesn't simply mount into the existing server.
 
-**Trust:** it exposes a possibly private corpus, so it binds to localhost by default, with the SDK's
-auth support available when that changes. This is also the concrete case for question 5 of
-`briefs/design/constellation-architecture-sketch.md`.
+**Trust:** it exposes a possibly private corpus, so it binds to localhost by default. This is also
+the concrete case for question 5 of `briefs/design/constellation-architecture-sketch.md`.
+
+**When it listens beyond localhost, guard it with a per-service API key** (2026-10-07). The client
+end sends `Authorization: Bearer <key>` through §3's `headers`. On the server end there are two
+options, both checked against the `mcp` 2.3.0 source and neither yet run:
+
+- **The SDK's hook: `MCPServer(token_verifier=..., auth=AuthSettings(...))`. Not this one.**
+  `TokenVerifier` is a one-method protocol (`async verify_token(token) -> AccessToken | None`), and
+  a static key fits it. But this path is built for OAuth. `AuthSettings.issuer_url` is mandatory,
+  and the server then publishes OAuth protected-resource metadata pointing at an authorization
+  server that does not exist. Our client sends the key up front and never sees the 401 that
+  starts discovery. A third-party MCP client might, and would then go looking for that nonexistent
+  authorization server.
+- **A plain ASGI middleware around the Starlette app. This one.** It is about fifteen lines,
+  publishes nothing it cannot back, and matches the client config exactly:
+
+  ```python
+  class RequireAPIKey:
+      def __init__(self, app, key: str):
+          self.app, self.key = app, key.encode()
+
+      async def __call__(self, scope, receive, send):
+          if scope["type"] == "http":
+              supplied = dict(scope["headers"]).get(b"authorization", b"")
+              if not hmac.compare_digest(supplied, b"Bearer " + self.key):
+                  await send({"type": "http.response.start", "status": 401, "headers": []})
+                  await send({"type": "http.response.body", "body": b""})
+                  return
+          await self.app(scope, receive, send)
+  ```
+
+  Each service reads its own key at startup: from an env var, or from the overrides file for a
+  Raven process. The constant-time comparison stops the check from leaking the key through timing.
+
+Two limits. stdio servers need none of this, being the client's own subprocesses with no network
+endpoint. And a static key over plain HTTP is cleartext, which is acceptable on localhost or the
+trusted LAN Raven-server already assumes. Beyond that it needs TLS in front, e.g. a reverse proxy,
+which could then do the key check instead and keep auth out of the Python altogether.
 
 ---
 
