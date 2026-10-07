@@ -153,3 +153,38 @@ def test_uninstall_deregisters_from_the_animator(dpg_context):
 def test_uninstalling_nothing_is_allowed():
     """`install` returns `None` when no URL can be found, so callers should not need a guard."""
     qroverlay.uninstall(None)
+
+
+# --------------------------------------------------------------------------------
+# Saving to a file
+
+def test_a_saved_png_is_the_overlays_code_at_the_requested_scale(tmp_path, overlay):
+    """The file and the overlay are one code: same matrix, quiet zone included, `scale` pixels a module."""
+    from PIL import Image
+
+    path = tmp_path / "qr.png"
+    assert qroverlay.save(path, url=overlay.url, scale=5) == overlay.url
+    side = (len(overlay.matrix) + 2 * qroverlay._QUIET_ZONE_MODULES) * 5
+    with Image.open(path) as image:
+        assert image.size == (side, side)
+        # Sample each module's centre and compare against the overlay's own matrix.
+        grey = image.convert("L")
+        offset = qroverlay._QUIET_ZONE_MODULES
+        saved = [[grey.getpixel(((offset + col) * 5 + 2, (offset + row) * 5 + 2)) < 128
+                  for col in range(len(overlay.matrix))]
+                 for row in range(len(overlay.matrix))]
+    assert saved == overlay.matrix
+    assert any(any(row) for row in saved) and not all(all(row) for row in saved), "the sample read no code at all"
+
+
+def test_the_format_follows_the_extension(tmp_path):
+    path = tmp_path / "qr.svg"
+    qroverlay.save(path, url="https://example.com/raven")
+    assert path.read_text(encoding="utf-8").lstrip().startswith("<?xml")
+
+
+def test_no_url_found_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(qroverlay, "get_project_url", lambda *args, **kwargs: None)
+    path = tmp_path / "qr.png"
+    assert qroverlay.save(path) is None
+    assert not path.exists()

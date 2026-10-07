@@ -23,6 +23,10 @@
 
 - **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
 
+#### Constellation-wide
+
+- **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
+
 ### Fixed
 
 #### Raven-librarian

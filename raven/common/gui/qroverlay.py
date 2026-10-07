@@ -13,16 +13,26 @@ Off unless an app is started with `--qr`, so it costs nothing in ordinary use.
 The code is generated at runtime from the URL recorded in the package metadata, rather than shipped as an
 image: a baked-in PNG would be a second copy of the URL that nothing keeps honest, and regenerating it is a
 step someone forgets.
+
+For a slide or a poster, the same code can be written to a file — PNG, SVG, PDF, or anything else `segno`
+writes, chosen by the extension::
+
+    python -m raven.common.gui.qroverlay raven-qr.svg
 """
 
 __all__ = ["Corner",
            "get_project_url",
+           "make_code", "save",
            "matrix_to_pixels",
-           "QRCodeOverlay", "install", "uninstall"]
+           "QRCodeOverlay", "install", "uninstall",
+           "main"]
 
+import argparse
 import enum
 import importlib.metadata
 import logging
+import pathlib
+import sys
 from typing import List, Optional, Tuple, Union
 
 import dearpygui.dearpygui as dpg
@@ -42,6 +52,9 @@ _DISTRIBUTION = "raven-visualizer"
 
 # A QR code is only reliably scannable with a clear margin around it, four modules wide by the standard.
 _QUIET_ZONE_MODULES = 4
+
+# Error correction level M: about 15% of the code can be damaged or obscured and it still decodes.
+_ERROR_CORRECTION = "m"
 
 
 class Corner(enum.Enum):
@@ -75,6 +88,28 @@ def get_project_url(distribution: str = _DISTRIBUTION) -> Optional[str]:
 
     logger.warning(f"get_project_url: distribution '{distribution}' declares no Repository URL.")
     return None
+
+
+def make_code(url: str) -> segno.QRCode:
+    """Return the QR code for `url`, encoded as both the overlay and `save` draw it."""
+    return segno.make(url, error=_ERROR_CORRECTION)
+
+
+def save(path: Union[str, pathlib.Path], url: Optional[str] = None, scale: int = 24) -> Optional[str]:
+    """Write the QR code to `path`, in the format its extension names (`.png`, `.svg`, `.pdf`, ...).
+
+    `url`: what to encode. `None` (default) reads the project's repository URL from the package metadata.
+    `scale`: pixels per module, for a raster format. The quiet zone is included.
+
+    Returns the URL encoded, or `None` if no URL was given and none could be discovered, in which case
+    nothing is written.
+    """
+    if url is None:
+        url = get_project_url()
+        if url is None:
+            return None
+    make_code(url).save(str(path), scale=scale, border=_QUIET_ZONE_MODULES)
+    return url
 
 
 def matrix_to_pixels(matrix: List[List[bool]],
@@ -149,7 +184,7 @@ class QRCodeOverlay(gui_animation.Animation):
         self.label_size = label_size
 
         self.matrix: List[List[bool]] = [[bool(module) for module in row]
-                                         for row in segno.make(url, error="m").matrix]
+                                         for row in make_code(url).matrix]
 
         width, height, rgba = matrix_to_pixels(self.matrix, module_size, _QUIET_ZONE_MODULES,
                                                foreground, background)
@@ -234,3 +269,23 @@ def uninstall(overlay: Union[QRCodeOverlay, None]) -> None:
     for item in (overlay.drawlist, overlay.texture_registry):
         if dpg.does_item_exist(item):
             dpg.delete_item(item)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Write Raven's QR code — the one `--qr` shows — to a file, for a "
+                                                 "slide or a poster. The format follows the extension.")
+    parser.add_argument("output", type=pathlib.Path, help="Where to write it, e.g. raven-qr.png or raven-qr.svg.")
+    parser.add_argument("--url", default=None, help="What to encode. Default: the project's repository URL.")
+    parser.add_argument("--scale", type=int, default=24, help="Pixels per module, for a raster format. Default: 24.")
+    args = parser.parse_args()
+
+    maybe_url = save(args.output, url=args.url, scale=args.scale)
+    if maybe_url is None:
+        print("No URL given, and none found in the package metadata.", file=sys.stderr)
+        return 1
+    print(f"Wrote {args.output}, encoding {maybe_url}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
