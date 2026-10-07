@@ -645,3 +645,24 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        matches shown and stepped across pages (`TODO_DEFERRED.md`); the chat search matching attachment and
        database-item filenames, for 0.2.11, the matching and the chat log's painting kept together
        (maintainer).
+   - **2026-10-07, the day before the event.** Each item its own commit; what follows is what the commits do
+     not say.
+     - **Spreadsheet output for the AOKK team, who asked for Excel.** `raven.common.tabular` writes and reads
+       TSV, `.xlsx` and `.ods` by extension; the papers tools and every AOKK script use it. The tables the
+       team reviews carry each record's link (by DOI, else `url`) and full abstract (maintainer, relaying
+       the team's request). `regenerate_reports.py` rebuilt their whole set as `.xlsx`, numbered by stage,
+       into `00_stuff/rawdata/AOKK/reports-2026-10-07/`; every stage's counts match the files shared before.
+     - **For Friday 2026-10-09** (maintainer):
+       - **The team's manual check came back**: `held-for-review_tarkastetut.xlsx`, their marked-up
+         `held-for-review`, in the shared folder.
+       - **A tool to drop the records that check rejected** — probably one more tool, reading the marked
+         sheet (which `tabular.read_table` already reads) and filtering the `.bib`.
+       - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
+         that points at it.
+     - **The MCP client starts around 2026-10-19**, the maintainer being away the week before. A lab meeting
+       today specced the server side of a v1 MVP; what Librarian needs for it is the MCP client, brief 04,
+       whose auth section (a per-service API key) was settled this morning.
+     - **Still owed**: the read-through of `briefs/roadmap-overview-2026-10.md`'s clusters for the autumn's
+       priorities, a session with the maintainer; and this sprint's cleanup, after the event, on the
+       Researchers' Night pattern (open briefs out to the top level, items living only here into
+       `TODO_DEFERRED.md`, the folder closed into `done/` with a postmortem).
