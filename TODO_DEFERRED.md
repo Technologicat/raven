@@ -11,20 +11,6 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
-## Save an edited message as a new branch
-
-*Cluster: message-editing · Cost: ? · Gate: none · Filed: 2026-10-07 · See also: message editing v1*
-
-Saving an edit makes a new *revision* of the message (`DPGLinearizedChatView.finish_editing` →
-`chat_controller.revise_message`, through `chatutil.revise_message_text`). Add the other option: save the
-edited text as a new *sibling* of the message, under the same parent, and move HEAD there. The original
-then stays as it was, and the edit becomes an alternative branch the user can compare it with, the same
-way a reroll's result is.
-
-Two things to decide when building it: which control offers it (a second button beside Save, or a modifier
-on the commit chord), and whether the replies below the original message are carried across to the new
-branch or left behind.
-
 **When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
 document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
 importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and

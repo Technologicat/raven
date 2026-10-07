@@ -162,6 +162,12 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   section above. Two multiline fields, one per `send_message_key` setting. Added 2026-08-28, DPG 2.3.1.
   About fifteen seconds.
 
+- `shift_commit_chord_probe.py` — what a multiline field does with Shift added to its commit chord
+  (Ctrl+Shift+Enter, or Shift+Enter under `send_message_key = "enter"`). **Nothing**, under both settings:
+  the field stays active, its text unchanged, and a global handler sees the key with Shift down. That is what
+  lets Librarian's message editor give the chord a meaning of its own (save as a new branch). The plain chord
+  is run first on each field as the control, and commits. Added 2026-10-07, DPG 2.3.1. About fifteen seconds.
+
 - `focus_request_vs_tooltip_probe.py` — whether a `focus_item` still pending survives a `Tooltip` rewriting
   its text in the same frames. It does not: the tooltip's offscreen measurement shows its window and takes
   the focus, from a fresh-launch state and from focus parked on a button alike, while a request re-issued

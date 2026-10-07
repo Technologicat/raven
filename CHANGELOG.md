@@ -17,6 +17,12 @@
 
 ## 0.2.11 (in progress)
 
+### Added
+
+#### Raven-librarian
+
+- **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
+
 ### Fixed
 
 #### Raven-librarian

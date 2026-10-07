@@ -1949,13 +1949,18 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                                      tag=f"chat_edit_field_{self.gui_uuid}",
                                                      parent=self.gui_text_group)
             save_key = "Ctrl+Enter" if librarian_config.send_message_key == "ctrl+enter" else "Enter"
+            branch_key = "Ctrl+Shift+Enter" if librarian_config.send_message_key == "ctrl+enter" else "Shift+Enter"
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            def save_callback() -> None:
+                shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+                view.finish_editing(save=True, as_branch=shift_pressed)
             view.gui_edit_save_button = dpg.add_button(label="Save",
-                                                       callback=lambda: view.finish_editing(save=True),
+                                                       callback=save_callback,
                                                        tag=f"chat_edit_save_button_{self.gui_uuid}",
                                                        parent=row)
             view.gui_edit_save_tooltip = self._add_tooltip(view.gui_edit_save_button,
-                                                           f"Save the text as a new revision of this message [{save_key}]")
+                                                           f"Save the text as a new revision of this message [{save_key}]\n"
+                                                           f"    with Shift: save as a new branch, keeping the original and its replies [{branch_key}]")
             cancel_button = dpg.add_button(label="Cancel",
                                            callback=lambda: view.finish_editing(save=False),
                                            tag=f"chat_edit_cancel_button_{self.gui_uuid}",

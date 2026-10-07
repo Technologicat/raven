@@ -2458,6 +2458,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
                env(key_indent=0, key="Ctrl+E", action_indent=0, action="Edit the marked message", notes="New revision. Esc cancels"),
+               env(key_indent=1, key=("Ctrl+Shift+Enter" if librarian_config.send_message_key == "ctrl+enter" else "Shift+Enter"),
+                   action_indent=1, action="While editing: save as a branch", notes="Keeps the original"),
                env(key_indent=1, key="Ctrl+Shift+E", action_indent=1, action="Show its revisions", notes="Can also delete each"),
                env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back. Not while typing"),
                env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
@@ -3147,7 +3149,7 @@ def librarian_hotkeys_callback(sender, app_data):
     # A message open for editing, while its field has the caret: every key is the field's, so nothing below
     # can act on the chat mid-edit, and the save chord and Esc close the edit. Ahead of the composer's send,
     # which shares the save chord and would otherwise send whatever is in the composer.
-    elif chat_controller.view.handle_edit_key(key, ctrl=ctrl_pressed):
+    elif chat_controller.view.handle_edit_key(key, ctrl=ctrl_pressed, shift=shift_pressed):
         pass
 
     # Enter in the search field goes to the next matching message, and Shift+Enter to the previous one. Above

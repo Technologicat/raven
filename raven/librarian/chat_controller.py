@@ -724,10 +724,13 @@ class DPGLinearizedChatView:
         self.chat_controller.give_caret(self.gui_edit_field)
         return None
 
-    def finish_editing(self, save: bool) -> str | None:
-        """Close the message open for editing, saving what was typed as a new revision if `save`.
+    def finish_editing(self, save: bool, as_branch: bool = False) -> str | None:
+        """Close the message open for editing, saving what was typed if `save`.
 
-        Saving text identical to the message's is the same as cancelling: no revision is made.
+        `as_branch`: save as a new branch beside the message (`DPGChatController.branch_message`) rather than
+                     as a new revision of it (`revise_message`).
+
+        Saving text identical to the message's is the same as cancelling, either way: nothing is added.
 
         Returns `None` when done, or, when the save is refused, a short reason, which is also flashed on the
         Save button. A refused save leaves the message open, with what was typed still in it.
@@ -735,12 +738,17 @@ class DPGLinearizedChatView:
         node_id = self.edit_node_id
         if node_id is None:
             return None
+        branched = False
         if save:
             self.capture_edit_draft()
             unused_role, unused_persona, old_text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, node_id)
             new_text = (self.edit_draft if self.edit_draft is not None else old_text).strip()
             if new_text != old_text.strip():
-                maybe_refusal = self.chat_controller.revise_message(node_id, new_text)
+                if as_branch:
+                    maybe_refusal = self.chat_controller.branch_message(node_id, new_text)
+                    branched = maybe_refusal is None
+                else:
+                    maybe_refusal = self.chat_controller.revise_message(node_id, new_text)
                 if maybe_refusal is not None:
                     if self.gui_edit_save_button is not None:
                         gui_animation.flash_button(button=self.gui_edit_save_button, tooltip=self.gui_edit_save_tooltip,
@@ -752,17 +760,23 @@ class DPGLinearizedChatView:
         self.gui_edit_field = None
         self.gui_edit_save_button = None
         self.gui_edit_save_tooltip = None
-        maybe_message = self.find_message(node_id)
-        if maybe_message is not None:
-            maybe_message.rebuild_in_place()
+        if branched:  # everything below the edited message has gone from the branch on screen
+            self.chat_controller.mark_discontinuity()
+            self.build()
+            self.chat_controller.navigated()
+        else:
+            maybe_message = self.find_message(node_id)
+            if maybe_message is not None:
+                maybe_message.rebuild_in_place()
         self.chat_controller.give_keyboard_to_log()
         return None
 
-    def handle_edit_key(self, key: int, ctrl: bool) -> bool:
+    def handle_edit_key(self, key: int, ctrl: bool, shift: bool = False) -> bool:
         """Offer a key to the message open for editing. Returns whether it was taken.
 
         While the edit field holds the caret, every key is taken, so no hotkey acts on the chat mid-edit.
-        The commit chord — the composer's send key — saves, and Esc cancels.
+        The commit chord — the composer's send key — saves as a new revision, the same chord with Shift saves
+        as a new branch, and Esc cancels.
         """
         field = self.gui_edit_field
         if self.edit_node_id is None or field is None:
@@ -777,9 +791,13 @@ class DPGLinearizedChatView:
         # chord validates the edit, and Esc reverts it — so the key that has just ended an edit reads
         # focused and not active. Measured for the commit chord in
         # `investigations/dpg-focus/commit_chord_dispatch_probe.py`.
+        #
+        # With Shift added, the chord is not the field's: it neither commits nor inserts a newline, so it
+        # arrives with the field still active and the text as typed. Measured under both settings of the send
+        # key in `investigations/dpg-focus/shift_commit_chord_probe.py`.
         commit_needs_ctrl = (librarian_config.send_message_key == "ctrl+enter")
         if key == dpg.mvKey_Return and ctrl == commit_needs_ctrl:
-            self.finish_editing(save=True)
+            self.finish_editing(save=True, as_branch=shift)
             return True
         if key == dpg.mvKey_Escape:
             self.finish_editing(save=False)
@@ -1629,8 +1647,9 @@ class DPGChatController:
     def mark_discontinuity(self) -> None:
         """Run the configured visual effect over the avatar, to mark that the conversation on screen changed.
 
-        For the four places where what the user is reading is replaced by something else: stepping to a
-        sibling branch, jumping to where a branch continues, starting a new chat, and rerolling a reply.
+        For the places where what the user is reading is replaced by something else: stepping to a sibling
+        branch, jumping to where a branch continues, starting a new chat, rerolling a reply, and saving an
+        edit as a new branch.
 
         Does nothing when `librarian_config.avatar_discontinuity_effect_enabled` is off. Call it before the
         rebuild rather than after — the rebuild is what takes the time, so the effect wants to be up while
@@ -1859,19 +1878,47 @@ class DPGChatController:
 
         Returns `None` when done, or, when refused, a short reason for the caller to show.
         """
-        maybe_refusal = self.edit_refusal()
+        maybe_refusal = self._save_edit_refusal(node_id, text)
         if maybe_refusal is not None:
             logger.info(f"DPGChatController.revise_message: refusing to edit '{node_id}': {maybe_refusal}")
             return maybe_refusal
-        old_payload = self.datastore.get_payload(node_id)
-        old_message = old_payload["message"]
-        if not text.strip() and not (old_message.get("tool_calls") or
-                                     any(part.get("type") != "text" for part in old_message.get("content") or [])):
-            logger.info(f"DPGChatController.revise_message: refusing to edit '{node_id}': nothing would be left of it")
-            return "Nothing would be left. To remove the message, delete it."
-        revision_id = self.datastore.add_revision(node_id, chatutil.revise_message_text(old_payload, text))
+        revision_id = self.datastore.add_revision(node_id, chatutil.revise_message_text(self.datastore.get_payload(node_id), text))
         logger.info(f"DPGChatController.revise_message: node '{node_id}' is now at revision {revision_id}.")
         self.update_context_fill_indicator()  # the branch's text changed
+        return None
+
+    def branch_message(self, node_id: str, text: str) -> str | None:
+        """Add a sibling of the message at `node_id` holding `text`, and move HEAD to it.
+
+        The other route to an edit: the message itself and everything below it stay as they were, and the
+        edited copy starts a branch of its own, with nothing below it. Refused as `revise_message` refuses.
+
+        `text`: the new text, without the persona prefix (see `chatutil.revise_message_text`).
+
+        Redraws nothing: HEAD has moved, and rebuilding the view is the caller's.
+
+        Returns `None` when done, or, when refused, a short reason for the caller to show.
+        """
+        maybe_refusal = self._save_edit_refusal(node_id, text)
+        if maybe_refusal is not None:
+            logger.info(f"DPGChatController.branch_message: refusing to branch from '{node_id}': {maybe_refusal}")
+            return maybe_refusal
+        new_node_id = self.datastore.create_node(chatutil.revise_message_text(self.datastore.get_payload(node_id), text),
+                                                 parent_id=self.datastore.get_parent(node_id))
+        self.app_state["HEAD"] = new_node_id
+        logger.info(f"DPGChatController.branch_message: added '{new_node_id}' as a sibling of '{node_id}', and moved HEAD there.")
+        self.update_context_fill_indicator()  # a different branch
+        return None
+
+    def _save_edit_refusal(self, node_id: str, text: str) -> str | None:
+        """Why saving `text` as the new text of the message at `node_id` would be refused right now, or `None`."""
+        maybe_refusal = self.edit_refusal()
+        if maybe_refusal is not None:
+            return maybe_refusal
+        old_message = self.datastore.get_payload(node_id)["message"]
+        if not text.strip() and not (old_message.get("tool_calls") or
+                                     any(part.get("type") != "text" for part in old_message.get("content") or [])):
+            return "Nothing would be left. To remove the message, delete it."
         return None
 
     def _revision_refusal(self, node_id: str) -> str | None:

@@ -130,6 +130,8 @@ With this storage scheme, a chat branch is just its **HEAD** pointer; roughly, l
 
 The nodes are versioned. **Editing** a message adds a new version of it, and the chat carries on from the new text; the old version is kept. Editing is meant for fixing typos, trimming a long reply before sharing a chat log, and similar small edits that don't change the flow of the chat — the messages below the edited one are left as they are, so they should still make sense afterwards. By design, each version is immutable - like the revisions of a GitHub issue comment.
 
+An edit can instead be saved as a new **branch**: the edited copy becomes a sibling of the message, with nothing below it, and becomes the **HEAD**, while the original and everything below it stay as they were. This is for asking a different question in place of one already asked, keeping the conversation that followed the original.
+
 Normally, when you write and send a new message to the AI, it is added below the **HEAD**, and it then becomes the new **HEAD**. The AI then replies. The AI's reply is added below your message, and becomes the new **HEAD**.
 
 It is possible to **reroll** the AI's reply. This replaces the AI's message with a freshly generated one. The old reply is kept in the tree, but not shown to the AI when it writes the new one. It is stored as a sibling node, and it retains any links to nodes that were downstream of it (i.e. the whole subtree is preserved). The new reply becomes the **HEAD**. Rerolling is convenient for quickly generating alternative replies to the same question.
@@ -795,6 +797,7 @@ Hover the dot and it says so.
   - See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 - Edit (your messages and AI replies) (Ctrl+E)
   - The text opens in place, in an editable field. **Save** (the send key, Ctrl+Enter or Enter as configured) stores it as a new revision of the message; **Cancel** (Esc) leaves the message as it was. While the field has the caret, the chat's hotkeys stay out of the way.
+  - **Shift** with the send key, or **Shift+click** on **Save**, saves it as a new branch beside the message instead. The original and its replies are kept, and the new branch has nothing below it. For an edited question, send an empty message to have the AI answer it.
   - Only the text is edited. Attachments stay attached, and an AI reply keeps its thinking trace and the record of which model wrote it.
   - The revision number in the grey line above the message goes up by one.
   - A message with more than one revision has its revision number drawn as a link, followed by how many revisions it has. Revision numbers are not reused, so after a deletion they can skip. **Click it** (or press Ctrl+Shift+E) to see all the revisions of the message: when each was written, and how it opens. **Enter** or a click shows one in the chat, and on the one already shown closes the list, so a double-click shows a revision and closes; **Delete**, pressed twice, deletes one permanently; **Esc** closes the list. The only revision of a message cannot be deleted — delete the message instead.
@@ -1024,7 +1027,7 @@ The blue dot says which message these act on: the bottommost one whose whole but
 | `Ctrl+S` | Speak it |
 | `Ctrl+C` | Copy it to the clipboard — while the message field does not hold the caret |
 | `Ctrl+Shift+C` | ...with its node ID and metadata included |
-| `Ctrl+E` | Edit it (your messages and AI replies), as a new revision. The send key saves, `Esc` cancels |
+| `Ctrl+E` | Edit it (your messages and AI replies), as a new revision. The send key saves, `Esc` cancels. `Shift` with the send key saves as a new branch beside it instead |
 | `Ctrl+Shift+E` | List its revisions, to show or delete each, when it has more than one. Again to close |
 | `Ctrl+B` | Branch the chat here — roll the conversation back to it |
 | `Ctrl+Shift+Delete` | Delete it and everything below it. Twice to confirm; there is no undo |

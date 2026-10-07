@@ -384,3 +384,40 @@ class TestRevisingAMessage:
         payload["message"]["content"].append(chatutil.image_content_part("sidecar:a.png"))
         assert self._controller(f).revise_message(message, "") is None
         assert f.get_payload(message)["message"]["content"] == [chatutil.image_content_part("sidecar:a.png")]
+
+
+class TestBranchingAnEditedMessage:
+    """The other route to an edit: a sibling holding the new text, with HEAD moved to it."""
+
+    @staticmethod
+    def _controller(forest, head, generating=False):
+        """A controller with just what `branch_message` touches."""
+        controller = TestRevisingAMessage._controller(forest, generating=generating)
+        controller.app_state = {"HEAD": head}
+        return controller
+
+    def test_the_edit_becomes_a_sibling_and_the_original_keeps_its_replies(self, two_card_forest, chat_payload):
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        reply = f.create_node(chat_payload("assistant", "the answer to the original", 5), parent_id=message)
+        controller = self._controller(f, reply)
+        assert controller.branch_message(message, "a different question") is None
+        new_node = controller.app_state["HEAD"]
+        assert new_node != reply, "HEAD did not move"
+        assert f.get_parent(new_node) == f.get_parent(message), "the edit is not a sibling of the original"
+        assert f.get_children(new_node) == [], "the replies came along to the new branch"
+        assert chatutil.content_to_text(f.get_payload(new_node)["message"]["content"]) == "a different question"
+        assert f.get_children(message) == [reply], "the original lost its replies"
+        assert len(f.get_revisions(message)) == 1, "the original was revised rather than branched from"
+
+    def test_refused_as_a_revision_is(self, two_card_forest):
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        parent = f.get_parent(message)
+        n_siblings = len(f.get_children(parent))
+        for controller, text in ((self._controller(f, message, generating=True), "edited mid-turn"),
+                                 (self._controller(f, message), "  \n")):
+            assert isinstance(controller.branch_message(message, text), str)
+            assert controller.app_state["HEAD"] == message
+        assert len(f.get_children(parent)) == n_siblings
+        # The control: neither condition, and the branch goes through.
+        assert self._controller(f, message).branch_message(message, "fine") is None
+        assert len(f.get_children(parent)) == n_siblings + 1
