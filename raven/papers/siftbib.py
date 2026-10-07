@@ -47,12 +47,12 @@ from collections.abc import Callable
 import bibtexparser
 from bibtexparser.model import Entry
 
+from ..common import tabular
 from ..common import utils as common_utils
 
 from .. import __version__
 
 from . import bibtex
-from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -188,18 +188,19 @@ def sift(library: bibtexparser.Library,
 
 def write_audit(path: pathlib.Path, dropped: list[DroppedRecord],
                 sources: list[str], criteria: list[Criterion]) -> None:
-    """Write the audit TSV, preceded by comment lines naming the tool version, inputs and criteria.
+    """Write the audit to `path`, as TSV, `.xlsx` or `.ods` by its extension, with lines naming the tool version,
+    inputs and criteria: comment lines above the header in a TSV, a *Notes* sheet in a spreadsheet.
 
     The header is what makes the file citable: a method section says which tool removed these records and
     on what test, and "the script said so" is not a method section.
     """
-    papers_utils.write_tsv(path,
-                           [f"raven-siftbib {__version__}",
-                            f"input: {'; '.join(sources)}",
-                            f"kept records satisfying: {'; '.join(criterion.describe for criterion in criteria)}",
-                            f"records removed: {len(dropped)}"],
-                           AUDIT_COLUMNS,
-                           [(record.key, record.reason, record.title, record.venue) for record in dropped])
+    tabular.write_table(path,
+                        [f"raven-siftbib {__version__}",
+                         f"input: {'; '.join(sources)}",
+                         f"kept records satisfying: {'; '.join(criterion.describe for criterion in criteria)}",
+                         f"records removed: {len(dropped)}"],
+                        AUDIT_COLUMNS,
+                        [(record.key, record.reason, record.title, record.venue) for record in dropped])
 
 
 def _report(kept: int, dropped: list[DroppedRecord], criteria: list[Criterion]) -> None:
@@ -231,6 +232,8 @@ def main() -> None:  # pragma: no cover
                         metavar="suf", help="Suffix for naming output files (file.bib -> file_sifted.bib).")
     parser.add_argument("--audit-suffix", dest="audit_suffix", default="_removed", type=str,
                         metavar="suf", help="Suffix for naming audit files (file.bib -> file_removed.tsv).")
+    parser.add_argument("--audit-format", dest="audit_format", default="tsv", choices=tabular.FORMATS,
+                        help="Format of the audit files: TSV, Excel or OpenDocument.")
     # A directory rather than a path, because this tool sifts each input on its own: there are as many
     # outputs and audits as there are inputs, and no single path can name them. It covers both files
     # rather than the audit alone — redirecting one and leaving the other beside the input is a
@@ -290,7 +293,7 @@ def main() -> None:  # pragma: no cover
         out_path.write_text(bibtex.write_string(kept), encoding="utf-8")
         print(f"  wrote {out_path}")
         if not opts.no_audit:
-            audit_path = directory / f"{path.stem}{opts.audit_suffix}.tsv"
+            audit_path = directory / f"{path.stem}{opts.audit_suffix}.{opts.audit_format}"
             write_audit(audit_path, dropped, [str(path)], criteria)
             print(f"  wrote {audit_path}")
 

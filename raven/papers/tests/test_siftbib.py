@@ -125,6 +125,16 @@ class TestWriteAudit:
         assert lines[4].split("\t") == list(siftbib.AUDIT_COLUMNS)
         assert lines[5].split("\t")[:2] == ["bare_2024", "no abstract"]
 
+    def test_a_spreadsheet_audit_holds_the_same_rows(self, tmp_path: pathlib.Path):
+        from raven.common import tabular
+
+        criteria = [siftbib.require_field("abstract")]
+        _kept, dropped = siftbib.sift(library(NO_ABSTRACT), criteria)
+        path = tmp_path / "removed.ods"
+        siftbib.write_audit(path, dropped, ["corpus.bib"], criteria)
+        rows = tabular.read_table(path)
+        assert [(row["key"], row["reason"]) for row in rows] == [("bare_2024", "no abstract")]
+
 
 LATEX_TITLE = r"""@article{latex_2024,
   title = {{\o}nly {Tr{\c e}bicki} and the {AutoPBL} caf\'e},

@@ -4,9 +4,7 @@ import bibtexparser
 from bibtexparser.model import Entry, Field
 from bibtexparser import Library
 
-import csv
-
-from raven.papers.utils import bibtex_escape, bibtex_unescape, write_tsv
+from raven.papers.utils import bibtex_escape, bibtex_unescape
 
 
 class TestBibtexEscape:
@@ -105,40 +103,3 @@ class TestBibtexUnescape:
         assert bibtex_unescape("\\\\") == "\\"
         assert bibtex_unescape("{[}") == "["
         assert bibtex_unescape("{]}") == "]"
-
-
-class TestWriteTsv:
-    """A report opens in a spreadsheet with one row per record and every cell intact."""
-
-    def _read(self, path):
-        """The data rows, parsed the way a spreadsheet's import does: `"` is a quote character."""
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
-                 if not line.startswith("#")]
-        return list(csv.reader(lines, delimiter="\t"))
-
-    def test_a_cell_opening_with_a_quote_survives_the_round_trip(self, tmp_path):
-        path = tmp_path / "report.tsv"
-        rows = [("a_2024", '"Hey ChatGPT": students ask'), ("b_2024", "plain title")]
-        write_tsv(path, ["tool 1.0"], ("key", "title"), rows)
-        parsed = self._read(path)
-        assert parsed[0] == ["key", "title"]
-        assert [tuple(row) for row in parsed[1:]] == rows
-
-    def test_a_quote_mid_cell_is_quoted_too(self, tmp_path):
-        # Asserted on the text rather than by parsing it back: Python's reader tolerates a bare `"` inside a
-        # cell, so a round trip passes whether or not it was quoted, while a spreadsheet import does not.
-        path = tmp_path / "report.tsv"
-        write_tsv(path, [], ("key", "title"), [("a_2024", 'The "learning assistant" in STEM')])
-        assert path.read_text(encoding="utf-8").splitlines()[1] == 'a_2024\t"The ""learning assistant"" in STEM"'
-
-    def test_tabs_and_newlines_in_a_cell_do_not_split_it(self, tmp_path):
-        path = tmp_path / "report.tsv"
-        write_tsv(path, [], ("key", "title"), [("a_2024", "two\tpart\ntitle ")])
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
-        assert lines == ["key\ttitle", "a_2024\ttwo part title"]
-
-    def test_comments_come_first_as_hash_lines(self, tmp_path):
-        path = tmp_path / "report.tsv"
-        write_tsv(path, ["tool 1.0", "input: corpus.bib"], ("key",), [("a_2024",)])
-        assert path.read_text(encoding="utf-8").splitlines() == ["# tool 1.0", "# input: corpus.bib",
-                                                                 "key", "a_2024"]

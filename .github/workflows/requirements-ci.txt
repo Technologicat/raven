@@ -53,6 +53,7 @@ filelock==4.0.7  # common.datastorelock; keeps two frontends off one chat datast
 gguf==0.19.0
 tokenizers==0.23.2
 odfpy==1.4.1
+openpyxl==3.1.5  # raven.common.tabular reads .xlsx with it
 Pillow==12.3.0
 # Imported at module level by the adopted `file_dialog`, so `raven/vendor/file_dialog/tests/` needs it to
 # collect at all — the tests themselves are pure-function and touch nothing psutil provides.
@@ -73,6 +74,7 @@ unpythonic==2.5.0
 # why that is not listed here: only direct dependencies are pinned (see the scope note above).
 wordcloud==1.9.6
 wosfile==0.7.0
+XlsxWriter==3.2.9  # raven.common.tabular writes .xlsx with it
 
 # Both of these raised their Python floor to 3.12 partway through our supported range — numpy at
 # 2.5.0, scipy at 1.18.0 — so the matrix legitimately resolves two versions of each and pip is

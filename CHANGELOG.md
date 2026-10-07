@@ -23,6 +23,16 @@
 
 - **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
 
+#### Raven-deduplicate
+
+- **The audit can be an Excel or OpenDocument spreadsheet**, as well as TSV: give `--audit` a path ending in `.xlsx` or `.ods`, or use `--audit-format xlsx` or `ods` for the audit named after the output.
+  - The lines saying which tool and which input go on a second sheet, *Notes*, so the first row of the table is its header.
+
+#### Raven-siftbib
+
+- **The audits can be Excel or OpenDocument spreadsheets**, as well as TSV: `--audit-format xlsx` or `ods`.
+  - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
+
 #### Constellation-wide
 
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.

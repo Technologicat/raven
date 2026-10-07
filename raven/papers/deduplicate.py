@@ -99,12 +99,12 @@ from bibtexparser.model import Entry, Field
 
 from .. import __version__
 
+from ..common import tabular
 from ..common import text as textutil
 
 from . import bibtex
 from . import config as papers_config
 from . import fixbib
-from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -664,7 +664,7 @@ def _describe_for_judge(record: Record) -> str:
                         ("booktitle", "booktitle"), ("publisher", "publisher"), ("doi", "doi")):
         value = record.field(name)
         if value:
-            parts.append(f"{label}: {papers_utils.tsv_cell(value)[:200]}")
+            parts.append(f"{label}: {tabular.tsv_cell(value)[:200]}")
     return "\n".join(f"    {part}" for part in parts)
 
 
@@ -918,7 +918,7 @@ def _venue_of(record: Record) -> str | None:
     for name in ("journal", "booktitle", "publisher"):
         value = record.field(name)
         if value:
-            return papers_utils.tsv_cell(value)[:200]
+            return tabular.tsv_cell(value)[:200]
     return None
 
 
@@ -955,7 +955,7 @@ def _describe_work_for_judge(record: Record) -> str:
     for label, name in (("authors", "author"), ("year", "year")):
         value = record.field(name)
         if value:
-            parts.append(f"{label}: {papers_utils.tsv_cell(value)[:200]}")
+            parts.append(f"{label}: {tabular.tsv_cell(value)[:200]}")
     return "\n".join(f"      {part}" for part in parts)
 
 
@@ -1213,7 +1213,7 @@ class AuditRow:
 
 def _clip(value: str) -> str:
     """`value` shortened to something an audit row can carry."""
-    value = papers_utils.tsv_cell(value)
+    value = tabular.tsv_cell(value)
     return value if len(value) <= papers_config.audit_value_chars else value[:papers_config.audit_value_chars - 1] + "…"
 
 
@@ -1338,7 +1338,7 @@ def merge_cluster(cluster: Cluster, rejected: frozenset[str] = frozenset()) -> t
                    removed=tuple(record.key for record in cluster.records[1:]),
                    matched_by=cluster.rules,
                    size=len(cluster.records),
-                   title=papers_utils.tsv_cell(base.display_title),
+                   title=tabular.tsv_cell(base.display_title),
                    dois=tuple(dois),
                    differences=tuple(differences))
     return merged, row
@@ -1364,18 +1364,19 @@ def deduplicate(clusters: list[Cluster],
 
 
 def write_audit(path: pathlib.Path, rows: list[AuditRow], sources: list[str]) -> None:
-    """Write the audit TSV, preceded by comment lines naming the tool version and the inputs.
+    """Write the audit to `path`, as TSV, `.xlsx` or `.ods` by its extension, with lines naming the tool version
+    and the inputs: comment lines above the header in a TSV, a *Notes* sheet in a spreadsheet.
 
     The version stamp is what makes the file citable: a method section says which tool produced these
     numbers, and "the script said so" is not a method section.
     """
-    papers_utils.write_tsv(path,
-                           [f"raven-deduplicate {__version__}",
-                            f"input: {'; '.join(sources)}",
-                            f"clusters merged: {len(rows)}",
-                            f"records removed: {sum(len(row.removed) for row in rows)}"],
-                           AUDIT_COLUMNS,
-                           [row.to_row() for row in rows])
+    tabular.write_table(path,
+                        [f"raven-deduplicate {__version__}",
+                         f"input: {'; '.join(sources)}",
+                         f"clusters merged: {len(rows)}",
+                         f"records removed: {sum(len(row.removed) for row in rows)}"],
+                        AUDIT_COLUMNS,
+                        [row.to_row() for row in rows])
 
 
 def _report(records: list[Record],
@@ -1428,7 +1429,9 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("-o", "--output", dest="output", default=None, type=str, metavar="deduped.bib",
                         help="Where to write the deduplicated bibliography. Without it, the run reports what it would do and writes nothing.")
     parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.tsv",
-                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. Defaults to sitting beside the output, as `<output>_audit.tsv`.")
+                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. TSV, Excel or OpenDocument, by the extension: `.tsv`, `.xlsx` or `.ods`. Defaults to sitting beside the output, as `<output>_audit.tsv`, or in the format `--audit-format` names.")
+    parser.add_argument("--audit-format", dest="audit_format", default=None, choices=tabular.FORMATS,
+                        help="Format of the audit file the tool names itself: TSV, Excel or OpenDocument. With `--audit`, the extension of its path decides instead. Default: tsv.")
     parser.add_argument("--no-audit", dest="no_audit", action="store_true", default=False,
                         help="Do not write the audit. A merge cannot be read back out of the merged file, so this discards the only record of what happened.")
     parser.add_argument("--judge", dest="judge", action="store_true", default=False,
@@ -1445,6 +1448,13 @@ def main() -> None:  # pragma: no cover
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="search.bib",
                         help="BibTeX file(s) to deduplicate. Several are read as one corpus, which is what a multi-database search produces.")
     opts = parser.parse_args()
+    if opts.audit:
+        try:
+            audit_format = tabular.format_of(opts.audit)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if opts.audit_format is not None and opts.audit_format != audit_format:
+            parser.error(f"--audit {opts.audit} is .{audit_format}, but --audit-format says {opts.audit_format}")
 
     from ..common import logsetup
     logsetup.configure(level=getattr(logging, opts.log_level), logfile=opts.log)
@@ -1489,7 +1499,7 @@ def main() -> None:  # pragma: no cover
         audit_path = pathlib.Path(opts.audit).expanduser().resolve()
     elif opts.output and not opts.no_audit:
         output_path = pathlib.Path(opts.output).expanduser().resolve()
-        audit_path = output_path.with_name(f"{output_path.stem}_audit.tsv")
+        audit_path = output_path.with_name(f"{output_path.stem}_audit.{opts.audit_format or 'tsv'}")
     if audit_path is not None:
         write_audit(audit_path, rows, sources)
         print(f"audit written to {audit_path}")

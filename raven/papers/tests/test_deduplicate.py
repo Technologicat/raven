@@ -8,6 +8,7 @@ unrelated editorials merged on the word `Editorial` — were invisible in statis
 
 import json
 import re
+import sys
 
 import pytest
 
@@ -637,6 +638,43 @@ class TestAudit:
         header = next(line for line in path.read_text(encoding="utf-8").splitlines()
                       if not line.startswith("#"))
         assert header.split("\t") == list(dd.AUDIT_COLUMNS)
+
+    @pytest.mark.parametrize("fmt", ["xlsx", "ods"])
+    def test_a_spreadsheet_audit_holds_the_same_rows(self, tmp_path, fmt):
+        from raven.common import tabular
+
+        row = self._row()
+        path = tmp_path / f"audit.{fmt}"
+        dd.write_audit(path, [row], ["search.bib"])
+        assert tabular.read_table(path) == [dict(zip(dd.AUDIT_COLUMNS, row.to_row()))]
+
+
+class TestAuditFormatOption:
+    """`--audit` names its format by extension, and `--audit-format` may not contradict it."""
+
+    def _run(self, monkeypatch, tmp_path, *args):
+        source = tmp_path / "search.bib"
+        source.write_text(TestAudit.SOURCE, encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["raven-deduplicate", str(source), *args])
+        dd.main()
+
+    def test_the_extension_picks_the_format(self, monkeypatch, tmp_path):
+        from raven.common import tabular
+
+        self._run(monkeypatch, tmp_path, "--audit", str(tmp_path / "audit.xlsx"))
+        assert len(tabular.read_table(tmp_path / "audit.xlsx")) == 1
+
+    def test_the_format_names_the_default_audit(self, monkeypatch, tmp_path):
+        self._run(monkeypatch, tmp_path, "-o", str(tmp_path / "deduped.bib"), "--audit-format", "ods")
+        assert (tmp_path / "deduped_audit.ods").exists()
+        assert not (tmp_path / "deduped_audit.tsv").exists()
+
+    @pytest.mark.parametrize("args", [("--audit", "audit.csv"),
+                                      ("--audit", "audit.xlsx", "--audit-format", "ods")])
+    def test_a_bad_or_contradicted_extension_is_refused_before_the_run(self, monkeypatch, tmp_path, args):
+        with pytest.raises(SystemExit):
+            self._run(monkeypatch, tmp_path, *args)
+        assert not list(tmp_path.glob("audit.*")), "the run went ahead and wrote an audit anyway"
 
 
 class TestNothingDisappears:
