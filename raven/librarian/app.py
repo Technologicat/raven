@@ -1126,6 +1126,23 @@ def _count_staged_files(status: sym) -> int:
     return sum(1 for staged in staged_files if staged.status is status)
 
 
+def _send_with_staged_attachments(user_message_text: str) -> None:
+    """Send `user_message_text` to the AI with whatever is staged in the attachment strip, and clear the strip.
+
+    Every way of sending goes through here, so a message never leaves its attachments behind for the next one.
+    Ask `_describe_send_gate` first.
+    """
+    # `chat_exchange` stores each image (bytes and all) on a background thread from this snapshot, so clearing
+    # the strip and its textures right away can't pull the rug out from under the send.
+    outgoing_images = list(staged_images)
+    outgoing_files = list(staged_files)
+    chat_controller.chat_exchange(user_message_text,
+                                  staged_images=(outgoing_images or None),
+                                  staged_files=(outgoing_files or None))
+    _clear_staged_images()
+    _clear_staged_files()
+
+
 def _describe_send_gate() -> str | None:
     """Why the message cannot be sent right now, or `None` when it can.
 
@@ -1597,16 +1614,7 @@ with timer() as tim:
                                                                                      text_color=(255, 255, 255)))
                                 return
                             user_message_text = dpg.get_value("chat_field").strip()  # tag
-                            # Snapshot the staged attachments and hand them off, then clear the staging. `chat_exchange`
-                            # stores each image (bytes and all) on a background thread from this snapshot, so clearing
-                            # the strip and its textures right away can't pull the rug out from under the send.
-                            outgoing_images = list(staged_images)
-                            outgoing_files = list(staged_files)
-                            chat_controller.chat_exchange(user_message_text,
-                                                          staged_images=(outgoing_images or None),
-                                                          staged_files=(outgoing_files or None))
-                            _clear_staged_images()
-                            _clear_staged_files()
+                            _send_with_staged_attachments(user_message_text)
                             # Clear the composer. ImGui owns the *active* (focused) multiline input's edit buffer
                             # and ignores an external `set_value` while it's focused, writing its own buffer back on
                             # deactivation — so a focused Enter-send can't be cleared by `set_value` alone. (A Send-
@@ -1693,9 +1701,22 @@ with timer() as tim:
                                                                          prompt="This is a conversation between an AI and a user.")  # TODO: prompt-engineer the STT transcription prompt (e.g. detect proper names from chat log)
                             logger.info(f"Transcribed: '{user_message_text}'")  # TODO: privacy-sensitive log message? (The server has some, too.)
 
-                            # Send the message to AI
+                            # A spoken message is held by the same gate as a typed one. The transcript is not
+                            # thrown away when it is: it goes into the composer, to be sent once the gate opens.
+                            gate_reason = _describe_send_gate()
+                            if gate_reason is not None:
+                                logger.info(f"stop_recording_audio_message: Not sending now ({gate_reason}); putting the transcript in the composer.")
+                                old_text = dpg.get_value("chat_field") or ""  # tag
+                                separator = "\n" if old_text.strip() else ""
+                                dpg.set_value("chat_field", old_text.rstrip() + separator + user_message_text)  # tag
+                                gui_animation.animator.add(gui_animation.WidgetFlash(target="chat_send_button",  # tag
+                                                                                     duration=1.0,
+                                                                                     flash_color=(255, 32, 32),
+                                                                                     text_color=(255, 255, 255)))
+                                return
+
                             logger.info("stop_recording_audio_message: Sending transcribed text to AI, as the user's message.")
-                            chat_controller.chat_exchange(user_message_text)
+                            _send_with_staged_attachments(user_message_text)
 
                         # Sending is the field's own commit action *and* a global hotkey, and it has to be
                         # both. ImGui owns this chord while the field is active and will not hand it over: a
