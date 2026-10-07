@@ -332,6 +332,46 @@ what the TODO asks for, and the rejection test is cheap.
 ECCOMAS reads median 1, p90 1, max 3 either way, because the garbage terms are all singletons and so
 never join the common pool.*
 
+## An improved classical mode, worth trying (2026-10-07)
+
+**This reopens the `"frequencies"` verdict below rather than contradicting it.** The method does give
+low-quality keywords (Juha, 2026-09-01). The question is whether that is a property of classical methods or
+of this one, and there are reasons to think it is this one. The maintainer wants it tried (2026-10-07).
+
+**What it does now**: `nlptools.suggest_keywords` counts single nouns and proper nouns, drops any word
+appearing in at least 10% of the documents, and ranks what is left by raw count; the importer adds spaCy's
+named entities. So a candidate is one word, and the score is frequency inside the band a hard cutoff
+leaves. Three things follow from that shape:
+
+- **A single word cannot be most keywords.** `knowledge tracing`, `retrieval-augmented generation`,
+  `intelligent tutoring system` arrive as their parts, and the parts say little.
+- **Raw count rewards the merely frequent** among whatever survived the cutoff.
+- **The cutoff is a hard edge**, the thing this brief already replaced with ranking for the pools.
+
+**Three steps, in increasing cost, each measurable on its own:**
+
+1. **Phrases as candidates.** spaCy's noun chunks, lemmatized, in place of single words. spaCy is already in
+   the pipeline, so this is the largest lever for the least work. S–M.
+2. **Class-based TF-IDF per cluster** in place of count-plus-cutoff: a term scores by how concentrated it is
+   in this cluster against the rest. Grootendorst's c-TF-IDF, from BERTopic
+   ([2022](https://arxiv.org/abs/2203.05794)). It produces exactly the scores the pools above rank by, so
+   the common and distinctive pools fall out of the same numbers. S.
+3. **Embedding rerank with diversity.** Score each candidate phrase by its embedding's similarity to the
+   cluster's centroid, after KeyBERT (Grootendorst, 2020, [repository](https://github.com/MaartenGr/KeyBERT)),
+   then pick with maximal marginal relevance so the top few are not near-synonyms
+   ([Carbonell & Goldstein, 1998](https://doi.org/10.1145/290941.291025)). This is what adds *aboutness*,
+   which no frequency can see. No LLM: the embedder and the per-document vectors are already there. M.
+
+**Measured against the LLM mode, on more than one corpus.** A keyword method tuned on one corpus is the
+kind of thing that looks right there and falls over on the next, so arXiv and AOKK at least. The pools'
+own statistic is a ready criterion: a good method gives a long tail of distinctive terms and few repeated
+across clusters, which the cluster document frequency counts directly. The other half is a person reading
+the clusters, since distinctive and *meaningful* are different properties.
+
+**If it holds up, it changes what the offline path is**: from a fallback that is worse, to a method worth
+choosing — no backend needed, and deterministic.
+It would also give the interim corpus TOC in brief 13 §4 the content description it currently cannot have.
+
 ## Settled
 
 - ~~**Does the model produce twelve meaningful keywords?**~~ **Yes** — measured 2026-09-01, see above.
