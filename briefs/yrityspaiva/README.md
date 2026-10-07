@@ -653,10 +653,11 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        the team's request). `regenerate_reports.py` rebuilt their whole set as `.xlsx`, numbered by stage,
        into `00_stuff/rawdata/AOKK/reports-2026-10-07/`; every stage's counts match the files shared before.
      - **For Friday 2026-10-09** (maintainer):
-       - **The team's manual check came back**: `held-for-review_tarkastetut.xlsx`, their marked-up
-         `held-for-review`, in the shared folder.
-       - **A tool to drop the records that check rejected** — probably one more tool, reading the marked
-         sheet (which `tabular.read_table` already reads) and filtering the `.bib`.
+       - **If the team's manual check is finished by then**: `held-for-review_tarkastetut.xlsx`, their
+         marked-up `held-for-review`, is in the shared folder, and the check is still in progress — they may
+         have other work queued (maintainer). Then **a tool to drop the records that check rejected** —
+         probably one more tool, reading the marked sheet (which `tabular.read_table` already reads) and
+         filtering the `.bib`.
        - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
          that points at it.
        - **Searching for a document by its ID or filename** (decided 2026-10-07): `HybridIR.query` puts a named
@@ -665,7 +666,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      - **The MCP client starts around 2026-10-19**, the maintainer being away the week before. A lab meeting
        today specced the server side of a v1 MVP; what Librarian needs for it is the MCP client, brief 04,
        whose auth section (a per-service API key) was settled this morning.
-     - **Still owed**: the read-through of `briefs/roadmap-overview-2026-10.md`'s clusters for the autumn's
-       priorities, a session with the maintainer; and this sprint's cleanup, after the event, on the
-       Researchers' Night pattern (open briefs out to the top level, items living only here into
-       `TODO_DEFERRED.md`, the folder closed into `done/` with a postmortem).
+     - **Also for Friday** (maintainer): the read-through of `briefs/roadmap-overview-2026-10.md`'s clusters
+       for the autumn's priorities, a session with the maintainer; and closing this sprint on the
+       Researchers' Night pattern — open briefs out to the top level, the folder into `done/` with a
+       postmortem. The items living only here were filed on 2026-10-07, so that part is done.
