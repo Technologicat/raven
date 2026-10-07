@@ -14,6 +14,10 @@ What it checks, all of it mechanical:
 - Every metadata line names the four required fields.
 - Every `##` heading is preceded by a blank line, per the canonical format.
 - No two items share a heading, since items are cited from briefs and from each other by title.
+- The introduction ends at `INTRO_END_MARKER`, which appears once, with no `##` heading above it. The intro
+  runs to several paragraphs, so "insert at the top" anchored on the first of them puts the new item in the
+  middle of it, and a later edit that takes the item out cuts the rest of the intro along with it. The
+  marker is the anchor to insert below; this check is what catches an item that went in above it.
 
 Exit status is 0 when clean, 1 when anything is reported.
 """
@@ -27,6 +31,7 @@ __all__ = ["check", "main"]
 TODO_PATH = pathlib.Path(__file__).resolve().parent.parent / "TODO_DEFERRED.md"
 
 METADATA_RE = re.compile(r"^\*Cluster:.*\*$")
+INTRO_END_MARKER = "<!-- New items go below this line. -->"
 REQUIRED_FIELDS = ("Cluster:", "Cost:", "Gate:", "Filed:")
 
 # Sections that are prose about the file rather than deferred items, and so carry no metadata line.
@@ -40,6 +45,16 @@ def check(path: pathlib.Path) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     complaints = []
     seen_headings = {}
+
+    marker_linenos = [i + 1 for i, line in enumerate(lines) if line.strip() == INTRO_END_MARKER]
+    if len(marker_linenos) != 1:
+        complaints.append(f"the intro-end marker {INTRO_END_MARKER!r} appears {len(marker_linenos)} times, "
+                          f"where it should appear once, as the last line of the introduction")
+    else:
+        for i, line in enumerate(lines[:marker_linenos[0] - 1]):
+            if line.startswith("## "):
+                complaints.append(f"{i + 1}: heading {line[3:].strip()!r} is inside the introduction, above the "
+                                  f"marker on line {marker_linenos[0]}; new items go below the marker")
 
     for i, line in enumerate(lines):
         lineno = i + 1

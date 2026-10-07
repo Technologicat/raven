@@ -1,6 +1,7 @@
 # Deferred TODOs
 
-New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
+New items go at the **top**, directly below the `<!-- New items go below this line. -->` marker that ends
+this introduction. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
 **A triage pass is due after Researchers' Night 2026** (2026-09-25; noted 2026-09-04). Several gates here
@@ -23,6 +24,8 @@ enough (maintainer, 2026-09-30).
 
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
+
+<!-- New items go below this line. -->
 
 ## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
 
