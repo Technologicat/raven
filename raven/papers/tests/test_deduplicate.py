@@ -12,6 +12,7 @@ import sys
 
 import pytest
 
+from raven.papers import config as papers_config
 from raven.papers import deduplicate as dd
 
 
@@ -32,48 +33,6 @@ def clusters_of(source: str, **kwargs):
     parsed = records(source)
     return [frozenset(record.key for record in cluster.records)
             for cluster in dd.cluster_records(parsed, **kwargs)]
-
-
-class TestNormalizeDoi:
-    def test_case_is_folded(self):
-        assert dd.normalize_doi("10.1234/ABC-def") == "10.1234/abc-def"
-
-    @pytest.mark.parametrize("prefix", ["https://doi.org/", "http://doi.org/", "https://dx.doi.org/",
-                                        "http://dx.doi.org/", "doi:", "doi: ", "info:doi/"])
-    def test_resolver_prefixes_are_stripped(self, prefix):
-        assert dd.normalize_doi(f"{prefix}10.1234/abc") == "10.1234/abc"
-
-    @pytest.mark.parametrize("dash", ["‐", "‑", "‒", "–", "—", "―", "−"])
-    def test_every_unicode_dash_folds_to_ascii(self, dash):
-        """Two databases exporting one DOI disagree about which dash it contains; the paper is one paper."""
-        assert dd.normalize_doi(f"10.1234/abc{dash}def") == "10.1234/abc-def"
-
-    def test_a_line_wrapped_doi_loses_its_whitespace(self):
-        assert dd.normalize_doi("10.1234/abc\n  def") == "10.1234/abcdef"
-
-    def test_trailing_sentence_punctuation_is_dropped(self):
-        assert dd.normalize_doi("10.1234/abc.") == "10.1234/abc"
-
-    def test_enclosing_braces_are_dropped(self):
-        assert dd.normalize_doi("{10.1234/abc}") == "10.1234/abc"
-
-    @pytest.mark.parametrize("value", ["", None, "   ", "n/a", "N/A", "not available",
-                                       "https://example.com/article/123", "10.1234", "10.1234/",
-                                       "10.12/x", "doi", "-"])
-    def test_what_is_not_a_doi_is_refused(self, value):
-        """A `doi` field regularly holds something that is not one, and those must not become a key.
-
-        Two records both saying `n/a` are equal to each other, so admitting the value would merge papers
-        with nothing whatsoever in common — the worst failure this tool has, since a merged record is
-        gone from the review and nothing downstream can notice.
-        """
-        assert dd.normalize_doi(value) is None
-
-    def test_a_suffix_full_of_punctuation_is_still_a_doi(self):
-        # Real DOIs carry slashes, parentheses and dots in the suffix; the shape check must not be
-        # so tight that it starts rejecting the thing it is checking for.
-        assert dd.normalize_doi("10.1002/(SICI)1097-0258(19980815)17:15<1661::AID-SIM968>3.0.CO;2-2") \
-            == "10.1002/(sici)1097-0258(19980815)17:15<1661::aid-sim968>3.0.co;2-2"
 
 
 class TestNormalizeTitle:
@@ -616,6 +575,23 @@ class TestAudit:
         _merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
         assert all("\t" not in cell and "\n" not in cell and "\r" not in cell for cell in row.to_row())
 
+    def test_the_row_links_to_the_paper_and_carries_its_abstract_in_full(self):
+        source = (entry("a", title="A Study of Learning Analytics", doi="https://doi.org/10.1234/X",
+                        abstract="We study {\\o}nly things. " + "More. " * 600)
+                  + entry("b", title="A Study of Learning Analytics", doi="10.1234/x", url="https://example.com/b"))
+        _merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
+        assert row.link == "https://doi.org/10.1234/x"
+        assert row.abstract.startswith("We study ønly things.")
+        assert len(row.abstract) > papers_config.audit_value_chars, "the abstract was clipped like a difference"
+
+    def test_without_a_doi_the_link_is_the_url(self):
+        source = (entry("a", title="A Study of Learning Analytics", year="2024", url="https://example.com/a")
+                  + entry("b", title="A Study of Learning Analytics", year="2024"))
+        clusters = dd.cluster_records(records(source))
+        assert len(clusters) == 1 and len(clusters[0].records) == 2, "the fixture did not merge"
+        _merged, row = dd.merge_cluster(clusters[0])
+        assert row.link == "https://example.com/a"
+
     def test_a_row_has_one_cell_per_column(self):
         assert len(self._row().to_row()) == len(dd.AUDIT_COLUMNS)
 
@@ -623,7 +599,9 @@ class TestAudit:
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x", note="short")
                   + entry("b", title="A Study of Learning Analytics", doi="10.1234/x", note="x" * 5000))
         _merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
-        assert all(len(cell) < 2000 for cell in row.to_row())
+        # The abstract column is exempt: it is there to be read in full.
+        cells = dict(zip(dd.AUDIT_COLUMNS, row.to_row()))
+        assert all(len(cell) < 2000 for column, cell in cells.items() if column != "abstract")
 
     def test_the_file_is_stamped_with_the_tool_version(self, tmp_path):
         """What makes the audit citable: a method section names a versioned tool, not somebody's script."""

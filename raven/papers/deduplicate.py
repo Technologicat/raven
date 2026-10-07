@@ -66,7 +66,7 @@ decoded. The input file is not modified; use `raven-fixbib` to repair the file i
 
 from __future__ import annotations
 
-__all__ = ["normalize_doi", "normalize_title", "is_generic_title",
+__all__ = ["normalize_title", "is_generic_title",
 
            "Record", "read_records",
 
@@ -101,10 +101,12 @@ from .. import __version__
 
 from ..common import tabular
 from ..common import text as textutil
+from ..common import utils as common_utils
 
 from . import bibtex
 from . import config as papers_config
 from . import fixbib
+from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -115,14 +117,6 @@ logger = logging.getLogger(__name__)
 # Everything below is a key, never a value: nothing normalized here reaches the output. The regexes are
 # implementation and stay in this module; the lists and thresholds a user might reasonably turn are in
 # `raven.papers.config`.
-
-# The seven Unicode dashes, folded to ASCII `-` in a DOI. Publishers' exports disagree about which one a
-# DOI containing a hyphen should use, and two records whose DOIs differ by an en-dash are one paper.
-_DASHES = "‐‑‒–—―−"
-_DASH_TABLE = str.maketrans({dash: "-" for dash in _DASHES})
-
-# Everything a database might put in front of the DOI itself.
-_DOI_PREFIX_PATTERN = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*|info:doi/)+", re.IGNORECASE)
 
 # A Springer living-reference-work chapter carries its version in the DOI: `..._12-1`, `..._12-2`. The
 # suffix is a documented convention rather than a guess, which is why a rule reads it instead of a model.
@@ -137,32 +131,6 @@ _TAG_PATTERN = re.compile(r"</?[a-z][a-z0-9]{0,9}\s*/?>", re.IGNORECASE)
 _ENTITY_PATTERN = re.compile(r"&(#\d{1,6}|#x[0-9a-f]{1,5}|[a-z]{2,8});", re.IGNORECASE)
 _NAMED_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'", "nbsp": " ",
                    "ndash": "-", "mdash": "-", "rsquo": "'", "lsquo": "'", "rdquo": '"', "ldquo": '"'}
-
-
-def normalize_doi(maybe_raw: str | None) -> str | None:
-    """The comparison key for a DOI, or `None` if the value is not one.
-
-    Lowercased, stripped of whatever resolver prefix the exporting database put in front of it, with the
-    Unicode dashes folded to ASCII and trailing sentence punctuation removed.
-
-    Returns `None` for anything that does not look like a DOI, which a `doi` field regularly holds — an
-    empty string, `n/a`, a publisher's landing-page URL. Those must not become a match key: they are
-    equal to each other across unrelated records, and would merge papers that have nothing to do with
-    one another.
-    """
-    if not maybe_raw:
-        return None
-    value = _DOI_PREFIX_PATTERN.sub("", str(maybe_raw).strip().strip("{}").strip())
-    value = value.translate(_DASH_TABLE).lower()
-    value = "".join(value.split())  # a DOI has no internal whitespace; a line-wrapped export has some
-    value = value.rstrip(".,;:")
-    # A DOI is `10.`, a registrant code of four or more digits, a slash, and a non-empty suffix
-    # (ISO 26324). No upper bound on the digits, there being none in the standard — the corpus this was
-    # built against uses four and five. Anything else in a `doi` field is something other than a DOI,
-    # whatever the field is called.
-    if not re.match(r"^10\.\d{4,}/\S+$", value):
-        return None
-    return value
 
 
 def normalize_title(maybe_raw: str | None) -> str | None:
@@ -343,14 +311,14 @@ def _year_of(maybe_year: str | None) -> int | None:
 
 def _make_record(index: int, entry: Entry) -> Record:
     """Derive a `Record` from one parsed entry."""
-    doi = normalize_doi(_field_value(entry, "doi"))
+    doi = papers_utils.normalize_doi(_field_value(entry, "doi"))
     if doi is None:
         # arXiv records often carry the identifier and no DOI. The registered form is derivable and is
         # what the published copy's own `doi` field will say if it has one, so deriving it here is what
         # lets a preprint match its twin at all.
         eprint = _field_value(entry, "eprint")
         if eprint and _field_value(entry, "archiveprefix"):
-            doi = normalize_doi(f"10.48550/arXiv.{eprint.strip()}")
+            doi = papers_utils.normalize_doi(f"10.48550/arXiv.{eprint.strip()}")
 
     version_match = _CHAPTER_VERSION_PATTERN.search(doi) if doi else None
     return Record(index=index,
@@ -1161,7 +1129,7 @@ def _apply_judge(records: list[Record],
 # The TSV schema. Not a knob despite being public: `AuditRow.to_row` produces these cells in this order,
 # so the two change together or not at all. A caller reading the audit wants the names, which is why it is
 # exported.
-AUDIT_COLUMNS = ("kept", "removed", "matched_by", "size", "title", "dois", "differences")
+AUDIT_COLUMNS = ("kept", "removed", "matched_by", "size", "title", "link", "dois", "differences", "abstract")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1179,6 +1147,8 @@ class AuditRow:
     `matched_by`: Which keys joined the cluster.
     `size`: How many records the cluster held.
     `title`: The surviving record's title, as written.
+    `link`: Where to read the paper: the merged record's DOI as a `https://doi.org/` link, else its `url`,
+            else empty. See `raven.papers.utils.paper_url`.
     `dois`: Every distinct normalized DOI in the cluster. More than one is a disagreement worth seeing,
             not an error — see the module docstring.
     `differences`: Every field where a merged-away record held a different non-empty value than the one
@@ -1191,6 +1161,9 @@ class AuditRow:
                    thing separating its copy from another's — and reporting each one would bury the
                    differences that are about the paper under hundreds that are about the exporter.
                    Nothing else is compared that way, and nothing else is exempt.
+    `abstract`: The merged record's abstract, in full, with its markup resolved. Unclipped, unlike the
+                values in `differences`: it is there to be read, so that a reviewer need not open the
+                `.bib` to judge the record.
     """
     kept: str
     removed: tuple[str, ...]
@@ -1199,6 +1172,8 @@ class AuditRow:
     title: str
     dois: tuple[str, ...]
     differences: tuple[str, ...]
+    link: str = ""
+    abstract: str = ""
 
     def to_row(self) -> tuple[str, ...]:
         """The cells of this row, in `AUDIT_COLUMNS` order."""
@@ -1207,8 +1182,10 @@ class AuditRow:
                 "+".join(self.matched_by),
                 str(self.size),
                 self.title,
+                self.link,
                 "; ".join(self.dois),
-                " | ".join(self.differences))
+                " | ".join(self.differences),
+                self.abstract)
 
 
 def _clip(value: str) -> str:
@@ -1340,7 +1317,10 @@ def merge_cluster(cluster: Cluster, rejected: frozenset[str] = frozenset()) -> t
                    size=len(cluster.records),
                    title=tabular.tsv_cell(base.display_title),
                    dois=tuple(dois),
-                   differences=tuple(differences))
+                   differences=tuple(differences),
+                   link=papers_utils.paper_url(fields.get("doi"), fields.get("url")),
+                   abstract=common_utils.normalize_whitespace(
+                       common_utils.unicodize_basic_markup(fields.get("abstract") or "")))
     return merged, row
 
 

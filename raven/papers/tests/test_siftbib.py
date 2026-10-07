@@ -125,6 +125,16 @@ class TestWriteAudit:
         assert lines[4].split("\t") == list(siftbib.AUDIT_COLUMNS)
         assert lines[5].split("\t")[:2] == ["bare_2024", "no abstract"]
 
+    def test_a_removed_record_comes_with_its_link_and_its_whole_abstract(self):
+        teaser_with_doi = TEASER.replace("@article{teaser_2024,", "@article{teaser_2024,\n  doi = {10.1234/Teaser},")
+        assert teaser_with_doi != TEASER
+        _kept, dropped = siftbib.sift(library(teaser_with_doi + "\n" + NO_ABSTRACT),
+                                      [siftbib.min_chars("abstract", 600)])
+        by_key = {record.key: record for record in dropped}
+        assert by_key["teaser_2024"].link == "https://doi.org/10.1234/teaser"
+        assert by_key["teaser_2024"].abstract == "Given the circumstances ..."
+        assert by_key["bare_2024"].link == "" and by_key["bare_2024"].abstract == ""
+
     def test_a_spreadsheet_audit_holds_the_same_rows(self, tmp_path: pathlib.Path):
         from raven.common import tabular
 

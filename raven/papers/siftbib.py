@@ -53,6 +53,7 @@ from ..common import utils as common_utils
 from .. import __version__
 
 from . import bibtex
+from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -122,14 +123,20 @@ def parse_min_chars(spec: str) -> Criterion:
 
 @dataclasses.dataclass(frozen=True)
 class DroppedRecord:
-    """One record that did not survive, and the first criterion it failed."""
+    """One record that did not survive, and the first criterion it failed.
+
+    `link` is where to read the paper (see `raven.papers.utils.paper_url`), and `abstract` is the record's
+    own, in full: a reviewer deciding whether a removal was right should not have to open the `.bib`.
+    """
     key: str
     reason: str
     title: str
     venue: str
+    link: str = ""
+    abstract: str = ""
 
 
-AUDIT_COLUMNS = ("key", "reason", "title", "venue")
+AUDIT_COLUMNS = ("key", "reason", "title", "venue", "link", "abstract")
 
 # Where a record says it appeared, in the order a BibTeX record is likely to carry it. Reported in the
 # audit rather than used as a criterion: a reviewer scanning what came out recognizes a venue faster than
@@ -182,7 +189,10 @@ def sift(library: bibtexparser.Library,
             dropped.append(DroppedRecord(key=block.key,
                                          reason=failed.reason,
                                          title=_readable(_field_text(block, "title")),
-                                         venue=_venue(block)))
+                                         venue=_venue(block),
+                                         link=papers_utils.paper_url(_field_text(block, "doi"),
+                                                                     _field_text(block, "url")),
+                                         abstract=_readable(_field_text(block, "abstract"))))
     return kept, dropped
 
 
@@ -200,7 +210,8 @@ def write_audit(path: pathlib.Path, dropped: list[DroppedRecord],
                          f"kept records satisfying: {'; '.join(criterion.describe for criterion in criteria)}",
                          f"records removed: {len(dropped)}"],
                         AUDIT_COLUMNS,
-                        [(record.key, record.reason, record.title, record.venue) for record in dropped])
+                        [(record.key, record.reason, record.title, record.venue, record.link, record.abstract)
+                         for record in dropped])
 
 
 def _report(kept: int, dropped: list[DroppedRecord], criteria: list[Criterion]) -> None:

@@ -27,11 +27,13 @@
 
 - **The audit can be an Excel or OpenDocument spreadsheet**, as well as TSV: give `--audit` a path ending in `.xlsx` or `.ods`, or use `--audit-format xlsx` or `ods` for the audit named after the output.
   - The lines saying which tool and which input go on a second sheet, *Notes*, so the first row of the table is its header.
+- **The audit links to each merged paper and carries its full abstract**, so a merge can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
 #### Raven-siftbib
 
 - **The audits can be Excel or OpenDocument spreadsheets**, as well as TSV: `--audit-format xlsx` or `ods`.
   - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
+- **The audit links to each removed paper and carries its full abstract**, so a removal can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
 #### Constellation-wide
 
