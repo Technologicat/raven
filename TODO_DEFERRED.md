@@ -33,8 +33,19 @@ and why hygiene items rank higher than they used to.
 
 Seen live (maintainer, 2026-10-07): asked to retrieve a whole document by its ID — one of the filenames in
 the documents folder — the 9B Qwen passed the ID to `search_documents` rather than to `fetch_document`. The
-search matched nothing, and the model was left with an empty result and no hint why. Not yet retested on
-the 27B. Arguably a bug whatever the model: a document's name is something a search should find.
+search matched nothing, and the model was left with an empty result and no hint why. Arguably a bug
+whatever the model: a document's name is something a search should find.
+
+**The 27B does the same** (retested the same evening, `qwen3.8-27b@q4_k_xl`, on the arXiv fulltext
+corpus): two `search_documents` calls, for `1504.06320` and `1504.06320v4`, and no `fetch_document`. Each
+returned **50 matches**, the semantic half always finding something nearby, so the model got fifty
+unrelated chunks with nothing to say the paper it named was not among them. Worse than an empty result.
+
+**The files carry the arXiv version in their names**, `1504.06320v4.pdf`, which the fix below has to allow
+for. `resolve_document_id` matches a name with or without its extension, so `1504.06320v4` resolves and the
+bare `1504.06320` — the form the model tried first — does not. Whether a trailing version becomes a general
+rule of the matching or something the papers side supplies is a design question: `hybridir` is generic,
+and the version suffix is an arXiv convention (`raven.papers.identifiers.strip_version` already parses it).
 
 Two callers query the retriever — `llmtools.search_documents` and `scaffold`'s automatic search, whose query
 the model also writes now — so a fix in one of them alone would leave the other asymmetric. Decided
