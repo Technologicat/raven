@@ -620,10 +620,11 @@ def format_notice_that_tools_are_spent() -> str:
     behind it was a larger budget: at `max_tool_call_rounds = 20`, re-measured on 2026-10-05, every
     follow-up in the same probe was answered (`investigations/tool_budget/`).
 
-    Worded as a statement of the situation with the required action attached, never as a prohibition. "You
-    may not call any more tools" is the shape that measured 5-37x the deliberation in the grounding
-    instruction's history (see `prompts/README.md`), and it would land here on a model that is *already*
-    mid-task and looking for a way to continue.
+    Worded as a statement of the situation with the required action attached, never as a prohibition. A
+    prohibition is what cost 5-37x the deliberation in the grounding instruction's history — there, "answer
+    from the context only" (see `prompts/README.md`). "You may not call any more tools" has the same shape,
+    though it was not itself measured, and it would land here on a model that is *already* mid-task and
+    looking for a way to continue.
     Permission to say the answer is incomplete is part of that: without it, a model whose gathering was cut
     short has a reason to keep trying rather than to report what it has.
 
@@ -646,10 +647,10 @@ def format_error_that_tools_are_spent() -> str:
     that the loop ends.
 
     Worded the same way as `format_notice_that_tools_are_spent`: the situation, plus the action that
-    follows from it, and permission to answer incompletely. Not a prohibition - "you may not call any more
-    tools" is the shape that measured 5-37x the deliberation in the grounding instruction's history (see
-    `prompts/README.md`), and it would land here on a model that is already mid-task and looking for a way
-    to continue.
+    follows from it, and permission to answer incompletely. Not a prohibition, the shape that cost 5-37x the
+    deliberation in the grounding instruction's history ("answer from the context only"; see
+    `prompts/README.md`). "You may not call any more tools" is that shape, though not itself measured, and
+    it would land here on a model that is already mid-task and looking for a way to continue.
     """
     return ("The tool-call budget for this reply is spent, so this call was not made. Write the answer now, "
             "from the information gathered above. If something you wanted is missing, say so in the answer.")

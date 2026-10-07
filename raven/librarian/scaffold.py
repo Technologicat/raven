@@ -522,8 +522,8 @@ def build_system_postamble(llm_settings: env,
                            tools_are_spent: bool = False) -> list[str]:
     """The system injects this turn appends *after* the standing system prompt: the second of the two kinds.
 
-    The date, the loaded model, and the standing reminders: material Raven derives at send time rather than
-    text anybody authored. It goes behind the standing prompt, so that what the model reads as its identity
+    The date and the loaded model: material Raven derives at send time rather than text anybody
+    authored. It goes behind the standing prompt, so that what the model reads as its identity
     comes first; `build_system_preamble` is the other end, for the framing that only means anything ahead
     of it.
 
@@ -564,8 +564,8 @@ def build_turn_prompt(llm_settings: env,
     message, which the instruction-like injects join) is *replaced* by a modified copy rather than edited.
 
     Two kinds of material go in, and they are shaped differently because they are asking for different
-    things. Instructions - the reminders, and the date - want to be obeyed, so they join the leading
-    system message. Data - the clock time, the document-database matches - wants to be read but not
+    things. Instructions - the date, and the notice when the tools are spent - want to be obeyed, so they
+    join the leading system message. Data - the clock time, the document-database matches - wants to be read but not
     obeyed, so it arrives as the answer to a tool call Raven makes on the model's behalf.
 
     One inject goes *ahead* of the standing system prompt rather than after it: the notice saying what that
@@ -574,8 +574,8 @@ def build_turn_prompt(llm_settings: env,
 
     So the three slots fall in order of how fast their contents change, and that is not a coincidence: what
     changes late costs nothing to reprocess. The framing is fixed, and leads. The material derived at send
-    time - today's date, the loaded model, the reminders - is stable within a session and follows the
-    standing prompt. The wall clock, which is different on every request, rides down with the data injects
+    time - today's date, the loaded model - is stable within a session and follows the standing
+    prompt. The wall clock, which is different on every request, rides down with the data injects
     just ahead of the user's latest message, where it invalidates nothing behind it.
 
     All of it lands *before* the user's latest message. That position is what keeps the model answering
