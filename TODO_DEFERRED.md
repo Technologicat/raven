@@ -27,6 +27,31 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## A search for a document's ID or filename finds nothing
+
+*Cluster: librarian-rag · Cost: M, then M–L · Gate: none; scheduled for Friday 2026-10-09 · Filed: 2026-10-07*
+
+Seen live (maintainer, 2026-10-07): asked to retrieve a whole document by its ID — one of the filenames in
+the documents folder — the 9B Qwen passed the ID to `search_documents` rather than to `fetch_document`. The
+search matched nothing, and the model was left with an empty result and no hint why. Not yet retested on
+the 27B. Arguably a bug whatever the model: a document's name is something a search should find.
+
+Two callers query the retriever — `llmtools.search_documents` and `scaffold`'s automatic search, whose query
+the model also writes now — so a fix in one of them alone would leave the other asymmetric. Decided
+(maintainer, 2026-10-07), in this order:
+
+1. **Short term: `HybridIR.query` puts a document named by the query first.** If the whole query resolves to
+   a document ID, loosely as `fetch_document` resolves one (the extension or the leading directories may be
+   dropped), that document's opening span is the top result. The matching moves from
+   `llmtools.resolve_document_id` into `hybridir` as a retriever method, documents being the retriever's
+   concept; `fetch_document` and both search paths then share it. Foundation code, so held to its bar.
+2. **Long term: filenames are indexed as searchable text**, so that `smith 2024` finds `smith_2024.pdf` by
+   its keywords partway through a longer query. A change to what is indexed, and a `TOKENIZER_VERSION` bump,
+   which re-tokenizes every store on its next commit.
+
+A third option was weighed and not taken: a shared helper in `llmtools` wrapping the retriever for both
+callers. Cheaper than 1, but it leaves the capability outside the class that owns documents.
+
 ## Bring `prompts/interaction.md` up to date
 
 *Cluster: prompts · Cost: S · Gate: the maintainer's wording · Filed: 2026-10-07*
