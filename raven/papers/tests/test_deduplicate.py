@@ -963,6 +963,53 @@ class TestJudge:
         assert "not the judge's business" not in described
 
 
+class TestTheJudgeConnectsOnlyToAsk:
+    """A run whose every answer is in the saved state asks nothing, so it must not need a backend either.
+
+    Imports the LLM client, unlike the judge tests above, because the connection is what is under test;
+    its connection check is replaced, so nothing is contacted.
+    """
+
+    def _opts(self, state):
+        import argparse
+        return argparse.Namespace(backend_url="http://localhost:9", judge_state=str(state), output=None,
+                                  audit=None)
+
+    def _attempts(self, monkeypatch):
+        from raven.librarian import llmclient
+        attempts = []
+
+        def refuse(url):
+            attempts.append(url)
+            return False  # unreachable: a run that does try to connect stops here
+
+        monkeypatch.setattr(llmclient, "test_connection", refuse)
+        return attempts
+
+    def test_a_replayed_run_never_connects(self, monkeypatch, tmp_path):
+        parsed = records(TestJudge.SOURCE)
+        state = tmp_path / "judge.jsonl"
+        # Fill the state as a first run would, with the model stubbed out.
+        with monkeypatch.context() as first_run:
+            first_run.setattr(dd, "_ask_judge", lambda _s, prompt: (
+                '[{"i": 0, "same": true, "why": "one paper"}]' if "same work" in prompt.lower()
+                else '[{"i": 0, "fits": true, "why": "fits"}]'))
+            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(state))
+        assert state.exists() and state.read_text(encoding="utf-8").strip(), "the first run saved nothing"
+
+        attempts = self._attempts(monkeypatch)
+        dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(state))
+        assert attempts == []
+
+    def test_a_run_with_a_question_left_does_connect(self, monkeypatch, tmp_path):
+        """The control: without it, the test above would pass for a judge that never connected at all."""
+        parsed = records(TestJudge.SOURCE)
+        attempts = self._attempts(monkeypatch)
+        with pytest.raises(SystemExit):
+            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(tmp_path / "empty.jsonl"))
+        assert attempts == ["http://localhost:9"]
+
+
 class TestJudgeDoiFit:
     """Deciding which of a merged work's DOIs belongs to it, with the backend replaced.
 

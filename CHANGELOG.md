@@ -39,6 +39,12 @@
 
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
 
+### Changed
+
+#### Raven-deduplicate
+
+- **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
+
 ### Fixed
 
 #### Raven-librarian

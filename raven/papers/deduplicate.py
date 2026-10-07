@@ -86,6 +86,7 @@ import argparse
 import collections
 import dataclasses
 import difflib
+import functools
 import json
 import logging
 import pathlib
@@ -730,6 +731,10 @@ def refused_doi_edges(records: list[Record]) -> list[tuple[Record, Record]]:
 def _ask_judge(llm_settings, prompt: str) -> str:
     """One stateless turn, returning the reply text. Raises if the backend did not generate.
 
+    `llm_settings`: from `llmclient.setup`, or a zero-argument callable returning them. A callable is
+                    called here, at the first question actually asked, so that a run whose answers all
+                    come from a saved state never contacts a backend at all.
+
     Deferred alias for `agent.ask`, and the import is deferred because the LLM pass is opt-in — `--judge`
     and `--judge-dois`, both off by default — while the rules run on every invocation. Measured
     2026-09-02: importing `librarian.agent` costs 1376 ms against this module's own 211 ms, so at module
@@ -742,6 +747,8 @@ def _ask_judge(llm_settings, prompt: str) -> str:
     something that has already parsed.
     """
     from ..librarian import agent
+    if callable(llm_settings):
+        llm_settings = llm_settings()
     return agent.ask(llm_settings, prompt)
 
 
@@ -1073,19 +1080,25 @@ def _apply_judge(records: list[Record],
         return clusters, frozenset()
 
     backend_url = opts.backend_url or librarian_config.llm_backend_url
-    # Stop here rather than at the first batch: this run can take a while, and a precise diagnosis now
-    # beats the same failure once per batch for the rest of the corpus. Reachable and
-    # reachable-with-a-model are separate questions, and the second is the one that reads as a bug when
-    # it is not checked — the backend answers, so nothing looks wrong until every verdict is empty.
-    if not llmclient.test_connection(backend_url):
-        print(f"judge: cannot reach an LLM backend at {backend_url}.", file=sys.stderr)
-        sys.exit(1)
-    llm_settings = llmclient.setup(backend_url=backend_url, quiet=True)
-    if (status := llmclient.backend_status(llm_settings)) is llmclient.backend_has_no_model:
-        headline, advice = llmclient.describe_backend_status(status, backend_url)
-        print(f"judge: {headline} {advice}", file=sys.stderr)
-        sys.exit(1)
-    print(f"judge: {llm_settings.model} at {backend_url}")
+
+    # Connected at the first question rather than here, so that a re-run whose answers are all in the
+    # saved state asks nothing of a backend and needs none running. Once connecting, it stops at once
+    # rather than at each batch: a precise diagnosis beats the same failure once per batch for the rest of
+    # the corpus. Reachable and reachable-with-a-model are separate questions, and the second is the one
+    # that reads as a bug when it is not checked — the backend answers, so nothing looks wrong until every
+    # verdict is empty. `SystemExit` passes through the per-batch `except Exception` in the judge passes.
+    @functools.cache
+    def llm_settings():
+        if not llmclient.test_connection(backend_url):
+            print(f"judge: cannot reach an LLM backend at {backend_url}.", file=sys.stderr)
+            sys.exit(1)
+        settings = llmclient.setup(backend_url=backend_url, quiet=True)
+        if (status := llmclient.backend_status(settings)) is llmclient.backend_has_no_model:
+            headline, advice = llmclient.describe_backend_status(status, backend_url)
+            print(f"judge: {headline} {advice}", file=sys.stderr)
+            sys.exit(1)
+        print(f"judge: {settings.model} at {backend_url}")
+        return settings
 
     state_path = _judge_state_path(opts)
     progress = lambda done, total: print(f"  judged {done}/{total}", flush=True)  # noqa: E731 -- one name, two call sites
