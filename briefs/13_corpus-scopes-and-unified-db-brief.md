@@ -389,7 +389,7 @@ Collected so the session has an agenda rather than a pile:
    lives*.
 7. **How big the build is, before it is scheduled** (maintainer, 2026-10-01). This is the drydock, 0.3.0,
    and by the maintainer's recollection at least L and fairly monolithic. If it sizes XL, stretch goals
-   split off it rather than the schedule stretching to fit.
+   split off it.
 
 ## The release this lands in has a name waiting for it
 
