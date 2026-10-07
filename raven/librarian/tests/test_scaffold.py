@@ -2237,6 +2237,11 @@ class TestModelWrittenDocsQuery:
         assert forest.get_payload(final_head)["retrieval"]["query"] == "airfoil stall"
 
     def test_the_query_request_is_the_turns_prompt_with_the_message_replaced(self, monkeypatch, llm_settings, populated_forest):
+        # The clock is frozen, because the two requests are built a moment apart and both carry the clock
+        # message just ahead of the user's: a run whose two builds straddle a second boundary would differ
+        # there and nowhere else. Seen once, on the Windows runner.
+        monkeypatch.setattr(llm_settings.formatters, "time_now",
+                            lambda: "[System information: The local time now is 12:00:00.]")
         _, _, _, invocations, _ = self._run(monkeypatch, llm_settings, populated_forest,
                                             self._query_call("airfoil stall"))
         query_request, reply_request = invocations[0], invocations[1]
