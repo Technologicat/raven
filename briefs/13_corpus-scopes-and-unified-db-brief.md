@@ -279,10 +279,12 @@ when it runs. Everything in this section is [P] and wants arguing with.
   above: "perfect after we unify the DBs"). So the cluster-keyword TOC is the agreed direction, gated on
   unification rather than a proposal still to be argued.
 - **[P] An interim TOC that needs neither unification nor an LLM** (raised 2026-10-05, with the
-  model-written search query). Counts, file types and distinctive terms from the BM25 index, rebuilt at
-  `commit` — the one moment the database is known to have changed — globally now and per scope once scopes
-  exist. Coarser than cluster keywords, but available before them, and the wording trap above applies to it
-  unchanged.
+  model-written search query): document counts and file types, rebuilt at `commit` — the one moment the
+  database is known to have changed — globally now and per scope once scopes exist. That much is cheap and
+  says how much there is. **What the documents are about is not available this way**: distinctive terms by
+  frequency analysis, spaCy or similar classical means come out poor, as the Visualizer's classical keyword
+  mode shows (maintainer, 2026-10-07). Describing content is what the cluster-keyword TOC above is for, so
+  the interim reports extent only, and is worth building only if extent alone measurably helps the model.
 
 ### 4a. With a TOC, the automatic search goes away
 
