@@ -156,6 +156,14 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    - **The agreed sanity checks** (`investigations/aokk-corpus-scope/README.md`, *"Open: is the off-topic
      rate too low to believe?"*) sample each stage's output for hand-checking.
    - **Calibration**, which is the prototype's `--pilot N --seed S` under a general name.
+8. **Whether confidence decides a drop** (maintainer, 2026-10-07: investigate and fix when generalizing).
+   The prototype's `verdict_of` decides from the three tests alone: any test answered `True` drops, and
+   confidence plays no part. `write_outputs`' comment says otherwise — that a low-confidence answer is an
+   `unknown` verdict and so is kept. The two disagree, and one record shows it: `shen_directions_2024`, a
+   high-confidence title drop whose abstract pass agreed at **low** confidence, and the only low-confidence
+   drop of the 1084. Both halves are suspect until it is settled which behaviour is wanted; the README's
+   *A drop and a keep do not deserve the same standard of proof* is where to start. The record was flagged
+   for the team's hand check in the 2026-10-07 report set (`00-pipeline.xlsx`, its notes).
 
 ## The final study's numbers
 

@@ -43,10 +43,15 @@ from raven.common import tabular
 from raven.common import utils as common_utils
 from raven.papers import bibtex, utils as papers_utils
 
-TIER_A = "wrong level, quoted"
-TIER_B1 = "not education, corroborated"
-TIER_B2 = "not education, uncorroborated"
-TIER_C = "learning, but not in an institution"
+# Worded for the people who read the tables, who were not there when the tiers were drawn: each label says
+# what the extracted fields found, in the order a reader needs it. A: `level` is school or vocational, with
+# the text's own words in `evidence`. B1: `level` is not applicable and `human_learning` is false, the two
+# answers agreeing. B2: `level` is not applicable without that agreement. C: `level` is professional
+# training or informal learning.
+TIER_A = "school or vocational level, stated in the text"
+TIER_B1 = "not about education: no educational level, and no one learning"
+TIER_B2 = "possibly not about education: no educational level, but someone may be learning"
+TIER_C = "learning outside an institution, e.g. workplace training"
 
 
 def tier_of(fields: dict) -> str | None:
@@ -150,9 +155,10 @@ def main() -> int:
 
     counts = collections.Counter(tiers.values())
     print(f"{bib_path.name}: {len(library.entries)} records, {len(extracted)} with extracted fields")
+    width = max(len(tier) for tier in (TIER_A, TIER_B1, TIER_B2, TIER_C))
     for tier in (TIER_A, TIER_B1, TIER_B2, TIER_C):
         verdict = "removing" if tier in removing else "HELD for hand-check"
-        print(f"  {tier:<32}{counts[tier]:>5}   {verdict}")
+        print(f"  {tier:<{width}}{counts[tier]:>5}   {verdict}")
     print(f"\n{len(doomed)} to remove, {len(library.entries) - len(doomed)} to keep")
     if opts.dry_run:
         print("\ndry run: nothing written")
