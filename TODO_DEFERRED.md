@@ -63,6 +63,36 @@ the model also writes now — so a fix in one of them alone would leave the othe
 A third option was weighed and not taken: a shared helper in `llmtools` wrapping the retriever for both
 callers. Cheaper than 1, but it leaves the capability outside the class that owns documents.
 
+**The matching, proposed** (2026-10-07; the maintainer agreed the order and asked for it written here). The
+filenames are the user's, so the rules have to be general — the arXiv version suffix is one case of them,
+not a special case. In order:
+
+1. **Exact** — the ID as stored.
+2. **Without the extension** — what `resolve_document_id` already does, along with dropping leading
+   directories.
+3. **A prefix at a boundary** — the name *starts with* the query, and the character after it differs in
+   kind from the one before: digit then letter, or a separator (`_`, `-`, `.`, space). So `1504.06320`
+   matches `1504.06320v4.pdf` and `smith_2024` matches `smith_2024_revised.pdf`, but `1504.06320` does
+   **not** match `1504.063201.pdf`. Several matches are reported as ambiguous, as now.
+4. **Fuzzy similarity: suggestions only, never a resolution.** Edit distance cannot tell a version suffix
+   from a different identifier — `1504.06320` and `1504.06321` are one character apart and two papers — so
+   it resolves confidently to the wrong document. As a suggestion it costs nothing when wrong, the model
+   still having to choose.
+
+**Where each rule applies — one search tool, not a name-search tool.** The bug *is* a model choosing the
+wrong tool, and a third document tool adds a choice of the same kind.
+
+- **`fetch_document` resolves by rules 1–3**, and on failure offers rule 4's suggestions: a fetch is
+  unambiguously a request by name, so suggestions there can only help.
+- **The search puts a document first only when the *whole* query resolves by rules 1–3**, labelled as a name
+  match with a pointer to `fetch_document`; the content results follow. A query that is a filename is a
+  lookup, so leading with it is safe.
+- **Rule 4 never enters a search.** A fuzzy name hit says nothing about whether the user wanted that file,
+  and ranked against content matches it is noise.
+- **Open for Friday**: rule 3 on a generic word — `survey` against `survey_2023.pdf` and
+  `survey_methods.pdf`. Whether such a query leads with name matches, or only when exactly one name
+  matches, is a call to make against the file names of a real corpus.
+
 ## Bring `prompts/interaction.md` up to date
 
 *Cluster: prompts · Cost: S · Gate: the maintainer's wording · Filed: 2026-10-07*
