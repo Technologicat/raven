@@ -107,11 +107,22 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    into the new tools, so that the finished toolset can be run over the prototype's corpus and produce
    clean, stage-numbered reports without paying for the LLM passes again. The motive is the methodology
    section, which needs exact numbers from a pipeline that can be named.
-   - **A run whose answers are all saved connects to nothing** (maintainer, 2026-10-07). The backend is
-     contacted at the first question actually asked, never up front, so a replay works with no LLM
-     running. `raven-deduplicate --judge` is the pattern: `_apply_judge` hands the passes a memoized
-     connect-on-first-use function, which `_ask_judge` resolves, and a test with a control pins it. The
-     prototype's `judge_scope.py` and `extract_fields.py` connect up front, so their replays need a
+   - **A run whose answers are all saved connects to nothing** (maintainer, 2026-10-07), so a replay works
+     with no LLM running.
+   - **And whether a run will ask anything is decided before its work starts** (maintainer, 2026-10-07).
+     Compute what is still unanswered first: if anything is, connect and check the backend then, failing
+     at once as before; if nothing is, never connect. Connecting lazily at the first question is not
+     enough on its own, because in a long replay the first uncached question can arrive an hour in, when
+     the user has gone for coffee and the backend has gone away — the failure the up-front check exists to
+     prevent, moved to the worst moment. Where a later pass's questions depend on an earlier pass's
+     answers, the earlier pass's to-do decides; a replayed earlier pass is cheap, so the later one's to-do
+     can then be known within seconds.
+   - **`raven-deduplicate --judge` connects on first use**: `_apply_judge` hands the passes a memoized
+     connect function, which `_ask_judge` resolves, and a test with a control pins that a replay never
+     connects. It meets the second rule by its structure rather than by design: each pass asks its first
+     batch as soon as it starts, and all that precedes the second pass is the first pass and a
+     re-clustering. The new tools should meet it by design.
+   - The prototype's `judge_scope.py` and `extract_fields.py` connect up front, so their replays need a
      backend; left as they are, being prototypes this brief replaces. `regenerate_reports.py` sidesteps
      it by replaying through `write_outputs`.
    - **Replayed answers carry the prototype's instrument, not the new tool's.** A report built from them
