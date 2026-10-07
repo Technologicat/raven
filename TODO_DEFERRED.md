@@ -11,6 +11,33 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## A message sent by voice leaves the staged attachments behind
+
+*Cluster: attachments · Cost: S · Gate: none · Filed: 2026-10-07*
+
+Librarian's two send paths disagree. Send by typing (`app.py`, the send callback) snapshots `staged_images`
+and `staged_files`, passes them to `chat_controller.chat_exchange` and clears the strip. Send by voice
+(`stop_recording_audio_message`) calls `chat_controller.chat_exchange(user_message_text)` with the
+transcript alone. So attachments staged before speaking are not sent with the spoken message, and they stay
+in the strip, to go out with whatever is sent next.
+
+The fix is to make the two paths one: a helper that snapshots, sends and clears, called from both, so a
+third send path cannot drift the same way.
+
+## Save an edited message as a new branch
+
+*Cluster: message-editing · Cost: ? · Gate: none · Filed: 2026-10-07 · See also: message editing v1*
+
+Saving an edit makes a new *revision* of the message (`DPGLinearizedChatView.finish_editing` →
+`chat_controller.revise_message`, through `chatutil.revise_message_text`). Add the other option: save the
+edited text as a new *sibling* of the message, under the same parent, and move HEAD there. The original
+then stays as it was, and the edit becomes an alternative branch the user can compare it with, the same
+way a reroll's result is.
+
+Two things to decide when building it: which control offers it (a second button beside Save, or a modifier
+on the commit chord), and whether the replies below the original message are carried across to the new
+branch or left behind.
+
 **When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
 document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
 importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and
