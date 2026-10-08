@@ -663,6 +663,8 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        - **Searching for a document by its ID or filename** (decided 2026-10-07): `HybridIR.query` puts a named
          document first, then filenames indexed as searchable text. `TODO_DEFERRED.md`, "A search for a
          document's ID or filename finds nothing".
+       - **Librarian takes ages to boot up** (maintainer, 2026-10-08): investigate where the startup time
+         goes. Not the datastore load, it seems: a blank `chat.json` boots just as slowly.
      - **The MCP client starts around 2026-10-19**, the maintainer being away the week before. A lab meeting
        today specced the server side of a v1 MVP; what Librarian needs for it is the MCP client, brief 04,
        whose auth section (a per-service API key) was settled this morning.
