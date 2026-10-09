@@ -85,8 +85,8 @@ flowchart TD
   soon after the per-document pass. Its endpoints are looked at once the client works.
 - **Lab installation.** Also gated on the avatar-only mode and the sci-fi file objects, and dates the
   `cu130` move (`briefs/design/lab-assistant-hci-sketch.md`).
-- **Hindsight** (`briefs/librarian-extension/06_hindsight-standup-brief.md`). Wanted soon for play, and for
-  the virtual-colleague track. Unplaced.
+- **Hindsight** (`briefs/librarian-extension/06_hindsight-standup-brief.md`). Wanted soon for testing and
+  evaluation, and for the virtual-colleague track. Unplaced.
 - **Drydock** (`briefs/13_corpus-scopes-and-unified-db-brief.md`), 0.3.0. Weeks at least. **Started once it
   blocks meaningful progress**, after 0.2.11 and the Visualizer block. Whether it or Hindsight comes first
   is open; both have value.

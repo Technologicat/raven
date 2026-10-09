@@ -812,6 +812,26 @@ TEMPR retrieval surface to the protocol's `query()` shape). Payoff: switching to
 MemoryBackend protocol with Hindsight as first implementation," not "wire Hindsight directly
 into the assembler."
 
+### Open questions, raised 2026-10-09
+
+What the maintainer wants to find out, for testing and evaluation. None of it is decided.
+
+- **Auto-search for memory.** Since 2026-10-05 the automatic document search runs on a query the model
+  writes (`scaffold.ai_turn`'s query request). As a v1, send that same query to Hindsight and see what
+  comes back — simpler than the multi-query plan under *Query shape for Hindsight autosearch* above,
+  which predates it. **A toggle of its own**, beside *Auto-search*: auto-search documents, auto-search
+  memory.
+- **Memory as tools**, as the internet and the documents are — the agentic half of the two-track recall
+  above.
+- **Forming memories.** Hindsight forms them from a session transcript by running it through the LLM.
+  - **In a multiverse, what is the proper unit?** A chat is a tree: branches share a prefix, and a
+    rerolled reply is a road not taken.
+  - **When is the right moment to pay for that processing?** It is expensive, so the timing is a design
+    question in itself.
+- **Useful values for the disposition settings.** Wants a scripted probe on `raven.librarian.agent` once
+  Hindsight is wired in. Per *Aria-relevant aside* above, disposition shapes only `reflect`, so the probe
+  has to exercise `reflect` for the settings to show.
+
 ---
 
 ## 3. Snowball control
