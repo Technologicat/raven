@@ -69,8 +69,10 @@ flowchart TD
   - **Not the Nomic switch**, which goes in during the drydock: image support is a new feature rather than an
     improvement to an existing one. It needs GUI design first — how image matches show in the annotation
     tooltip and in the info panel (brief 11 item 1).
-- **MCP client** (`briefs/librarian-extension/04_librarian-mcp-client-brief.md`). Both transports, stdio
-  (CLI) and HTTP, working before the lab's server specifically is worth worrying about.
+- **MCP client** (`briefs/librarian-extension/04_librarian-mcp-client-brief.md`). **High value for its size**:
+  it lets tools for the AI be installed as plugins (maintainer, 2026-10-09), which is why it goes ahead of
+  the Librarian features deferred from 0.2.11. Both transports, stdio (CLI) and HTTP, working before the
+  lab's server specifically is worth worrying about.
   - **Test targets**: the MCP servers already configured for LM Studio, which Qwen has been tested with —
     open-meteo first, being fully nondestructive, then filesystem, shell and playwright. Configuration is in
     the maintainer's machine setup notes, in dotclaude.
