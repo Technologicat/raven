@@ -259,8 +259,9 @@ stopping" is exactly what an exit callback is for, and it is exactly what a libr
 **It runs during `destroy_context`, not when the loop stops.** Measured 2026-10-09 on DPG 2.3.1: a window
 close, `stop_dearpygui` from the loop and a SIGTERM handled by `stop_dearpygui` all ran it, and in each case
 on the callback thread at the moment the main thread called `destroy_context` — however long after the loop
-had ended. So it cannot tell those causes apart, and in an app whose loop `finally` drives the teardown, it
-fires after that teardown, against a context being destroyed. Probe and table in
+had ended. `destroy_context` waits for it to return, and the context is intact while it runs — widgets exist
+and DPG calls work. So it cannot tell those causes apart, and it runs after anything in the loop's `finally`:
+work that must come before the teardown there has to be called from the `finally` itself. Probe and table in
 `investigations/dpg-exit-callback/`. Measured in a minimal app with nothing else on the callback thread.
 
 ## The two internal queues

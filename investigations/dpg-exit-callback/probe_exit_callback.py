@@ -33,12 +33,18 @@ def on_exit(*args) -> None:
     state["callback_ran"] = True
     state["callback_after_loop"] = state["loop_exited"]
     say(f"exit callback ran (loop exited already: {state['loop_exited']})")
+    if os.environ.get("PROBE_CALLBACK_WORK"):
+        # Does `destroy_context` wait for the callback, and is the context still usable from inside it?
+        time.sleep(0.5)
+        say(f"exit callback, 0.5 s later: does_item_exist('w') = {dpg.does_item_exist('w')}, "
+            f"get_value('t') = {dpg.get_value('t')!r}")
+        say("exit callback returning")
 
 dpg.create_context()
 dpg.create_viewport(title="exit-callback-probe", width=320, height=120)
 dpg.setup_dearpygui()
 with dpg.window(tag="w"):
-    dpg.add_text(f"exit callback probe, mode {mode}")
+    dpg.add_text(f"exit callback probe, mode {mode}", tag="t")
 dpg.set_primary_window("w", True)
 dpg.set_exit_callback(on_exit)
 dpg.show_viewport()
@@ -68,6 +74,8 @@ finally:
 
 # The exit callback is dispatched on DPG's callback thread, so give it time to arrive before deciding it did not.
 time.sleep(float(os.environ.get("PROBE_DELAY", "1.0")))
+say("calling destroy_context")
 dpg.destroy_context()
+say("destroy_context returned")
 say(f"RESULT: mode={mode} callback_ran={state['callback_ran']} "
     f"callback_after_loop_exit={state['callback_after_loop']}")

@@ -18,14 +18,21 @@ The probe sleeps between the loop's exit and `destroy_context`, and the callback
 after the loop ended — 1.0 s by default, and 2.5 s with `PROBE_DELAY=2.5`. It runs on DPG's callback thread,
 not on the main thread.
 
+**`destroy_context` waits for it, and the context is still intact while it runs.** With
+`PROBE_CALLBACK_WORK=1` the callback sleeps 0.5 s and then reads a widget back: the item still exists, its
+value is readable, and `destroy_context` returns about a millisecond after the callback does. So the callback
+runs at the *start* of `destroy_context`, before anything is freed.
+
 ## What follows
 
 - **The exit callback cannot say why the app is closing.** It looks the same for every cause, so a log line
   that names the cause has to come from the paths that know it: the loop exiting normally (a window close, or
   the app's own `stop_dearpygui`), an exception propagating out of the loop, a signal handler.
-- **It runs after anything in the loop's `finally` that comes before `destroy_context`.** An app whose
-  `finally` already drives its own teardown, as Raven's do, gets the exit callback a second time, late,
-  against a context being destroyed.
+- **It runs after everything in the loop's `finally` that comes before `destroy_context`.** So a callback
+  that cancels background work does so after anything the `finally` does, not before it — an app that wants
+  cancellation to come first has to call it from the `finally` itself.
+- **Teardown in the callback is not made unsafe by the timing.** The context is intact and DPG calls work, so
+  an app that registers its whole shutdown as the exit callback is shutting down before anything is freed.
 - **The callback's output is not a timestamp for "the loop stopped".** A log line written from it appears
   after the app's whole teardown, which is the misreading this probe was written to settle.
 
@@ -38,4 +45,4 @@ thread may behave differently, which this does not measure.
   and ends it by `MODE`: `stop`, `sigterm` or `wmclose`. For `wmclose` the caller closes the window, e.g.
   `wmctrl -i -c $(wmctrl -l | awk '/exit-callback-probe/ {print $1; exit}')` about a second after launch.
   Prints each event with its time and thread, and ends with a `RESULT:` line. `PROBE_DELAY` sets the pause
-  before `destroy_context`.
+  before `destroy_context`; `PROBE_CALLBACK_WORK=1` makes the callback sleep and then read a widget back.
