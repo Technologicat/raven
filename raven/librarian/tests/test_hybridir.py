@@ -250,6 +250,12 @@ class TestResultStructure:
         assert len(report.vector_results) == len(report.vector_distances)
         assert len(results) > 0
 
+    def test_the_datastore_directory_may_be_given_as_a_string(self, tmp_path, client_api_initialized):
+        store = hybridir.HybridIR(datastore_base_dir=str(tmp_path / "as_a_string"),
+                                  embedding_model_name="sentence-transformers/multi-qa-mpnet-base-cos-v1",
+                                  local_model_loader_fallback=True)
+        assert store.datastore_base_dir == tmp_path / "as_a_string"
+
     def test_an_empty_index_still_returns_the_pair_when_extra_info_was_asked_for(self, tmp_path, client_api_initialized):
         # An empty index is an ordinary state, not an error: `HybridIR` creates its datastore directory
         # rather than rejecting a path that does not exist yet, so anyone who mistypes a `--db-dir` gets

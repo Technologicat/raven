@@ -473,6 +473,7 @@ class HybridIR:
         self._process_lock = None
         self._pending_edits_lock = threading.RLock()  # self._pending_edits
 
+        datastore_base_dir = pathlib.Path(datastore_base_dir)  # the signature allows a `str`
         self.datastore_base_dir = datastore_base_dir
         self.fulldocs_path = datastore_base_dir / "fulldocs"
         self.fulldocs_documents_file = self.fulldocs_path / "data.json"
