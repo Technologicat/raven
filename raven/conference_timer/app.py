@@ -98,6 +98,14 @@ def _parse_duration(text: str) -> int:
     return total
 
 
+def _gui_shutdown() -> None:
+    """App exit: release what touches DPG. Call from the render loop's `finally`, before `dpg.destroy_context()`.
+
+    The app has no background tasks, so there is no first, cancelling phase.
+    """
+    gui_animation.animator.clear()
+
+
 def main() -> int:
     """Main entry point for the application."""
     # `args` was parsed at module top, before heavy imports — see top of file.
@@ -495,7 +503,7 @@ def main() -> int:
     finally:
         logger.info("App render loop exited.")
 
-        gui_animation.animator.clear()
+        _gui_shutdown()
 
         # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
         # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one

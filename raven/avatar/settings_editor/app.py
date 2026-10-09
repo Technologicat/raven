@@ -1850,18 +1850,34 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            emotion_autoreset_interval=None,
                                                            idle_timeout=None)
 
-def gui_shutdown() -> None:
-    """App exit: gracefully shut down parts that access DPG."""
+def _gui_cancel_tasks() -> None:
+    """App exit, first phase: signal background work to stop, WITHOUT waiting."""
+    avatar_controller.stop_tts()  # stop TTS playback (no wait)
+    if gui_instance is not None:
+        gui_instance.dpg_avatar_renderer.stop(wait=False)  # the renderer's background (OpenGL) task
+        gui_instance.crop_push_task_manager.clear(wait=False)
+
+def _gui_shutdown() -> None:
+    """App exit, second phase: wait for background work to finish, and release what touches DPG.
+
+    Call after `_gui_cancel_tasks`, and before `dpg.destroy_context()`.
+    """
     global gui_instance
-    logger.info("gui_shutdown: entered")
+    logger.info("_gui_shutdown: entered")
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     avatar_controller.shutdown()
     if gui_instance is not None:
+        gui_instance.crop_push_task_manager.clear(wait=True)
         gui_instance.dpg_avatar_renderer.stop(wait=True)
+    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls DPG.
+    # Before the animator is cleared, since the dialog stops its cursor pulsation through it.
+    for filedialog in (filedialog_open_input_image, filedialog_open_backdrop_image, filedialog_open_json,
+                       filedialog_open_animator_settings, filedialog_save_animator_settings):
+        if filedialog is not None:
+            filedialog.destroy()
     gui_animation.animator.clear()
     gui_instance = None
-    logger.info("gui_shutdown: done")
-dpg.set_exit_callback(gui_shutdown)
+    logger.info("_gui_shutdown: done")
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
@@ -2003,12 +2019,8 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls
-    # DPG. This `finally` runs before the exit callback, which DPG runs at the start of `destroy_context`.
-    for filedialog in (filedialog_open_input_image, filedialog_open_backdrop_image, filedialog_open_json,
-                       filedialog_open_animator_settings, filedialog_save_animator_settings):
-        if filedialog is not None:
-            filedialog.destroy()
+    _gui_cancel_tasks()
+    _gui_shutdown()
 
     # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
     # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one

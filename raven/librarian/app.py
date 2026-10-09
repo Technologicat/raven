@@ -3608,7 +3608,7 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   on_committed=_on_cleanup_committed,
                                   centering_reference_window="librarian_main_window")  # tag
 
-# Set in `_gui_cancel_tasks` and again, defensively, in `gui_shutdown`. The startup
+# Set in `_gui_cancel_tasks` and again, defensively, in `_gui_shutdown`. The startup
 # frame callback (`_finish_startup`) runs on DPG's callback thread and can race app teardown: if the user
 # closes the window mid-boot, it may still be in flight while the context is being destroyed, and creating
 # widgets then segfaults the process (no Python `try/except` can catch a crash in DPG's C side — the only
@@ -3618,11 +3618,11 @@ _shutting_down = False
 # Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`), both phases called from
 # the render loop's `finally`, on the main thread, once the loop has exited:
 #   1. `_gui_cancel_tasks` — *signals* cancellation, never waits (see its docstring).
-#   2. `gui_shutdown` — the blocking drains and resource teardown, then the caller destroys the context.
+#   2. `_gui_shutdown` — the blocking drains and resource teardown, then the caller destroys the context.
 def _gui_cancel_tasks() -> None:
     """App exit, first phase: signal background work to stop, WITHOUT waiting. Idempotent.
 
-    Called from the render loop's `finally`, before `gui_shutdown`, which does the waiting.
+    Called from the render loop's `finally`, before `_gui_shutdown`, which does the waiting.
     """
     global _shutting_down
     _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
@@ -3637,7 +3637,7 @@ def _gui_cancel_tasks() -> None:
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
 
-def gui_shutdown() -> None:
+def _gui_shutdown() -> None:
     """App exit, second phase: wait for background work to finish and release GUI/server resources.
 
     Call from the render loop's `finally`, on the main thread, AFTER the loop has exited and AFTER
@@ -3648,7 +3648,7 @@ def gui_shutdown() -> None:
     global _shutting_down
     _shutting_down = True  # defensive; normally already set by `_gui_cancel_tasks`
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-    logger.info("gui_shutdown: entered")
+    logger.info("_gui_shutdown: entered")
     # Silence the GUI side (idempotent; `_gui_cancel_tasks` already did this, via `chat_controller.cancel_tasks()`,
     # whose first action is `disable_gui_updates()`). The cancelled commit's `finally` will fire `on_indexing_done`
     # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would then call
@@ -3679,7 +3679,7 @@ def gui_shutdown() -> None:
     if _filedialog_attach is not None:
         _filedialog_attach.destroy()
     gui_animation.animator.clear()
-    logger.info("gui_shutdown: done")
+    logger.info("_gui_shutdown: done")
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
@@ -3985,11 +3985,11 @@ finally:
     #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
     #      so they stop before reaching a `split_frame`, which is unsafe once the loop has stopped. The
     #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
-    #   2. `gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
+    #   2. `_gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
     #      everything, so nothing remains parked in `split_frame`.
     # Then destroy the context, with no background thread still touching DPG/OpenGL.
     _gui_cancel_tasks()
-    gui_shutdown()
+    _gui_shutdown()
 
     # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
     # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one

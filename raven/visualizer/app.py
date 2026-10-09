@@ -1420,17 +1420,28 @@ with dpg.item_handler_registry(tag="plot_handler_registry") as registry:
 dpg.bind_item_handler_registry("plot", registry)  # tag
 
 # --------------------------------------------------------------------------------
-# Set up app exit cleanup
+# App exit, in two phases, both called from the render loop's `finally`
 
-# NOTE: In DPG 2.0.0, this works correctly.
-# NOTE: In DPG 1.x, if the info panel is updating while the app shuts down, DPG's exit callback doesn't actually trigger, and DPG segfaults.
-#   - At least it's not `update_animations`, the same happens also even if we disable that.
-#   - Maybe it's because `_update_info_panel` renders GUI stuff from a background thread? Trying to create GUI items while the app shuts down?
-def gui_shutdown():
-    logger.info("gui_shutdown: entered")
-    reset_app_state(_update_gui=False)  # Exiting, GUI might no longer exist when this is called.
-    logger.info("gui_shutdown: done")
-dpg.set_exit_callback(gui_shutdown)
+def _gui_cancel_tasks() -> None:
+    """App exit, first phase: signal background work to stop, WITHOUT waiting."""
+    clear_background_tasks(wait=False)
+
+def _gui_shutdown() -> None:
+    """App exit, second phase: wait for background work to finish, and release what touches DPG.
+
+    Call after `_gui_cancel_tasks`, and before `dpg.destroy_context()`.
+    """
+    logger.info("_gui_shutdown: entered")
+    # Join each file dialog's tick thread before the context goes. A dialog that has been opened runs one,
+    # and it calls DPG — after `destroy_context` that is a call into freed memory, so the failure is a
+    # segfault rather than an exception. Before `reset_app_state`, which clears the animator the dialog
+    # stops its cursor pulsation through.
+    for filedialog in (filedialog_open, app_state.filedialog_save):
+        if filedialog is not None:
+            filedialog.destroy()
+    importer_gui.destroy_filedialogs()
+    reset_app_state(_update_gui=False)  # waits for the background tasks, and clears the animator
+    logger.info("_gui_shutdown: done")
 
 # --------------------------------------------------------------------------------
 # Start the app
@@ -1550,16 +1561,8 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    clear_background_tasks(wait=False)  # signal background tasks to exit
-
-    # Join each file dialog's tick thread before the context goes. A dialog that has been opened runs one,
-    # and it calls DPG — after `destroy_context` that is a call into freed memory, so the failure is a
-    # segfault rather than an exception. Here, in the render loop's `finally`, which runs before
-    # `destroy_context` — and so before the exit callback, which DPG runs at the start of it.
-    for filedialog in (filedialog_open, app_state.filedialog_save):
-        if filedialog is not None:
-            filedialog.destroy()
-    importer_gui.destroy_filedialogs()
+    _gui_cancel_tasks()
+    _gui_shutdown()
 
     # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
     # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one

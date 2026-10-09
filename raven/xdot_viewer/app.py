@@ -672,7 +672,14 @@ def _on_key(sender, app_data) -> None:
 
 
 def _gui_shutdown() -> None:
-    """Clean up on app exit. Registered via ``dpg.set_exit_callback``."""
+    """App exit: release what touches DPG. Call from the render loop's `finally`, before `dpg.destroy_context()`.
+
+    The app has no background tasks, so there is no first, cancelling phase.
+    """
+    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls DPG.
+    # Before the animator is cleared, since the dialog stops its cursor pulsation through it.
+    if _filedialog_open is not None:
+        _filedialog_open.destroy()
     gui_animation.animator.clear()
 
 
@@ -913,7 +920,6 @@ def main() -> int:
     # --- Start app ---
     dpg.set_primary_window("main_window", True)
     dpg.set_viewport_resize_callback(_resize_gui)
-    dpg.set_exit_callback(_gui_shutdown)
     dpg.show_viewport()
 
     if args.qr:
@@ -982,11 +988,7 @@ def main() -> int:
     finally:
         logger.info("App render loop exited.")
 
-        # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that
-        # calls DPG. This `finally` runs before the exit callback, which DPG runs at the start of
-        # `destroy_context`.
-        if _filedialog_open is not None:
-            _filedialog_open.destroy()
+        _gui_shutdown()
 
         # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
         # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one

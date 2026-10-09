@@ -1527,9 +1527,18 @@ pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
 gui_instance = PoseEditorGUI(poser, device, args.model)
 
-def shutdown():
+def _gui_shutdown() -> None:
+    """App exit: release what touches DPG. Call from the render loop's `finally`, before `dpg.destroy_context()`.
+
+    The app has no background tasks, so there is no first, cancelling phase.
+    """
+    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls DPG.
+    # Before the animator is cleared, since the dialog stops its cursor pulsation through it.
+    for filedialog in (filedialog_open_image, filedialog_save_image, filedialog_open_json,
+                       filedialog_save_all_emotions):
+        if filedialog is not None:
+            filedialog.destroy()
     gui_animation.animator.clear()
-dpg.set_exit_callback(shutdown)
 
 # Say where the arrow keys are when they are handed to a combo. DPG draws nothing on a focused combo, so
 # without this the browsing appears to do nothing until a value changes — the same blue pulse every Raven
@@ -1609,12 +1618,7 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls
-    # DPG. This `finally` runs before the exit callback, which DPG runs at the start of `destroy_context`.
-    for filedialog in (filedialog_open_image, filedialog_save_image, filedialog_open_json,
-                       filedialog_save_all_emotions):
-        if filedialog is not None:
-            filedialog.destroy()
+    _gui_shutdown()
 
     # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
     # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
