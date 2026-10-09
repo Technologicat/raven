@@ -320,36 +320,42 @@ def agrees_with_backend(tokenizer: Any,
 # where an old build would still pass the checks while counting slightly differently.
 _CACHE_FORMAT_VERSION = 1
 
-def _cache_file(cache_dir: pathlib.Path, gguf_path: pathlib.Path) -> Optional[pathlib.Path]:
-    """Where the tokenizer built from `gguf_path` is cached, or `None` if the file cannot be stat'd.
+def _cache_entry(cache_dir: pathlib.Path, gguf_path: pathlib.Path) -> Optional[tuple[pathlib.Path, dict]]:
+    """`(cache_file, stamp)` for the tokenizer built from `gguf_path`; `None` if the file cannot be stat'd.
 
-    Keyed on the resolved path, size and modification time, so a file replaced in place is built again.
+    One cache file per `.gguf`, named for its resolved path, so a file replaced in place overwrites its own
+    entry rather than leaving the old one behind. `stamp` describes the version of the file the entry is
+    for, and is stored in it; an entry whose stamp no longer matches is built again.
     """
     try:
         resolved = gguf_path.resolve()
         stats = resolved.stat()
     except OSError:
         return None
-    key = f"{resolved}|{stats.st_size}|{stats.st_mtime_ns}|{_CACHE_FORMAT_VERSION}"
-    return cache_dir / f"{gguf_path.stem}-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]}.json"
+    name = f"{gguf_path.stem}-{hashlib.sha256(str(resolved).encode('utf-8')).hexdigest()[:16]}.json"
+    stamp = {"size": stats.st_size, "mtime_ns": stats.st_mtime_ns, "format": _CACHE_FORMAT_VERSION}
+    return cache_dir / name, stamp
 
-def _read_cache(cache_file: pathlib.Path) -> Optional[tuple[Any, str, Optional[str]]]:
-    """`(tokenizer, tokenizer_class, pre)` from `cache_file`, or `None` if it is absent or unreadable."""
+def _read_cache(cache_file: pathlib.Path, stamp: dict) -> Optional[tuple[Any, str, Optional[str]]]:
+    """`(tokenizer, tokenizer_class, pre)` from `cache_file`, or `None` if it is absent, unreadable, or stale."""
     if not cache_file.is_file():
         return None
     try:
         import tokenizers  # noqa: PLC0415 -- deferred as in `_build`
         record = json.loads(cache_file.read_text(encoding="utf-8"))
+        if record.get("source") != stamp:
+            logger.info(f"_read_cache: '{cache_file.name}' was built from another version of the file; building it again.")
+            return None
         return tokenizers.Tokenizer.from_str(record["tokenizer"]), record["tokenizer_class"], record["pre"]
     except Exception as exc:  # noqa: BLE001 -- an unusable cache means building afresh, nothing more
         logger.warning(f"_read_cache: could not use the cached tokenizer '{cache_file}': {type(exc)}: {exc}. Building it again.")
         return None
 
-def _write_cache(cache_file: pathlib.Path, tokenizer: Any, tokenizer_class: str, pre: Optional[str]) -> None:
-    """Save a tokenizer that passed its checks. Logs and carries on if it cannot."""
+def _write_cache(cache_file: pathlib.Path, stamp: dict, tokenizer: Any, tokenizer_class: str, pre: Optional[str]) -> None:
+    """Save a tokenizer that passed its checks, replacing any older entry for the same file. Logs and carries on if it cannot."""
     try:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
-        record = {"tokenizer_class": tokenizer_class, "pre": pre, "tokenizer": tokenizer.to_str()}
+        record = {"source": stamp, "tokenizer_class": tokenizer_class, "pre": pre, "tokenizer": tokenizer.to_str()}
         with common_utils.atomic_write(cache_file) as f:
             json.dump(record, f)
         logger.info(f"_write_cache: cached the tokenizer as '{cache_file}'.")
@@ -411,8 +417,8 @@ def load(gguf_path: pathlib.Path,
     GGUF reader parsing every metadata field on the way past — so call this off any thread that must stay
     responsive. Loading from the cache skips that part.
     """
-    cache_file = _cache_file(cache_dir, gguf_path) if cache_dir is not None else None
-    cached = _read_cache(cache_file) if cache_file is not None else None
+    entry = _cache_entry(cache_dir, gguf_path) if cache_dir is not None else None
+    cached = _read_cache(*entry) if entry is not None else None
     built = cached if cached is not None else _build(gguf_path)
     if built is None:
         return None
@@ -450,8 +456,8 @@ def load(gguf_path: pathlib.Path,
                     f"keeping the token estimate. Measured offline: {sorted(_VERIFIED_CONSTRUCTIONS)}.")
         return None
 
-    if cached is None and cache_file is not None:
-        _write_cache(cache_file, tokenizer, tokenizer_class, pre)
+    if cached is None and entry is not None:
+        _write_cache(*entry, tokenizer, tokenizer_class, pre)
     confirmation = "confirmed against the backend" if agrees else "matching a pre-tokenizer measured offline"
     origin = ", via the cache" if cached is not None else ""
     logger.info(f"load: tokenizer ready from '{gguf_path.name}'{origin} ({confirmation}): {tokenizer.get_vocab_size()} tokens, "

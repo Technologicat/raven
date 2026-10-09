@@ -381,6 +381,9 @@ class TestCache:
         write_gguf(model, tokenizer_class="gpt2", pre="qwen35", merges=("l l", "h e"))  # same name, new contents
         load(model, cache_dir=cache)
         assert len(builds) == 2, "a file replaced in place was answered from the old file's cache"
+        assert len(list(cache.iterdir())) == 1, "the old file's entry was left behind beside the new one"
+        load(model, cache_dir=cache)
+        assert len(builds) == 2, "the rebuilt entry was not used on the next load"
 
     def test_a_corrupt_cache_file_is_built_again_rather_than_raising(self, tmp_path, builds):
         model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
