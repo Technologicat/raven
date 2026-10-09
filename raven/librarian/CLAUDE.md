@@ -47,7 +47,7 @@ Layer 1 - Utilities:        chatutil.py (~2.0k), chatsearch.py (~130), appstate.
                             imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~3.2k),
                             userprofile.py (~200), messagetext.py (~500)
 Layer 0 - Foundation:       config.py (~900), chattree.py (~1.5k), sidecarstore.py (~150),
-                            gguftokenizer.py (~400)
+                            gguftokenizer.py (~460)
 ```
 
 Each layer only imports from layers below it. No circular dependencies.
