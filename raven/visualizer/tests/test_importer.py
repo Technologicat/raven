@@ -1151,6 +1151,9 @@ class TestTheStepsThatNeedAModel:
         # Caches are per input file so that adding a file to a dataset does not re-embed the ones already
         # done. On a real corpus this is the difference between seconds and an hour.
         first = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        # `caplog.records` holds the whole test, not just the block below. Where an earlier test has left the
+        # importer's logger at INFO, the first pass's "Computing embeddings" is in there too.
+        caplog.clear()
         with caplog.at_level("INFO"):
             second = importer._get_highdim_semantic_vectors(two_entry_input_data)
 
