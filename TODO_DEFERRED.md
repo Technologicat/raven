@@ -27,6 +27,30 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Librarian's window vanished mid-session at Yrityspäivä, with no request to close
+
+*Cluster: abnormal-exit · Cost: ? · Gate: the next occurrence, with `--log` on · Filed: 2026-10-09 · See also: `investigations/dpg-exit-callback/`*
+
+On 2026-10-08, at the event, Librarian's window disappeared while the maintainer was using it; nobody asked it
+to close. Logging was off, so the evidence is a few lines copied from the terminal: an AI turn's `on_done`
+raising in `restore_scroll_after_swap`, because `split_frame` found no render loop, followed a millisecond
+later by `stop_tts: clearing TTS playback queue`.
+
+- **The render loop had ended by the normal path, not by a crash.** No core dump on the machine, and the
+  app was running its own teardown: that `stop_tts` came from the loop's `finally`. (Not from the exit
+  callback, as first read: DPG runs that only at the start of `destroy_context`, measured 2026-10-09.)
+- **So what ended it was one of** an exception escaping the render loop (logged as `Unhandled exception in
+  render loop`, above the captured lines), a quit signal (logged by `quitsignal`), or a close request from the
+  window manager. Every GUI app now logs the last case too (`guiutils.log_render_loop_stopped`), so with
+  `--log` the next occurrence names its path.
+- **The `on_done` traceback is a consequence, not the cause**: the turn finished as the app was going away.
+  It is still an ERROR with a traceback at an ordinary shutdown that happens mid-reply. `required=False` on
+  that wait would make it a warning, and is kept as `required=True` for now: it may cause scroll glitches
+  in normal use, so it wants testing before it changes (maintainer, 2026-10-09).
+
+The machine was rebooted afterwards, so the terminal's scrollback is gone. The same day brought another
+sighting of the subtitle glyph drop, recorded in "The Markdown renderer drops text".
+
 ## Shutdown: what the shared two-phase helper does not yet reach
 
 *Cluster: abnormal-exit · Cost: S–M · Gate: none · Filed: 2026-06-04 · See also: `guiutils.shutdown`, `investigations/dpg-exit-callback/`*
@@ -4162,6 +4186,8 @@ conclusive:
 
 So the operator's remedy at the top of this item, restart until the card comes up clean, covers only what
 was drawn at startup: a card page or a message drawn later can still come out damaged.
+
+**Sighting, 2026-10-08, at the Yrityspäivä event: the subtitles again** (maintainer). Logging was off, so no details were captured.
 
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
 `--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can

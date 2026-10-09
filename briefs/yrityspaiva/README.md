@@ -662,8 +662,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          filtering the `.bib`.
        - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
          that points at it.
-         - **Done 2026-10-09**: it is `todo.org`, untracked, on the personal machine, with two untracked notes
-           from the 4.0 modernization beside it. The mcpyrate item now says so.
+         - **Done 2026-10-09**: it is `todo.org`, untracked, on the personal machine. Reviewed together with
+           the other old notes there (`old_todo.txt`, and two from the 4.0 modernization) against the current
+           code: what is open is filed in mcpyrate's `TODO_DEFERRED.md`, the dead ideas are under its
+           `## Declined`, and the files are kept in `00_stuff/`.
        - **Searching for a document by its ID or filename** (decided 2026-10-07): `HybridIR.query` puts a named
          document first, then filenames indexed as searchable text. `TODO_DEFERRED.md`, "A search for a
          document's ID or filename finds nothing".
@@ -679,3 +681,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        for the autumn's priorities, a session with the maintainer; and closing this sprint on the
        Researchers' Night pattern — open briefs out to the top level, the folder into `done/` with a
        postmortem. The items living only here were filed on 2026-10-07, so that part is done.
+   - **2026-10-08, the event.** A success (maintainer). Two faults, Librarian running without `--log`:
+     - The subtitles drew blank glyphs again: `TODO_DEFERRED.md`, "The Markdown renderer drops text".
+     - Librarian's window vanished mid-session, with nobody asking it to close: `TODO_DEFERRED.md`, "Librarian's
+       window vanished mid-session at Yrityspäivä". Why is still unknown; with `--log` the next occurrence will
+       say which way the render loop ended. **Run with `--log` at every event** (maintainer).
+   - **2026-10-09.** Following up the vanished window led to the shared shutdown helper, `guiutils.shutdown`,
+     now in all seven apps; Librarian's slow start was found and fixed (`investigations/librarian-startup/`).
