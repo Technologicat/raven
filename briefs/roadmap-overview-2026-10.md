@@ -195,6 +195,9 @@ Added 2026-10-06 (maintainer), with 0.2.10 released:
 - **The MCP client (04) starts around 2026-10-19**, its auth section (a per-service API key) settled on
   2026-10-07, after a lab meeting specced the server side of a v1 MVP.
 
+**The order of the large pieces is now a graph, in `briefs/roadmap.md`** (2026-10-09), which supersedes
+the ordering decisions above where they disagree.
+
 **This page stays open until its clusters have been read through for the autumn's priorities**, a session
 with the maintainer not yet held at the Yrityspäivä sprint's close (2026-10-09). Into `briefs/done/` after
 that.

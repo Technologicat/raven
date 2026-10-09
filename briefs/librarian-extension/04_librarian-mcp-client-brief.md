@@ -1,8 +1,11 @@
 # Brief: client-side MCP tool client in Librarian
 
 **Relationship to the LM Studio compat brief:** independent. That one ships before the autumn
-demo regardless; this one is gated on the Hindsight playground being up and is the
-"interesting path," not the deadline path. They share one thing — the verified OpenAI function
+demo regardless. This one is the "interesting path," not the deadline path.
+
+**Gate: none** (maintainer, 2026-10-09). It was gated on the Hindsight playground, Hindsight being the
+first planned test target; it is tested instead against the MCP servers already configured for LM Studio,
+open-meteo first. Order and the rest of what was decided that day: `briefs/roadmap.md`, *MCP client*. They share one thing — the verified OpenAI function
 spec (see §2) — and nothing else.
 
 **Goal:** make external tools first-class **alongside** Raven's built-in ones, not in place of
@@ -538,7 +541,7 @@ Two things this target needs that Hindsight does not (maintainer, 2026-10-01):
     together.
 
 And one consequence for scheduling, a reader's inference: a ComfyUI target needs no Hindsight, so it may
-loosen this brief's gate on the Hindsight playground.
+loosen this brief's gate on the Hindsight playground. (The gate was lifted on 2026-10-09; see the top.)
 
 ---
 
