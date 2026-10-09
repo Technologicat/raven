@@ -51,6 +51,7 @@
 
 - **A message spoken into the microphone is sent with the attachments staged for it.** Before, it went out without them, and they stayed in the strip to be sent with the next message.
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
+- **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.
 
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 

@@ -3438,3 +3438,18 @@ class TestBackendErrorMessage:
     def test_a_long_body_is_shortened(self):
         text = llmclient._backend_error_message("x" * 1000, max_length=10)
         assert text == "x" * 10 + "…"
+
+
+class TestAuthorizationValue:
+    """What the API key file turns into in the `Authorization` header."""
+
+    def test_bare_key_gets_bearer_scheme(self):
+        assert llmclient._maybe_authorization_value("sk-abc123\n") == "Bearer sk-abc123"
+
+    def test_value_with_scheme_is_sent_as_is(self):
+        assert llmclient._maybe_authorization_value("Bearer sk-abc123") == "Bearer sk-abc123"
+        assert llmclient._maybe_authorization_value("Basic dXNlcjpwYXNz\n") == "Basic dXNlcjpwYXNz"
+
+    def test_blank_file_means_no_key(self):
+        assert llmclient._maybe_authorization_value("") is None
+        assert llmclient._maybe_authorization_value("  \n") is None

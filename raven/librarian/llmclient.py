@@ -142,13 +142,31 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# Read API key for cloud LLM support
-if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test this (implemented according to spec)
-    with open(librarian_config.llm_api_key_file, "r", encoding="utf-8") as f:
-        api_key = f.read().replace('\n', '')
+
+def _maybe_authorization_value(api_key_file_contents: str) -> str | None:
+    """The `Authorization` header value for the contents of the API key file, or `None` if it is blank.
+
+    A bare key is sent as `Bearer <key>`; a value naming its own scheme (`Bearer ...`, `Basic ...`)
+    is sent as is.
+    """
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
-    headers["Authorization"] = api_key.strip()
+    #
+    # An Authorization value is `<scheme> <credentials>`, so it contains a space, and an API key does not.
+    value = api_key_file_contents.replace('\n', '').strip()
+    if not value:
+        return None
+    if " " not in value:
+        value = f"Bearer {value}"
+    return value
+
+
+# Read API key for cloud LLM support
+if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test against a cloud LLM
+    with open(librarian_config.llm_api_key_file, "r", encoding="utf-8") as f:
+        maybe_authorization = _maybe_authorization_value(f.read())
+    if maybe_authorization is not None:
+        headers["Authorization"] = maybe_authorization
 
 # --------------------------------------------------------------------------------
 # Websearch integration (requires `raven.server` to be running)
@@ -968,8 +986,8 @@ def configure(model_info: env,
             print()
         else:
             print(f"{colorizer.Fore.YELLOW}{colorizer.Style.BRIGHT}No LLM API key configured.{colorizer.Style.RESET_ALL} If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
-            print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
-            print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+            print("A bare key is sent as 'Bearer <key>'; a value naming its own scheme ('Bearer ...', 'Basic ...') is sent as is.")
+            print("Do NOT send credentials over an unencrypted http:// connection!")
             print()
 
     _start_tokenizer_load(settings, tokenizer_sources)

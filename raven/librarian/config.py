@@ -38,7 +38,8 @@ llm_autosave_interval = 60.0
 #
 # This has been tested with local LLMs only, but theoretically cloud LLMs should work, too.
 # To set your API key, create a file "api_key.txt" in `librarian_userdata_dir` (see `llm_api_key_file` below).
-# Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
+# It becomes the Authorization field of the HTTP headers when `llmclient` starts: a bare key is sent as
+# `Bearer <key>`, and a value naming its own scheme (`Bearer ...`, `Basic ...`) is sent as is.
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
 llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
