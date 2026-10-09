@@ -3608,7 +3608,7 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   on_committed=_on_cleanup_committed,
                                   centering_reference_window="librarian_main_window")  # tag
 
-# Set in `_gui_cancel_tasks` (the DPG exit callback) and again, defensively, in `gui_shutdown`. The startup
+# Set in `_gui_cancel_tasks` and again, defensively, in `gui_shutdown`. The startup
 # frame callback (`_finish_startup`) runs on DPG's callback thread and can race app teardown: if the user
 # closes the window mid-boot, it may still be in flight while the context is being destroyed, and creating
 # widgets then segfaults the process (no Python `try/except` can catch a crash in DPG's C side — the only
@@ -3622,9 +3622,7 @@ _shutting_down = False
 def _gui_cancel_tasks() -> None:
     """App exit, first phase: signal background work to stop, WITHOUT waiting. Idempotent.
 
-    Called from the render loop's `finally`, before `gui_shutdown`, which does the waiting. Also registered as
-    the DPG exit callback, which DPG runs at the start of `destroy_context` — by then everything here has
-    already been signalled, so that call is a repeat.
+    Called from the render loop's `finally`, before `gui_shutdown`, which does the waiting.
     """
     global _shutting_down
     _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
@@ -3638,7 +3636,6 @@ def _gui_cancel_tasks() -> None:
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
-dpg.set_exit_callback(_gui_cancel_tasks)
 
 def gui_shutdown() -> None:
     """App exit, second phase: wait for background work to finish and release GUI/server resources.
@@ -3678,8 +3675,7 @@ def gui_shutdown() -> None:
     dpg_avatar_renderer.stop(wait=True)
     # Before the animator is cleared, since the dialog cancels its cursor pulsation through it — and well
     # before `destroy_context`, because an opened dialog runs a tick thread that calls DPG. See
-    # `FileDialog.destroy`, which joins that thread and therefore belongs in this phase rather than in the
-    # exit callback.
+    # `FileDialog.destroy`, which joins that thread and therefore belongs in this phase.
     if _filedialog_attach is not None:
         _filedialog_attach.destroy()
     gui_animation.animator.clear()
@@ -3983,14 +3979,12 @@ except Exception:
 finally:
     logger.info("App render loop exited.")
 
-    # Drive BOTH shutdown phases here, on the main thread. DPG runs the exit callback only at the start of
-    # `destroy_context` (measured: `investigations/dpg-exit-callback/`), after everything below — so it cannot
-    # be what signals cancellation first.
+    # Drive BOTH shutdown phases here, on the main thread. Not from a DPG exit callback: DPG runs that only at
+    # the start of `destroy_context` (measured: `investigations/dpg-exit-callback/`), after everything below.
     #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Sets `_shutting_down` (so a late startup
     #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
     #      so they stop before reaching a `split_frame`, which is unsafe once the loop has stopped. The
     #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
-    #      Idempotent, so the exit callback's later call of it is a harmless repeat.
     #   2. `gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
     #      everything, so nothing remains parked in `split_frame`.
     # Then destroy the context, with no background thread still touching DPG/OpenGL.

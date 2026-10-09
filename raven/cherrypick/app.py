@@ -1323,9 +1323,7 @@ def _gui_cancel_tasks() -> None:
     """App exit, first phase: cancel background tasks without waiting.
 
     Called from the render loop's ``finally``, before ``_gui_shutdown``, which
-    does the waiting and cleanup (see end of ``main``). Also registered as the
-    exit callback, which DPG runs at the start of ``destroy_context`` — after
-    ``_gui_shutdown``, so that call is a repeat.
+    does the waiting and cleanup (see end of ``main``).
     """
     # Exit compare mode: skip DPG redraws (item tree may be torn down).
     compare = _app_state["compare"]
@@ -1889,7 +1887,6 @@ def main() -> int:
     # --- Start app ---
     dpg.set_primary_window("cherrypick_main_window", True)
     dpg.set_viewport_resize_callback(_resize_gui)
-    dpg.set_exit_callback(_gui_cancel_tasks)
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
 
@@ -2015,8 +2012,8 @@ def main() -> int:
         logger.info("App render loop exited.")
 
         # Both shutdown phases here, in order: cancel without waiting, then wait for threads and clean up.
-        # The exit callback cannot be the first phase — DPG runs it only at the start of `destroy_context`,
-        # after everything below. Its later call of `_gui_cancel_tasks` is a repeat.
+        # Not from a DPG exit callback, which DPG runs only at the start of `destroy_context`, after
+        # everything below.
         _gui_cancel_tasks()
         _gui_shutdown()
 
