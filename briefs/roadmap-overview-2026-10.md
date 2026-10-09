@@ -88,8 +88,8 @@ schedulable steps. Statuses are the briefs' own.
   planned for scheduling in autumn 2026". Its only recorded ordering (05 first, on size) was set against the
   Night's deadline and no longer binds.
   - **04, MCP client** — external MCP tools join the built-ins in `perform_tool_calls`; `@tool` registry for
-    built-ins, `raven.common.async_bridge`, transports, namespacing · ~M–L · gated on the Hindsight playground
-    (06 steps 1–2). Absorbs `T:985` and the MCP toggle `T:956`.
+    built-ins, `raven.common.async_bridge`, transports, namespacing · ~M–L · **no gate** since 2026-10-09,
+    tested against the MCP servers already configured for LM Studio rather than Hindsight. Absorbs `T:985` and the MCP toggle `T:956`.
   - **05, lorebook** — keyword-triggered injection from a watched directory, built on a new candidate-emitting
     context assembler; LM Studio plugin port as a second frontend · ~M native + ~M plugin · no upstream gate;
     defines the assembler interface 06 ranks on
@@ -162,8 +162,8 @@ Stated in the briefs unless marked *(inferred)*.
   avatar sketch), **04, the MCP client**, and the `cu130` move; the `cu130` move pulls in the CUDA half of
   easy install and, as a reader's inference, `pdm.lock`. Before or after 13: open
 - **13** ← a release cut just before it, Raven being inoperable for the weeks it takes
-- **06 steps 1–3** → 04 → 06's agentic path. 04 and 06 name each other as gates; 06's first three steps need no
-  Raven code, which breaks the cycle *(the resolution is a reader's)*
+- **04** → 06's agentic path. 04 no longer waits on 06's playground (2026-10-09), which also dissolves the
+  cycle the two briefs had, each naming the other as a gate
 - **05** (assembler interface) → 06 (assembler ranking)
 - **Markdown step 2** → step 3; steps 3 and 7 together
 - **the ooba upgrade** (`TD "Upgrade oobabooga…"`) → streaming thinking before `</think>`, Gemma's inline
@@ -185,18 +185,32 @@ move. **Brief 13 is a drydock build** with a release cut just before it. Which o
 Added 2026-10-01, in the prioritization session (maintainer): **after 0.2.10, the per-document pass comes
 first** — the maintainer's part of the AOKK study blocks on it, and that blocks the other researchers. Then the
 lab installation's prerequisites, then the drydock. **The drydock is to be sized before it is scheduled**, and
-if it comes out XL, stretch goals split off it.
+if it comes out XL, stretch goals split off it. *(The order after the per-document pass was revised on
+2026-10-09, below.)*
 
 Added 2026-10-06 (maintainer), with 0.2.10 released:
 
 - **0.2.11 is a dehydration pass**, fixing the issues deferred in the run-up to Yrityspäivä. So it does not
   take brief 12's store, which goes with the drydock.
 - **The drydock is 0.3.0**: after it, Raven will not be recognizable for what it was.
-- **The MCP client (04) starts around 2026-10-19**, its auth section (a per-service API key) settled on
+- **The MCP client (04) starts around 2026-10-19** — tentative since 2026-10-09, the per-document pass coming
+  first and 0.2.11 between them; its auth section (a per-service API key) settled on
   2026-10-07, after a lab meeting specced the server side of a v1 MVP.
 
-**The order of the large pieces is now a graph, in `briefs/roadmap.md`** (2026-10-09), which supersedes
-the ordering decisions above where they disagree.
+Added 2026-10-09 (maintainer), **revising the 2026-10-01 order above**. The order of the large pieces is
+now kept as a graph in `briefs/roadmap.md`, which carries each piece's detail; in short:
+
+- **The per-document pass first**, as before. Then **0.2.11**, the dehydration pass, for a clean starting
+  state; what it takes and defers is in the graph, and the TODO files' gates agree.
+- **Anthropic-style backends** in 0.2.11 if they fit, otherwise a 0.2.12 holding nothing else.
+- Then **the Visualizer block and the MCP client**, in either order: author search, time ranges, clustering
+  and DOIs on one side; the client, its stdio and HTTP transports, and per-tool toggles on the other. The
+  lab's MCP server needs a v1 demo by the end of 2026.
+- **The drydock after 0.2.11 and the Visualizer block**, so users have a useful version while the insides
+  are overhauled; started once it blocks meaningful progress. **The Nomic switch goes in during it**, as
+  decided on 2026-10-01: image support is a new feature, and wants GUI design first.
+- **Unplaced**: Hindsight (against the drydock, open), being usable by non-technical users (`TODO.md`,
+  under *Cross-cutting*), subagents, and an MCP server side in Librarian.
 
 **This page stays open until its clusters have been read through for the autumn's priorities**, a session
 with the maintainer not yet held at the Yrityspäivä sprint's close (2026-10-09). Into `briefs/done/` after

@@ -60,10 +60,11 @@ flowchart TD
 - **Anthropic-style backends.** Brand neutrality on the backend axis too. Guessed at a few days: L, where the
   drydock is XL. In 0.2.11 if it fits reasonably, otherwise a 0.2.12 holding nothing else.
 - **Visualizer block.** Author search, time ranges for trend visualization, clustering improvements (brief
-  11 item 5), the switch to Nomic, DOI per item. Some of it has waited about a year. **Before the drydock**,
-  so that users have a useful version while the insides are overhauled.
-  - **Open**: the Nomic switch was placed *during* the drydock on 2026-10-01 (the roadmap overview), and is
-    listed here before it. One of the two placements has to go.
+  11 item 5), DOI per item. Some of it has waited about a year. **Before the drydock**, so that users have a
+  useful version while the insides are overhauled.
+  - **Not the Nomic switch**, which goes in during the drydock: image support is a new feature rather than an
+    improvement to an existing one. It needs GUI design first — how image matches show in the annotation
+    tooltip and in the info panel (brief 11 item 1).
 - **MCP client** (`briefs/librarian-extension/04_librarian-mcp-client-brief.md`). Both transports, stdio
   (CLI) and HTTP, working before the lab's server specifically is worth worrying about.
   - **Test targets**: the MCP servers already configured for LM Studio, which Qwen has been tested with —
@@ -85,12 +86,9 @@ flowchart TD
   is open; both have value.
 - **Visualizer ↔ Librarian integration.** "Let's discuss these studies", "highlight in the Visualizer what
   you found". Needs the unified DB, hence the drydock.
-- **Usable by non-technical users.** Visitors at Yrityspäivä wanted to try Raven and were not technical
-  types (maintainer). Three parts, more important for practical value than the PyPI upload:
-  - server autostart, last one out turns off the lights (`briefs/server-autostart-brief.md`);
-  - settings dialogs, so nobody edits JSON or `config.py` by hand (`TODO.md`, "User-level settings");
-  - a simpler installation: today a user must set up a Python environment and install PDM into it before
-    installing Raven can even begin. No item yet.
+- **Usable by non-technical users** (`TODO.md`, "Usable by non-technical users"). Visitors at Yrityspäivä
+  wanted to try Raven and were not technical types (maintainer). Server autostart, settings dialogs, and a
+  simpler installation — more important for practical value than the PyPI upload. Unplaced.
 - **Subagents.** `librarian.agent` offered to the AI as a tool, its sessions viewable by opening a datastore
   other than the default (`TODO_DEFERRED.md`, "Librarian: open a chat datastore other than the configured
   default"). Two levels are likely enough — the main session plus workers, the tool not offered to a

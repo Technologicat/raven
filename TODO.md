@@ -8,6 +8,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Cross-cutting
 
+- **[High]** Usable by non-technical users. Visitors at Yrityspäivä (2026-10-08) wanted to try Raven and were not technical types (maintainer). Three parts, together more important for practical value than the PyPI upload; placement in the roadmap is open (`briefs/roadmap.md`).
+  - Server autostart, last one out turns off the lights: `briefs/server-autostart-brief.md`.
+  - Settings dialogs, so nobody edits JSON or `config.py` by hand: "User-level settings" under Librarian below.
+  - **A simpler installation.** Today a user must set up a Python environment and install PDM into it before installing Raven can even begin. Nothing is designed yet.
+
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
   - **Verify against the code first**, before deciding anything (maintainer, 2026-10-01): part of this may have been done by the fleet-wide logsetup work (`briefs/done/logsetup-fleet-wide.md`).
 
@@ -55,10 +60,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 ### Search and data access
 
 - **[High]** Author search: show full author list, in the info panel too, where it is already loaded but not displayed. GUI must be search-aware — when search is active, highlight where the match appears in a long author list (e.g. a 200-name list starting with "Aaltonen" and ending with "Virtanen"; user searching for "Smith" needs to see where it is, not just that it matched).
-  - **Scheduled: 0.2.11** (maintainer, 2026-10-01). Wanted for about a year.
+  - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Wanted for about a year.
 
 - **[High]** DOI: record DOI in BibTeX importer; show DOI per item in info panel; per-item button to open official webpage (`https://dx.doi.org/...`); export list of DOIs/URLs for fulltext automation.
-  - **Scheduled: 0.2.11** (maintainer, 2026-10-01). Also wanted soon.
+  - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Also wanted soon.
 
 - **[Medium]** Fragment search across multiple fields (author, year, abstract, ...); configurable which fields to search. Add checkboxes and a select/unselect-all button below the search bar. Note: the highlighter currently only processes titles and is slow — may not be able to highlight in abstracts without performance work.
 
@@ -221,7 +226,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - **Open question: whose affordance is this — the user's, the AI's, or both?** The AI side already has an entry under Tools ("RAG access via tool-call: … fetch a full document by ID"), so if that lands, the model can pull a whole document itself. The user side (pick from the DB in the attach dialog) is the genuinely missing half. Deciding this shapes both: a shared "resolve doc ID → `text_file` content part" path serves both callers, and the GUI picker needs the docs DB to be browsable, which the tool version doesn't.
 
 - **[High]** Inline citations, validated: encourage the LLM to inline citations in a specified format, then check that each cited ID is in the RAG result set, and flag any that are not. Design goal: preserve synthesis — don't force one paragraph per source. The other half — surfacing *which* documents fed a reply, and opening the originals — is specced in `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"; the provenance data is already tracked per turn (the payload's `retrieval` field), just not shown.
-  - **Scheduled: 0.2.11, or the release after** (maintainer, 2026-10-01). A companion of showing what the automatic search and memory recall retrieved (`TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"). Probably a combination of system-prompting, possibly an inject, and a validator harness.
+  - **Scheduled: after 0.2.11** (maintainer, 2026-10-09). A companion of showing what the automatic search and memory recall retrieved (`TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"). Probably a combination of system-prompting, possibly an inject, and a validator harness.
 
 
 ### Core features
@@ -246,7 +251,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** BM25 migration from `bm25s` to ChromaDB FTS5: gains incremental updates and metadata filtering (needed for scopes); removes full index rebuild at each commit; simplifies `hybridir.py` and removes a dependency. Mitigate tokenization quality loss by storing spaCy-lemmatized text in a dedicated ChromaDB field for FTS5 search. **Low priority** — `bm25s` works, and Raven's dependency policy is already generous.
 
 - **[High]** Context compaction: drop and/or summarize old messages when context window fills. Use `raven.librarian.llmclient.count_tokens` to bisect linearized history to find the cut point (accounting for max response length from `settings.request_data["max_tokens"]`). Budgeting details in `TODO_DEFERRED.md`, "Context-window budgeting and conversation compaction (Librarian)".
-  - **Scheduled: 0.2.11** (maintainer, 2026-10-01). Wanted soon.
+  - **Scheduled: after 0.2.11** (maintainer, 2026-10-09). Wanted soon.
   - **Raised from Medium 2026-07-29.** "Start a new chat before running out" stops being an answer once a turn can carry several fulltext attachments. Three papers compared against each other (`briefs/design/corpus-interrogation-sketch.md`, mode 3) is ~30k tokens before the discussion begins, and the discussion is the point.
   - **An attachment must not roll out entirely.** It is the reason the conversation exists. So compaction needs a priority order — pinned material, then recent turns, then older turns — rather than a single cut point found by bisection. Note that `llmclient.fit_attachments_to_context` is already a partial answer: it shrinks attachments as the conversation grows, max-min fair between them. What it lacks is the temporal dimension (an attachment nobody has mentioned in thirty turns is not equal to the one under discussion) and any notion of pinning.
   - **Summarizing on the main LLM is a two-way KV cache miss.** Sending a summarization prompt evicts the chat's cached prefix; returning to the chat with a *modified* history presents a new prefix in turn. Worse, since compaction targets the oldest part of the conversation, the first replaced message sits near the front — so nearly the whole prompt is reprocessed. A summarization event is therefore roughly a full prompt reprocess, which is the argument for **granularity**: compact rarely and in large chunks rather than continuously in small ones.
@@ -263,7 +268,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 ### Chat UI
 
 - **[High]** Show the raw prompt (the prompt viewer). A window displaying exactly what went on the wire for the current turn, with a copy button (Raven's usual green flash and tooltip acknowledgment). Slated for 2026-08-25; recorded because the decisions below were taken on 2026-08-24 and produced no diff.
-  - **Scheduled: 0.2.11; wanted for debugging soon** (maintainer, 2026-10-01). **Images included**, since they go into the prompt too: the window shows each message as a block, text parts as text and image parts as thumbnails (`chattextures.AttachmentTextures.inline_image`), while **Copy** puts a text report on the clipboard with each image replaced by a placeholder line — name, sidecar path, size, token cost. Attached documents need nothing extra, their text being folded into the message on the wire. A mixed text-and-image layout is about M rather than S.
+  - **Scheduled: 0.2.11 if it comes out M at most; wanted for debugging soon** (maintainer, 2026-10-09). **Images included**, since they go into the prompt too: the window shows each message as a block, text parts as text and image parts as thumbnails (`chattextures.AttachmentTextures.inline_image`), while **Copy** puts a text report on the clipboard with each image replaced by a placeholder line — name, sidecar path, size, token cost. Attached documents need nothing extra, their text being folded into the message on the wire. A mixed text-and-image layout is about M rather than S.
   - **Raw text is the default, with a toggle to render it.** The chatlog is already the rendered view, so the point of this window is to be the unrendered one — and Markdown rendering hides the whitespace and delimiters a prompt is opened to inspect. Rendering is still worth offering, since messages typically contain formatting.
   - **With a breakdown, as SillyTavern's has**: system prompt, character card, user profile, RAG results, per-turn injects. This is the part with real work in it — the segments exist only as concatenated text by the time anyone can see them, so `scaffold.build_turn_prompt` has to hand back labelled pieces rather than a string. Sized as one focused session, which is why it is here and not a brief.
     - **Half of that is already labelled, checked 2026-08-25**, which is what keeps the sizing honest. `build_turn_prompt` returns a `List[Dict]`, so the *data* injects are separate messages by construction (`_synthetic_tool_exchange`). Only the *instruction* injects are joined into one string — and `build_system_injects` hands `_add_to_system_message` a **list of texts** to join, so the work is carrying a label alongside pieces that are already separate rather than decomposing a blob. One production caller, `scaffold.py:1116`.
@@ -409,7 +414,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - **Installing ooba to widen the second tier is explicitly not the answer** (Juha, 2026-09-08).
 
 - **[High]** **Support Anthropic-style backends**, alongside the OpenAI-compatible ones. Raised 2026-08-07 (Juha). Two reasons, and the second is the one that outlives the first:
-  - **Scheduled: 0.2.11** (maintainer, 2026-10-01), so that Raven can start advertising itself as brand-neutral.
+  - **Scheduled: 0.2.11 if it fits reasonably, otherwise a 0.2.12 holding nothing else** (maintainer, 2026-10-09), so that Raven can start advertising itself as brand-neutral. Guessed at a few days.
 
   - **Reach.** A significant fraction of scientific users are on Claude, and today Raven cannot talk to them at all.
   - **Brand neutrality, as a stated position.** *Bring your own backend* — the same stance Raven takes on NVIDIA versus AMD, where development happens on NVIDIA but nothing in the stack is supposed to *require* it. A local-first research tool that works with exactly one vendor's API shape has made a choice it did not mean to make, and the longer only one shape is supported the more the code quietly assumes it.
@@ -462,7 +467,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Source attribution for RAG: clickable snippets in GUI based on `document_id`, `offset`, length; clickable link to open full document (spawn external viewer based on file type). Same feature as `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations" — that entry carries the current design questions (where the affordance lives, snippet vs. whole document) and notes the `open_file` / `open_in_file_manager` machinery it can reuse.
 
 - **[High]** MCP support: specced in `briefs/librarian-extension/04_librarian-mcp-client-brief.md` — client-side MCP tools registered *alongside* the built-ins, all feeding the existing `perform_tool_calls` loop. No longer gated on the Hindsight playground (2026-10-09; `briefs/roadmap.md`). Main line for the "digital colleague" track: this is how Librarian reaches the lab's systems. Agent skills (CLI-based, "anime maid form factor" — plugging into interfaces designed for human use) remain a superior alternative capability-wise but more dangerous for the user's computing environment; still under consideration as a separate path.
-  - **Scheduled: 0.2.11, definitely** (maintainer, 2026-10-01).
+  - **Scheduled: after the per-document pass and 0.2.11** (maintainer, 2026-10-09; `briefs/roadmap.md`), the lab demo being due by the end of 2026.
 
 - **[Low]** IBM Granite OCR / vision OCR: low priority. Since writing this item, DeepSeek-OCR and Qwen3.5 native vision have appeared. Evaluate accuracy/speed/model size tradeoff when relevant.
 
@@ -511,7 +516,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 ## Server
 
 - **[High]** Expand the server config-variant set. `device_string` is already per *module*, not just per config, so any split across two GPUs is a config edit rather than a code change. Existing: default `config.py`, `config_lowvram.py`, `config_avatar_only.py` (avatar testing / settings editor). Wanted, so the right one can be selected on the CLI at server start.
-  - **Near future, perhaps 0.2.11** (maintainer, 2026-10-01).
+  - **Later** (maintainer, 2026-10-09).
 
   Two axes: how much VRAM the GPU serving raven-server's modules has, and whether there is a *second* GPU the LLM gets to itself. Name by capability tier, not by hardware — an installing user knows their card's VRAM, not our machines. Proposed (naming still open):
 

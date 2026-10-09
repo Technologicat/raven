@@ -292,7 +292,7 @@ avoid. Not checked: whether upstream GLFW has gained drag-enter events, which wo
 
 ## Brief: block-level Markdown in the chat view
 
-*Cluster: markdown-renderer · Cost: ~M · Gate: none — next to be looked at after Yrityspäivä · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ~M · Gate: the renderer overhaul, after 0.2.11 (2026-10-09) · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 Fenced code, multi-line lists, paragraph gaps and later tables, by removing the per-line splitter. Steps 1,
 5 and 6 done. The rest of the `markdown-renderer` cluster in this file wants folding into it, or into a
@@ -1935,7 +1935,7 @@ batch runs with no durability, and one resume mechanism answers both.
 
 ## `chat_controller` is not importable without the ML stack
 
-*Cluster: dependency-hygiene · Cost: M, possibly L · Gate: 0.2.11, moved off 0.2.10 once measured (maintainer, 2026-10-01) · Filed: 2026-08-12*
+*Cluster: dependency-hygiene · Cost: M, possibly L · Gate: after 0.2.11 (deferred 2026-10-09; moved off 0.2.10 once measured, 2026-10-01) · Filed: 2026-08-12*
 
 **Measured 2026-10-01, and spaCy is one link of many.** Importing `chat_controller` with every package CI
 lacks replaced by a stand-in module recorded which Raven modules import each one at module level:
@@ -2010,7 +2010,7 @@ compare wheel size against the previous release and flag a large jump.
 
 ## Librarian: open a chat datastore other than the configured default
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11 · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: with subagents, `briefs/roadmap.md` · Filed: 2026-08-11*
 
 **A second use, 2026-10-01** (maintainer): examining a subagent's log, which would naturally come back as a
 chat datastore, beside the agent's final reply as a message part.
@@ -2309,7 +2309,7 @@ than a flash.
 
 ## Indexing pays two server round trips per document: batch across documents
 
-*Cluster: ? · Cost: M · Gate: 0.2.11 · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
+*Cluster: ? · Cost: M · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
 
 `HybridIR.commit` prepares one document at a time, and `_prepare_document_for_indexing` sends one tokenizer
 request and one embedding request per document. For a corpus of short documents — a BibTeX record or an
@@ -2352,7 +2352,7 @@ Raised by Juha (2026-08-06), asking why the indexer was still on its first docum
 
 ## System prompt templating: the user should choose where the per-turn facts go
 
-*Cluster: ? · Cost: M · Gate: with the system-prompt trio, 0.2.11 · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
+*Cluster: ? · Cost: M · Gate: after 0.2.11; the rest of the trio is in it (2026-10-09) · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
 
 Filed 2026-08-12 to make good on a condition set when the multi-root work landed: today's advice — **do not
 use `{model}` or `{context_length}` in a card** — is documented at the `# TODO:` block in
@@ -2388,7 +2388,7 @@ them separately risks three answers to one question.
 
 ## The vendored Markdown renderer has no way to say it has finished
 
-*Cluster: markdown-renderer · Cost: S · Gate: with the Markdown renderer work, 0.2.11 · Filed: 2026-08-12*
+*Cluster: markdown-renderer · Cost: S · Gate: 0.2.11, ahead of the renderer overhaul (2026-10-09) · Filed: 2026-08-12*
 
 `raven/vendor/DearPyGui_Markdown` lays a message out in pieces from its own worker thread
 (`CallInNextFrame._worker`), and nothing tells a caller when the last piece has landed. Anything that needs
@@ -2424,7 +2424,7 @@ add a finish event").
 
 ## Holding the chat view's scrollbar does not hold your place while a reply streams
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11 at the earliest; not serious · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: later; not serious (2026-10-09) · Filed: 2026-08-03*
 
 `raven/librarian/chat_controller.py` plus a new per-frame hook, probably in
 `raven/common/gui/animation.py`. Grab the scrollbar mid-reply and hold it: the view creeps downward, roughly
@@ -2944,7 +2944,7 @@ Raised by Juha (2026-07-30), from wanting to check the hydrogen indexing run fro
 
 ## Browse *all* attachments in the datastore, not just the orphaned ones
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11 or later; nice to have · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: later; nice to have (2026-10-09) · Filed: 2026-07-29*
 
 The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
 happens to be filtered to orphans. Point the same machinery at `list_sidecar_files()` instead of
@@ -2955,6 +2955,10 @@ the one that recurs:
   rather than SHA-256 filenames, and folds a downscaled image and its preserved original into one item.
 - *"I'm sure I attached paper X at some point, but which chat was it?"* — which the file manager cannot
   answer at all.
+
+A full dump of everything is likely not very helpful, so this wants some thinking first (maintainer,
+2026-10-09). One thing that would help: the chat search matching inside attachment *content*, not only
+filenames — though that does nothing for images.
 
 **Most of it is already built.** `cleanup.describe_sidecar`, the companion fold that merges original with
 downscaled, `SidecarEntry.archival_filename`, the thumbnail grid, and click-to-open-the-original all work off
@@ -3100,7 +3104,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## Make the canned AI greeting optional
 
-*Cluster: system-prompt-and-greeting · Cost: M · Gate: with the system-prompt trio, 0.2.11 · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
+*Cluster: system-prompt-and-greeting · Cost: S–M, the largest blocker gone 2026-08-12 · Gate: 0.2.11 (2026-10-09) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -3176,7 +3180,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: with the system-prompt trio, 0.2.11 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
+*Cluster: ? · Cost: S · Gate: 0.2.11 (2026-10-09) · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 **Keep the Aria persona** (maintainer, 2026-10-01), and test how the model responds to the new card.
 
@@ -3465,7 +3469,7 @@ Discovered during raven-cherrypick loader pipeline design.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11 at the earliest · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
+*Cluster: ? · Cost: ? · Gate: later (2026-10-09) · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 
@@ -4002,7 +4006,7 @@ Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juh
 
 ## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: M (probe), then S (the DPG fix) · Gate: after the Yrityspäivä event · Filed: 2026-07-19 · Updated: 2026-10-05*
+*Cluster: markdown-renderer · Cost: M (probe), then S (the DPG fix) · Gate: 0.2.11 (2026-10-09) · Filed: 2026-07-19 · Updated: 2026-10-05*
 
 **Not scheduled before the exhibit, though not ruled out either** (Juha, 2026-09-09): two and a half weeks
 left and a queue ahead of it, so it goes if there is time and not otherwise. The atlas hypothesis below predicts the outcome
@@ -4714,7 +4718,7 @@ Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
-*Cluster: ? · Cost: ? · Gate: when it becomes unusably slow; 0.2.11 at the earliest · Filed: 2026-07-17 · See also: "Version the chat datastore file …"*
+*Cluster: ? · Cost: ? · Gate: when it becomes unusably slow · Filed: 2026-07-17 · See also: "Version the chat datastore file …"*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
 `chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
@@ -4747,7 +4751,7 @@ data folder" button making the single-store design visible).
 
 ## Colorblind-safe status signaling (ok/error flashes distinguished by color alone)
 
-*Cluster: ? · Cost: ? · Gate: 0.2.11 · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: later (2026-10-09) · Filed: 2026-07-17*
 
 `animation.flash_button(ok=...)` (and, more broadly, Raven's flash/highlight vocabulary) conveys success vs.
 failure by *color alone* — green for ok, red for error. That's invisible to the ~8% of men with red–green
@@ -5289,7 +5293,7 @@ those tracks, which will otherwise each build half of it differently.
 
 ## No way for the user to attach a document from a URL
 
-*Cluster: document-ingestion · Cost: ? · Gate: 0.2.11 · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-07-29*
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
 message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
@@ -5763,7 +5767,7 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work, likely 0.2.11 · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ? · Gate: the Markdown renderer overhaul, after 0.2.11 (2026-10-09) · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 **Important for discussing scientific topics** (maintainer, 2026-10-01): Qwen often writes numbers in scientific
 notation as inline dollar-sign LaTeX, so this is not only about equations. **Single-dollar inline math is
@@ -6282,7 +6286,7 @@ The URL *underline*, on the other hand, is one of the six sites above and belong
 
 ## Nothing remembers which sibling the reader was on
 
-*Cluster: chat-navigation · Cost: M · Gate: 0.2.11; wants a live-tested prototype · Filed: 2026-08-27*
+*Cluster: chat-navigation · Cost: M · Gate: after 0.2.11 (deferred 2026-10-09); wants a live-tested prototype · Filed: 2026-08-27*
 
 **A design to try first, 2026-10-01** (maintainer): the chat graph already keeps a Back/Forward history of
 *views* (`navhistory`, Alt+Left / Alt+Right), which deliberately never moves HEAD. Record HEAD moves in that
@@ -6629,7 +6633,7 @@ Raised by Juha during the 0.2.10 release-day live testing (2026-10-06).
 
 ## Librarian's chat search: match attachment and database-item filenames
 
-*Cluster: librarian-search · Cost: M (matching alone S) · Gate: 0.2.11 · Filed: 2026-10-06*
+*Cluster: librarian-search · Cost: M (matching alone S) · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-10-06*
 
 The search reads a message's text parts only: `chatutil.content_to_text` skips attachment parts, so a
 filename never reaches `chatsearch._counts_for`, and searching for a PDF's name finds nothing unless a

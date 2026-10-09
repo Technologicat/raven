@@ -11,6 +11,10 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
 
 1. **Nomic-embed migration**: Replace snowflake-arctic + mpnet with Nomic-embed-text (unified text embeddings) and, for future image search, a vision encoder. VRAM savings + a unified embedding space.
 
+   **Built during the drydock, not with the rest of this brief** (maintainer, 2026-10-09): image support is a
+   new feature rather than an improvement to an existing one. It needs GUI design first — how image matches
+   show in the annotation tooltip and in the info panel.
+
    **Amended 2026-08-03: the model choice is a fork, not a version bump.** Checked against Nomic's published
    lineup rather than assumed:
 
