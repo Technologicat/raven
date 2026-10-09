@@ -182,6 +182,23 @@ Added 2026-10-01 (maintainer): **the lab installation comes after 0.2.10**, gate
 mode, the sci-fi file objects, the MCP client — and is the first install from zero, which dates the `cu130`
 move. **Brief 13 is a drydock build** with a release cut just before it. Which of the two comes first is open.
 
+Added 2026-10-01, in the prioritization session (maintainer): **after 0.2.10, the per-document pass comes
+first** — the maintainer's part of the AOKK study blocks on it, and that blocks the other researchers. Then the
+lab installation's prerequisites, then the drydock. **The drydock is to be sized before it is scheduled**, and
+if it comes out XL, stretch goals split off it.
+
+Added 2026-10-06 (maintainer), with 0.2.10 released:
+
+- **0.2.11 is a dehydration pass**, fixing the issues deferred in the run-up to Yrityspäivä. So it does not
+  take brief 12's store, which goes with the drydock.
+- **The drydock is 0.3.0**: after it, Raven will not be recognizable for what it was.
+- **The MCP client (04) starts around 2026-10-19**, its auth section (a per-service API key) settled on
+  2026-10-07, after a lab meeting specced the server side of a v1 MVP.
+
+**This page stays open until its clusters have been read through for the autumn's priorities**, a session
+with the maintainer not yet held at the Yrityspäivä sprint's close (2026-10-09). Into `briefs/done/` after
+that.
+
 
 ## 2. Open items by theme
 

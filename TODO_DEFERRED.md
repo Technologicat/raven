@@ -27,6 +27,20 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Drop the held records the AOKK team's manual check rejected
+
+*Cluster: papers · Cost: ? · Gate: the team's marked sheet, expected the week of 2026-10-19 · Filed: 2026-10-09*
+
+The AOKK team is checking the `held-for-review` records by hand, marking up the `.xlsx` we sent them
+(`held-for-review_tarkastetut.xlsx` in the shared folder; still in progress on 2026-10-09). Once it is in,
+the records they rejected come out of the `.bib` — and so may any other held records we have reason to drop
+(maintainer, 2026-10-09).
+
+To spec before building: whether it takes the marked spreadsheet, a list of IDs, or a mix of the two.
+`tabular.read_table` already reads the sheet. A promising starting point (maintainer): one more criterion
+for `raven-siftbib`, which already removes records on named criteria with an audit TSV, rather than a new
+tool. How well its structure takes a criterion read from a file is not yet checked.
+
 ## Librarian's window vanished mid-session at Yrityspäivä, with no request to close
 
 *Cluster: abnormal-exit · Cost: ? · Gate: the next occurrence, with `--log` on · Filed: 2026-10-09 · See also: `investigations/dpg-exit-callback/`*
