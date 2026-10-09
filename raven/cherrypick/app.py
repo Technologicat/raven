@@ -1322,7 +1322,7 @@ def _change_tile_size(new_size: int) -> None:
 def _gui_cancel_tasks() -> None:
     """App exit, first phase: cancel background tasks without waiting.
 
-    Called from the render loop's ``finally``, before ``_gui_shutdown``, which
+    Called from the render loop's ``finally``, before ``_gui_release``, which
     does the waiting and cleanup (see end of ``main``).
     """
     # Exit compare mode: skip DPG redraws (item tree may be torn down).
@@ -1338,7 +1338,7 @@ def _gui_cancel_tasks() -> None:
         iv._augment_task_mgr.clear(wait=False)
 
 
-def _gui_shutdown() -> None:
+def _gui_release() -> None:
     """Full cleanup — call after the render loop has exited."""
     gui_animation.animator.clear()
     preload = _app_state["preload"]
@@ -2014,13 +2014,7 @@ def main() -> int:
         # Both shutdown phases here, in order: cancel without waiting, then wait for threads and clean up.
         # Not from a DPG exit callback, which DPG runs only at the start of `destroy_context`, after
         # everything below.
-        _gui_cancel_tasks()
-        _gui_shutdown()
-
-        # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
-        # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
-        # against a destroyed context segfaults rather than raising.
-        guiutils.teardown()
+        guiutils.shutdown(cancel_tasks=_gui_cancel_tasks, release=_gui_release)
 
         try:
             dpg.destroy_context()

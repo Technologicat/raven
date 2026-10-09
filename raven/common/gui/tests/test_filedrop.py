@@ -14,6 +14,7 @@ a viewport to center on and a render loop to wait for.
 """
 
 import os
+import queue
 import threading
 
 import pytest
@@ -21,6 +22,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
 from raven.common.gui import filedrop  # noqa: E402 -- after importorskip by design
+from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 
 
 @pytest.fixture
@@ -309,3 +311,25 @@ def test_install_is_refused_in_a_fresh_context_after_an_earlier_one_was_shown():
     finally:
         filedrop.uninstall()
         dpg.destroy_context()
+
+
+def test_a_drop_arriving_during_shutdown_is_discarded(monkeypatch):
+    """The worker must not run a handler once the app has begun shutting down: the handler calls DPG."""
+    received = []
+    arrived = threading.Event()
+    def handler(paths):
+        received.append(paths)
+        arrived.set()
+    monkeypatch.setattr(filedrop, "_handler", handler)
+    monkeypatch.setattr(filedrop, "_drops", queue.Queue())
+    # A daemon left parked in `_drops.get()` on a queue nothing else holds; it goes when the process does.
+    threading.Thread(target=filedrop._dispatch_loop, daemon=True).start()
+    try:
+        guiutils._shutting_down.set()
+        filedrop._drops.put(["/during/shutdown"])
+        assert not arrived.wait(0.5), "a drop reached its handler after the shutdown flag was set"
+    finally:
+        guiutils._shutting_down.clear()
+    filedrop._drops.put(["/after/clearing"])
+    assert arrived.wait(5.0), "nothing arrived even with the flag clear, so the discard above proves nothing"
+    assert received == [["/after/clearing"]]

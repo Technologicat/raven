@@ -1857,13 +1857,13 @@ def _gui_cancel_tasks() -> None:
         gui_instance.dpg_avatar_renderer.stop(wait=False)  # the renderer's background (OpenGL) task
         gui_instance.crop_push_task_manager.clear(wait=False)
 
-def _gui_shutdown() -> None:
+def _gui_release() -> None:
     """App exit, second phase: wait for background work to finish, and release what touches DPG.
 
     Call after `_gui_cancel_tasks`, and before `dpg.destroy_context()`.
     """
     global gui_instance
-    logger.info("_gui_shutdown: entered")
+    logger.info("_gui_release: entered")
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     avatar_controller.shutdown()
     if gui_instance is not None:
@@ -1877,7 +1877,7 @@ def _gui_shutdown() -> None:
             filedialog.destroy()
     gui_animation.animator.clear()
     gui_instance = None
-    logger.info("_gui_shutdown: done")
+    logger.info("_gui_release: done")
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
@@ -2019,13 +2019,7 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    _gui_cancel_tasks()
-    _gui_shutdown()
-
-    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
-    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
-    # against a destroyed context segfaults rather than raising.
-    guiutils.teardown()
+    guiutils.shutdown(cancel_tasks=_gui_cancel_tasks, release=_gui_release)
 
     try:
         dpg.destroy_context()

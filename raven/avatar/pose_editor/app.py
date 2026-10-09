@@ -1527,7 +1527,7 @@ pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
 gui_instance = PoseEditorGUI(poser, device, args.model)
 
-def _gui_shutdown() -> None:
+def _gui_release() -> None:
     """App exit: release what touches DPG. Call from the render loop's `finally`, before `dpg.destroy_context()`.
 
     The app has no background tasks, so there is no first, cancelling phase.
@@ -1618,12 +1618,7 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    _gui_shutdown()
-
-    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
-    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
-    # against a destroyed context segfaults rather than raising.
-    guiutils.teardown()
+    guiutils.shutdown(release=_gui_release)
 
     try:
         dpg.destroy_context()

@@ -669,3 +669,37 @@ class TestMinimumShowTime:
         hold.show("b")  # must not cancel `a`'s pending hide
         assert self._wait_until(lambda: ("hide", "a") in calls, deadline=5.0)
         assert ("hide", "b") not in calls
+
+
+class TestShutdown:
+    """`shutdown` runs the app's phases in order, flags the shutdown first, and survives a phase that raises."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_flag(self, monkeypatch):
+        # `shutdown` sets a process-wide flag, and the real `teardown` stops the Markdown workers; neither
+        # should leak into the tests after this one.
+        self.calls = []
+        monkeypatch.setattr(guiutils, "teardown", lambda: self.calls.append(("teardown", guiutils.is_shutting_down())))
+        yield
+        guiutils._shutting_down.clear()
+
+    def phase(self, name):
+        return lambda: self.calls.append((name, guiutils.is_shutting_down()))
+
+    def test_the_phases_run_in_order_with_the_flag_already_set(self):
+        assert not guiutils.is_shutting_down(), "the flag was set before the test began, so it cannot show it being set"
+        guiutils.shutdown(cancel_tasks=self.phase("cancel_tasks"), release=self.phase("release"))
+        assert self.calls == [("cancel_tasks", True), ("release", True), ("teardown", True)]
+        assert guiutils.is_shutting_down()
+
+    def test_an_app_with_no_background_work_omits_the_first_phase(self):
+        guiutils.shutdown(release=self.phase("release"))
+        assert [name for name, _ in self.calls] == ["release", "teardown"]
+
+    def test_a_phase_that_raises_does_not_skip_the_rest(self, caplog):
+        def broken():
+            raise ValueError("phase 1 broke")
+        with caplog.at_level(logging.ERROR, logger=guiutils.logger.name):
+            guiutils.shutdown(cancel_tasks=broken, release=self.phase("release"))
+        assert [name for name, _ in self.calls] == ["release", "teardown"]
+        assert "cancel_tasks raised" in caplog.text

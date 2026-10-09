@@ -678,10 +678,10 @@ def _backend_status_poll_task(task_env: env) -> None:
         """Wait up to `duration` seconds in slices. Return whether the caller should carry on."""
         deadline = time.monotonic() + duration
         while time.monotonic() < deadline:
-            if task_env.cancelled or _shutting_down:
+            if task_env.cancelled or guiutils.is_shutting_down():
                 return False
             time.sleep(_BACKEND_POLL_TICK_S)
-        return not (task_env.cancelled or _shutting_down)
+        return not (task_env.cancelled or guiutils.is_shutting_down())
 
     previous_status = llmclient.backend_status(llm_settings)
 
@@ -692,7 +692,7 @@ def _backend_status_poll_task(task_env: env) -> None:
         # Quiet, which for `reconnect` covers the log as well as the console: this asks the same question
         # every few seconds, so what is worth recording is where the answer *changes*, which is here.
         status = llmclient.reconnect(llm_settings)
-        if task_env.cancelled or _shutting_down:
+        if task_env.cancelled or guiutils.is_shutting_down():
             return
         if status is not previous_status:
             logger.info(f"_backend_status_poll_task: {task_env.task_name}: backend at {llm_settings.backend_url} went from {previous_status} to {status}.")
@@ -719,7 +719,7 @@ def _backend_status_poll_task(task_env: env) -> None:
 
 def _start_backend_status_poll(delay_first_probe: bool) -> None:
     """Start watching the LLM backend. Supersedes a watch already running."""
-    if _shutting_down:
+    if guiutils.is_shutting_down():
         return
     backend_status_task_manager.submit(_backend_status_poll_task, env(delay_first_probe=delay_first_probe))
 
@@ -843,16 +843,16 @@ def _server_status_poll_task(task_env: env) -> None:
         """Wait up to `duration` seconds in slices. Return whether the caller should carry on."""
         deadline = time.monotonic() + duration
         while time.monotonic() < deadline:
-            if task_env.cancelled or _shutting_down:
+            if task_env.cancelled or guiutils.is_shutting_down():
                 return False
             time.sleep(_BACKEND_POLL_TICK_S)
-        return not (task_env.cancelled or _shutting_down)
+        return not (task_env.cancelled or guiutils.is_shutting_down())
 
     if task_env.delay_first_probe and not keep_waiting(_SERVER_POLL_INTERVAL_S):
         return
     while True:
         available = api.raven_server_available()
-        if task_env.cancelled or _shutting_down:  # the probe takes a network timeout; the app may be gone by now
+        if task_env.cancelled or guiutils.is_shutting_down():  # the probe takes a network timeout; the app may be gone by now
             return
         if available != _server_was_available:
             logger.info(f"_server_status_poll_task: {task_env.task_name}: Raven-server at {raven_server_url} went from "
@@ -870,7 +870,7 @@ def _server_status_poll_task(task_env: env) -> None:
 
 def _start_server_status_poll(delay_first_probe: bool) -> None:
     """Start watching Raven-server. Supersedes a watch already running."""
-    if _shutting_down:
+    if guiutils.is_shutting_down():
         return
     server_status_task_manager.submit(_server_status_poll_task, env(delay_first_probe=delay_first_probe))
 
@@ -2381,7 +2381,7 @@ def update_animations():
     # The LLM backend's status row comes back up when a turn finds the backend unable to answer: the turn's
     # model check (`llmclient.follow_model_swap`) records that in the settings, and this notices it. Two
     # attribute reads, no request; the poll it starts is what probes, and takes the row down again.
-    if not _backend_pill_shown and not _shutting_down:
+    if not _backend_pill_shown and not guiutils.is_shutting_down():
         maybe_bad_status = llmclient.backend_status(llm_settings)
         if maybe_bad_status is not llmclient.backend_ready:
             _refresh_backend_status_pill(maybe_bad_status)
@@ -2854,7 +2854,7 @@ def _resize_panels() -> None:
 
 def _resize_gui_task(task_env: env) -> None:
     """We run this in the background. Expensive parts of the GUI update benefit from the "there can be only one" mechanism."""
-    if task_env.cancelled or _shutting_down:  # while waiting in queue, or app tearing down (this task can be submitted *after* the shutdown cancel)
+    if task_env.cancelled or guiutils.is_shutting_down():  # while waiting in queue, or app tearing down (this task can be submitted *after* the shutdown cancel)
         return
     logger.debug(f"_resize_gui_task: {task_env.task_name}: Updating main window GUI element sizes.")
     _resize_panels()
@@ -2866,7 +2866,7 @@ def _resize_gui_task(task_env: env) -> None:
 
 def _resize_gui() -> None:
     """Resize dynamically sized GUI elements, RIGHT NOW (unless overridden by another call shortly in succession)."""
-    if _shutting_down:  # a resize event (incl. the window close itself) must not kick off GUI rebuilds during teardown
+    if guiutils.is_shutting_down():  # a resize event (incl. the window close itself) must not kick off GUI rebuilds during teardown
         return
     logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Recentering help window.")
@@ -3608,24 +3608,20 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   on_committed=_on_cleanup_committed,
                                   centering_reference_window="librarian_main_window")  # tag
 
-# Set in `_gui_cancel_tasks` and again, defensively, in `_gui_shutdown`. The startup
-# frame callback (`_finish_startup`) runs on DPG's callback thread and can race app teardown: if the user
-# closes the window mid-boot, it may still be in flight while the context is being destroyed, and creating
-# widgets then segfaults the process (no Python `try/except` can catch a crash in DPG's C side — the only
-# safe move is to not make the call). Its steps check this flag and bail.
-_shutting_down = False
+# Startup and background work below check `guiutils.is_shutting_down()`, which `guiutils.shutdown` sets
+# before either phase runs. The startup frame callback (`_finish_startup`) runs on DPG's callback thread and
+# can race app teardown: if the user closes the window mid-boot, it may still be in flight while the context
+# is being destroyed, and creating widgets then segfaults the process (no Python `try/except` can catch a
+# crash in DPG's C side — the only safe move is to not make the call). Its steps check the flag and bail.
 
-# Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`), both phases called from
-# the render loop's `finally`, on the main thread, once the loop has exited:
+# The two phases `guiutils.shutdown` runs from the render loop's `finally`, on the main thread:
 #   1. `_gui_cancel_tasks` — *signals* cancellation, never waits (see its docstring).
-#   2. `_gui_shutdown` — the blocking drains and resource teardown, then the caller destroys the context.
+#   2. `_gui_release` — the blocking drains and resource teardown, then the caller destroys the context.
 def _gui_cancel_tasks() -> None:
     """App exit, first phase: signal background work to stop, WITHOUT waiting. Idempotent.
 
-    Called from the render loop's `finally`, before `_gui_shutdown`, which does the waiting.
+    Run by `guiutils.shutdown`, before `_gui_release`, which does the waiting.
     """
-    global _shutting_down
-    _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
     chat_controller.cancel_tasks()        # cancel chat / AI-turn / context-prefill tasks (no wait)
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
@@ -3637,18 +3633,16 @@ def _gui_cancel_tasks() -> None:
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
 
-def _gui_shutdown() -> None:
+def _gui_release() -> None:
     """App exit, second phase: wait for background work to finish and release GUI/server resources.
 
-    Call from the render loop's `finally`, on the main thread, AFTER the loop has exited and AFTER
-    `_gui_cancel_tasks` has signalled cancellation, so that every task is already winding down when the
-    `wait=True` drains below begin. Must run before `dpg.destroy_context()`, so no background thread is still
-    touching DPG/OpenGL when the context goes away.
+    Run by `guiutils.shutdown`, on the main thread, AFTER the loop has exited and AFTER `_gui_cancel_tasks`
+    has signalled cancellation, so that every task is already winding down when the `wait=True` drains below
+    begin. Must run before `dpg.destroy_context()`, so no background thread is still touching DPG/OpenGL when
+    the context goes away.
     """
-    global _shutting_down
-    _shutting_down = True  # defensive; normally already set by `_gui_cancel_tasks`
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-    logger.info("_gui_shutdown: entered")
+    logger.info("_gui_release: entered")
     # Silence the GUI side (idempotent; `_gui_cancel_tasks` already did this, via `chat_controller.cancel_tasks()`,
     # whose first action is `disable_gui_updates()`). The cancelled commit's `finally` will fire `on_indexing_done`
     # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would then call
@@ -3679,7 +3673,7 @@ def _gui_shutdown() -> None:
     if _filedialog_attach is not None:
         _filedialog_attach.destroy()
     gui_animation.animator.clear()
-    logger.info("_gui_shutdown: done")
+    logger.info("_gui_release: done")
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
@@ -3727,7 +3721,7 @@ def _load_initial_animator_settings() -> bool:
     """Return whether the app can go on; on `False` it should quit, the error having been reported."""
     global _animator_settings
 
-    if _shutting_down:  # window closed before this deferred startup callback even started
+    if guiutils.is_shutting_down():  # window closed before this deferred startup callback even started
         return True
 
     animator_json_path = avatar.assets_path("settings", "animator.json")
@@ -3755,7 +3749,7 @@ def _load_initial_animator_settings() -> bool:
     # Re-check after the (possibly slow) JSON load: this callback runs on DPG's callback thread, so the user
     # may have closed the window while we were here. Everything below starts the avatar and creates DPG widgets
     # (e.g. `configure_backdrop` -> `add_raw_texture`); doing that against a context being torn down segfaults.
-    if _shutting_down:
+    if guiutils.is_shutting_down():
         return True
 
     # Through the controller rather than straight at the API, so that it knows what the avatar's settings
@@ -3774,7 +3768,7 @@ def _load_initial_animator_settings() -> bool:
 
 def _build_initial_chat_view() -> None:
     """Build the chat log, and put the keyboard where `startup_keyboard_home` says. A step of `_finish_startup`."""
-    if _shutting_down:  # window closed during startup; building chat widgets now would race context teardown (segfault)
+    if guiutils.is_shutting_down():  # window closed during startup; building chat widgets now would race context teardown (segfault)
         return
     chat_controller.view.build()
 
@@ -3875,7 +3869,7 @@ def _panel_occupancy_task(task_env: env) -> None:
     where being a tick late is visible: the renderer draws "video is off" into the panel it is losing. The
     poll would still catch it, so this remains the safety net for both directions.
     """
-    while not (task_env.cancelled or _shutting_down):
+    while not (task_env.cancelled or guiutils.is_shutting_down()):
         _apply_panel_occupancy()
         time.sleep(_PANEL_OCCUPANCY_TICK_S)
 
@@ -3889,7 +3883,7 @@ else:
 
 def _start_panel_occupancy_watch() -> None:
     """Start watching who should hold the avatar's panel. Supersedes a watch already running."""
-    if _shutting_down:
+    if guiutils.is_shutting_down():
         return
     panel_occupancy_task_manager.submit(_panel_occupancy_task, env())
 
@@ -3916,7 +3910,7 @@ def _finish_startup(sender, app_data) -> None:
 
     _build_initial_chat_view()
 
-    if _shutting_down:
+    if guiutils.is_shutting_down():
         return
     # Raven-server was reachable at startup or the app would have exited, so the watch starts believing that
     # and waits an interval before its first probe.
@@ -3979,22 +3973,16 @@ except Exception:
 finally:
     logger.info("App render loop exited.")
 
-    # Drive BOTH shutdown phases here, on the main thread. Not from a DPG exit callback: DPG runs that only at
-    # the start of `destroy_context` (measured: `investigations/dpg-exit-callback/`), after everything below.
-    #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Sets `_shutting_down` (so a late startup
-    #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
-    #      so they stop before reaching a `split_frame`, which is unsafe once the loop has stopped. The
-    #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
-    #   2. `_gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
-    #      everything, so nothing remains parked in `split_frame`.
+    # Both shutdown phases, driven from here on the main thread. Not from a DPG exit callback: DPG runs that
+    # only at the start of `destroy_context` (measured: `investigations/dpg-exit-callback/`), after all this.
+    #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Flips `gui_updates_safe` off, and cancels
+    #      the avatar renderer + chat tasks, so they stop before reaching a `split_frame`, which is unsafe once
+    #      the loop has stopped. The renderer's `split_frame`s self-skip once its task is cancelled (see
+    #      `_split_frame_unless_stopping`).
+    #   2. `_gui_release` — the blocking drain + resource teardown. Safe to wait now: phase 1 already
+    #      signalled everything, so nothing remains parked in `split_frame`.
     # Then destroy the context, with no background thread still touching DPG/OpenGL.
-    _gui_cancel_tasks()
-    _gui_shutdown()
-
-    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
-    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
-    # against a destroyed context segfaults rather than raising.
-    guiutils.teardown()
+    guiutils.shutdown(cancel_tasks=_gui_cancel_tasks, release=_gui_release)
 
     try:
         dpg.destroy_context()

@@ -15,7 +15,9 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
            "DEBUG_OVERLAY_COLOR", "DEBUG_OVERLAY_FONT_SIZE", "DEBUG_OVERLAY_INSET",  # how a numbers overlay looks
 
-           "bootup", "teardown", "load_extra_font",  # high-level bootup API, you usually want these for app bootup
+           "bootup", "teardown",  # the shared GUI machinery: start it at app start, stop it before `destroy_context`
+           "is_shutting_down", "shutdown",  # app exit, driven from the render loop's `finally`, and the flag that says it has begun
+           "load_extra_font",  # another font, once `bootup` has run
            "get_font_path",  # mostly internal, but available for exotic use cases
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
 
@@ -207,6 +209,7 @@ def bootup(font_size: int,
     how an app preloads the faces it will need: see `raven.visualizer.app`'s
     `markdown_font_loader_trigger_dummy`. Once the render loop is up, wrap freely.
     """
+    _shutting_down.clear()  # a new GUI is starting; matters only where one process builds several (tests)
     font_registry = setup_default_font(font_size, font_basename)
     icons = setup_icon_fonts(font_registry, font_size)
     setup_markdown(font_registry, font_size, font_basename)
@@ -239,6 +242,45 @@ def teardown() -> None:
     through it, so an app that only ever shows an F1 card has the threads running too.
     """
     dpg_markdown.shutdown()
+
+# Python-side, so that reading it is safe from any thread at any time — which a DPG call is not: once
+# `destroy_context` has run, every call into the library is into freed memory, `is_dearpygui_running`
+# included, and it segfaults rather than raising.
+_shutting_down = threading.Event()
+
+def is_shutting_down() -> bool:
+    """Whether the app has begun shutting its GUI down — set by `shutdown`, cleared by `bootup`.
+
+    Safe from any thread, at any time, including after `dpg.destroy_context()`. A background thread that
+    calls DPG should check this before each call, and stop once it is set. Do not use
+    `dpg.is_dearpygui_running` for that: it is itself a DPG call, and segfaults once the context is gone.
+    """
+    return _shutting_down.is_set()
+
+def shutdown(cancel_tasks: Callable[[], None] | None = None,
+             release: Callable[[], None] | None = None) -> None:
+    """Shut the app's GUI down, in order. The app then calls `dpg.destroy_context()`.
+
+    Call from the render loop's `finally`, on the main thread, once the loop has exited.
+
+    `cancel_tasks`: The app's first phase: signal its background work to stop, **without waiting**. Omit
+                    if the app has no background work.
+    `release`: The app's second phase: wait for that work to finish, and release whatever touches DPG —
+               file dialogs, the animator, the app's own threads.
+
+    The order is: set `is_shutting_down`, so that threads which check it stop calling DPG; `cancel_tasks`;
+    `release`; then `teardown`, which stops the shared machinery `bootup` started.
+    """
+    _shutting_down.set()
+    # A phase that raises must not skip the ones after it: whatever they would have stopped would then still
+    # be calling DPG when the app destroys the context, which is a segfault rather than an exception.
+    for name, phase in (("cancel_tasks", cancel_tasks), ("release", release), ("teardown", teardown)):
+        if phase is None:
+            continue
+        try:
+            phase()
+        except Exception as exc:
+            logger.exception(f"shutdown: {name} raised, continuing with the rest of the shutdown: {type(exc)}: {exc}")
 
 def load_extra_font(themes_and_fonts: env,
                     font_size: int,

@@ -110,10 +110,10 @@ def _dispatch_loop() -> None:
         handler = _handler
         if handler is None:  # uninstalled between the drop and now
             continue
-        if not dpg.is_dearpygui_running():
-            # Teardown, or a drop that landed before the render loop started. Calling into DPG after
-            # `destroy_context` segfaults, so drop the drop and say so.
-            logger.info(f"_dispatch_loop: render loop not running, discarding {len(paths)} dropped path{common_text.plural_s(len(paths))}")
+        if guiutils.is_shutting_down():
+            # Calling into DPG after `destroy_context` segfaults, so drop the drop and say so. Not
+            # `dpg.is_dearpygui_running`, which is such a call itself.
+            logger.info(f"_dispatch_loop: app shutting down, discarding {len(paths)} dropped path{common_text.plural_s(len(paths))}")
             continue
         try:
             handler(paths)

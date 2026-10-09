@@ -1426,12 +1426,12 @@ def _gui_cancel_tasks() -> None:
     """App exit, first phase: signal background work to stop, WITHOUT waiting."""
     clear_background_tasks(wait=False)
 
-def _gui_shutdown() -> None:
+def _gui_release() -> None:
     """App exit, second phase: wait for background work to finish, and release what touches DPG.
 
     Call after `_gui_cancel_tasks`, and before `dpg.destroy_context()`.
     """
-    logger.info("_gui_shutdown: entered")
+    logger.info("_gui_release: entered")
     # Join each file dialog's tick thread before the context goes. A dialog that has been opened runs one,
     # and it calls DPG — after `destroy_context` that is a call into freed memory, so the failure is a
     # segfault rather than an exception. Before `reset_app_state`, which clears the animator the dialog
@@ -1441,7 +1441,7 @@ def _gui_shutdown() -> None:
             filedialog.destroy()
     importer_gui.destroy_filedialogs()
     reset_app_state(_update_gui=False)  # waits for the background tasks, and clears the animator
-    logger.info("_gui_shutdown: done")
+    logger.info("_gui_release: done")
 
 # --------------------------------------------------------------------------------
 # Start the app
@@ -1561,13 +1561,7 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
-    _gui_cancel_tasks()
-    _gui_shutdown()
-
-    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
-    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
-    # against a destroyed context segfaults rather than raising.
-    guiutils.teardown()
+    guiutils.shutdown(cancel_tasks=_gui_cancel_tasks, release=_gui_release)
 
     try:
         dpg.destroy_context()
