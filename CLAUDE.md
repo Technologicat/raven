@@ -44,6 +44,8 @@ index.
   and `done/`, and unnumbered briefs alongside any numbered ones. **Numbering is discontinued** — the 01–16
   run is historical, and new briefs are named for what they are. `briefs/README.md` is authoritative, and
   explains why a single `active/` folder was tried and rejected on 2026-08-07.
+  **`briefs/roadmap.md` is the order of the large pieces of work**, kept as a graph: read it when choosing
+  what to start next.
 - **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding
   its write-up, its scripts and its data together**, because a measurement whose apparatus lives in another tree
   is not reproducible in practice however carefully it was written. **`investigations/README.md` lists what is

@@ -5,6 +5,10 @@ what stops "done" from being applied to something that was never going to be fin
 
 ## The categories
 
+**`roadmap.md`**, at this level, is the order of the large pieces of work: a graph of what comes before
+what, with the alternatives whose order is not decided yet left side by side. It names the pieces; the
+briefs, sketches and TODO files hold their detail.
+
 - **`design/`** — **sketches.** A direction where the *workflow* is clear and the *mechanism* is not. Writing
   one as a brief would freeze decisions nobody has made yet. A sketch graduates by producing a brief, not by
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
