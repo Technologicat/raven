@@ -25,6 +25,7 @@ flowchart TD
     USE["Usable by non-technical users"]
     SUB["Subagents"]
     MCPS["MCP server side in Librarian"]
+    LIBF["Librarian features deferred from 0.2.11"]
 
     PDP -.-> T11
     T11 -.-> ANT
@@ -36,6 +37,7 @@ flowchart TD
     VIS -.-> DD
     DD --> INTEG
     MCP --> MCPS
+    MCP -.-> LIBF
 ```
 
 `HS`, `USE` and `SUB` have no edges yet: their place is open.
@@ -54,9 +56,11 @@ flowchart TD
     — a canned greeting reads as 2023 — and whose cost is S–M now that its largest blocker went on
     2026-08-12; **the prompt viewer**, if it comes out M at most, being a power multiplier for debugging.
   - **Deferred**: `chat_controller` without the ML stack; most of the Librarian features gated on 0.2.11
-    (datastore browsing, attach from URL, sibling memory, batch indexing, context compaction, inline
-    citations); the Markdown renderer's block rendering and LaTeX, an overhaul of days; colourblind-safe
-    flashes, the streaming scrollbar, image-conversion consolidation, datastore scaling.
+    (attach from URL, sibling memory, batch indexing, prompt templating, the chat search on attachment
+    filenames, context compaction, inline citations); the Markdown renderer's block rendering and LaTeX, an
+    overhaul of days. **All of these come after the MCP client** (maintainer, 2026-10-09), and are unplaced
+    beyond that. Later still: datastore browsing, colourblind-safe flashes, the streaming scrollbar,
+    image-conversion consolidation, datastore scaling.
 - **Anthropic-style backends.** Brand neutrality on the backend axis too. Guessed at a few days: L, where the
   drydock is XL. In 0.2.11 if it fits reasonably, otherwise a 0.2.12 holding nothing else.
 - **Visualizer block.** Author search, time ranges for trend visualization, clustering improvements (brief

@@ -292,7 +292,7 @@ avoid. Not checked: whether upstream GLFW has gained drag-enter events, which wo
 
 ## Brief: block-level Markdown in the chat view
 
-*Cluster: markdown-renderer · Cost: ~M · Gate: the renderer overhaul, after 0.2.11 (2026-10-09) · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ~M · Gate: the renderer overhaul, after the MCP client (2026-10-09) · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 Fenced code, multi-line lists, paragraph gaps and later tables, by removing the per-line splitter. Steps 1,
 5 and 6 done. The rest of the `markdown-renderer` cluster in this file wants folding into it, or into a
@@ -1935,7 +1935,7 @@ batch runs with no durability, and one resume mechanism answers both.
 
 ## `chat_controller` is not importable without the ML stack
 
-*Cluster: dependency-hygiene · Cost: M, possibly L · Gate: after 0.2.11 (deferred 2026-10-09; moved off 0.2.10 once measured, 2026-10-01) · Filed: 2026-08-12*
+*Cluster: dependency-hygiene · Cost: M, possibly L · Gate: after the MCP client (deferred 2026-10-09; moved off 0.2.10 once measured, 2026-10-01) · Filed: 2026-08-12*
 
 **Measured 2026-10-01, and spaCy is one link of many.** Importing `chat_controller` with every package CI
 lacks replaced by a stand-in module recorded which Raven modules import each one at module level:
@@ -2309,7 +2309,7 @@ than a flash.
 
 ## Indexing pays two server round trips per document: batch across documents
 
-*Cluster: ? · Cost: M · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
+*Cluster: ? · Cost: M · Gate: after the MCP client (deferred 2026-10-09) · Filed: 2026-10-01 · See also: "The ingest pool's concurrency is nominal: pypdf is pure Python"*
 
 `HybridIR.commit` prepares one document at a time, and `_prepare_document_for_indexing` sends one tokenizer
 request and one embedding request per document. For a corpus of short documents — a BibTeX record or an
@@ -2352,7 +2352,7 @@ Raised by Juha (2026-08-06), asking why the indexer was still on its first docum
 
 ## System prompt templating: the user should choose where the per-turn facts go
 
-*Cluster: ? · Cost: M · Gate: after 0.2.11; the rest of the trio is in it (2026-10-09) · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
+*Cluster: ? · Cost: M · Gate: after the MCP client; the rest of the trio is in 0.2.11 (2026-10-09) · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
 
 Filed 2026-08-12 to make good on a condition set when the multi-root work landed: today's advice — **do not
 use `{model}` or `{context_length}` in a card** — is documented at the `# TODO:` block in
@@ -5293,7 +5293,7 @@ those tracks, which will otherwise each build half of it differently.
 
 ## No way for the user to attach a document from a URL
 
-*Cluster: document-ingestion · Cost: ? · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: after the MCP client (deferred 2026-10-09) · Filed: 2026-07-29*
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
 message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
@@ -5767,7 +5767,7 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: the Markdown renderer overhaul, after 0.2.11 (2026-10-09) · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ? · Gate: the Markdown renderer overhaul, after the MCP client (2026-10-09) · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 **Important for discussing scientific topics** (maintainer, 2026-10-01): Qwen often writes numbers in scientific
 notation as inline dollar-sign LaTeX, so this is not only about equations. **Single-dollar inline math is
@@ -6286,7 +6286,7 @@ The URL *underline*, on the other hand, is one of the six sites above and belong
 
 ## Nothing remembers which sibling the reader was on
 
-*Cluster: chat-navigation · Cost: M · Gate: after 0.2.11 (deferred 2026-10-09); wants a live-tested prototype · Filed: 2026-08-27*
+*Cluster: chat-navigation · Cost: M · Gate: after the MCP client (deferred 2026-10-09); wants a live-tested prototype · Filed: 2026-08-27*
 
 **A design to try first, 2026-10-01** (maintainer): the chat graph already keeps a Back/Forward history of
 *views* (`navhistory`, Alt+Left / Alt+Right), which deliberately never moves HEAD. Record HEAD moves in that
@@ -6633,7 +6633,7 @@ Raised by Juha during the 0.2.10 release-day live testing (2026-10-06).
 
 ## Librarian's chat search: match attachment and database-item filenames
 
-*Cluster: librarian-search · Cost: M (matching alone S) · Gate: after 0.2.11 (deferred 2026-10-09) · Filed: 2026-10-06*
+*Cluster: librarian-search · Cost: M (matching alone S) · Gate: after the MCP client (deferred 2026-10-09) · Filed: 2026-10-06*
 
 The search reads a message's text parts only: `chatutil.content_to_text` skips attachment parts, so a
 filename never reaches `chatsearch._counts_for`, and searching for a PDF's name finds nothing unless a
