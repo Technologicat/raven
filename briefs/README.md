@@ -9,9 +9,8 @@ what stops "done" from being applied to something that was never going to be fin
   one as a brief would freeze decisions nobody has made yet. A sketch graduates by producing a brief, not by
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
 
-- **One folder per sprint**, named for its scope — currently `librarian-extension/` and
-  `yrityspaiva/`. Implementation briefs for work that has been decided on, each folder with
-  its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
+- **One folder per sprint**, named for its scope — currently `librarian-extension/`. Implementation briefs
+  for work that has been decided on, each folder with its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
   **A sprint `README.md` is the sprint's decision log**, which is a different document from the folder
@@ -19,7 +18,7 @@ what stops "done" from being applied to something that was never going to be fin
   item turned out to need. It reads as an odd sort of README because most of what is in it produced no
   diff — a decision that produced a commit is recorded by that commit's message, and a decision that did
   not is recorded here or nowhere. Consulted when taking stock or picking the next item, rather than read
-  through. Both sprint READMEs say so at the top.
+  through. The sprint READMEs say so at the top.
 
   **Numbering is discontinued.** The 01–16 run is historical and keeps its numbers; new briefs are named for
   what they are. The numbers recorded the order briefs were *written*, which is not the order they are read,

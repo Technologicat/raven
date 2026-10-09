@@ -11,6 +11,61 @@ live on the Night.
 **The event itself** (maintainer, 2026-09-30): an open house, run in English. No rehearsal is needed — only a
 systems check on 7 October that everything works as it should.
 
+## Postmortem, written at the close (2026-10-09)
+
+**The sprint closed on 2026-10-09**, the day after the event, and moved to `briefs/done/`. 0.2.10,
+*"Algol"*, was released on 2026-10-06, a day earlier than planned, and the systems check passed the same
+day; its changelog is the full record of what shipped. This section is the other half: what was planned,
+and what happened to the plan. It is written from the dated sections below.
+
+### What the event needed, and got
+
+**The sprint's stated purpose — fixing what the Night's demo found — was done in three days**, on
+2026-09-30: the attach dialog closing itself, the Tab caret flashes, tool calls that could not be stopped,
+web tools that failed silently after thirty seconds. Message editing, cut from the Night as slack, was
+built on day one.
+
+That left eight days, and they went where the maintainer chose on 2026-09-30, rather than to a plan made in
+advance: the roadmap overview and the TODO triage it fed (five passes), a prioritization session, and then
+0.2.10's list, worked through in the order of how much use each change needed before the demo ran on it.
+
+**The event was a success** (maintainer). Two faults, with Librarian running without `--log`: the subtitles
+dropped glyphs again, and Librarian's window vanished mid-session, leaving nothing to say why. Both are in `TODO_DEFERRED.md`. **Run with `--log` at every event** (maintainer).
+
+### Plan against outcome
+
+- **Several decisions turned on a measurement, and the measurement changed the answer.** Qwen 3.8's slow prompt processing was a confound (*Documents* on, 50 matches per prompt).
+  Librarian's turns missed the backend's cache because the prefill ended at the AI's last reply, found by
+  bisection. A per-document token ratio would have cut an attachment anywhere from −19% to +30% off its
+  allowance, so the cut moved to token boundaries.
+- **Costings held or came in under.** The token-boundary cut, planned as an M on its own branch, came out
+  small. Stage reporting for the web tools, costed at about half a day on 2026-10-01, was done the next
+  day. Everything moved to Monday 2026-10-05 was done that day, and the automatic-search decision taken
+  that morning was built the same day, both halves.
+- **What was re-gated to 0.2.11 went for risk or size, not for lack of time**: the backdrop, the thumbnail
+  grid's textures, `chat_controller` without the ML stack (measured as an M sweep), versioning the chat
+  datastore file, and the shared two-phase shutdown helper — moved on 2026-10-01 as every app's teardown in
+  the week of a demo. That last one landed the day after the event anyway, prompted by the vanished window.
+- **A ship-if-clean rule worked as written**: the avatar heartbeat was to go into 0.2.10 only if it ran
+  clean until release day, did, and went in.
+- **The roadmap overview ran ahead of its own plan.** The triage was meant to follow the prioritization
+  session and went first instead, since the overview left out everything the triage would touch.
+
+### What the close did not do
+
+**The read-through of the roadmap overview's clusters for the autumn's priorities was not held.** It was on
+the list for the close; the overview stays at the top level of `briefs/` until it is, and says so.
+
+## Carried out at the close
+
+No briefs were open in this folder; everything it scheduled was done, re-gated, or filed as it went. Two
+things lived only here, and were moved:
+
+- **The tool to drop the records the AOKK team's manual check rejected**, waiting on their marked sheet:
+  `TODO_DEFERRED.md`, "Drop the held records the AOKK team's manual check rejected".
+- **What 0.2.11 and 0.3.0 are for, the post-0.2.10 order, and the MCP client's start date**: into
+  `briefs/roadmap-overview-2026-10.md`, beside its other dated decisions.
+
 ## Done
 
 - **Librarian's attach dialog closed itself on the first Ctrl+Shift+O after launch** (flagged live on the

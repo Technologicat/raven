@@ -35,7 +35,7 @@ Four trees, sorted by what a document *is* rather than what it is about. Each ha
 index.
 
 - **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), **one folder per sprint**,
-  named for its scope (currently `librarian-extension/` and `yrityspaiva/`), `done/` for closed briefs
+  named for its scope (currently `librarian-extension/`), `done/` for closed briefs
   and closed sprints, `reference/` for **durable knowledge** — documents that describe how something *is*
   rather than what to build, and so are consulted rather than finished (the EU AI Act summary, the DPG keycode
   table, an archived style snapshot). Who wrote them is not the test: **every document in

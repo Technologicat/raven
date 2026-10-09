@@ -169,7 +169,7 @@ whether the order still makes sense with the reminders in it.
 
 ## Retest DOCUMENTS' stages on the model's own document search
 
-*Cluster: librarian-indicators · Cost: S · Gate: a live session with the maintainer · Filed: 2026-10-07 · See also: `briefs/yrityspaiva/README.md`, 2026-10-05*
+*Cluster: librarian-indicators · Cost: S · Gate: a live session with the maintainer · Filed: 2026-10-07 · See also: `briefs/done/yrityspaiva/README.md`, 2026-10-05*
 
 DOCUMENTS' progress stages were checked live on 2026-10-05, each stage slowed to 1.5 s through `--repl`,
 and the automatic search stepped through them and ended on *Done*. The model's own `search_documents` call
@@ -528,7 +528,7 @@ Until then, an emotion that keeps looking wrong can be switched off in `emotion_
 
 ## Edit an AI reply's thinking trace, to unwedge a model stuck in a loop
 
-*Cluster: message-editing · Cost: ? · Gate: Continue resuming an incomplete thinking trace · Filed: 2026-09-28 · See also: `briefs/yrityspaiva/README.md`, message editing v1*
+*Cluster: message-editing · Cost: ? · Gate: Continue resuming an incomplete thinking trace · Filed: 2026-09-28 · See also: `briefs/done/yrityspaiva/README.md`, message editing v1*
 
 Message editing v1 (2026-09-28) edits a message's text only; an AI reply's thinking trace carries over
 untouched. The maintainer's use case for editing the trace too: a model stuck in a loop while thinking can
