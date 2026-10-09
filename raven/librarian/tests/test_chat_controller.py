@@ -421,3 +421,46 @@ class TestBranchingAnEditedMessage:
         # The control: neither condition, and the branch goes through.
         assert self._controller(f, message).branch_message(message, "fine") is None
         assert len(f.get_children(parent)) == n_siblings + 1
+
+
+class TestBuildDuringShutdown:
+    """A chat view build stops adding messages once shutdown begins, not only when it starts."""
+
+    @staticmethod
+    def _view(monkeypatch, n_messages, shut_down_after):
+        added = []
+        controller = types.SimpleNamespace(gui_updates_safe=True,
+                                           app_state={"HEAD": f"n{n_messages - 1}"},
+                                           datastore=types.SimpleNamespace(linearize_up=lambda head: [f"n{i}" for i in range(n_messages)]),
+                                           current_chat_history=[],
+                                           current_chat_history_lock=threading.RLock(),
+                                           search=types.SimpleNamespace(clear_matches=lambda: None),
+                                           avatar_controller=types.SimpleNamespace(ping=lambda config: None),
+                                           avatar_record=None,
+                                           update_context_fill_indicator=lambda: None)
+        view = object.__new__(chat_controller.DPGLinearizedChatView)
+        view.chat_controller = controller
+        view.chat_messages_container_group_widget = 0
+        view.gui_edit_field = None
+        view.edit_node_id = None
+        def add_complete_message(node_id, scroll_view):
+            added.append(node_id)
+            if len(added) == shut_down_after:
+                controller.gui_updates_safe = False  # shutdown begins while this build is running
+        view.add_complete_message = add_complete_message
+        monkeypatch.setattr(chat_controller.dpg, "delete_item", lambda *args, **kwargs: None)
+        monkeypatch.setattr(chat_controller.messagetext, "node_is_unfinished", lambda datastore, node_id: False)
+        monkeypatch.setattr(chat_controller.chatutil, "get_node_message_text_without_persona",
+                            lambda datastore, node_id: ("user", None, ""))
+        return view, added
+
+    def test_a_build_already_running_stops_at_the_next_message(self, monkeypatch):
+        view, added = self._view(monkeypatch, n_messages=5, shut_down_after=2)
+        view.build()
+        assert added == ["n0", "n1"], f"the build went on adding messages after shutdown began: {added}"
+
+    def test_a_build_with_no_shutdown_adds_every_message(self, monkeypatch):
+        # The negative control: without it, a fixture that never reached the loop would pass the test above.
+        view, added = self._view(monkeypatch, n_messages=3, shut_down_after=3)
+        view.build()
+        assert added == ["n0", "n1", "n2"]

@@ -1359,6 +1359,10 @@ class DPGLinearizedChatView:
             dpg.delete_item(self.chat_messages_container_group_widget,
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
+                # Checked per message as well as on entry: a long branch takes a while to build, and shutdown
+                # can begin partway through it.
+                if not self.chat_controller.gui_updates_safe:
+                    return
                 # A reply still being written renders as a live message, carrying everything that has
                 # arrived so far. It is the same act as rendering any other node — the text is in the tree
                 # — which is what lets returning to a branch mid-reply look like never having left, with
@@ -1382,9 +1386,9 @@ class DPGLinearizedChatView:
                                                                             text=text)
         self.chat_controller.avatar_controller.ping(config=self.chat_controller.avatar_record)  # wake up the AI avatar when the chat view is re-rendered
         self.chat_controller.update_context_fill_indicator()  # HEAD changed (rebuild / branch switch / initial load)
-        # Skip the final settle-and-scroll during shutdown: once the render loop has stopped, `split_frame`
-        # blocks forever (it waits for a frame that will never come). `gui_updates_safe` goes False as the very
-        # first action of teardown, so a startup `build()` that races the close bails here instead of parking.
+        # Skip the final settle-and-scroll during shutdown: `split_frame` is unsafe once the render loop has
+        # stopped. `gui_updates_safe` goes False as the very first action of teardown, so a startup `build()`
+        # that races the close bails here instead.
         if self.chat_controller.gui_updates_safe:
             dpg.split_frame()
             self.scroll_view(scroll_target_node_id=scroll_target_node_id,
