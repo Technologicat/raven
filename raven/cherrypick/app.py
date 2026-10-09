@@ -1320,11 +1320,12 @@ def _change_tile_size(new_size: int) -> None:
 # ---------------------------------------------------------------------------
 
 def _gui_cancel_tasks() -> None:
-    """Exit callback: cancel background tasks without waiting.
+    """App exit, first phase: cancel background tasks without waiting.
 
-    DPG runs it at the start of ``destroy_context``, after the render loop's
-    ``finally`` has run ``_gui_shutdown``. The actual wait and cleanup are
-    ``_gui_shutdown``'s (see end of ``main``).
+    Called from the render loop's ``finally``, before ``_gui_shutdown``, which
+    does the waiting and cleanup (see end of ``main``). Also registered as the
+    exit callback, which DPG runs at the start of ``destroy_context`` — after
+    ``_gui_shutdown``, so that call is a repeat.
     """
     # Exit compare mode: skip DPG redraws (item tree may be torn down).
     compare = _app_state["compare"]
@@ -2013,9 +2014,10 @@ def main() -> int:
     finally:
         logger.info("App render loop exited.")
 
-        # The exit callback cancelled tasks without waiting.  The last
-        # render_dearpygui_frame() unblocked any split_frame() waiters.
-        # Now it's safe to wait for threads and clean up.
+        # Both shutdown phases here, in order: cancel without waiting, then wait for threads and clean up.
+        # The exit callback cannot be the first phase — DPG runs it only at the start of `destroy_context`,
+        # after everything below. Its later call of `_gui_cancel_tasks` is a repeat.
+        _gui_cancel_tasks()
         _gui_shutdown()
 
         # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
