@@ -76,6 +76,9 @@ _WORD_MARK = "\u2581"
 _VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, measured 2026-08-24: 486 tokens against 486
                            ("gemma4", None)}       # Gemma 4, measured 2026-08-24: 510 against 510
 
+# HuggingFace's single-file tokenizer, which a model archive may hold beside or instead of a `.gguf`.
+TOKENIZER_JSON = "tokenizer.json"
+
 # A vision projector rides beside its model under a name that matches the model's just as well, and carries
 # no tokenizer. Anywhere in the name, not just at the front: both `mmproj-gemma-4-26B-A4B-it-BF16.gguf` and
 # `Qwen3.5-9B-mmproj-BF16.gguf` are in use.
@@ -87,9 +90,6 @@ _VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, meas
 #
 # The size tie-break in `rank_for_model` already passes over both, a companion being smaller than its model;
 # naming them here also covers a directory holding the companion and not the model.
-# HuggingFace's single-file tokenizer, which a model archive may hold beside or instead of a `.gguf`.
-TOKENIZER_JSON = "tokenizer.json"
-
 _NOT_A_MODEL = re.compile(r"mmproj|(?<![a-z0-9])mtp(?![a-z0-9])", re.IGNORECASE)
 
 # Round-trip probe. Digits, punctuation runs, non-ASCII letters and newlines are where a mis-assembled
