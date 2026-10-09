@@ -283,34 +283,51 @@ Support both:
   (Hindsight, and anything else that runs in a container and exposes an MCP endpoint). This is
   the v0 critical path, since the first target (Hindsight) is HTTP.
 
-**Config shape** (in `raven.librarian.config`): a dict keyed by server name. Each value carries
-its transport plus transport-specific params. Match the de facto MCP-client schema (Claude
-Desktop, Cursor, Cline) on field names so users can lift entries from existing MCP
-configurations without reshaping:
+**Config shape** (in `raven.librarian.config`): a dict keyed by server name, with the same
+entries as the `mcpServers` object of the de facto MCP-client schema (Claude Desktop, Cursor,
+Cline, LM Studio, Claude Code), so an entry can be lifted from any of them unchanged:
 
 ```python
 mcp_servers = {
     "hindsight": {
-        "transport": "http",
         "url": "http://localhost:8788/mcp",      # placeholder; actual port per Hindsight docs
-        "enabled": True,                          # toggle without removing the entry
+        # optional: "type": "http" or "sse"
         # optional: "headers": {"Authorization": "Bearer ..."},
         # optional: "allowed_tools": ["retain", "recall", "reflect"],
     },
     "local-filesystem": {
-        "transport": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/jje/notes"],
-        "enabled": True,
+        "disabled": False,                        # toggle without removing the entry
         # optional: "env": {...}, "cwd": "..."
     },
 }
 ```
 
 Field names match the convention: `command`/`args`/`env` for stdio, `url`/`headers` for HTTP.
-The `enabled` flag (default `True` if absent) lets the user flip a flaky server off without
-removing its entry — the equivalent of commenting out a line of config, but expressed in
-config data.
+
+- **Transport is inferred, with `type` as the override.** An entry with `command` is stdio; one
+  with `url` is HTTP (streamable). An explicit `type` (`"stdio"`, `"http"`, `"sse"`) wins —
+  that is Claude Code's key, and Cline's. LM Studio's and Claude Desktop's entries carry no
+  transport key at all, which is why inference is needed rather than a required field. The
+  value spellings vary between clients (check Cline's for streamable HTTP when implementing);
+  accept the known ones and reject anything else with an error naming the server.
+- **`disabled`** (default `False` if absent) lets the user flip a flaky server off without
+  removing its entry — the equivalent of commenting out a line of config, but expressed in
+  config data. It is Cline's key, and using it rather than an `enabled` of our own keeps the
+  dialect count down.
+- **`allowed_tools`** is ours. It restricts which of the server's tools are exposed at all,
+  which is a different thing from Cline's `autoApprove` (tools that skip confirmation), so it
+  is not a synonym for it.
+
+**Reading an `mcp.json` directly.** Besides the dict, a config key — `mcp_config_path`, say —
+names an `mcp.json` file, and Raven reads its top-level `mcpServers`. That lets Raven and
+LM Studio (`~/.lmstudio/mcp.json`) share one file instead of keeping two copies in sync. When
+both are given, merge them, with the Python-side dict winning on a name clash. Cost: a
+`json.load` and a dict merge on top of the parsing the dict needs anyway.
+
+Open: whether LM Studio tolerates keys it does not know (`disabled`, `allowed_tools`) in a
+shared file. Unchecked as of 2026-10-09; one try with a dummy entry settles it.
 
 **How `headers` reaches the SDK** (checked against `mcp` 2.3.0, 2026-10-07). The two HTTP
 transports take it differently:
@@ -327,15 +344,30 @@ covers the spec's OAuth flow if a server ever requires it.
 
 Secrets in `config.py` is consistent with `llm_api_key` (Raven's existing pattern; fine for
 localhost). When sharing configs or onboarding more users eventually wants secrets out of source,
-the natural move is the same shape in an external JSON file (`~/.config/raven/mcp.json` or
-similar) — defer until needed. Note that `~/.config/raven/overrides.json` already exists as the
+the `mcp_config_path` file above is already that external JSON. Note that `~/.config/raven/overrides.json` already exists as the
 machine-local layer over every config module, so a key set there stays out of the tracked
 `config.py` with no new mechanism.
 
 **Static at startup, not live-reloadable in v0.** Tearing down and restarting an MCP transport
 (subprocess or HTTP session) is invasive enough that hot-reload isn't worth it before there's a
-reason. The `enabled` flag covers the day-to-day "skip this flaky server" case without a full
+reason. The `disabled` flag covers the day-to-day "skip this flaky server" case without a full
 config reload.
+
+### Spawn stdio servers in a session of their own
+
+When Librarian runs from a terminal, a stdio server it spawns can stop the whole app, as if Ctrl+Z
+had been pressed. Seen in LM Studio, 2026-10-07: launched from a terminal, with the
+mark3labs filesystem server or Playwright MCP enabled, LM Studio stopped at the start of every
+AI turn and needed `fg`, several times over. The other two servers in the same config never did
+it, and the cause inside those two was not found. Running LM Studio under `script -qc`, which
+gives it a pseudo-terminal of its own, cured it.
+
+Raven can avoid it from the spawning side: start each stdio server in a new session
+(`start_new_session=True`, i.e. `setsid`), so it has no controlling terminal to stop anyone
+through. Check whether the `mcp` SDK's `stdio_client` already does this on POSIX. If it does not
+and offers no hook for it, wrapping the command in `setsid` is the fallback. If the symptom
+appears in testing anyway — the app's shell reports `Stopped` on the first turn after an MCP
+server comes up — this is what it is.
 
 ---
 
@@ -365,8 +397,8 @@ and they are not — which is the same reason the Internet toggle exists at all 
 all-or-nothing `tools_enabled` bool.
 
 Open: whether one toggle covers all configured servers or each server gets its own. Per-server matches the
-config shape (`"enabled": True` per entry, §3) and matches the trust argument, since two servers need not be
-equally trusted; one toggle is less GUI. The `enabled` flag in config is the *static* answer to this — the
+config shape (`"disabled"` per entry, §3) and matches the trust argument, since two servers need not be
+equally trusted; one toggle is less GUI. The `disabled` flag in config is the *static* answer to this — the
 toggle is the per-session one, and they should agree on what a disabled server does to the tool list.
 
 ---
