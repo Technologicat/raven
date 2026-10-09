@@ -51,6 +51,10 @@
 
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
 
+#### Constellation-wide
+
+- **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
+
 ### Fixed
 
 #### Raven-librarian
