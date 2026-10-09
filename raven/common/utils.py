@@ -345,9 +345,7 @@ def gc_suspended() -> Iterator[None]:
     everything the process holds, so pausing it can save a large share of the block's time.
 
     The collector is process-wide, so this pauses it for every thread, not just the caller. Reference
-    counting still frees what goes out of scope; only cycles wait. Blocks may nest and may overlap across
-    threads: the collector stays paused until the last of them exits, and is then put back as it was before
-    the first.
+    counting still frees what goes out of scope; only cycles wait. Nestable, and thread-safe.
     """
     global _gc_suspension_depth, _gc_was_enabled
     with _gc_suspension_lock:
