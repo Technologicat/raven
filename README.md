@@ -828,6 +828,8 @@ AI models auto-install themselves elsewhere:
 
 - The dehyphenator AI model (of *Raven-server*'s `sanitize` module) is auto-installed in `~/.flair/embeddings/`.
 
+- The [spaCy](https://spacy.io/) language model (`en_core_web_sm` by default) is auto-installed as a Python package into Raven's own venv, so deleting the venv removes it too.
+
 - All other AI models are auto-installed from *HuggingFace Hub*.
   - These live at the default models cache location of the [`huggingface_hub` Python package](https://pypi.org/project/huggingface-hub/), which is usually `~/.cache/huggingface/hub`.
   - Note that this models cache is shared between many different Python-based AI apps, so removing everything is not recommended.
