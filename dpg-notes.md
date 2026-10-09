@@ -256,6 +256,13 @@ the widget can read.
 Worth stating because reaching for it is a natural move: "let a background thread know the render loop is
 stopping" is exactly what an exit callback is for, and it is exactly what a library must not use it for.
 
+**It runs during `destroy_context`, not when the loop stops.** Measured 2026-10-09 on DPG 2.3.1: a window
+close, `stop_dearpygui` from the loop and a SIGTERM handled by `stop_dearpygui` all ran it, and in each case
+on the callback thread at the moment the main thread called `destroy_context` — however long after the loop
+had ended. So it cannot tell those causes apart, and in an app whose loop `finally` drives the teardown, it
+fires after that teardown, against a context being destroyed. Probe and table in
+`investigations/dpg-exit-callback/`. Measured in a minimal app with nothing else on the callback thread.
+
 ## The two internal queues
 
 - **`calls`** (thread-safe queue): Python user callbacks. Consumed by the
