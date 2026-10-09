@@ -43,7 +43,7 @@ llm_autosave_interval = 60.0
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
 llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
-llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
+llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used if it exists, ignored if not.
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
 # Separate from `raven.client.config.network_timeout` because the LLM backend is a distinct service
