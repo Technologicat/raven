@@ -825,7 +825,7 @@ What the maintainer wants to find out, for testing and evaluation. None of it is
   above.
 - **Forming memories.** Hindsight forms them from a session transcript by running it through the LLM.
   - **In a multiverse, what is the proper unit?** A chat is a tree: branches share a prefix, and a
-    rerolled reply is a road not taken.
+    rerolled reply is a sibling branch, every one of which was taken.
   - **When is the right moment to pay for that processing?** It is expensive, so the timing is a design
     question in itself.
 - **Useful values for the disposition settings.** Wants a scripted probe on `raven.librarian.agent` once
