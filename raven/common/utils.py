@@ -4,7 +4,7 @@ __all__ = ["absolutize_filename", "canonical_path",
            "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory", "atomic_write",
            "user_directory",
            "open_file", "open_in_file_manager",
-           "make_blank_index_array", "bail",
+           "make_blank_index_array", "bail", "gc_suspended",
            "notify",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 import atexit
 import contextlib
 import functools
+import gc
 import io
 import os
 import pathlib
@@ -26,6 +27,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import IO, Any, Callable, Dict, Iterator, List, NoReturn, Optional, Union
 import unicodedata
@@ -326,6 +328,40 @@ def bail(exitcode: int = 0) -> NoReturn:
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(exitcode)
+
+# How many `gc_suspended` blocks are open, across all threads, and whether the collector was on before the
+# first of them. The collector is process-wide, so the state saved and restored has to be too: a per-call
+# copy lets whichever block exits first turn it back on while another is still inside.
+_gc_suspension_lock = threading.Lock()
+_gc_suspension_depth = 0
+_gc_was_enabled = False
+
+@contextlib.contextmanager
+def gc_suspended() -> Iterator[None]:
+    """Pause Python's cycle collector for the duration of the `with` block, then restore it as it was.
+
+    For a block that builds a great many objects none of which can form a reference cycle — parsing a large
+    JSON file, say. The allocations alone keep triggering the collector, including full passes over
+    everything the process holds, so pausing it can save a large share of the block's time.
+
+    The collector is process-wide, so this pauses it for every thread, not just the caller. Reference
+    counting still frees what goes out of scope; only cycles wait. Blocks may nest and may overlap across
+    threads: the collector stays paused until the last of them exits, and is then put back as it was before
+    the first.
+    """
+    global _gc_suspension_depth, _gc_was_enabled
+    with _gc_suspension_lock:
+        if _gc_suspension_depth == 0:
+            _gc_was_enabled = gc.isenabled()
+            gc.disable()
+        _gc_suspension_depth += 1
+    try:
+        yield
+    finally:
+        with _gc_suspension_lock:
+            _gc_suspension_depth -= 1
+            if _gc_suspension_depth == 0 and _gc_was_enabled:
+                gc.enable()
 
 # --------------------------------------------------------------------------------
 # Observer callbacks

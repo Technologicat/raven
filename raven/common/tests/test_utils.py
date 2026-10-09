@@ -1,11 +1,13 @@
 """Unit tests for raven.common.utils."""
 
+import gc
 import logging
 import os
 import pathlib
 import re
 import subprocess
 import sys
+import threading
 import time
 import types
 
@@ -993,3 +995,56 @@ class TestNotify:
         assert utils.notify("on_thing", boom, _default="fallback") == "fallback"  # ...swallowed without it
         with pytest.raises(KeyError):
             utils.notify("on_thing", boom, _default="fallback", _reraise=(KeyError,))
+
+
+class TestGcSuspended:
+    @pytest.fixture(autouse=True)
+    def _restore_gc(self):
+        was_enabled = gc.isenabled()
+        yield
+        (gc.enable if was_enabled else gc.disable)()
+
+    def test_the_collector_is_paused_inside_and_running_again_after(self):
+        gc.enable()
+        with utils.gc_suspended():
+            assert not gc.isenabled()
+        assert gc.isenabled()
+
+    def test_the_collector_comes_back_when_the_block_raises(self):
+        gc.enable()
+        with pytest.raises(ValueError):
+            with utils.gc_suspended():
+                raise ValueError("inside")
+        assert gc.isenabled()
+
+    def test_an_inner_block_leaves_the_collector_paused_for_the_outer_one(self):
+        gc.enable()
+        with utils.gc_suspended():
+            with utils.gc_suspended():
+                pass
+            assert not gc.isenabled(), "the inner block re-enabled the collector inside the outer one"
+        assert gc.isenabled()
+
+    def test_a_collector_that_was_already_off_stays_off(self):
+        gc.disable()
+        with utils.gc_suspended():
+            pass
+        assert not gc.isenabled()
+
+    def test_overlapping_blocks_on_two_threads_keep_it_paused_until_both_are_out(self):
+        gc.enable()
+        first_inside, second_inside, first_out = threading.Event(), threading.Event(), threading.Event()
+        def first():
+            with utils.gc_suspended():
+                first_inside.set()
+                second_inside.wait(5.0)
+            first_out.set()
+        thread = threading.Thread(target=first)
+        thread.start()
+        assert first_inside.wait(5.0)
+        with utils.gc_suspended():
+            second_inside.set()
+            assert first_out.wait(5.0)
+            assert not gc.isenabled(), "the block that exited first turned the collector back on under the other"
+        thread.join(5.0)
+        assert gc.isenabled()

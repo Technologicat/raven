@@ -1020,7 +1020,10 @@ class HybridIR:
     def _load_datastore(self) -> Tuple[Optional[str], Optional[int], Optional[Dict]]:
         """Return `(embedding_model_name, tokenizer_version, documents)`, or three `None`s if there is no datastore."""
         logger.info("HybridIR._load_datastore: entered.")
-        with self.datastore_lock:
+        # Parsing the JSON and listing the embeddings make millions of small objects, none of which can form a
+        # reference cycle. On a large store the collector was a sizeable share of the load
+        # (`investigations/librarian-startup/`).
+        with self.datastore_lock, common_utils.gc_suspended():
             try:
                 with open(self.fulldocs_documents_file, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
