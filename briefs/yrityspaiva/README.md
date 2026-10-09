@@ -516,6 +516,8 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          4.2 s. The deferred re-test of `reasoning_effort` is closed on that.
        - Several models' stored LM Studio defaults had `parallel: 4`, a configuration mistake (maintainer):
          the probes pin it to 1; the defaults are the maintainer's to fix.
+         - **Fixed by the maintainer on both machines** (reported 2026-10-09). LM Studio's own default for a new
+           model is still 4; `llmclient._warn_if_lmstudio_parallel` logs a warning for any model loaded that way.
      - **The tool-call budget re-run, done**: at cap 20, 24 of 24 follow-ups answered across qwen3.6-35b-a3b and
        qwen3.8-27b (`investigations/tool_budget/`). The probe had rotted in three places and was repaired first.
        Its per-sample data carries copyrighted abstracts: today's is gitignored and July's untracked, the history
@@ -536,7 +538,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          the comments in `scaffold.py` and `chatutil.py` that put the 5–37× of Q4's *old* wording on "a
          reminder sent with nothing to ground in"; Q4 measured today's wording clean in that condition.
          Afterwards, reload qwen3.8-27b at 128k (`parallel` 1) on the personal machine: the probe unloads
-         every model it measured.
+         every model it measured. **Done** (maintainer, reported 2026-10-09).
        - **Then, in order:** Cherrypick's crown-in-compare; the avatar instance leaked by `sys.exit` on DPG's
          callback thread in `_load_initial_animator_settings` (confirm how that thread handles `SystemExit`
          first); the chat chip's hover cue if time allows. All three want a live check. The backdrop and the
@@ -660,6 +662,8 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          filtering the `.bib`.
        - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
          that points at it.
+         - **Done 2026-10-09**: it is `todo.org`, untracked, on the personal machine, with two untracked notes
+           from the 4.0 modernization beside it. The mcpyrate item now says so.
        - **Searching for a document by its ID or filename** (decided 2026-10-07): `HybridIR.query` puts a named
          document first, then filenames indexed as searchable text. `TODO_DEFERRED.md`, "A search for a
          document's ID or filename finds nothing".
