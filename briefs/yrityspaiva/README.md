@@ -665,6 +665,9 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          document's ID or filename finds nothing".
        - **Librarian takes ages to boot up** (maintainer, 2026-10-08): investigate where the startup time
          goes. Not the datastore load, it seems: a blank `chat.json` boots just as slowly.
+         - **Done 2026-10-09** (`investigations/librarian-startup/`): a GGUF tokenizer build on a background
+           thread, competing with the RAG index load. The tokenizer is now cached and the collector paused
+           during the load; the render loop starts about 10 s sooner.
      - **The MCP client starts around 2026-10-19**, the maintainer being away the week before. A lab meeting
        today specced the server side of a v1 MVP; what Librarian needs for it is the MCP client, brief 04,
        whose auth section (a per-service API key) was settled this morning.

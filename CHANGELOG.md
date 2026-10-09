@@ -41,6 +41,12 @@
 
 ### Changed
 
+#### Raven-librarian
+
+- **Starts several seconds sooner when it counts tokens with a tokenizer read from a `.gguf`** (`llm_tokenizer_path`, in `raven.librarian.config`).
+  - The tokenizer is built once and kept in `~/.config/raven/librarian/tokenizer_cache/` (`llm_tokenizer_cache_dir`); later starts load it from there. Safe to delete; it is rebuilt when the `.gguf` changes.
+  - A large document collection also loads faster.
+
 #### Raven-deduplicate
 
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
