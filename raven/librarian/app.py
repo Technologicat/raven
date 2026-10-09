@@ -3615,22 +3615,16 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
 # safe move is to not make the call). Its steps check this flag and bail.
 _shutting_down = False
 
-# Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`):
-#   1. `_gui_cancel_tasks` — the DPG exit callback. Runs inside `render_dearpygui_frame`, so it may only
-#      *signal* cancellation, never wait (see its docstring).
-#   2. `gui_shutdown` — called from the render loop's `finally`, on the main thread, once the loop has exited.
-#      Does the blocking drains and resource teardown, then the caller destroys the context.
+# Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`), both phases called from
+# the render loop's `finally`, on the main thread, once the loop has exited:
+#   1. `_gui_cancel_tasks` — *signals* cancellation, never waits (see its docstring).
+#   2. `gui_shutdown` — the blocking drains and resource teardown, then the caller destroys the context.
 def _gui_cancel_tasks() -> None:
-    """DPG exit callback: signal background work to stop, WITHOUT waiting.
+    """App exit, first phase: signal background work to stop, WITHOUT waiting. Idempotent.
 
-    DPG dispatches the exit callback from inside `render_dearpygui_frame`, so this must NOT wait. A background
-    task parked in `dpg.split_frame` — the avatar renderer's OpenGL task and the chat-streaming updater both
-    do this — can only be released by the render loop completing one more frame, and the render loop is right
-    now sitting in this callback. So we only *cancel* here. The frame that fired this callback then completes,
-    releasing the `split_frame` waiters; the tasks observe their cancelled flags and exit. The blocking drain
-    happens in `gui_shutdown`. Without this split, `destroy_context()` in the `finally` could run while the
-    renderer thread is still touching OpenGL — destroying the context under it segfaults the process (notably
-    when closing the window mid-boot, where the renderer was just started and is busy).
+    Called from the render loop's `finally`, before `gui_shutdown`, which does the waiting. Also registered as
+    the DPG exit callback, which DPG runs at the start of `destroy_context` — by then everything here has
+    already been signalled, so that call is a repeat.
     """
     global _shutting_down
     _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
@@ -3650,9 +3644,9 @@ def gui_shutdown() -> None:
     """App exit, second phase: wait for background work to finish and release GUI/server resources.
 
     Call from the render loop's `finally`, on the main thread, AFTER the loop has exited and AFTER
-    `_gui_cancel_tasks` (the exit callback) has already signalled cancellation during the final frame — so the
-    `wait=True` drains below complete instead of deadlocking on `split_frame` waiters. Must run before
-    `dpg.destroy_context()`, so no background thread is still touching DPG/OpenGL when the context goes away.
+    `_gui_cancel_tasks` has signalled cancellation, so that every task is already winding down when the
+    `wait=True` drains below begin. Must run before `dpg.destroy_context()`, so no background thread is still
+    touching DPG/OpenGL when the context goes away.
     """
     global _shutting_down
     _shutting_down = True  # defensive; normally already set by `_gui_cancel_tasks`
@@ -3989,14 +3983,14 @@ except Exception:
 finally:
     logger.info("App render loop exited.")
 
-    # Drive BOTH shutdown phases here, on the main thread — we must NOT rely on DPG having run the exit
-    # callback. On a fast (e.g. mid-boot) close, DPG's callback-thread slot can be occupied by a startup
-    # frame callback parked in `split_frame`, so the exit callback never fires.
+    # Drive BOTH shutdown phases here, on the main thread. DPG runs the exit callback only at the start of
+    # `destroy_context` (measured: `investigations/dpg-exit-callback/`), after everything below — so it cannot
+    # be what signals cancellation first.
     #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Sets `_shutting_down` (so a late startup
     #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
     #      so they stop before parking in `split_frame` (which would hang now that the loop is stopped). The
     #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
-    #      Idempotent with the exit-callback invocation, if DPG did run it.
+    #      Idempotent, so the exit callback's later call of it is a harmless repeat.
     #   2. `gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
     #      everything, so nothing remains parked in `split_frame`.
     # Then destroy the context, with no background thread still touching DPG/OpenGL.

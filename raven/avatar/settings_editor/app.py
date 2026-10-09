@@ -2004,7 +2004,7 @@ finally:
     logger.info("App render loop exited.")
 
     # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls
-    # DPG, and joining it is waiting, which is why this is here and not in the exit callback.
+    # DPG. This `finally` runs before the exit callback, which DPG runs at the start of `destroy_context`.
     for filedialog in (filedialog_open_input_image, filedialog_open_backdrop_image, filedialog_open_json,
                        filedialog_open_animator_settings, filedialog_save_animator_settings):
         if filedialog is not None:

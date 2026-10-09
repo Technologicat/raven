@@ -1733,13 +1733,8 @@ class DPGChatController:
     def cancel_tasks(self) -> None:
         """Signal all background tasks to stop, WITHOUT waiting. Idempotent.
 
-        The non-blocking first phase of shutdown, meant to run from the app's DPG exit callback — i.e.
-        from inside a render frame. A task parked in `dpg.split_frame` (e.g. the chat-streaming updater)
-        can only be released by the render loop completing one more frame; waiting for it *here* would
-        deadlock, because the render loop is currently sitting in the exit callback. So we only signal
-        cancellation now (so the final frame releases the `split_frame` waiters, which then observe the
-        flag and exit), and leave the blocking drain to `shutdown()`, called from the render loop's
-        `finally` once the loop has exited.
+        The non-blocking first phase of shutdown, called from the app's first shutdown phase. The blocking
+        drain is `shutdown()`, called after it once the render loop has exited.
         """
         self.disable_gui_updates()
         self.task_manager.clear(wait=False)

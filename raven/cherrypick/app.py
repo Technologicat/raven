@@ -1322,13 +1322,9 @@ def _change_tile_size(new_size: int) -> None:
 def _gui_cancel_tasks() -> None:
     """Exit callback: cancel background tasks without waiting.
 
-    Called from inside ``render_dearpygui_frame``.  Must NOT wait — that
-    would deadlock (the frame can't complete while we're waiting, and
-    ``split_frame`` waiters need the frame to complete).
-
-    The frame that triggers this callback unblocks ``split_frame`` waiters.
-    Background threads then see ``cancelled`` and exit.  The actual wait
-    and cleanup happen after the render loop exits (see end of ``main``).
+    DPG runs it at the start of ``destroy_context``, after the render loop's
+    ``finally`` has run ``_gui_shutdown``. The actual wait and cleanup are
+    ``_gui_shutdown``'s (see end of ``main``).
     """
     # Exit compare mode: skip DPG redraws (item tree may be torn down).
     compare = _app_state["compare"]
@@ -1361,8 +1357,8 @@ def _gui_shutdown() -> None:
     # Last, because it was built first — and load-bearing rather than tidy. The dialog runs a tick thread
     # while it is open, and `destroy` is what joins it; without this it is still calling DPG when
     # `destroy_context` frees the library underneath it, which is a segfault rather than an exception.
-    # Reached here rather than from the exit callback because joining is waiting, and the exit callback
-    # runs inside `render_dearpygui_frame` where waiting deadlocks anything parked in `split_frame`.
+    # Here, from the render loop's `finally`, which runs before `destroy_context` — and so before the exit
+    # callback, which DPG runs at the start of it.
     if _filedialog_open is not None:
         _filedialog_open.destroy()
 

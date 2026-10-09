@@ -3274,16 +3274,14 @@ class FileDialog:
         # on this thread. It is intermittent — the window is one tick, ~16 ms — so a clean shutdown proves
         # nothing.)
         #
-        # **Not from the exit callback**, because this *waits*: stopping the ticker joins it. DPG dispatches
-        # the exit callback from inside `render_dearpygui_frame`, where waiting deadlocks anything parked in
-        # `split_frame` — the frame cannot complete while the callback blocks, and `split_frame` needs the
-        # frame to complete. The exit callback is the place to *signal*; this is the place to *drain*.
+        # **Not from the exit callback.** DPG runs it at the start of `destroy_context`, after everything in
+        # the host app's render loop `finally` (measured on DPG 2.3.1), so the join would come after the
+        # host's own teardown rather than at a point the host chose. The host calls this from that `finally`.
         #
         # There is deliberately no self-registered `set_exit_callback` here to make this automatic, and it
-        # fails twice over. The exit callback is a place that cannot wait, so registering one would put
-        # this join in exactly the spot the paragraph above rules out — true however many callbacks DPG
-        # allowed. And it allows one: the slot is process-wide, so a widget taking it would silently
-        # replace the host app's and break the app's shutdown to fix its own.
+        # fails twice over. Registering one would put this join after the host's teardown, as above — true
+        # however many callbacks DPG allowed. And it allows one: the slot is process-wide, so a widget taking
+        # it would silently replace the host app's and break the app's shutdown to fix its own.
         for mark in self._home_marks.values():
             mark.detach()
         self._stop_cursor_pulse()

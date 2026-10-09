@@ -983,7 +983,8 @@ def main() -> int:
         logger.info("App render loop exited.")
 
         # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that
-        # calls DPG, and joining it is waiting, which is why this is here and not in the exit callback.
+        # calls DPG. This `finally` runs before the exit callback, which DPG runs at the start of
+        # `destroy_context`.
         if _filedialog_open is not None:
             _filedialog_open.destroy()
 

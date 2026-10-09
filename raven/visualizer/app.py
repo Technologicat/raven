@@ -1554,9 +1554,8 @@ finally:
 
     # Join each file dialog's tick thread before the context goes. A dialog that has been opened runs one,
     # and it calls DPG — after `destroy_context` that is a call into freed memory, so the failure is a
-    # segfault rather than an exception. Here rather than in the exit callback, because joining is waiting
-    # and the exit callback runs inside `render_dearpygui_frame`, where waiting deadlocks anything parked
-    # in `split_frame`.
+    # segfault rather than an exception. Here, in the render loop's `finally`, which runs before
+    # `destroy_context` — and so before the exit callback, which DPG runs at the start of it.
     for filedialog in (filedialog_open, app_state.filedialog_save):
         if filedialog is not None:
             filedialog.destroy()
