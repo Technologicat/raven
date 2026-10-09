@@ -3979,10 +3979,7 @@ try:
         # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
         if not _is_busy():
             guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
-    # DPG says nothing about why it stopped, and of the three ways out, only this one would otherwise leave
-    # no line of its own: an exception is logged below, and a quit signal by `quitsignal`.
-    logger.info("App render loop: DPG stopped running — the window was closed, or the app asked to stop "
-                "(a quit signal or a failed startup is logged above if so).")
+    guiutils.log_render_loop_stopped(logger)
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler

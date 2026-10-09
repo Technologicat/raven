@@ -973,6 +973,7 @@ def main() -> int:
             # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating.
             if not _is_busy():
                 guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
+        guiutils.log_render_loop_stopped(logger)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

@@ -2008,6 +2008,7 @@ def main() -> int:
             # Cuts GPU/CPU usage when the user is just looking at an image.
             if not _is_busy():
                 guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
+        guiutils.log_render_loop_stopped(logger)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

@@ -486,6 +486,7 @@ def main() -> int:
 
             if color_state != "expired":  # `paused` is False on this path, so the glow is the only question
                 guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
+        guiutils.log_render_loop_stopped(logger)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

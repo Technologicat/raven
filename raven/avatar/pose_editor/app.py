@@ -1599,6 +1599,7 @@ try:
         # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating.
         if not _is_busy():
             guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
+    guiutils.log_render_loop_stopped(logger)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1

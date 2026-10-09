@@ -28,6 +28,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "get_mouse_relative_pos", "is_mouse_on_widget",
 
            "sleep_until_next_frame",  # pacing the render loop
+           "log_render_loop_stopped",
 
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
@@ -872,6 +873,18 @@ def sleep_until_next_frame(t0: float, framerate: float) -> float:
     remaining = max(0.0, budget - (time.perf_counter() - t0))
     time.sleep(remaining)
     return remaining
+
+def log_render_loop_stopped(app_logger: logging.Logger) -> None:
+    """Log that the render loop ended because DPG stopped running, on `app_logger` (the app's own).
+
+    Call it right after the render loop, inside the `try` whose `except` logs an exception escaping the loop,
+    so that every way out leaves a line: an exception is logged there, a quit signal by
+    `raven.common.quitsignal`, and this covers the rest — a window close, or the app's own `stop_dearpygui`.
+    """
+    # DPG reports no reason for stopping, and its exit callback cannot supply one: it runs during
+    # `destroy_context`, the same way for every cause (`investigations/dpg-exit-callback/`).
+    app_logger.info("App render loop: DPG stopped running — the window was closed, or the app asked to stop "
+                    "(a quit signal, or an error that stopped it, is logged above if so).")
 
 # ---------------------------------------------------------------------------
 # Waiting for frames, without deadlocking
