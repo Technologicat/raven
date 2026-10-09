@@ -660,6 +660,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          have other work queued (maintainer). Then **a tool to drop the records that check rejected** —
          probably one more tool, reading the marked sheet (which `tabular.read_table` already reads) and
          filtering the `.bib`.
+         - **Not in yet on 2026-10-09; moved to the week beginning 2026-10-19** (maintainer).
        - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
          that points at it.
          - **Done 2026-10-09**: it is `todo.org`, untracked, on the personal machine. Reviewed together with
