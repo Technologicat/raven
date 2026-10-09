@@ -663,7 +663,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
          - **Not in yet on 2026-10-09; moved to the week beginning 2026-10-19** (maintainer).
          - **The tool's scope is wider than the team's sheet** (maintainer, 2026-10-09): it drops the records
            that check rejected, and any other held records we may have reason to drop. To spec before building:
-           whether it takes the marked spreadsheet, a list of IDs, or a mix of the two.
+           whether it takes the marked spreadsheet, a list of IDs, or a mix of the two. A promising starting
+           point (maintainer): make it one more criterion for `raven-siftbib`, which already removes records on
+           named criteria with an audit TSV, rather than a new tool. How well its structure takes that is not
+           yet checked.
        - **mcpyrate's `todo.md`**: look on the personal machine; if it is not there either, delete the item
          that points at it.
          - **Done 2026-10-09**: it is `todo.org`, untracked, on the personal machine. Reviewed together with
