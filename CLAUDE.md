@@ -905,10 +905,9 @@ either way, treat the in-tree copy as the source of truth. Don't reach for "it's
 - `tha3/` - Talking Head Anime 3 neural network (avatar animation). Switched `no_grad` → `inference_mode` in the
   hot paths for a few-percent speedup.
 - `DearPyGui_Markdown/` - MD renderer, substantially robustified for Raven's background-threaded rendering
-  (most call sites guarded with `guiutils.nonexistent_ok` / `does_item_exist` against DPG's lazy GC). Known
-  remaining issue: the persistent render worker thread (`CallInNextFrame._worker`) doesn't participate in app
-  shutdown — it keeps calling DPG (incl. `split_frame`) during teardown, which can segfault on a mid-boot close
-  while a URL-heavy message is mid-render. Tracked in `TODO_DEFERRED.md` (fleet shutdown item).
+  (most call sites guarded with `guiutils.nonexistent_ok` / `does_item_exist` against DPG's lazy GC). Its two
+  persistent worker threads call DPG, so they are stopped and joined at app exit by `dpg_markdown.shutdown()`,
+  which `guiutils.teardown()` calls as the last step of `guiutils.shutdown`.
 - `file_dialog/` - File dialog, extended (sortable, animated OK button, click twice when overwriting).
 - `anime4k/` - PyTorch port of Anime4K upscaler (extracts kernels from GLSL), slightly cleaned up.
 - `kokoro_fastapi/` - Streaming audio writer for TTS over network.

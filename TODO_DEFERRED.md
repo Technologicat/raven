@@ -27,6 +27,37 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Shutdown: what the shared two-phase helper does not yet reach
+
+*Cluster: abnormal-exit · Cost: S per bullet · Gate: none · Filed: 2026-06-04 · See also: `guiutils.shutdown`, `investigations/dpg-exit-callback/`*
+
+**`abnormal-exit` still wants writing up as a brief** (agreed 2026-09-03): nothing between "the app decided to
+exit" and "the process is gone" was anybody's responsibility, so each way of dying was found and filed
+separately.
+
+Since 2026-10-09 every GUI app shuts down through `guiutils.shutdown(cancel_tasks=..., release=...)`, called
+from the render loop's `finally`: it sets `guiutils.is_shutting_down()`, runs the app's cancel phase (signal,
+never wait) and release phase (wait, destroy file dialogs, clear the animator), then `guiutils.teardown()`.
+No app uses a DPG exit callback: DPG runs one only at the start of `destroy_context`, after all of that. The
+file dialog's ticker and `filedrop`'s worker check the flag instead of `dpg.is_dearpygui_running()`, which
+segfaults once the context is gone (a Cherrypick core dump on 2026-08-21 put the crash there).
+
+What is still open:
+
+- **`filedrop`'s worker is never joined.** It checks the flag before running a handler, but a handler
+  already running when shutdown begins runs on, and handlers call DPG. The worker is a daemon parked in
+  `queue.get`, so joining it needs a wake-up — a sentinel on the queue — from the release phase.
+- **`DPGLinearizedChatView.build` checks `gui_updates_safe` on entry and at the scroll tail**, so a build
+  already running when shutdown begins carries on adding widgets. A per-message check in the loop closes it.
+- **No audit of each app's DPG-touching threads against its cancel phase.** The conversion moved the shapes,
+  not the contents: each app cancels what it cancelled before. The pose editor's one `split_frame` site was
+  never audited.
+
+Rules for any thread that calls DPG, learned in Librarian's 2026-06-04 conversion: check the flag (or
+`gui_updates_safe`) at the GUI-mutating operation itself, not only when the task starts, since a debounced
+task can be submitted after the cancel phase ran; and skip `split_frame` once cancelled, which is unsafe
+after the loop has stopped (`DPGAvatarRenderer._split_frame_unless_stopping`).
+
 ## A search for a document's ID or filename finds nothing
 
 *Cluster: librarian-rag · Cost: M, then M–L · Gate: none; scheduled for Friday 2026-10-09 · Filed: 2026-10-07*
@@ -1477,50 +1508,6 @@ reading for this one and fixed on the spot (see `join_pulse`). That fix is unrel
 **A recurrence will now be loud rather than long**: the CI test job has a 20-minute timeout as of the same
 day, so the next one fails with a log instead of running to GitHub's six-hour default.
 
-## `is_dearpygui_running()` is not a safe guard against `destroy_context`, and two loops use it as one
-
-*Cluster: abnormal-exit · Cost: S for the narrowing, M for a correct fix · Gate: a correct fix needs the two-phase shutdown helper below · Filed: 2026-08-21 · See also: the fleet shutdown item*
-
-Closing `raven-cherrypick` with Alt+F4 segfaulted (Juha, 2026-08-21). `coredumpctl` on the core puts the
-crash in `dpg.is_dearpygui_running()` — **on a background thread**, after `destroy_context()` had freed the
-library:
-
-```
-Thread 1 (LWP 89532):
-#0  is_dearpygui_running(_object*, _object*, _object*) from dearpygui/_dearpygui.so
-#1..#6  Python frames
-#7  start_thread
-```
-
-**The call that crashed is the guard against the crash.** `fdialog.py`'s grid tick loop polls
-`dpg.is_dearpygui_running()` to notice the app closing while the picker is open, under a comment that says
-in as many words that a guard against a freed context "would have to be a DPG call itself" — and then uses
-one. `raven/common/gui/filedrop.py` does the same, though its worker is normally parked on a queue rather
-than in the call. There is no safe DPG-side answer: **any** call into the library after teardown is into
-freed memory, so the flag has to be Python-side and set before the context goes.
-
-Intermittent for a reason that is now measurable: the tick interval is 1/60 s, so the window in which the
-poll can land between the render loop stopping and `destroy_context` is about 16 ms. That also explains why
-neither Juha nor a driven repro could trigger it again on demand.
-
-**The right shape already exists twice, and neither copy is reachable from here** (Juha, 2026-08-21).
-`raven/librarian/app.py` keeps a module-level `_shutting_down`, set as the very first action of its cancel
-phase and checked before anything touches DPG; `raven/client/avatar_controller.py` keeps
-`gui_updates_safe` per instance, for the same job. Both are Python-side flags, which is exactly right and
-is what `is_dearpygui_running` should have been. But one is a global in an app module and the other is
-instance state, so a **shared widget** — `FileDialog`, used by six apps — can read neither. That missing
-piece is the actual gap: a process-wide "the context is going away" flag in `raven.common.gui`, set by each
-app's cancel phase, that shared widgets can consult.
-
-**Two levels of fix.** The narrowing is cheap and local — set the ticker's stop `Event` from
-`dpg.set_exit_callback` (cancel only, no waiting, per the rules in the shutdown item) and delete the
-`is_dearpygui_running` poll, so nothing calls DPG after the flag is set. That leaves a smaller race: the
-thread can already be inside `_grid.tick()`. The correct fix is the two-phase teardown below, where the app
-*joins* every DPG-touching thread before `destroy_context` — which is what `FileDialog.destroy` already
-does, and which Cherrypick's exit path does not call.
-
-Discovered while chasing the FileDialog help card's cosmetic pass (2026-08-21).
-
 ## The main keyboard offers no zoom, on any layout
 
 *Cluster: keyboard-accessibility · Cost: S, once the keys are chosen · Gate: needs a decision on which keys carry zoom · Filed: 2026-08-21 · See also: `dpg-notes.md` → "A punctuation `mvKey_*` is a US-layout assumption"*
@@ -2396,10 +2383,9 @@ Two things to settle when building it:
   by, or satisfied by, work that has nothing to do with the waiter. So the signal wants to be per call,
   grouped: the caller passes an ID, and the event fires when no writes remain pending under it. A chat
   message is then one group, and `scroll_view` waits for that group rather than for the app to fall quiet.
-- **It must not resurrect the shutdown hazard.** That worker already outlives app teardown and keeps calling
-  DPG across `destroy_context` (see "Fleet-wide: shared two-phase DPG shutdown helper + audit"). A completion
-  signal is a second thing a caller can block on, so it needs the same stop-flag discipline, or a wait at
-  shutdown never returns.
+- **It must not resurrect the shutdown hazard.** That worker calls DPG, so `dpg_markdown.shutdown()` stops it
+  with a flag and joins it before `destroy_context`. A completion signal is a second thing a caller can block
+  on, so it needs the same stop-flag discipline, or a wait at shutdown never returns.
 
 Raised while fixing the short scroll (2026-08-12, Juha — "that's the solution; it's adopted code, we could
 add a finish event").
@@ -4395,102 +4381,6 @@ sliding-window) gated on the fill fraction. The §7 token-counting tiers (local 
 usage-calibration / idle-prefill) are the measurement substrate this would build on.
 
 Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
-
-## Fleet-wide: shared two-phase DPG shutdown helper + audit
-
-*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.11, moved off 0.2.10 as too wide a change for the week of a demo (2026-10-01) · Filed: 2026-06-04*
-
-**`abnormal-exit` wants writing up as a brief, in the post-sprint cleanup** (agreed 2026-09-03). It has
-five members now — this helper, the `is_dearpygui_running` segfault, the leaked avatar instance and its
-missing signal handlers, the absent autosave, and the datastore-scaling item the autosave cadence is
-coupled to — and they share one root rather than a theme: nothing between "the app decided to exit" and
-"the process is gone" is anybody's responsibility, so each way of dying was found and filed separately.
-A flat list cannot say that, or say which of them has to land first.
-
-The DPG apps each hand-roll their render-loop teardown, and the pattern is fragile — `raven-librarian`
-and `raven-avatar-settings-editor` both got it *wrong* independently, which is the signal it should be a
-shared utility, not copy-pasted boilerplate. The correct shape (already in `raven.cherrypick.app`):
-
-1. **Exit callback = cancel only, NO waiting.** DPG dispatches it from inside `render_dearpygui_frame`; a
-   `wait=True` there deadlocks any task parked in `dpg.split_frame` (the frame can't complete while we wait,
-   and `split_frame` needs the frame to complete). Signal cancellation only.
-2. **Blocking drain + teardown in the render-loop `finally`,** on the main thread, BEFORE `destroy_context()`.
-   And **drive both phases from the `finally` yourself** — do NOT rely on DPG having run the exit callback: on
-   a fast/mid-boot close its callback-thread slot can be occupied, so it may never fire (this was the librarian
-   hang). Call the cancel explicitly at the top of the `finally`, then the waiting drain, then `destroy_context`.
-
-The librarian fix (commits TBD on `feature/librarian-lmstudio-compat`, 2026-06-04) also surfaced gotchas any
-shared helper / per-app conversion must handle, beyond the two-phase skeleton:
-- **`split_frame` after loop-exit hangs forever** (no frame will ever complete). Any background task that calls
-  it (avatar renderer texture reconfigure; chat-view rebuild) must skip it once cancelled/shutting-down — see
-  `DPGAvatarRenderer._split_frame_unless_stopping` and the `gui_updates_safe` guards in
-  `DPGLinearizedChatView.build`.
-- **Late submissions slip past the cancel.** A startup callback's tail can *submit* a debounced rebuild task
-  AFTER teardown's cancel ran (librarian's `_resize_gui` → `_resize_gui_task` → `view.build`). Guard the
-  GUI-mutating op itself (a top-level `gui_updates_safe`/`_shutting_down` bail), not just the task manager.
-- **Startup frame callbacks race teardown.** `set_frame_callback`-deferred startup work runs on DPG's callback
-  thread and can fire mid-teardown; guard each on a `_shutting_down` flag set at the very first action of shutdown.
-- **In-flight GUI builds.** A top-of-function `gui_updates_safe` guard catches builds that *start* during
-  shutdown, but not one already running when teardown begins; for full coverage the build loop must re-check
-  per-iteration (currently `DPGLinearizedChatView.build` only guards entry + the scroll tail).
-- **The `DearPyGui_Markdown` render worker is the worst offender — STILL OPEN.** `CallInNextFrame._worker`
-  (`raven/vendor/DearPyGui_Markdown/__init__.py`) is a *persistent daemon* thread (not a managed task, no
-  cancellation hook) that pulls a render queue and calls DPG — including `dpg.split_frame()` — on its own thread.
-  Nothing stops it at shutdown, so on a mid-boot close with a URL-heavy message mid-render it keeps touching DPG
-  across `destroy_context` → segfault (and its `split_frame` would park post-loop-exit). It needs a stop flag the
-  worker checks (skip `split_frame` + stop processing when set), an app-side `markdown.shutdown()` called in the
-  cancel phase, and ideally a drain (worker sets a "stopped" flag; teardown waits for it before `destroy_context`).
-  This is the boundary layer the librarian whack-a-mole bottomed out on (2026-06-04) — the reason the shared
-  helper must own a *global* "all DPG-touching threads stop before `destroy_context`" barrier, not just per-task
-  drains. A `does_item_exist`/`nonexistent_ok` guard was added at the worker's `bind_item_handler_registry`
-  (quieted the "Item not found" spam) but does NOT fix the segfault (other DPG calls + `split_frame` remain).
-  - **Partly addressed 2026-08-21: both workers now stand down instead of polling a dead GUI.** Rendering
-    any card starts `CallInNextFrame._worker` (the card's header is `dpg_markdown.add_text`), and it
-    outlives every `destroy_context` in the process. Both workers went through a bare `dpg.split_frame()`,
-    which *raises* where no render loop is running; on a worker thread that killed the thread, which was
-    accidentally safe and reported itself as an unhandled-thread-exception warning. They now call
-    `guiutils.split_frame(..., required=False)` and **return** when the wait cannot happen, which is the
-    same outcome deliberately and quietly.
-    - **Retrying instead was measured to be much worse, so do not reintroduce it.** An attempt to re-queue
-      the work and poll every 15 ms segfaulted the `gui` group 1/1, in `split_frame` on the worker thread:
-      after `destroy_context` every call into DPG is into freed memory, so a worker that keeps trying is a
-      worker that eventually crashes the app on exit. 3/3 clean once it stands down instead.
-    - ~~**What is left is the case the item is about**~~ — **closed 2026-09-14, with exactly the stop flag
-      and drain described above.** `dpg_markdown.shutdown()` sets a module-level stopping `Event`, wakes
-      the idle wait (now an `Event.wait` rather than a `time.sleep`, so there is no interval of exposure),
-      and joins both workers with a timeout, warning if one does not come out. The workers check the flag
-      before queueing, before each queued call, and in `CallWhenDPGStarted`'s `get_frame_count` poll —
-      which was itself a DPG call in a loop. `guiutils.teardown()` is the app-side call, the mirror of
-      `bootup`, and all seven GUI apps make it after the render loop exits and before `destroy_context`.
-      - **Found by a test rather than by an app**, which is why it closed now: a new module in
-        `raven/vendor/DearPyGui_Markdown/tests/` builds Markdown and then tears its context down, and
-        segfaulted 1/1 on its own — no mid-boot close, no URL-heavy message, no timing to catch. It passes
-        now, so the suite holds this shut.
-  - **A second, separate offender, diagnosed from a core dump on 2026-08-21 — see the item below.** Closing
-    `raven-cherrypick` with Alt+F4 segfaulted (Juha), and `coredumpctl` put the crash in
-    `dpg.is_dearpygui_running()` on a background thread. Not this worker, and worth stating because the
-    markdown worker is the obvious suspect for any teardown segfault and was wrongly assumed to be this one.
-
-Per-app exposure (the bug needs a waiting drain in the exit callback AND a `split_frame`-using background task
-that can be busy at close):
-
-| App | Status |
-|---|---|
-| `cherrypick` | ✅ correct (the reference) |
-| `librarian` | ✅ fixed 2026-06-04 (this saga) |
-| `avatar-settings-editor` | 🔴 **identical bug** — only other `DPGAvatarRenderer` user, `stop(wait=True)` in exit callback, bare `finally` |
-| `visualizer` | 🟠 partial — `finally` does `clear_background_tasks(wait=False)`, but no waiting drain there; `split_frame` in annotation/info_panel (interaction-triggered, narrower window) |
-| `avatar-pose-editor` | 🟡 anti-pattern + 1 `split_frame`; exposure TBD |
-| `xdot-viewer` | 🟢 anti-pattern structure, but no `split_frame` anywhere → this bug can't bite |
-| `conference-timer` | 🟢 no exit callback, no heavy bg tasks |
-
-Plan for a focused session: extract a shared `raven.common` helper that owns the cancel-in-exit-callback /
-drain-in-finally / then-destroy_context sequence (and ideally the `split_frame`-skip-when-stopping idiom),
-convert each exposed app to it, and test each with the finicky mid-boot-close repro. `avatar-settings-editor`
-first (confirmed identical bug). Dovetails with the existing "extract `raven.common` into a toolkit" item.
-
-Discovered during brief 02 §7 live testing (2026-06-04), when an accidental mid-boot Alt+F4 exposed the
-librarian shutdown races.
 
 ## Idle prefill fires even when the HEAD's token count is already exact
 
