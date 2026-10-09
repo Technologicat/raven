@@ -418,8 +418,12 @@ hard question, see how its reasoning style depends on disposition." It's less us
 general persona-shaping dial for ordinary chat (where the model is reading memories, not
 asking the bank to reason).
 
-**Important constraint**: disposition (and presumably mission / directives) **must be set
-at bank creation; changing them requires wiping the bank.** So this isn't a live-experimental
+**No longer a constraint, as of 2026-10-09**: when this was written, Hindsight's docs said
+disposition had to be set at bank creation, and changing it meant wiping the bank. The
+current docs change it on a live bank with `update_bank_config` (`disposition_skepticism`,
+`disposition_literalism`, `disposition_empathy`, and `reflect_mission`), so the rest of this
+paragraph and the next describe the earlier version. **Was**: disposition (and presumably
+mission / directives) **must be set at bank creation; changing them requires wiping the bank.** So this isn't a live-experimental
 dial you can twiddle mid-conversation to see what changes. It's a per-persona-instance
 deliberate commitment — pick the values you mean when creating the bank, and treat changes
 as "I'm starting fresh with a different persona configuration."
@@ -635,8 +639,10 @@ loop. Can compose with either A or B.
     - **`retain`** — write path, stores memories.
     - **`recall`** — read path, semantic search via TEMPR (semantic + BM25 + graph +
       temporal). This is what autosearch uses.
-    - **`reflect`** — agentic-loop reasoning. Runs an autonomous agent on the same LLM
-      instance as Librarian's chat, so every `reflect` call incurs KV-cache miss in both
+    - **`reflect`** — agentic-loop reasoning. Runs an autonomous agent — on a single
+      workstation, realistically on the same LLM instance as Librarian's chat (Hindsight can
+      give `reflect`, `retain` and consolidation an LLM each, `HINDSIGHT_API_REFLECT_LLM_*`
+      and siblings, but that wants a second model loaded somewhere), so every `reflect` call incurs KV-cache miss in both
       directions (chat history → reflect's prompts → back to chat). Unworkable on every
       user turn; the natural home is as an **MCP tool** surfaced via the phase-4 MCP
       client. The model invokes it when it recognizes the need for "think deep through
@@ -830,7 +836,40 @@ What the maintainer wants to find out, for testing and evaluation. None of it is
     question in itself.
 - **Useful values for the disposition settings.** Wants a scripted probe on `raven.librarian.agent` once
   Hindsight is wired in. Per *Aria-relevant aside* above, disposition shapes only `reflect`, so the probe
-  has to exercise `reflect` for the settings to show.
+  has to exercise `reflect` for the settings to show. Disposition can now be changed on a live bank, so the
+  probe can vary it on one bank rather than building a fresh one per setting.
+- **When should Librarian `recall`, and when `reflect`?** The plan above: `recall` for the automatic search
+  and as a tool, `reflect` as a tool only, the model choosing. What `reflect` adds over `recall`, for its
+  price, is worth measuring on the same questions, in the same harness as the disposition probe. The price
+  includes the cache: with one slot (`parallel: 1`) and `reflect` on the chat's own model — the realistic
+  single-workstation setup — its prompts presumably evict the chat's cached prefix, and the next round of
+  the turn reprocesses the whole conversation. Inferred, not measured.
+
+### Decided 2026-10-09 (maintainer), from Hindsight's current docs
+
+Checked against the docs that day: [observations](https://hindsight.vectorize.io/developer/observations),
+[reflect](https://hindsight.vectorize.io/developer/reflect),
+[configuration](https://hindsight.vectorize.io/developer/configuration).
+
+- **Memory's value is remembering across chats.** Sessions can be short, so recall must not be scoped to the
+  branch being answered: what was said in another chat is the point. (Summarizing the current branch is a
+  different feature, chat compaction, in `TODO.md`.)
+- **Work and hobby data must never be retained into the same bank.** After every `retain`, Hindsight
+  consolidates related facts into LLM-synthesized *observations*, and `reflect` reads mental models,
+  observations and raw facts. `observation_scopes` can keep tag sets apart at the observation level, but the
+  docs give `reflect` no tag filter over memories and say nothing of scoping mental models — so only a
+  separate bank is a promised boundary ("no cross-bank leakage"). Once mixed, a bank stays mixed for
+  `reflect`.
+- **Deletion is finer than clearing the bank.** Deleting a document removes the observations derived from
+  it; deleting individual memories removes theirs, and the remaining sources are re-consolidated. So when
+  the user edits a chat node, its memory can be deleted and retained anew. The docs read show no whole-bank
+  or by-tag delete, and do not say whether a mistaken retain can be undone in the mental models too.
+- **One scoping system is preferred** across chats, documents and memory — cleaner than separate datastores
+  — with brief 13 §1's tags for documents as the starting point. Under it, **a bank per memory scope** is the
+  isolation boundary. That makes memory scopes a partition: a chat in two scopes cannot be retained into
+  both banks without carrying data across, which a document tag in two scopes never has to worry about.
+  How the UX handles that is open.
+- **Open: should a subagent see the orchestrator's memory bank?** Both choices can be argued for.
 
 ---
 
