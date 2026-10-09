@@ -333,3 +333,29 @@ def test_a_drop_arriving_during_shutdown_is_discarded(monkeypatch):
     filedrop._drops.put(["/after/clearing"])
     assert arrived.wait(5.0), "nothing arrived even with the flag clear, so the discard above proves nothing"
     assert received == [["/after/clearing"]]
+
+
+def test_stop_waits_for_a_running_handler_and_ends_the_worker(monkeypatch):
+    """Handlers call DPG, so the worker must be out of one before the context is destroyed."""
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    def handler(paths):
+        entered.set()
+        release.wait(5.0)
+        finished.set()
+    worker = threading.Thread(target=filedrop._dispatch_loop, daemon=True)
+    monkeypatch.setattr(filedrop, "_handler", handler)
+    monkeypatch.setattr(filedrop, "_drops", queue.Queue())
+    monkeypatch.setattr(filedrop, "_worker", worker)
+    worker.start()
+    filedrop._drops.put(["/a/file"])
+    assert entered.wait(5.0), "the handler never started, so there is nothing for stop to wait for"
+    threading.Timer(0.3, release.set).start()
+    filedrop.stop(timeout=5.0)
+    assert finished.is_set(), "stop returned while the handler was still running"
+    assert not worker.is_alive()
+    assert filedrop._worker is None, "a later install would not start a new worker"
+
+
+def test_stop_is_a_no_op_without_a_worker(monkeypatch):
+    monkeypatch.setattr(filedrop, "_worker", None)
+    filedrop.stop()

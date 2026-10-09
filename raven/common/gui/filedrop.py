@@ -35,7 +35,7 @@ handlers reporting an error concurrently would race over it.
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["is_available", "install", "uninstall", "by_extension", "is_directory", "all_of", "DropRule", "make_router"]
+__all__ = ["is_available", "install", "uninstall", "stop", "by_extension", "is_directory", "all_of", "DropRule", "make_router"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -103,10 +103,14 @@ _worker: Optional[threading.Thread] = None
 # reference is a segfault at drop time, not an exception — hence a module-level binding that is never cleared.
 _drop_callback = None
 
+_STOP = object()  # queued by `stop`, to wake the worker so that it can exit
+
 def _dispatch_loop() -> None:
     """Worker: run handlers off the render thread, one drop at a time."""
     while True:
         paths = _drops.get()
+        if paths is _STOP:
+            return
         handler = _handler
         if handler is None:  # uninstalled between the drop and now
             continue
@@ -201,6 +205,26 @@ def uninstall() -> None:
     global _handler
     _handler = None
     logger.info("uninstall: OS file drop handler removed")
+
+def stop(timeout: float = 1.0) -> None:
+    """Stop the worker thread that runs the handlers. `guiutils.teardown` calls this; an app does not.
+
+    `timeout`: seconds to wait for a handler the worker is already running to return. Handlers call DPG, so
+               the worker has to be out of one before `dpg.destroy_context()`.
+
+    Idempotent, and safe where `install` was never called. A later `install` starts a new worker.
+    """
+    global _worker
+    worker = _worker
+    if worker is None:
+        return
+    _drops.put(_STOP)
+    worker.join(timeout)
+    if worker.is_alive():
+        logger.warning(f"stop: the worker did not finish its handler within {timeout} s; it may still call DPG")
+        return
+    _worker = None
+    logger.info("stop: OS file drop worker stopped")
 
 # ---------------------------------------------------------------------------
 # Routing a drop to the right handler

@@ -229,19 +229,26 @@ def bootup(font_size: int,
 def teardown() -> None:
     """Shut down the shared GUI machinery `bootup` started. The counterpart to it, and its mirror image.
 
-    Call **after the render loop has exited and before `dpg.destroy_context()`**, from the main thread.
+    **An app does not call this: `shutdown` does, as its last step.** Call it directly only where something
+    ran `bootup` without being an app — a test fixture — and so has no `shutdown` to call. Either way, after
+    the render loop (if any) has exited and before `dpg.destroy_context()`, from the main thread.
 
-    What it currently does is stop the Markdown renderer's worker threads. Those are daemon threads, so
-    they do not hold up interpreter exit — which is exactly what makes them easy to overlook. They are also
-    free to wake up *during* teardown, and a DPG call against a destroyed context does not raise: it takes
-    the process down, with no traceback and nothing in the log.
+    What it currently does is stop the Markdown renderer's worker threads and the file drop worker. Those
+    are daemon threads, so they do not hold up interpreter exit — which is exactly what makes them easy to
+    overlook. They are also free to wake up *during* teardown, and a DPG call against a destroyed context
+    does not raise: it takes the process down, with no traceback and nothing in the log.
 
-    Safe in an app that never rendered any Markdown; there is then nothing to stop.
+    Safe in an app that never rendered any Markdown or installed file drop; there is then nothing to stop.
 
-    Every GUI app wants this, whether or not it mentions the renderer by name — a help card's prose goes
-    through it, so an app that only ever shows an F1 card has the threads running too.
+    Every GUI app needs this to run, whether or not it mentions the renderer by name — a help card's prose
+    goes through it, so an app that only ever shows an F1 card has the threads running too. That is why
+    `shutdown` always includes it.
     """
     dpg_markdown.shutdown()
+    # The file drop worker runs app handlers, which call DPG. Imported here because `filedrop` imports this
+    # module; `stop` is a no-op where no app installed it.
+    from . import filedrop
+    filedrop.stop()
 
 # Python-side, so that reading it is safe from any thread at any time — which a DPG call is not: once
 # `destroy_context` has run, every call into the library is into freed memory, `is_dearpygui_running`
@@ -259,9 +266,10 @@ def is_shutting_down() -> bool:
 
 def shutdown(cancel_tasks: Callable[[], None] | None = None,
              release: Callable[[], None] | None = None) -> None:
-    """Shut the app's GUI down, in order. The app then calls `dpg.destroy_context()`.
+    """Shut the app's GUI down, in order: the one call an app makes at exit. Then call `dpg.destroy_context()`.
 
-    Call from the render loop's `finally`, on the main thread, once the loop has exited.
+    Call from the render loop's `finally`, on the main thread, once the loop has exited. It includes
+    `teardown`, so an app does not call that separately.
 
     `cancel_tasks`: The app's first phase: signal its background work to stop, **without waiting**. Omit
                     if the app has no background work.
