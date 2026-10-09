@@ -1135,7 +1135,7 @@ def _load_local_tokenizer(path: str, backend_counter: Callable[[str], int | None
     if path in _tokenizer_cache:
         return _tokenizer_cache[path]
     if path.lower().endswith(".gguf"):
-        tokenizer = gguftokenizer.load(pathlib.Path(path), backend_counter)
+        tokenizer = gguftokenizer.load(pathlib.Path(path), backend_counter, cache_dir=librarian_config.llm_tokenizer_cache_dir)
     else:
         tokenizer = _load_tokenizer_json(path)
         if tokenizer is not None and gguftokenizer.agrees_with_backend(tokenizer, backend_counter) is False:

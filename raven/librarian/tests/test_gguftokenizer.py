@@ -336,3 +336,63 @@ def test_a_file_that_is_not_a_gguf_is_declined(tmp_path):
     not_a_model = tmp_path / "model.gguf"
     not_a_model.write_bytes(b"this is not a GGUF at all")
     assert load(not_a_model) is None
+
+
+# --------------------------------------------------------------------------------
+# The cache of built tokenizers
+
+class TestCache:
+    """A tokenizer built once is loaded from the cache afterwards, and still checked like a fresh one."""
+
+    @pytest.fixture
+    def builds(self, monkeypatch):
+        """A list that grows by one each time a tokenizer is assembled from a GGUF rather than from the cache."""
+        calls = []
+        real_build = gguftokenizer._build
+        def counting_build(gguf_path):
+            calls.append(gguf_path)
+            return real_build(gguf_path)
+        monkeypatch.setattr(gguftokenizer, "_build", counting_build)
+        return calls
+
+    def test_the_second_load_comes_from_the_cache_and_counts_the_same(self, tmp_path, builds):
+        model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
+        cache = tmp_path / "cache"
+        first = load(model, cache_dir=cache)
+        second = load(model, cache_dir=cache)
+        assert first is not None and second is not None
+        assert len(builds) == 1, f"the model was assembled {len(builds)} times; the cache was not used"
+        assert second.encode("hello hello", add_special_tokens=False).ids == first.encode("hello hello", add_special_tokens=False).ids
+
+    def test_a_cached_tokenizer_is_still_checked_against_the_backend(self, tmp_path, reference, builds):
+        # `reference` before `builds`, so that the reference's own load is not counted as one of ours.
+        tokenizer, _ = reference
+        model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
+        cache = tmp_path / "cache"
+        assert load(model, cache_dir=cache) is not None
+        assert load(model, counter_agreeing_with(tokenizer, ratio=0.5), cache_dir=cache) is None, \
+            "a cached tokenizer was used although the backend counts differently"
+        assert builds == [model], "the second load built afresh, so this tested the fresh path rather than the cache"
+
+    def test_a_replaced_file_is_built_again(self, tmp_path, builds):
+        model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
+        cache = tmp_path / "cache"
+        load(model, cache_dir=cache)
+        write_gguf(model, tokenizer_class="gpt2", pre="qwen35", merges=("l l", "h e"))  # same name, new contents
+        load(model, cache_dir=cache)
+        assert len(builds) == 2, "a file replaced in place was answered from the old file's cache"
+
+    def test_a_corrupt_cache_file_is_built_again_rather_than_raising(self, tmp_path, builds):
+        model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
+        cache = tmp_path / "cache"
+        load(model, cache_dir=cache)
+        (cache_file,) = cache.iterdir()
+        cache_file.write_text("{not json", encoding="utf-8")
+        assert load(model, cache_dir=cache) is not None
+        assert len(builds) == 2
+
+    def test_a_declined_tokenizer_is_not_cached(self, tmp_path):
+        model = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="something-we-have-not-measured")
+        cache = tmp_path / "cache"
+        assert load(model, cache_dir=cache) is None
+        assert not cache.exists() or not any(cache.iterdir())

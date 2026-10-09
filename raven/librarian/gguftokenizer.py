@@ -38,6 +38,8 @@ __all__ = ["TOKENIZER_JSON",
            "rank_for_model", "find_for_model", "agrees_with_backend", "load"]
 
 import logging
+import hashlib
+import json
 import os
 import pathlib
 import re
@@ -311,22 +313,50 @@ def agrees_with_backend(tokenizer: Any,
     return agrees
 
 
-def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Optional[int]]] = None) -> Optional[Any]:
-    """Build the tokenizer stored in `gguf_path`. Returns a `tokenizers.Tokenizer`, or `None`.
+# Bumped when the way a tokenizer is assembled changes, so that a cache written by the old assembly is built
+# again rather than trusted. A cached tokenizer is checked like a fresh one either way; this saves the case
+# where an old build would still pass the checks while counting slightly differently.
+_CACHE_FORMAT_VERSION = 1
 
-    `None` means the file could not be read, its tokenizer is of a class this module cannot assemble, the
-    result failed its own round-trip check, or it disagreed with the backend about how many tokens a piece of
-    text is. Every one of those is logged, and every one leaves the caller to fall back to estimating.
+def _cache_file(cache_dir: pathlib.Path, gguf_path: pathlib.Path) -> Optional[pathlib.Path]:
+    """Where the tokenizer built from `gguf_path` is cached, or `None` if the file cannot be stat'd.
 
-    `backend_counter`: how to ask the backend to count a piece of text — `text -> token count`, or `None`
-                       when it cannot answer. Given one, the tokenizer is checked against the model that is
-                       actually being served, and any pre-tokenizer is then allowed. Without one, only
-                       constructions measured in advance (`_PRE_TOKENIZER_REGEXES`) are trusted, since
-                       nothing else could catch a wrong guess.
-
-    Reading is slow enough to matter — measured at ~7 s, nearly all of it in the GGUF reader indexing the
-    file's tensor metadata on the way past — so call this off any thread that must stay responsive.
+    Keyed on the resolved path, size and modification time, so a file replaced in place is built again.
     """
+    try:
+        resolved = gguf_path.resolve()
+        stats = resolved.stat()
+    except OSError:
+        return None
+    key = f"{resolved}|{stats.st_size}|{stats.st_mtime_ns}|{_CACHE_FORMAT_VERSION}"
+    return cache_dir / f"{gguf_path.stem}-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]}.json"
+
+def _read_cache(cache_file: pathlib.Path) -> Optional[tuple[Any, str, Optional[str]]]:
+    """`(tokenizer, tokenizer_class, pre)` from `cache_file`, or `None` if it is absent or unreadable."""
+    if not cache_file.is_file():
+        return None
+    try:
+        import tokenizers  # noqa: PLC0415 -- deferred as in `_build`
+        record = json.loads(cache_file.read_text(encoding="utf-8"))
+        return tokenizers.Tokenizer.from_str(record["tokenizer"]), record["tokenizer_class"], record["pre"]
+    except Exception as exc:  # noqa: BLE001 -- an unusable cache means building afresh, nothing more
+        logger.warning(f"_read_cache: could not use the cached tokenizer '{cache_file}': {type(exc)}: {exc}. Building it again.")
+        return None
+
+def _write_cache(cache_file: pathlib.Path, tokenizer: Any, tokenizer_class: str, pre: Optional[str]) -> None:
+    """Save a tokenizer that passed its checks. Logs and carries on if it cannot."""
+    try:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        record = {"tokenizer_class": tokenizer_class, "pre": pre, "tokenizer": tokenizer.to_str()}
+        temp = cache_file.with_name(f"{cache_file.name}.{uuid.uuid4().hex}.tmp")
+        temp.write_text(json.dumps(record), encoding="utf-8")
+        os.replace(temp, cache_file)  # atomic, so a reader never sees half a file
+        logger.info(f"_write_cache: cached the tokenizer as '{cache_file}'.")
+    except Exception as exc:  # noqa: BLE001 -- not caching only costs the next start its time
+        logger.warning(f"_write_cache: could not cache the tokenizer as '{cache_file}': {type(exc)}: {exc}.")
+
+def _build(gguf_path: pathlib.Path) -> Optional[tuple[Any, str, Optional[str]]]:
+    """`(tokenizer, tokenizer_class, pre)` assembled from `gguf_path`, unchecked; or `None`, the reason logged."""
     try:
         # Deferred because only this path needs them, not because they are dear: measured together at ~46 ms
         # against `llmclient`'s own 1282 ms to import. What the deferral does buy is that a broken install
@@ -354,10 +384,38 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
         pre = field("tokenizer.ggml.pre") if "tokenizer.ggml.pre" in reader.fields else None
         vocabulary = {token: index for index, token in enumerate(field("tokenizer.ggml.tokens"))}
         merges = [tuple(merge.split(" ", 1)) for merge in field("tokenizer.ggml.merges")]
-        tokenizer = build(vocabulary, merges, pre)
+        return build(vocabulary, merges, pre), tokenizer_class, pre
     except Exception as exc:  # noqa: BLE001 -- any failure here just means "no local tokenizer"
         logger.warning(f"load: could not build a tokenizer from '{gguf_path}': {type(exc)}: {exc}. Falling back to token estimates.")
         return None
+
+def load(gguf_path: pathlib.Path,
+         backend_counter: Optional[Callable[[str], Optional[int]]] = None,
+         cache_dir: Optional[pathlib.Path] = None) -> Optional[Any]:
+    """Build the tokenizer stored in `gguf_path`. Returns a `tokenizers.Tokenizer`, or `None`.
+
+    `None` means the file could not be read, its tokenizer is of a class this module cannot assemble, the
+    result failed its own round-trip check, or it disagreed with the backend about how many tokens a piece of
+    text is. Every one of those is logged, and every one leaves the caller to fall back to estimating.
+
+    `backend_counter`: how to ask the backend to count a piece of text — `text -> token count`, or `None`
+                       when it cannot answer. Given one, the tokenizer is checked against the model that is
+                       actually being served, and any pre-tokenizer is then allowed. Without one, only
+                       constructions measured in advance (`_PRE_TOKENIZER_REGEXES`) are trusted, since
+                       nothing else could catch a wrong guess.
+    `cache_dir`: where to keep tokenizers already built, or `None` to build every time. A cached one is
+                 checked exactly as a fresh build is, and one built from a file since replaced is not used.
+
+    Building is slow enough to matter — measured at ~9 s for a 248k-token vocabulary, nearly all of it in the
+    GGUF reader parsing every metadata field on the way past — so call this off any thread that must stay
+    responsive. Loading from the cache skips that part.
+    """
+    cache_file = _cache_file(cache_dir, gguf_path) if cache_dir is not None else None
+    cached = _read_cache(cache_file) if cache_file is not None else None
+    built = cached if cached is not None else _build(gguf_path)
+    if built is None:
+        return None
+    tokenizer, tokenizer_class, pre = built
 
     # Ask the thing we just assembled whether it is reversible before anyone counts with it. A tokenizer
     # built from mismatched parts still returns a number, and that number would be shown without the `~`
@@ -391,7 +449,10 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
                     f"keeping the token estimate. Measured offline: {sorted(_VERIFIED_CONSTRUCTIONS)}.")
         return None
 
+    if cached is None and cache_file is not None:
+        _write_cache(cache_file, tokenizer, tokenizer_class, pre)
     confirmation = "confirmed against the backend" if agrees else "matching a pre-tokenizer measured offline"
-    logger.info(f"load: tokenizer ready from '{gguf_path.name}' ({confirmation}): {len(vocabulary)} tokens, "
+    origin = ", via the cache" if cached is not None else ""
+    logger.info(f"load: tokenizer ready from '{gguf_path.name}'{origin} ({confirmation}): {tokenizer.get_vocab_size()} tokens, "
                 f"class {tokenizer_class!r}, pre-tokenizer {pre!r}.")
     return tokenizer

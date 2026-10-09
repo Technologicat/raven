@@ -90,13 +90,19 @@ llm_model = None
 #   - **A HuggingFace tokenizer**: a `tokenizer.json`, a directory holding one, or a repo id such as
 #     "Qwen/Qwen3.5-4B". Tiny (~10-15 MB) and loads in milliseconds.
 #
-# A `.gguf` is slower to read (~7 s, in the GGUF reader rather than in the tokenizer), so it is loaded on a
-# background thread: the readout starts as an estimate and sharpens once it is ready.
+# A `.gguf` is slower to read (several seconds, in the GGUF reader rather than in the tokenizer), so it is
+# loaded on a background thread: the readout starts as an estimate and sharpens once it is ready. The tokenizer
+# built from it is cached (`llm_tokenizer_cache_dir`, below), so that cost is paid once per model file.
 #
 # It MUST match the served model, or counts would be confidently wrong — so a tokenizer is checked against
 # the backend before it is used, by comparing how the two count two short probes. A tokenizer that disagrees
 # is refused and the estimate stays. ooba has its own exact endpoint and needs none of this.
 llm_tokenizer_path = None
+
+# Where tokenizers built from a `.gguf` are kept, so the next start loads in well under a second rather than
+# reading the GGUF again. One file per model file, replaced when that file changes; a cached tokenizer is
+# checked against the backend exactly as a fresh build is. Safe to delete. `None` disables the cache.
+llm_tokenizer_cache_dir = librarian_userdata_dir / "tokenizer_cache"
 
 # Idle delay (seconds) before the GUI fires a background "context prefill" on the current branch.
 #
