@@ -374,9 +374,8 @@ Briefs in part 1 (server availability, autostart).
 
 - **Error-reporting sweep, so failures reach the user** — what remains of the no-model item · L ·
   `TD "Librarian doesn't check that the LLM backend has a model loaded"`
-- **Shared two-phase DPG shutdown helper** — done 2026-10-09 (`guiutils.shutdown`, all seven apps); what it
-  does not yet reach, and the audit, · S per bullet · `TD "Shutdown: what the shared two-phase helper does not
-  yet reach"`
+- **Shared two-phase DPG shutdown helper** — done 2026-10-09 (`guiutils.shutdown`, all seven apps); an audit
+  of each app's threads remains · S–M · `TD "Shutdown: what the shared two-phase helper does not yet reach"`
 - **`quitsignal.install` in the other five apps** · ~S · 0.2.10 · `TD "Librarian leaks its server-side avatar
   instance…"`
 - **`is_dearpygui_running()` is not a guard against `destroy_context`** — done 2026-10-09: both loops check

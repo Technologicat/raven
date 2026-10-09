@@ -29,7 +29,7 @@ and why hygiene items rank higher than they used to.
 
 ## Shutdown: what the shared two-phase helper does not yet reach
 
-*Cluster: abnormal-exit · Cost: S per bullet · Gate: none · Filed: 2026-06-04 · See also: `guiutils.shutdown`, `investigations/dpg-exit-callback/`*
+*Cluster: abnormal-exit · Cost: S–M · Gate: none · Filed: 2026-06-04 · See also: `guiutils.shutdown`, `investigations/dpg-exit-callback/`*
 
 **`abnormal-exit` still wants writing up as a brief** (agreed 2026-09-03): nothing between "the app decided to
 exit" and "the process is gone" was anybody's responsibility, so each way of dying was found and filed
@@ -42,16 +42,10 @@ No app uses a DPG exit callback: DPG runs one only at the start of `destroy_cont
 file dialog's ticker and `filedrop`'s worker check the flag instead of `dpg.is_dearpygui_running()`, which
 segfaults once the context is gone (a Cherrypick core dump on 2026-08-21 put the crash there).
 
-What is still open:
-
-- **`filedrop`'s worker is never joined.** It checks the flag before running a handler, but a handler
-  already running when shutdown begins runs on, and handlers call DPG. The worker is a daemon parked in
-  `queue.get`, so joining it needs a wake-up — a sentinel on the queue — from the release phase.
-- **`DPGLinearizedChatView.build` checks `gui_updates_safe` on entry and at the scroll tail**, so a build
-  already running when shutdown begins carries on adding widgets. A per-message check in the loop closes it.
-- **No audit of each app's DPG-touching threads against its cancel phase.** The conversion moved the shapes,
-  not the contents: each app cancels what it cancelled before. The pose editor's one `split_frame` site was
-  never audited.
+What is still open: **an audit of each app's DPG-touching threads against its cancel phase.** The
+conversion moved the shapes, not the contents: each app cancels what it cancelled before. The pose editor's one
+`split_frame` site was never audited. (`filedrop`'s worker and the Markdown workers are stopped and joined by
+`guiutils.teardown`; the chat view's build checks `gui_updates_safe` per message.)
 
 Rules for any thread that calls DPG, learned in Librarian's 2026-06-04 conversion: check the flag (or
 `gui_updates_safe`) at the GUI-mutating operation itself, not only when the task starts, since a debounced
