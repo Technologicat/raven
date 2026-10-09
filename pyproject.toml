@@ -73,8 +73,7 @@ dependencies = [
     "scikit-learn>=1.9.1",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
     "scipy>=1.17.1",  # visualizer: KDTree
     "sentence_transformers>=6.1.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
-    "spacy>=3.8.16",  # BibTeX importer: NLP analysis
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
+    "spacy>=3.8.16",  # BibTeX importer: NLP analysis. Its language models are downloaded on first use (`nlptools.load_spacy_pipeline`), not declared here: PyPI refuses a direct URL dependency.
     "sseclient-py>=1.9.0",  # librarian: streaming transport for receiving data from LLM
     # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
     # `[[tool.pdm.source]]` below — so a re-lock keeps the validated `+cu128` build set instead of drifting the

@@ -972,12 +972,10 @@ class TestIndexLock:
 
 @pytest.fixture(scope="module")
 def nlp():
-    """spaCy's small English model, loaded in-process."""
-    spacy = pytest.importorskip("spacy")
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        pytest.skip("en_core_web_sm not installed")
+    """spaCy's small English model, loaded in-process, and downloaded first if it is missing."""
+    pytest.importorskip("spacy")
+    from raven.common import nlptools
+    return nlptools.load_spacy_pipeline("en_core_web_sm", "cpu")
 
 
 @pytest.mark.ml
