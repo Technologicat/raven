@@ -245,6 +245,8 @@
 
 #### Constellation-wide
 
+- **Closing an app while a file dialog is open no longer risks a crash on the way out.**
+  - Rare, and not reproducible on demand: the dialog's background thread had to check on the app at the moment it was closing.
 - **Tab in the file dialog no longer lights up the path field for a moment.**
 - **The file dialog's blue keyboard mark now follows a click.** In v0.2.9 it stayed where it was, and the keys went with it.
   - Clicking the find field puts the mark there.
