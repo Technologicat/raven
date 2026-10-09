@@ -46,6 +46,8 @@ import re
 import uuid
 from typing import Any, Callable, Collection, Optional
 
+from ..common import utils as common_utils
+
 logger = logging.getLogger(__name__)
 
 # Quantization and file-format markers, dropped from a name before matching so that the same model at two
@@ -348,9 +350,8 @@ def _write_cache(cache_file: pathlib.Path, tokenizer: Any, tokenizer_class: str,
     try:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         record = {"tokenizer_class": tokenizer_class, "pre": pre, "tokenizer": tokenizer.to_str()}
-        temp = cache_file.with_name(f"{cache_file.name}.{uuid.uuid4().hex}.tmp")
-        temp.write_text(json.dumps(record), encoding="utf-8")
-        os.replace(temp, cache_file)  # atomic, so a reader never sees half a file
+        with common_utils.atomic_write(cache_file) as f:
+            json.dump(record, f)
         logger.info(f"_write_cache: cached the tokenizer as '{cache_file}'.")
     except Exception as exc:  # noqa: BLE001 -- not caching only costs the next start its time
         logger.warning(f"_write_cache: could not cache the tokenizer as '{cache_file}': {type(exc)}: {exc}.")
