@@ -3988,7 +3988,7 @@ finally:
     # be what signals cancellation first.
     #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Sets `_shutting_down` (so a late startup
     #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
-    #      so they stop before parking in `split_frame` (which would hang now that the loop is stopped). The
+    #      so they stop before reaching a `split_frame`, which is unsafe once the loop has stopped. The
     #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
     #      Idempotent, so the exit callback's later call of it is a harmless repeat.
     #   2. `gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
