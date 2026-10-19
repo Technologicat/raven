@@ -58,11 +58,19 @@ accepted.
 
 - **Per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`). **First**: the maintainer's part of
   the AOKK study blocks on it, and that blocks the other researchers on the team. Tentatively from 2026-10-19.
+  - **Its acceptance includes** reconnecting to the LLM backend mid-run (`TODO_DEFERRED.md`, "Batch tools:
+    LLM reconnect mid-run") and a status flag for a reply that hit the token limit (`TODO.md`, "pdf2bib
+    overthinking"), both of which were waiting on it (2026-10-19).
+  - **Decided during the build**: what the pass does with a wedged reply (`TODO_DEFERRED.md`, "Tell a wedged
+    reply from a hard one"). A run over thousands of documents is where one costs most, so it needs some
+    policy, even if that policy is today's token cap.
 - **Corpus filter** (`briefs/corpus-filter-brief.md`). **Gated on the per-document pass**, which it is built
   on. It is what the AOKK numbers actually wait on, so the pass alone does not unblock the team: the chain is
   *per-document pass → corpus filter → AOKK numbers*. The study re-run is a day or two of unattended GPU time.
   The tool that drops the records the AOKK team's manual check rejected, possibly a `raven-siftbib`
   criterion (`briefs/done/yrityspaiva/README.md`), is in the same queue, waiting on the team's marked sheet.
+  - **Absorbs the classifier pass over the arXiv stash** (`TODO.md`, 2026-10-19): the same tool, with the
+    stash as a second corpus, which is also the check that its thresholds are not fitted to the AOKK one.
 - **0.2.11, the dehydration pass.** After the MCP client since 2026-10-19; until then it came first, as a
   clean starting state for the builds after it. Small items are welcome
   here on their own merit: closing many of them shortens the list quickly, and that is attention rent
@@ -72,7 +80,7 @@ accepted.
     race; the distribution rename to `raven-lab` and the wheel audit, as small items; the Markdown renderer's
     done-signal; modernizing the system prompt (small); **the optional greeting**, whose PR impact is large
     — a canned greeting reads as 2023 — and whose cost is S–M now that its largest blocker went on
-    2026-08-12; **the prompt viewer**, if it comes out M at most, being a power multiplier for debugging.
+    2026-08-12. (The prompt viewer was here too; it moved to the start of the MCP build on 2026-10-19.)
   - **Deferred**: `chat_controller` without the ML stack; most of the Librarian features gated on 0.2.11
     (attach from URL, sibling memory, batch indexing, prompt templating, the chat search on attachment
     filenames, context compaction, inline citations); the Markdown renderer's block rendering and LaTeX, an
@@ -97,7 +105,13 @@ accepted.
   - **Per-tool enable toggles**, in `mcp.json` if LM Studio tolerates custom fields there, otherwise in a
     sidecar.
   - **No longer gated on Hindsight**: Hindsight was only the first planned test target.
-  - **Open**: whether weather stays with open-meteo or becomes a built-in tool.
+  - **Open**: whether weather stays with open-meteo or becomes a built-in tool. Partly mooted by the
+    per-tool toggles, which can hide the marine and climate endpoints open-meteo also exposes.
+  - **The prompt viewer comes first** (`TODO.md`, "Show the raw prompt"; 2026-10-19). It was a 0.2.11
+    item, and 0.2.11 now follows this build, which needs it most: tool specs and injected skills are what
+    goes on the wire.
+  - **Re-run the tool-call budget probe** once the MCP tools are in (`TODO.md`, "Tool-call budget").
+  - **Measure what the tool specs cost in context**, rather than building compaction for it.
 - **Agent skills** (`TODO_DEFERRED.md`, "Agent skills for Librarian"). **Part of the MCP build** (maintainer,
   2026-10-19): MCP supplies the tools, and skills tell Librarian how to use them, carrying the material that
   does not belong in a tool's docstring. The lab demo needs both. No brief yet; the item holds what is
@@ -106,6 +120,10 @@ accepted.
   JSON. Needs a fully functional demo, v1 at least, by the end of 2026, which is why the MCP client comes
   right after the corpus filter. Its endpoints are looked at once the client works. Its tools come with
   agent skills on Librarian's side.
+  - **The plan** (maintainer, 2026-10-19): develop the client against open-meteo and possibly other public
+    MCP servers; then get remote access to the lab's server and verify against it; then run the demo in the
+    lab on a **standard Librarian instance**. The avatar-only mode and the sci-fi file objects are not
+    prerequisites for the demo, only for the lab installation.
 - **Lab installation.** Also gated on the avatar-only mode and the sci-fi file objects, and dates the
   `cu130` move (`briefs/design/lab-assistant-hci-sketch.md`).
 - **Hindsight** (`briefs/librarian-extension/06_hindsight-standup-brief.md`). Wanted soon for testing and
