@@ -102,7 +102,7 @@ dependencies = [
     # raven.common.image.codec, client.avatar_renderer, server.modules.avatar, librarian.imagestore. Already in
     # the tree via torchvision and wordcloud; declared because we import it. The floor is the version CI pins
     # and the tree resolves, rather than a feature we need — nothing here uses a recent Pillow API.
-    "Pillow>=12.3.0",
+    "Pillow>=13.0.0",
     # `raven.common.gui.qroverlay`, for the `--qr` exhibit overlay. Pure Python with no dependencies of its
     # own, where `qrcode` pulls in Pillow to rasterize. The overlay wants the module grid, which both offer -
     # and if an actual image is ever wanted (a poster, a README), segno writes PNG and SVG without Pillow
