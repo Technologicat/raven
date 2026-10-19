@@ -164,6 +164,31 @@ def no_leaked_animations(request):
             f"keeps the colour of that flash's last frame, and every later flash on it becomes a no-op.")
 
 
+@pytest.fixture(autouse=True)
+def restore_logging():
+    """Snapshot the root logger's handlers and level; restore them after the test.
+
+    Anything that calls `raven.common.logsetup.configure` — its own tests, and any test that runs a
+    command-line tool's `main` — replaces the root handlers with a `StreamHandler` on whatever
+    `sys.stderr` is at the time, which under pytest is the capture stream. Left in place, that handler
+    outlives the capture: anything logging at interpreter exit, such as a datastore's `atexit` save,
+    then fails with "I/O operation on closed file".
+    """
+    import logging
+
+    saved_handlers = list(logging.root.handlers)
+    saved_level = logging.root.level
+    yield
+    # Close only what the test added: the saved handlers include pytest's own, which must come back usable.
+    for handler in list(logging.root.handlers):
+        logging.root.removeHandler(handler)
+        if handler not in saved_handlers:
+            handler.close()
+    for handler in saved_handlers:
+        logging.root.addHandler(handler)
+    logging.root.setLevel(saved_level)
+
+
 GUI_VIEWPORT_TITLE = "raven gui tests"
 
 

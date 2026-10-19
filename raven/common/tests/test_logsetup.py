@@ -2,8 +2,8 @@
 
 Tests verify that `configure(...)` correctly installs handlers, applies the
 allowlist filter, mirrors to a logfile, and survives re-entry. The tests
-mutate the global `logging.root` configuration; each test restores the
-original state via the `restore_logging` fixture.
+mutate the global `logging.root` configuration; the project-wide autouse
+`restore_logging` fixture in the root `conftest.py` restores it after each.
 """
 
 import logging
@@ -11,25 +11,6 @@ import logging
 import pytest
 
 from raven.common import logsetup
-
-
-@pytest.fixture
-def restore_logging():
-    """Snapshot root logger config; restore after the test.
-
-    `configure` mutates `logging.root` (level, handlers). Without this
-    fixture, tests would leak configuration into one another and into the
-    rest of the pytest run.
-    """
-    saved_handlers = list(logging.root.handlers)
-    saved_level = logging.root.level
-    yield
-    for handler in list(logging.root.handlers):
-        logging.root.removeHandler(handler)
-        handler.close()
-    for handler in saved_handlers:
-        logging.root.addHandler(handler)
-    logging.root.setLevel(saved_level)
 
 
 # ---------------------------------------------------------------------------
