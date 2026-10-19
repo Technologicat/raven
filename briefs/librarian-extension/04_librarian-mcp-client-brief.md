@@ -19,6 +19,11 @@ become available *in addition* to the built-ins, **all feeding the existing
 several; the scaffold, the `on_call_start`/`on_call_done` events, timing, and error handling
 are common path.
 
+**Built together with agent skills** (maintainer, 2026-10-19): MCP supplies the tools, and skills tell
+Librarian how to use them, for material that does not belong in a tool's docstring. The lab's demo needs
+both. Skills have no brief yet; `TODO_DEFERRED.md`, "Agent skills for Librarian", holds what is
+established.
+
 **Explicitly NOT this brief:** backend-hosted MCP (LM Studio talking to MCP servers itself).
 That's the quick path for *playing with* Hindsight as a tool and bypasses Raven's tool loop
 entirely — fine for experiments, wrong for the product. Different job.

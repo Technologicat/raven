@@ -212,6 +212,11 @@ now kept as a graph in `briefs/roadmap.md`, which carries each piece's detail; i
 - **Unplaced**: Hindsight (against the drydock, open), being usable by non-technical users (`TODO.md`,
   under *Cross-cutting*), subagents, and an MCP server side in Librarian.
 
+Added 2026-10-19 (maintainer), **revising the 2026-10-09 order**: the per-document pass, then the corpus
+filter (which the AOKK numbers wait on, and which had no node), then the MCP client with agent skills, then
+everything else, unordered beyond the earlier preferences. The drydock may slip into 2027. Details in
+`briefs/roadmap.md`.
+
 **This page stays open until its clusters have been read through for the autumn's priorities**, a session
 with the maintainer not yet held at the Yrityspäivä sprint's close (2026-10-09). Into `briefs/done/` after
 that.

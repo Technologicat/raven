@@ -13,10 +13,12 @@ pieces and the order between them.*
 ```mermaid
 flowchart TD
     PDP["Per-document LLM pass"]
+    CF["Corpus filter"]
+    MCP["MCP client"]
+    SKL["Agent skills"]
     T11["0.2.11: dehydration pass"]
     ANT["Anthropic-style backends<br/>(in 0.2.11, or 0.2.12 alone)"]
     VIS["Visualizer block"]
-    MCP["MCP client"]
     LABMCP["The lab's MCP server, v1 demo<br/>(by the end of 2026)"]
     LABINST["Lab installation"]
     HS["Hindsight"]
@@ -27,12 +29,15 @@ flowchart TD
     MCPS["MCP server side in Librarian"]
     LIBF["Librarian features deferred from 0.2.11"]
 
-    PDP -.-> T11
+    PDP --> CF
+    CF -.-> MCP
+    CF -.-> SKL
+    MCP --> LABMCP
+    SKL --> LABMCP
+    MCP --> LABINST
+    MCP -.-> T11
     T11 -.-> ANT
     ANT -.-> VIS
-    ANT -.-> MCP
-    MCP --> LABMCP
-    MCP --> LABINST
     T11 -.-> DD
     VIS -.-> DD
     DD --> INTEG
@@ -42,11 +47,24 @@ flowchart TD
 
 `HS`, `USE` and `SUB` have no edges yet: their place is open.
 
+**The rest of 2026, as decided 2026-10-19 (maintainer):** the *per-document pass → corpus filter* chain
+first, being what blocks the AOKK researchers; then the MCP client with agent skills, which the lab's
+December demo blocks on; then everything else. **The linearization stops there on purpose**: build what
+has to be built now, then look at the situation again. The edges below the MCP client are the earlier
+preferences, kept as they were rather than re-decided. **The drydock may slip into 2027**, and that is
+accepted.
+
 ## The nodes
 
 - **Per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`). **First**: the maintainer's part of
   the AOKK study blocks on it, and that blocks the other researchers on the team. Tentatively from 2026-10-19.
-- **0.2.11, the dehydration pass.** A clean starting state before the next builds. Small items are welcome
+- **Corpus filter** (`briefs/corpus-filter-brief.md`). **Gated on the per-document pass**, which it is built
+  on. It is what the AOKK numbers actually wait on, so the pass alone does not unblock the team: the chain is
+  *per-document pass → corpus filter → AOKK numbers*. The study re-run is a day or two of unattended GPU time.
+  The tool that drops the records the AOKK team's manual check rejected, possibly a `raven-siftbib`
+  criterion (`briefs/done/yrityspaiva/README.md`), is in the same queue, waiting on the team's marked sheet.
+- **0.2.11, the dehydration pass.** After the MCP client since 2026-10-19; until then it came first, as a
+  clean starting state for the builds after it. Small items are welcome
   here on their own merit: closing many of them shortens the list quickly, and that is attention rent
   removed. Decided 2026-10-09 (maintainer):
   - **In**: what was deferred in the run-up to Yrityspäivä — versioning the chat datastore file, the
@@ -80,9 +98,14 @@ flowchart TD
     sidecar.
   - **No longer gated on Hindsight**: Hindsight was only the first planned test target.
   - **Open**: whether weather stays with open-meteo or becomes a built-in tool.
+- **Agent skills** (`TODO_DEFERRED.md`, "Agent skills for Librarian"). **Part of the MCP build** (maintainer,
+  2026-10-19): MCP supplies the tools, and skills tell Librarian how to use them, carrying the material that
+  does not belong in a tool's docstring. The lab demo needs both. No brief yet; the item holds what is
+  established, including the open questions for its design.
 - **The lab's MCP server.** Its v1 requirements were specced on campus on 2026-10-07; it returns text or
   JSON. Needs a fully functional demo, v1 at least, by the end of 2026, which is why the MCP client comes
-  soon after the per-document pass. Its endpoints are looked at once the client works.
+  right after the corpus filter. Its endpoints are looked at once the client works. Its tools come with
+  agent skills on Librarian's side.
 - **Lab installation.** Also gated on the avatar-only mode and the sci-fi file objects, and dates the
   `cu130` move (`briefs/design/lab-assistant-hci-sketch.md`).
 - **Hindsight** (`briefs/librarian-extension/06_hindsight-standup-brief.md`). Wanted soon for testing and

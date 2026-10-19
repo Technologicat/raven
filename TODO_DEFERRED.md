@@ -2143,11 +2143,13 @@ Decided in the corpus-interrogation sketch (2026-08-11), recorded there and nowh
 
 ## Agent skills for Librarian (natural-language workflows over the document database)
 
-*Cluster: ? · Cost: ? · Gate: shortly after the MCP client (brief 04) · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: none; built with the MCP client (brief 04) · Filed: 2026-08-11 · See also: `briefs/roadmap.md`, *Agent skills**
 
-**Wanted shortly after MCP** (maintainer, 2026-10-01): MCP gives the tools, and skills orchestrate them.
+**Part of the MCP build** (maintainer, 2026-10-19), where it was wanted shortly after it (2026-10-01): MCP
+gives the tools, and skills tell Librarian how to use them — the material that does not belong in a tool's
+docstring. The lab's MCP demo needs both.
 
-Design work deliberately postponed; this records the idea and what is already established about it.
+Not designed yet, and no brief; this records the idea and what is already established about it.
 
 The Agent Skills open standard (https://agentskills.io) — originally Anthropic's, now adopted across a range
 of agent products. A skill is a folder with a `SKILL.md` carrying metadata (`name`, `description`) plus

@@ -9,6 +9,9 @@ this brief.
 is the kind of item that expands to fill whatever schedule it is given, so the design session should fix
 what v1 is and what waits (maintainer's worry, 2026-09-30).
 
+**Status, 2026-10-19:** may slip into 2027, which is accepted (maintainer). The per-document pass, the
+corpus filter and the MCP client come first; `briefs/roadmap.md` has the order.
+
 **Status, 2026-10-01 — a drydock build** (maintainer). It replaces the data model wholesale, so it is
 expected to take several weeks during which Raven is not in an operable state. **A release is cut just
 before it starts**, containing whatever is done at that moment. **The multimodal embedder goes in during
