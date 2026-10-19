@@ -40,10 +40,10 @@ rather than six features being wanted.
    explicitly deferred the mid-run case. CC's three deferred questions are this brief's scope exactly: how
    long to wait before giving up, whether to resume or restart, and what to do with the documents already
    written.
-5. **A crash during ingest loses the whole run** — the measured version. The delayed-commit coalescer defers
-   a commit one second after each finished read, so on a large corpus it never fires until the reads *stop*:
-   **~40 minutes on the 1268-PDF fulltext corpus (2026-08-06)**, with every extracted document pending in
-   memory and nothing on disk.
+5. ~~**A crash during ingest loses the whole run**~~ — **not a user after all** (2026-10-19). The work at risk
+   is PDF extraction in the indexer, not an LLM loop, and the agreed remedy is a content-addressed cache of
+   the extracted text: brief 12's derived-text sidecar. Re-gated there in `TODO_DEFERRED.md`. The number is
+   kept so that references to users 6–10 stay valid.
 6. **Two shapes found while implementing brief 15** — a VLM pass over page images, and "here is a fulltext
    PDF, what does it say about X?" over a set. Brief 15 names the batch mechanics of both as this work.
 7. **A title for every document, upon import** (Juha, 2026-09-29). `chatutil.document_label` names a document
@@ -65,6 +65,12 @@ rather than six features being wanted.
    no structured affiliation filtering. The same import step as 7; the extraction is what
    `investigations/aokk-corpus-scope/extract_fields.py` already does for its study, and filtering on the
    result is brief 13's scope mechanism with a different source for the tags.
+10. **A field-of-science classifier** (2026-10-19) — label each paper in a pile with its field, so the strays
+    can be moved out. Done once by hand over a ~1600-paper pile that had drifted from its AI-research focus,
+    as `investigations/agent-batch-classification/`; `classify_papers.py` there is the prototype, with its
+    batching, index-keyed answers, resume and escalation computed outside the model. A sibling of the corpus
+    filter rather than a case of it: that judges a record against the question a search was meant to answer,
+    this one assigns a label. A second pile, of scanned documents, waits on an OCR preprocessor.
 
 Corpus sizes make several of these concrete rather than prospective: ~12k hydrogen abstracts already
 ingested, ~2500 one-page ECCOMAS 2024 conference abstracts, an arXiv AI fulltext set of 1200+ full papers.

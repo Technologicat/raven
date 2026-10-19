@@ -6041,7 +6041,7 @@ Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: the per-document LLM pass: a resumable job is the remedy · Filed: 2026-08-06 · See also: `briefs/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: brief 12, whose derived-text sidecar is this cache · Filed: 2026-08-06 · See also: `briefs/12_derived-artifact-store-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus

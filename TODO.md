@@ -238,7 +238,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - **And with stage 3 of `VISION.md`**, whose half-built piece is per-document summarization — shipped code, currently switched off because it runs over a whole dataset at import time rather than over a selection. A summary layer is what this item wants indexed, so that is three things wanting one mechanism. Worth settling before any of them is built separately.
   - The confidence signal from brief 09 lever 1 detects the case without fixing it, which is worth having in the meantime: the query reads as low-confidence, so it can at least be *reported* as unanswered rather than answered wrongly.
 
-- **[Medium]** A classifier pass over the arXiv paper stash, to separate the AI/ML records from the strays. The corpus at `00_stuff/datasets/ai_papers` accumulated by saving everything to one folder, so a minority of cosmology, astronomy and speculative-physics records are mixed in with the AI research. A short script that asks a local model to label each abstract would give a pure AI set, and the labels are reusable: they are exactly the ground truth a topic-scoping feature would be evaluated against, so this is worth doing even though the corpus works as-is for retrieval evaluation. Raised 2026-08-05.
 
 - **[Medium]** Think blocks: parse properly instead of current regex hack. We already receive one token at a time.
 
