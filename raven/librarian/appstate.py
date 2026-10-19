@@ -304,24 +304,24 @@ def _refresh_greeting(llm_settings: env,
 def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
          state_file: Union[str, pathlib.Path],
-         autosave: bool = True) -> Tuple[chattree.Forest, Dict]:
+         autosave: bool = False) -> Tuple[chattree.Forest, Dict]:
     """Load chat app state.
 
     `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
 
     `datastore_file`: Path to the JSON file to load the persistent chat forest from.
-                      Will be auto-persisted to the same path at app exit.
+                      With `autosave=True`, persisted to the same path at app exit.
 
     `state_file`: Path to the app state JSON file to load things such as the
                   new-chat HEAD, the current chat HEAD, and various settings.
-                  Will be auto-persisted to the same path at app exit.
+                  With `autosave=True`, persisted to the same path at app exit.
 
-    `autosave`: If `True` (default), register automatic `atexit` persistence for both the datastore
-                and the app state file. This is the right behaviour for app lifecycle use.
+    `autosave`: If `False` (default), nothing is written unless the caller calls
+                `save(state_file, state)` and `datastore.save()`. This is what a script,
+                a tool or a test wants.
 
-                If `False`, skip both `atexit` registrations. The caller is responsible for calling
-                `save(state_file, state)` and `datastore.save()` explicitly if persistence is wanted.
-                Primarily useful for tests and ad-hoc inspection.
+                If `True`, register automatic `atexit` persistence for both the datastore
+                and the app state file. This is what a chat app wants.
 
     Return value is the tuple `(datastore, state)`, where:
         `datastore`: `chattree.PersistentForest` containing the chat database,

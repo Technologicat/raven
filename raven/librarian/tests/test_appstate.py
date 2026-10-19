@@ -627,6 +627,19 @@ class TestAutosave:
         _load(tmp_path, llm_settings, autosave=True)
         assert len(registered) == 2
 
+    def test_the_default_registers_nothing(self, monkeypatch, tmp_path, llm_settings):
+        """Saving at exit is opt-in, in `PersistentForest` and `appstate.load` alike."""
+        registered = []
+        monkeypatch.setattr("atexit.register",
+                            lambda fn, *a, **kw: registered.append(fn))
+
+        chattree.PersistentForest(tmp_path / "bare.json")
+        appstate.load(llm_settings, tmp_path / "chat.json", tmp_path / "state.json")
+        assert registered == [], f"saving at exit was registered without being asked for: {registered}"
+
+        chattree.PersistentForest(tmp_path / "opted_in.json", autosave=True)
+        assert len(registered) == 1, "an opted-in save was not captured, so this fixture cannot see a registration"
+
     def test_persistentforest_autosave_property_is_readonly(self, tmp_path):
         """The `autosave` property cannot be reassigned on an existing instance —
         changing it after construction would be misleading (the atexit hook is

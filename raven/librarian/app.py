@@ -461,7 +461,8 @@ with timer() as tim:
     # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
     datastore, app_state = appstate.load(llm_settings,
                                          librarian_config.llm_datastore_file,
-                                         librarian_config.llm_state_file)
+                                         librarian_config.llm_state_file,
+                                         autosave=True)
 logger.info(f"Datastore loaded in {tim.dt:0.6g}s.")
 
 @call

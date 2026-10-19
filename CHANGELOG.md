@@ -46,6 +46,7 @@
 - **Starts several seconds sooner when it counts tokens with a tokenizer read from a `.gguf`** (`llm_tokenizer_path`, in `raven.librarian.config`).
   - The tokenizer is built once and kept in `~/.config/raven/librarian/tokenizer_cache/` (`llm_tokenizer_cache_dir`); later starts load it from there. Safe to delete; it is rebuilt when the `.gguf` changes.
   - A large document collection also loads faster.
+- **API: `raven.librarian.chattree.PersistentForest` and `raven.librarian.appstate.load` no longer save at interpreter exit unless asked.** `autosave` now defaults to `False`. Code that builds its own datastore and relies on the save at exit must pass `autosave=True` or call `save()`. Librarian and Minichat behave as before.
 
 #### Raven-deduplicate
 

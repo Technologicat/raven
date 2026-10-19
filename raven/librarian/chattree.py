@@ -1208,21 +1208,20 @@ def rename_datastore(old_file: Union[str, pathlib.Path],
 class PersistentForest(Forest):
     def __init__(self,
                  datastore_file: Union[str, pathlib.Path],
-                 autosave: bool = True,
+                 autosave: bool = False,
                  sidecar_extractor: Callable[[Any], set[str]] | None = None):
         """Exactly like `Forest`, but with persistent storage as JSON.
 
         `datastore_file`: Where to store the data (for the specific collection you're creating/loading).
 
-        `autosave`: If `True` (default), register `self.save` to be called at interpreter exit via `atexit`.
-                    This is the right behaviour for app lifecycle use — whatever state the datastore is in
-                    when the app exits, that's what gets persisted.
+        `autosave`: If `False` (default), nothing is written unless the caller calls `self.save()`.
+                    In-memory mutations work either way. This is what a script, a tool or a test wants,
+                    and it is safe for ad-hoc inspection of a real datastore file from a Python session,
+                    which is not rewritten at interpreter exit.
 
-                    If `False`, skip the `atexit` registration. In-memory mutations still work; the caller
-                    is responsible for calling `self.save()` explicitly when (or if) persistence is wanted.
-                    This is primarily useful for tests and for ad-hoc inspection of a real datastore file
-                    from a Python session, where unconditional autosave would silently rewrite the file
-                    at interpreter exit.
+                    If `True`, register `self.save` to be called at interpreter exit via `atexit`, so that
+                    whatever state the datastore is in when the program exits is what gets persisted. This
+                    is what a chat app wants.
 
         `sidecar_extractor`: How to read the sidecar references out of one (otherwise opaque) node payload —
                     a callable `payload -> set[str]` returning the sidecar filenames that payload references.
@@ -1292,8 +1291,8 @@ class PersistentForest(Forest):
         there — so saving often costs no disk writes while nothing is happening. A migration at load time
         counts as a change.
 
-        With `autosave=True` (the default), this is called automatically at interpreter exit via `atexit`.
-        With `autosave=False`, the caller must invoke this explicitly if persistence is wanted.
+        With `autosave=False` (the default), the caller must invoke this explicitly if persistence is wanted.
+        With `autosave=True`, this is called automatically at interpreter exit via `atexit`.
         """
         # Atomic, because the crash that kills a save half-way is exactly when the history is most wanted.
         with self.lock:

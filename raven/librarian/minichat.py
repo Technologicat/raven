@@ -182,7 +182,7 @@ def minimal_chat_client(backend_url) -> None:
             sys.exit(255)
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
-        datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
+        datastore, app_state = appstate.load(llm_settings, datastore_file, state_file, autosave=True)
         print()
 
         # The two ways a flag command's setting is shown to the user: introduced at startup, and listed in
