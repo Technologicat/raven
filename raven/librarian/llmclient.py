@@ -230,11 +230,11 @@ def detect_backend_flavor(backend_url: str) -> str:
     ooba-private endpoint is not a clean discriminator (LM Studio returns 200 for it too, just without the
     expected field).
     """
-    # LM Studio: the native `/api/v0/models` returns {"data": [{id, state, arch, loaded_context_length, ...}]}.
-    # No other backend serves this namespace.
+    # LM Studio: the native `/api/v1/models` returns {"models": [{key, type, loaded_instances, ...}]}. No other
+    # backend serves this namespace. An LM Studio too old to have it detects as "generic", which still works.
     try:
-        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data")
-        if isinstance(models, list) and models and "state" in models[0]:
+        models = requests.get(f"{backend_url}/api/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("models")
+        if isinstance(models, list) and models and "loaded_instances" in models[0]:
             return "lmstudio"
     except (requests.RequestException, ValueError, AttributeError):  # connection / non-JSON / unexpected shape -> not LM Studio
         pass
@@ -247,24 +247,23 @@ def detect_backend_flavor(backend_url: str) -> str:
         pass
     return "generic"
 
-def _format_lmstudio_model_label(model_record: dict) -> str:
-    """Assemble a rich identity line from an LM Studio `/api/v0/models` record.
+def _format_lmstudio_model_label(model_id: str, quantization: str | None, context_length: int | None) -> str:
+    """Assemble a rich identity line from the parts of an LM Studio model record.
 
     E.g. `qwen3.5-4b, Q4_K_XL, 128 Ki context` — accurate, structured, better than a bare GGUF filename.
     The context length uses an IEC binary prefix (`si_prefix` with `binary=True`), since model context
     windows are powers of two (131072 -> "128 Ki", exactly).
     """
-    parts = [model_record["id"]]
-    if model_record.get("quantization"):
-        parts.append(model_record["quantization"])
-    ctx = model_record.get("loaded_context_length")
-    if ctx:
-        parts.append(f"{si_prefix(ctx, precision=0, binary=True)} context")
+    parts = [model_id]
+    if quantization:
+        parts.append(quantization)
+    if context_length:
+        parts.append(f"{si_prefix(context_length, precision=0, binary=True)} context")
     return ", ".join(parts)
 
 def _warn_if_lmstudio_parallel(backend_url: str) -> None:
-    """Log a warning for each model LM Studio has loaded with more than one concurrent slot. Best effort: an LM
-    Studio without the `/api/v1` listing, or any other failure here, logs nothing at WARNING."""
+    """Log a warning for each model LM Studio has loaded with more than one concurrent slot. Best effort: any
+    failure here logs nothing at WARNING."""
     # Said rather than changed, the load settings being the user's. Above 1 the setting costs VRAM, the more
     # so the longer the context, which is what makes a model that should fit run out of memory with no
     # visible cause.
@@ -292,15 +291,20 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
       `model_id`: the model id to send in requests (relevant for LM Studio JIT), or `None`.
       `context_length`: the loaded context window in tokens, or `None` if the backend doesn't report it.
       `is_vlm`: whether the loaded model accepts image input, as a tri-state — `True` / `False` when the backend
-                reports it (LM Studio flags this via the model record's `type == "vlm"`), or `None` when it
-                can't be determined (ooba / generic expose no capability field). Gates the image-attach UI: a
-                definite `False` hard-refuses attachment; `None` allows it and lets the backend reject.
+                reports it (LM Studio, as `capabilities.vision`), or `None` when it can't be determined (ooba /
+                generic expose no capability field). Gates the image-attach UI: a definite `False`
+                hard-refuses attachment; `None` allows it and lets the backend reject.
       `loaded`: whether the backend currently has a model resident and ready to answer, as the same tri-state.
                 LM Studio says so per model (`state`); ooba reports the string "None" as its model name when
                 it has nothing. Both are therefore `True`/`False`. A generic backend lists models it *has*,
                 which says nothing about what is resident, so there it is `None` — "cannot tell", which must
                 not be shown to the user as a fault. Reachable-but-empty is otherwise invisible until the
                 first message of a session fails, which is the worst moment to discover it.
+      `quantization`, `bits_per_weight`: the loaded model's quantization, by name (`"Q4_K_XL"`) and in bits
+                per weight, or `None` where the backend does not report it (all but LM Studio).
+      `load_config`: the settings the model was loaded with, as the backend reports them — on LM Studio the
+                loaded instance's whole `config` block (context length, batch sizes, `parallel`, flash
+                attention, speculative decoding, ...) — or `None` where it does not.
     """
     if flavor == "oobabooga":
         # ooba reports the GGUF filename (fine — the model can interpret `name-size-quant.gguf` itself) but
@@ -312,30 +316,37 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
         # test below is ooba's test, not a guess at one - but it is read from its source rather than
         # observed, since there is no ooba instance here to try it against.
         model_is_loaded = bool(model_name) and model_name != "None"
-        return env(label=model_name if model_is_loaded else NO_MODEL_INFO,
-                   model_id=model_name if model_is_loaded else None,
-                   context_length=None,
-                   is_vlm=None,
-                   loaded=model_is_loaded)
+        return _model_info(label=model_name if model_is_loaded else NO_MODEL_INFO,
+                           model_id=model_name if model_is_loaded else None,
+                           loaded=model_is_loaded)
     if flavor == "lmstudio":
-        # `/api/v0/models` lists all downloaded models; exactly the `state == "loaded"` one is resident under
-        # JIT, and only that record carries `loaded_context_length`. The record's `type` field is `"vlm"` for
-        # vision models (vs `"llm"` / `"embeddings"`); vision is signaled there, not in `capabilities`.
-        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])
-        loaded = [m for m in models if m.get("state") == "loaded"]
+        # `/api/v1/models` lists every downloaded model, each with its `loaded_instances` — several when one
+        # model is loaded more than once, in which case the instance `id`, not the model's `key`, is what a
+        # request must name. An embedding model can be loaded too, and cannot chat, so it is never the answer.
+        models = requests.get(f"{backend_url}/api/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("models", [])
+        loaded = [(model, instance)
+                  for model in models if model.get("type") != "embedding"
+                  for instance in model.get("loaded_instances") or []]
         if loaded:
-            record = loaded[0]  # with several loaded, the first LM Studio lists; `n_loaded` lets a caller say so
-            # A record with no `type` at all is "cannot tell", not "cannot see": a bare `== "vlm"` would
-            # hard-refuse image attachment on the strength of a field that was never there. Every record
-            # this LM Studio returns carries one, so this is the shape of the answer rather than a
-            # workaround for an observed gap.
-            maybe_model_type = record.get("type")
-            return env(label=_format_lmstudio_model_label(record),
-                       n_loaded=len(loaded),
-                       model_id=record.get("id"),
-                       context_length=record.get("loaded_context_length"),
-                       is_vlm=(maybe_model_type == "vlm") if maybe_model_type is not None else None,
-                       loaded=True)
+            model, instance = loaded[0]  # with several loaded, the first LM Studio lists; `n_loaded` lets a caller say so
+            load_config = instance.get("config") or {}
+            quantization = model.get("quantization") or {}
+            # A record with no vision flag is "cannot tell", not "cannot see": a bare `is True` would
+            # hard-refuse image attachment on the strength of a field that was never there. Embedding
+            # records are the ones without `capabilities`, and they are filtered out above, so this is the
+            # shape of the answer rather than a workaround for an observed gap.
+            maybe_vision = (model.get("capabilities") or {}).get("vision")
+            return _model_info(label=_format_lmstudio_model_label(instance.get("id"),
+                                                                  quantization.get("name"),
+                                                                  load_config.get("context_length")),
+                               n_loaded=len(loaded),
+                               model_id=instance.get("id"),
+                               context_length=load_config.get("context_length"),
+                               is_vlm=maybe_vision if isinstance(maybe_vision, bool) else None,
+                               loaded=True,
+                               quantization=quantization.get("name"),
+                               bits_per_weight=quantization.get("bits_per_weight"),
+                               load_config=load_config)
         # JIT idle: nothing resident right now. If the user named a model, trust that; else say so honestly.
         # Nothing loaded means no capability record to read, so `is_vlm` is unknown either way.
         #
@@ -344,14 +355,28 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
         # resolves itself - but it also fails outright when the named model does not fit in what is free,
         # and telling the user which of those they are in is the whole point of reporting it.
         if librarian_config.llm_model:
-            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None, is_vlm=None, loaded=False)
-        return env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None, loaded=False)
+            return _model_info(label=librarian_config.llm_model, model_id=librarian_config.llm_model, loaded=False)
+        return _model_info(loaded=False)
     # generic: best-effort from the standard list; never guess identity, and no capability field to read.
     ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])]
     ids = [model_id for model_id in ids if model_id]
     if len(ids) == 1:
-        return env(label=ids[0], model_id=ids[0], context_length=None, is_vlm=None, loaded=None)
-    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None, is_vlm=None, loaded=None)
+        return _model_info(label=ids[0], model_id=ids[0])
+    return _model_info(model_id=librarian_config.llm_model)
+
+def _model_info(label: str = NO_MODEL_INFO,
+                model_id: str | None = None,
+                context_length: int | None = None,
+                is_vlm: bool | None = None,
+                loaded: bool | None = None,
+                quantization: str | None = None,
+                bits_per_weight: float | None = None,
+                load_config: dict | None = None,
+                **extra) -> env:
+    """Build a model-info `env` as `_resolve_model_info` returns it, every field present; the defaults say
+    "not reported". `extra` carries flavor-specific fields (LM Studio's `n_loaded`)."""
+    return env(label=label, model_id=model_id, context_length=context_length, is_vlm=is_vlm, loaded=loaded,
+               quantization=quantization, bits_per_weight=bits_per_weight, load_config=load_config, **extra)
 
 # --------------------------------------------------------------------------------
 # The tool registry
@@ -488,7 +513,7 @@ def setup(backend_url: str,
 
 
 # What a backend that cannot be reached has told us about itself: nothing.
-_UNREACHABLE_MODEL_INFO = env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None, loaded=False)
+_UNREACHABLE_MODEL_INFO = _model_info(loaded=False)
 
 backend_unreachable = sym("backend_unreachable")
 backend_has_no_model = sym("backend_has_no_model")

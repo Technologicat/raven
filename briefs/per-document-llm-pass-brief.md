@@ -123,6 +123,17 @@ thousand "failed" documents that were never tried properly.
 
 ## Step 0: one model record in `llmclient`, shared with Librarian
 
+**Done 2026-10-19.** `llmclient._resolve_model_info` reads `/api/v1/models` only. The open question below
+was settled as `v1` only (Juha, 2026-10-19), so an LM Studio without it detects as a generic backend. Its
+`env` now carries `quantization`, `bits_per_weight` and `load_config` beside the `label` composed from
+them, and those three are `None` on the other flavors. Two things the build leaves for the pass:
+
+- **The parts are not copied into `llm_settings`**, which keeps only the `label`. Read them when the run
+  starts, or add them to `configure` and `follow_model_swap` together. A swap is detected by comparing the
+  label, so a reload with different settings and the same context length would go unnoticed.
+- **`_resolve_model_info` is still private.** Whether the pass calls it as it is or it gets a public name
+  is decided where the pass is written.
+
 Decided 2026-09-30 (Juha): the instrument stamp needs the model's identity, and Librarian already builds
 one for its character card, so both come from one function rather than two copies. It is the first step
 of this build, not a separate item, because the stamp is what needs it.

@@ -1521,14 +1521,32 @@ def _route_get(routes):
     return _get
 
 
+def _lmstudio_model(key, loaded=True, quantization=None, context_length=None, vision=None, type="llm", **config):
+    """One model record as LM Studio's `/api/v1/models` lists it. `vision=None` leaves `capabilities` out,
+    as LM Studio does for an embedding model; `config` goes into the loaded instance's `config` block."""
+    record = {"type": type, "key": key, "loaded_instances": []}
+    if quantization is not None:
+        record["quantization"] = {"name": quantization, "bits_per_weight": 4}
+    if vision is not None:
+        record["capabilities"] = {"vision": vision, "trained_for_tool_use": True}
+    if loaded:
+        if context_length is not None:
+            config["context_length"] = context_length
+        record["loaded_instances"].append({"id": key, "config": config})
+    return record
+
+
+def _lmstudio(*records):
+    return {"/api/v1/models": {"models": list(records)}}
+
+
 class TestDetectBackendFlavor:
     def test_lmstudio_via_native_endpoint(self, monkeypatch):
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "arch": "qwen35"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("qwen3.5-4b"))))
         assert llmclient.detect_backend_flavor("http://x") == "lmstudio"
 
     def test_oobabooga_when_native_endpoint_absent(self, monkeypatch):
-        # /api/v0/models hits the default error-body (not LM Studio); /v1/internal/model/info has model_name.
+        # /api/v1/models hits the default error-body (not LM Studio); /v1/internal/model/info has model_name.
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
         assert llmclient.detect_backend_flavor("http://x") == "oobabooga"
@@ -1542,21 +1560,56 @@ class TestDetectBackendFlavor:
         # The real gotcha: LM Studio returns 200 + {"error": ...} for /v1/internal/model/info. Detection keys
         # on the `model_name` field, not the status, so this must NOT be misread as ooba.
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "m", "state": "loaded"}]},
+            **_lmstudio(_lmstudio_model("m")),
             "/v1/internal/model/info": {"error": {"message": "Unexpected endpoint"}}}))
         assert llmclient.detect_backend_flavor("http://x") == "lmstudio"
 
 
 class TestModelInfoResolution:
     def test_lmstudio_rich_label_and_context(self, monkeypatch):
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [
-                {"id": "other", "state": "not-loaded", "quantization": "Q8", "max_context_length": 262144},
-                {"id": "qwen3.5-4b", "state": "loaded", "quantization": "Q4_K_XL", "loaded_context_length": 131072}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
+            _lmstudio_model("other", loaded=False, quantization="Q8"),
+            _lmstudio_model("qwen3.5-4b", quantization="Q4_K_XL", context_length=131072, vision=True))))
         info = llmclient._resolve_model_info("http://x", "lmstudio")
         assert info.label == "qwen3.5-4b, Q4_K_XL, 128 Ki context"
         assert info.model_id == "qwen3.5-4b"
         assert info.context_length == 131072
+
+    def test_lmstudio_record_carries_its_parts(self, monkeypatch):
+        # The label is for a person; what produced a result is said by the parts, the load settings included.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
+            _lmstudio_model("qwen3.5-4b", quantization="Q4_K_XL", context_length=131072, vision=True,
+                            parallel=1, flash_attention=True))))
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.quantization == "Q4_K_XL"
+        assert info.bits_per_weight == 4
+        assert info.load_config == {"context_length": 131072, "parallel": 1, "flash_attention": True}
+
+    def test_other_flavors_report_no_parts(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
+        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        assert (info.quantization, info.bits_per_weight, info.load_config) == (None, None, None)
+
+    def test_lmstudio_a_loaded_embedding_model_is_not_the_model(self, monkeypatch):
+        # LM Studio lists the embedding model first here, as it may; it cannot chat, so the LLM is the answer.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
+            _lmstudio_model("text-embedding-nomic-embed-text-v1.5", type="embedding", context_length=2048),
+            _lmstudio_model("qwen3.5-4b", context_length=131072, vision=True))))
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.model_id == "qwen3.5-4b"
+        assert info.n_loaded == 1
+
+    def test_lmstudio_a_model_loaded_twice_is_named_by_its_instance(self, monkeypatch):
+        # A second instance of one model gets its own id, and that id is what a request has to name.
+        model = _lmstudio_model("qwen3.5-4b", context_length=131072, vision=True)
+        model["loaded_instances"].append({"id": "qwen3.5-4b:2", "config": {"context_length": 8192}})
+        model["loaded_instances"].reverse()
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(model)))
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.model_id == "qwen3.5-4b:2"
+        assert info.context_length == 8192
+        assert info.n_loaded == 2
 
     @pytest.mark.parametrize("parallel, quiet, warns", [(4, False, True), (1, False, False), (4, True, False)],
                              ids=["concurrency 4", "concurrency 1", "concurrency 4, quiet"])
@@ -1564,22 +1617,11 @@ class TestModelInfoResolution:
         # Concurrency 1 is the control: the same listing, and no warning. Quiet is what a polling `reconnect`
         # passes, which asks every few seconds and must not repeat the warning each time.
         monkeypatch.setattr(llmclient.librarian_config, "llm_backend_flavor", "lmstudio")
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "loaded_context_length": 131072}]},
-            "/api/v1/models": {"models": [{"key": "qwen3.5-4b",
-                                           "loaded_instances": [{"id": "qwen3.5-4b", "config": {"parallel": parallel}}]}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
+            _lmstudio_model("qwen3.5-4b", context_length=131072, parallel=parallel))))
         with caplog.at_level(logging.WARNING, logger="raven.librarian.llmclient"):
             llmclient.setup("http://x", quiet=quiet)
         assert any("max concurrency" in record.getMessage() for record in caplog.records) is warns
-
-    def test_lmstudio_without_the_v1_listing_says_nothing(self, monkeypatch, caplog):
-        # An older LM Studio answers `/api/v1/models` with its error body; model info resolves as before.
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "loaded_context_length": 131072}]}}))
-        with caplog.at_level(logging.WARNING, logger="raven.librarian.llmclient"):
-            info = llmclient._resolve_model_info("http://x", "lmstudio")
-        assert info.model_id == "qwen3.5-4b"
-        assert not caplog.records
 
     def test_oobabooga_filename_label_no_context(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
@@ -1603,8 +1645,8 @@ class TestModelInfoResolution:
 
     def test_lmstudio_jit_idle_nothing_loaded(self, monkeypatch):
         # No model resident (all not-loaded) and no configured llm_model -> honest "no info", not a guess.
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}, {"id": "b", "state": "not-loaded"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False),
+                                                                            _lmstudio_model("b", loaded=False))))
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
         info = llmclient._resolve_model_info("http://x", "lmstudio")
         assert info.label == llmclient.NO_MODEL_INFO
@@ -1616,12 +1658,10 @@ class TestModelInfoResolution:
         # put a permanent warning in front of every user of either.
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
 
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "loaded"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a"))))
         assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is True
 
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False))))
         assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is False
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
@@ -1646,22 +1686,22 @@ class TestModelInfoResolution:
         assert info.model_id is None
 
     def test_a_missing_capability_field_is_cannot_tell_not_cannot_see(self, monkeypatch):
-        # `is_vlm=False` hard-refuses image attachment, so it must mean the backend said so. Every record
-        # LM Studio returns carries `type`; a record without one has not answered the question.
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "loaded"}]}}))
+        # `is_vlm=False` hard-refuses image attachment, so it must mean the backend said so. Every LLM record
+        # LM Studio returns carries `capabilities`; a record without one has not answered the question.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a"))))
         assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is None
 
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "loaded", "type": "llm"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", vision=False))))
         assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is False
+
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", vision=True))))
+        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is True
 
     def test_naming_a_model_does_not_make_it_resident(self, monkeypatch):
         # LM Studio's JIT loads on demand, so a configured model name is a request the backend will *try* to
         # honor - and it fails outright when the model does not fit in the free VRAM. So the name settles
         # what a request would ask for, not whether the backend can answer now.
-        monkeypatch.setattr(llmclient.requests, "get", _route_get({
-            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}]}}))
+        monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False))))
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", "qwen3.6-35b-a3b")
         info = llmclient._resolve_model_info("http://x", "lmstudio")
         assert info.label == "qwen3.6-35b-a3b"

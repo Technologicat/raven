@@ -51,6 +51,8 @@
   - Code that builds its own datastore and relies on the save at exit must pass `autosave=True`, or call `save()`.
   - Librarian and Minichat behave as before.
   - This suits `raven.librarian.agent` scripting and tests, which build datastores of their own and should not have them written out at exit by default.
+- **Librarian reads the loaded model from LM Studio's `/api/v1` REST API.**
+  - An LM Studio too old to serve it is treated as a generic OpenAI-compatible backend. Chat still works there, but the context window falls back to the default and vision support is not detected.
 
 #### Raven-deduplicate
 
@@ -67,6 +69,7 @@
 - **A message spoken into the microphone is sent with the attachments staged for it.** Before, it went out without them, and they stayed in the strip to be sent with the next message.
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
 - **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.
+- **An embedding model loaded in LM Studio beside the chat model is no longer taken for it.** Before, whichever loaded model LM Studio listed first was the one Librarian named and sent requests to.
 
 #### Raven-pdf2bib
 
