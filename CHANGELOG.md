@@ -68,6 +68,10 @@
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
 - **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.
 
+#### Raven-pdf2bib
+
+- **An abstract with no author list or no title leaves that field out**, and the entry is flagged for a check by hand (into `--failed`, when given). Before, the model's description of the absence, such as "The abstract does not list any authors", was written into the field as if it were the data. A section heading reported as the title, such as "Abstract", is treated the same way.
+
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 
 ### Added

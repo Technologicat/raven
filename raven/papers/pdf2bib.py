@@ -53,6 +53,11 @@ from .utils import bibtex_escape
 status_success = sym("success")
 status_failed = sym("failed")
 
+# What the prompts ask the LLM to reply when a field is absent from the abstract. Without one, the model
+# describes the absence in prose, and the sentence lands in the BibTeX field as if it were the data.
+_NO_AUTHORS = "NO AUTHORS LISTED"
+_NO_TITLE = "NO TITLE"
+
 # This tool's whole job is to drive an LLM over the text layer of free-form conference abstracts, so it
 # always needs raven-server's client — unconditionally, unlike `visualizer.importer`, which needs it only
 # when the cluster-keyword mode is `llm`. Initialize before the `MaybeRemoteService` below, whose
@@ -88,6 +93,11 @@ def _get_dehyphenator() -> "mayberemote.Dehyphenator":
 
 # --------------------------------------------------------------------------------
 # Utilities
+
+def _is_sentinel(reply: str, sentinel: str) -> bool:
+    """Whether the LLM's `reply` is `sentinel`, ignoring case, surrounding whitespace, and the Markdown
+    emphasis and trailing punctuation a model tends to add even when asked for plain text."""
+    return reply.strip().strip("*_`\"'.! ").upper() == sentinel
 
 def full_output_trace(record: agent.TurnRecord) -> str:
     """Format everything the LLM wrote in one extraction step, for the error report.
@@ -192,7 +202,7 @@ def setup_prompts(llm_settings: env,
         return text
 
     # TODO: Sometimes this returns comma-separated authors. Can't easily detect programmatically, since "Ally Author" and "Author, Ally" are both valid BibTeX formats. Use LLM self-critique?
-    prompt_get_authors = dedent("""Who are the authors of the abstract?
+    prompt_get_authors = dedent(f"""Who are the authors of the abstract?
 
     This will be used for a bibliography. We need only the author names: NO institutions, NO street addresses, NO email addresses.
 
@@ -201,6 +211,8 @@ def setup_prompts(llm_settings: env,
     Just copy that line (or those lines) into the output.
 
     IMPORTANT: List the authors IN THE SAME ORDER as they appear in the original abstract.
+
+    If the abstract lists no authors at all, reply only with: {_NO_AUTHORS}
     """)
 
     prompt_drop_author_affiliations = dedent("""Below is a list of author names for a bibliography:
@@ -440,6 +452,13 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
+        if _is_sentinel(scrubbed_output_text_1, _NO_AUTHORS):
+            error_msg = f"Input file '{unique_id}': LLM found no author list; omitting the field, manual check recommended."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+            return status_failed, error_info.getvalue(), None
+
         # Usually the output is correct, but sometimes:
         #   - The list may use commas instead of the word "and"
         #   - The list may have additional hallucinated authors
@@ -633,13 +652,17 @@ def setup_prompts(llm_settings: env,
 
         return status, error_info.getvalue(), authors
 
-    prompt_get_title = dedent("""What is the title of the abstract?
+    prompt_get_title = dedent(f"""What is the title of the abstract?
 
     Please reply only with the title.
 
     Use plain text.
 
     Do NOT place quotation marks around the title.
+
+    A section heading such as "Abstract" is NOT the title.
+
+    If the abstract has no title, reply only with: {_NO_TITLE}
     """)
 
     def extract_title(unique_id: str, text: str) -> str:
@@ -660,6 +683,14 @@ def setup_prompts(llm_settings: env,
 
         title = scrubbed_output_text.strip()
 
+        # The prompt says a heading is not the title, and a model sometimes reports one anyway.
+        if _is_sentinel(title, _NO_TITLE) or _is_sentinel(title, "ABSTRACT"):
+            error_msg = f"Input file '{unique_id}': LLM found no title (reply: '{title}'); omitting the field, manual check recommended."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
+            return status_failed, error_info.getvalue(), None
+
         if not title:
             status = status_failed
             error_msg = f"Input file '{unique_id}': LLM returned empty title; manual check recommended."
@@ -668,7 +699,7 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
         else:
             # Strip spurious period
-            while title[-1] == ".":
+            while title.endswith("."):
                 title = title[:-1]
 
             # Strip spurious quotation marks (they may still occasionally happen even though we instruct the LLM not to emit them)
@@ -676,7 +707,7 @@ def setup_prompts(llm_settings: env,
                 title = title[1:-1]
 
             # Strip spurious period, again (inside quotation marks)
-            while title[-1] == ".":
+            while title.endswith("."):
                 title = title[:-1]
 
             # Sanity check: are all words of the LLM-extracted title present in the original text?
