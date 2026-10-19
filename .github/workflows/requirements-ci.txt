@@ -29,7 +29,7 @@
 #
 # Versions are the ones that passed on main at 1cc20a2 (CI run 30772151270).
 
-bibtexparser==2.0.1
+bibtexparser==2.1.0
 # The GUI toolkit. Here so that the tests which drive a DPG context — `raven/common/gui/tests/` and
 # `raven/librarian/tests/test_chat_controller.py` — actually run, instead of `importorskip`-ing away on
 # every CI run and reporting a skip that looks like a pass. Tests that *map a window* stay out regardless:
@@ -46,7 +46,7 @@ simpleeval==1.0.8  # librarian.llmtools, the `calculate` tool; `test_llmtools.py
 # `librarian.chatgraph` strips Markdown out of a node's label, a box drawing plain glyphs and no formatting.
 # Imported at module scope there, so `test_chatgraph.py` cannot even be collected without it.
 strip-markdown==1.3
-filelock==4.0.7  # common.datastorelock; keeps two frontends off one chat datastore
+filelock==4.2.4  # common.datastorelock; keeps two frontends off one chat datastore
 # `librarian.gguftokenizer` builds a tokenizer out of a GGUF. Its tests write a small one and read it back,
 # so they need the pair — and that is the point of having them: it turns a construction verified by hand
 # against one backend into one the suite checks on every push.
@@ -58,17 +58,17 @@ Pillow==12.3.0
 # Imported at module level by the adopted `file_dialog`, so `raven/vendor/file_dialog/tests/` needs it to
 # collect at all — the tests themselves are pure-function and touch nothing psutil provides.
 psutil==7.2.2
-pypdf==6.19.0
+pypdf==6.21.1
 pytest==9.1.1
 pytest-cov==7.1.0
 python-docx==1.2.0
 python-pptx==1.0.2
 PyYAML==6.0.3
-qoi==0.7.2
+qoi==0.8.0
 requests==2.34.2
 sseclient-py==1.9.0  # llmclient's SSE transport; needed since test_llmclient/test_scaffold started running here
 tqdm==4.70.1
-trafilatura==2.2.0
+trafilatura==2.3.1
 unpythonic==2.5.0
 # Same story as `scipy`, for `test_word_cloud.py`'s 28 tests. It brings matplotlib with it, which is
 # why that is not listed here: only direct dependencies are pinned (see the scope note above).

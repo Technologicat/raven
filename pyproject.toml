@@ -55,9 +55,9 @@ license-files = ["LICENSE.md",
 dynamic = ["version"]
 
 dependencies = [
-    "bibtexparser>=2.0.1",
+    "bibtexparser>=2.1.0",
     "dearpygui>=2.3.1",  # non-Latin text needs `add_font_range` before 2.3, which builds font atlas ranges automatically; we no longer call it
-    "filelock>=4.0.7",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
+    "filelock>=4.2.4",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
     # librarian: counting the served model's tokens exactly, offline. A llama.cpp-family backend serves a
     # `.gguf`, which carries the vocabulary and merges; `gguf` reads them and `tokenizers` assembles them.
     # Both are small, and the alternative is trusting a backend's `prompt_tokens`, which we have measured
@@ -98,7 +98,7 @@ dependencies = [
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
     "av>=18.1.0",  # TTS audio encoder (for network transport)
     "pygame>=2.6.1",  # TTS audio playback (client side)
-    "qoi>=0.7.2",  # server, fast lossless image format for streaming
+    "qoi>=0.8.0",  # server, fast lossless image format for streaming
     # raven.common.image.codec, client.avatar_renderer, server.modules.avatar, librarian.imagestore. Already in
     # the tree via torchvision and wordcloud; declared because we import it. The floor is the version CI pins
     # and the tree resolves, rather than a feature we need — nothing here uses a recent Pillow API.
@@ -126,9 +126,9 @@ dependencies = [
     "feedparser>=6.0.14",  # papers: arXiv search
     "requests>=2.34.2",  # client, librarian, papers (arXiv tools)
     "tqdm>=4.70.1",  # server.stt, papers (arXiv download)
-    "trafilatura>=2.2.0",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
+    "trafilatura>=2.3.1",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
     "youtube-transcript-api>=1.2.4",  # server.webfetch; transcript extraction for YouTube URLs
-    "pypdf>=6.19.0",  # raven.common.docextract: PDF text layer
+    "pypdf>=6.21.1",  # raven.common.docextract: PDF text layer
     # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs
     # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` needs at least 1.1 for
     # `iter_inner_content`, which walks a body's paragraphs and tables in document order — without it, table
