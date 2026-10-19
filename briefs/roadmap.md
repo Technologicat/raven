@@ -121,7 +121,7 @@ accepted.
   - **The plan** (maintainer, 2026-10-19): develop the client against open-meteo and possibly other public
     MCP servers; then get remote access to the lab's server and verify against it; then run the demo in the
     lab on a **standard Librarian instance**. The avatar-only mode and the sci-fi file objects are not
-    prerequisites for the demo, only for the lab installation.
+    prerequisites for the demo, only for the lab installation in the long term.
 - **Lab installation.** Also gated on the avatar-only mode and the sci-fi file objects, and dates the
   `cu130` move (`briefs/design/lab-assistant-hci-sketch.md`).
 - **Hindsight** (`briefs/librarian-extension/06_hindsight-standup-brief.md`). Wanted soon for testing and
