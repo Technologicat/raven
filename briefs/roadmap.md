@@ -69,8 +69,6 @@ accepted.
   *per-document pass → corpus filter → AOKK numbers*. The study re-run is a day or two of unattended GPU time.
   The tool that drops the records the AOKK team's manual check rejected, possibly a `raven-siftbib`
   criterion (`briefs/done/yrityspaiva/README.md`), is in the same queue, waiting on the team's marked sheet.
-  - **Absorbs the classifier pass over the arXiv stash** (`TODO.md`, 2026-10-19): the same tool, with the
-    stash as a second corpus, which is also the check that its thresholds are not fitted to the AOKK one.
 - **0.2.11, the dehydration pass.** After the MCP client since 2026-10-19; until then it came first, as a
   clean starting state for the builds after it. Small items are welcome
   here on their own merit: closing many of them shortens the list quickly, and that is attention rent

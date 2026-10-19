@@ -10,11 +10,6 @@ driven slice by slice with `--skip`. This tool should be built on the shared pri
 a third copy. That brief lists this as its eighth user, and carries the two
 requirements the prototype adds to it: an instrument stamp in the cache key, and batching.
 
-**A second corpus to run it on** (2026-10-19): the arXiv paper stash, whose cosmology and speculative-physics
-strays are to be separated from its AI research (`TODO.md`, "A classifier pass over the arXiv paper stash",
-absorbed here). The question differs and the shape does not, so it tests whether the tool generalizes
-beyond the AOKK corpus it was prototyped on. Its labels are also ground truth for evaluating corpus scopes.
-
 ## The specification is the investigation README
 
 `investigations/aokk-corpus-scope/README.md`, from *"Where this is headed: a `raven.papers` corpus
