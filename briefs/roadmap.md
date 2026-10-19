@@ -7,7 +7,7 @@ time (maintainer, 2026-10-09).*
 
 *A solid edge is a gate: B cannot start, or would be wasted, without A. A dashed edge is a preference: the
 order we intend, which can be revisited. Item-level detail lives in `TODO.md`, `TODO_DEFERRED.md` and the
-briefs; `briefs/roadmap-overview-2026-10.md` is the dated inventory of all of it. This page names the
+briefs; `briefs/done/roadmap-overview-2026-10.md` is the dated inventory of all of it. This page names the
 pieces and the order between them.*
 
 ```mermaid

@@ -217,6 +217,8 @@ filter (which the AOKK numbers wait on, and which had no node), then the MCP cli
 everything else, unordered beyond the earlier preferences. The drydock may slip into 2027. Details in
 `briefs/roadmap.md`.
 
+**Closed 2026-10-19**, its clusters read through for the autumn's priorities in a session with the maintainer; the outcome is in `briefs/roadmap.md`. What follows records why it had stayed open:
+
 **This page stays open until its clusters have been read through for the autumn's priorities**, a session
 with the maintainer not yet held at the Yrityspäivä sprint's close (2026-10-09). Into `briefs/done/` after
 that.

@@ -47,7 +47,7 @@ Three things now wait on it explicitly, and each is queued rather than designed 
 2026-09-30): **Raven's own TODO lists as a Visualizer dataset.** The backlog has outgrown reading — several
 hundred items across `TODO.md`, `TODO_DEFERRED.md` and the briefs — and seeing its clusters would help
 prioritize. Probably best built once the unified DB takes inputs other than BibTeX, rather than as a
-one-off converter. Until then a hierarchical list stands in for it, `briefs/roadmap-overview-2026-10.md`
+one-off converter. Until then a hierarchical list stands in for it, `briefs/done/roadmap-overview-2026-10.md`
 (queued in `briefs/done/yrityspaiva/README.md`).
 
 **Provenance markers** are carried over from the 2026-08-01 design session and are load-bearing — the point
