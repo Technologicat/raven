@@ -24,7 +24,7 @@ is a worked example.
 __all__ = ["fingerprint", "instrument_header",
            "Ledger",
            "completed", "cancelled", "backend_unavailable", "model_changed",
-           "Sweep"]
+           "Failure", "Sweep"]
 
 import datetime
 import hashlib
@@ -171,6 +171,17 @@ cancelled = sym("cancelled")
 backend_unavailable = sym("backend_unavailable")  # unreachable, or no model loaded
 model_changed = sym("model_changed")  # another model, or the same one loaded with other settings
 
+class Failure:
+    """An answer saying the item could not be answered: recorded as failed, with `reason`, and tried again
+    on the next run. For an `ask_batch` that knows why an item failed and has turns worth keeping, which
+    raising would lose."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"Failure({self.reason!r})"
+
 class Sweep:
     """One run of `ask_batch` over the items not yet answered in `ledger`.
 
@@ -180,9 +191,9 @@ class Sweep:
                  `(id, item)` pairs, `answers` a dict from id to answer, anything JSON can hold, and `turns`
                  the `agent.TurnRecord` of each model call made, which go to the ledger's traces file whole.
                  Pass `maybe_abort` on to `agent.ask_record` or `agent.turn`, which is what makes `cancel`
-                 reach a call in flight. An id the answers leave out is recorded as failed; an exception
-                 fails the whole batch, and its turns are not kept, so return rather than raise where the
-                 reply is worth reading afterwards.
+                 reach a call in flight. An id the answers leave out, or answer with a `Failure`, is
+                 recorded as failed; an exception fails the whole batch, and its turns are not kept, so
+                 return rather than raise where the reply is worth reading afterwards.
 
     `items`: `(id, item)` pairs, ids unique strings. Those the ledger already answers are skipped.
 
@@ -309,11 +320,13 @@ class Sweep:
                     fail(item_id, f"{type(exc)}: {exc}")
             else:
                 for item_id in ids:
-                    if item_id in answers:
+                    if item_id not in answers:
+                        fail(item_id, "the reply had no answer for this item")
+                    elif isinstance(answers[item_id], Failure):
+                        fail(item_id, answers[item_id].reason)
+                    else:
                         self.ledger.write_answer(item_id, answers[item_id])
                         done += 1
-                    else:
-                        fail(item_id, "the reply had no answer for this item")
                 if turns:
                     self.ledger.write_trace(ids, turns)
             finally:

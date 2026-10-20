@@ -149,6 +149,19 @@ class TestSweep:
         assert (result.done, result.failed) == (2, 1)
         assert ledger.latest()["item1"]["status"] == "failed"
 
+    def test_an_item_answered_with_a_failure_is_recorded_with_its_reason_and_turns(self, llm_settings, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+
+        def ask(llm_settings, batch, maybe_abort):
+            return ({"item0": "fine", "item1": sweep.Failure("the abstract came back empty three times")},
+                    [_Turn("why it was empty")])
+        result = sweep.Sweep(llm_settings, ask, _items(2), ledger, batch_size=2).run()
+        assert (result.done, result.failed) == (1, 1)
+        assert ledger.latest()["item1"] == {"id": "item1", "v": "abcd1234", "status": "failed",
+                                            "error": "the abstract came back empty three times"}
+        traces = [json.loads(line) for line in ledger.traces_path.read_text().splitlines()]
+        assert traces[0]["turns"][0]["reply"] == "why it was empty"
+
     def test_a_backend_that_went_away_stops_the_run(self, llm_settings, tmp_path, monkeypatch):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
         asked = []
