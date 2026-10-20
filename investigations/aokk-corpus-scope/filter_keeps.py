@@ -95,13 +95,26 @@ def load_extracted(path: pathlib.Path) -> tuple[dict[str, dict], set[str]]:
     says — two runs concatenated, or a rename — and the caller has to decide, because the mixture cannot
     be seen in the values: a level name that exists in two vocabularies means different things on either
     side of the change, and nothing errors.
+
+    Reads both formats `extract_fields.py` has written: a `raven.librarian.sweep` ledger, where a line is
+    `{"id", "v", "status", "answer"}` and a record whose latest line is a failure has no fields; and the
+    flat `{"key", "v", <fields>}` lines from before it. A ledger's header lines are skipped.
     """
     out, seen = {}, set()
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            fields = json.loads(line)
-            out[fields["key"]] = fields
-            seen.add(fields.get("v"))
+        if not line.strip():
+            continue
+        entry = json.loads(line)
+        if "header" in entry:
+            continue
+        seen.add(entry.get("v"))
+        if "id" in entry:  # a sweep ledger
+            if entry["status"] == "ok":
+                out[entry["id"]] = {"key": entry["id"], "v": entry["v"], **entry["answer"]}
+            else:
+                out.pop(entry["id"], None)
+        else:
+            out[entry["key"]] = entry
     return out, seen
 
 
