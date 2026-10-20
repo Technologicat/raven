@@ -1,0 +1,5 @@
+# The replies and their traces carry the system text each condition was run under, the maintainer's user
+# card included, and the replayed chats. Only the script and the write-up are committed.
+*.jsonl
+stream.log
+blind-*

@@ -1,8 +1,25 @@
 # What gives Aria her register, and how to keep it through the prompt rewrite
 
-**Status: a plan, nothing run yet** (2026-10-20). Deferred to the start of `TODO_DEFERRED.md`'s "Modernize
-the Librarian system prompt / character card", which it gates: the rewrite needs its answer (maintainer,
-2026-10-20).
+**Status: step 1 generated, not yet scored** (2026-10-20). Gates `TODO_DEFERRED.md`'s "Modernize the
+Librarian system prompt / character card": the rewrite needs its answer (maintainer, 2026-10-20).
+
+## Running it
+
+- **`probe_register.py`** generates step 1's replies: three conditions × ten prompts × `--samples`, as a
+  `raven.librarian.sweep` (`register-step1-<fingerprint>.jsonl`, the turns whole in `-traces.jsonl`, and
+  `stream.log` while it runs). Its docstring has the conditions and the prompts.
+- **`judge_register.py <ledger>`** scores them with the rubric below, as a second sweep, and prints the
+  rates per condition. `--blind N` writes a blind sample for rating by hand instead, with its key in a
+  separate file.
+
+Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
+the user card included, and the replayed chats.
+
+Two of the October examples are not replayed. Both reacted to the automatic document search — keyed on the
+whole message, and on a garbled model-written query — and both of those have since been fixed, so the
+stimulus no longer exists. The other two are replayed from the stored chat with its attachments; the
+September one is a fresh chat, and is asked under Aria rather than the character it first drew the voice
+from.
 
 ## The question
 
