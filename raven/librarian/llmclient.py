@@ -1949,9 +1949,10 @@ def serialize_history_for_wire(settings: env,
         part. Reasoning (thinking) rides out-of-band in the `reasoning_content` sibling field. A trace
         `keeps_reasoning` does not keep is dropped, which is everything before the latest user message when
         `settings.retain_thinking` is false; the rest is sent untouched, and the chat template decides what
-        it renders. The scrub is mostly a legacy safety net now: it strips any inline `<think>` blocks
-        still embedded in OLD content (pre-migration data) and normalizes the persona prefix; on new-parser
-        content it's a no-op on the text.
+        it renders. The scrub normalizes the persona prefix, and is otherwise a backstop: it strips inline
+        `<think>` blocks, which chats saved before 0.2.8 stored in the text, but the load-time migration
+        (`chatutil.upgrade_datastore`) already moves those out. What can still reach it is a stray thinking
+        tag that a model emits in the content channel.
 
       - **Images.** `image_url` parts are preserved (not collapsed away) and appended after the text part in
         their original order. A `sidecar:<filename>` URL is resolved to a real `data:<mime>;base64,...` URL by
