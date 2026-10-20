@@ -93,6 +93,8 @@ from typing import TYPE_CHECKING, TextIO
 from unpythonic import sym
 from unpythonic.env import env
 
+from ..common import netutil
+
 from . import chattree
 from . import chatutil
 from . import llmclient
@@ -294,7 +296,8 @@ def turn(llm_settings: env,
          write_docs_query: bool = False,
          docs_num_results: int | None = None,
          continue_: bool = False,
-         markup: str | None = None) -> TurnRecord:
+         markup: str | None = None,
+         maybe_abort: netutil.Abort | None = None) -> TurnRecord:
     """Run one assistant turn — the full agent loop — and return what it did.
 
     The one-liner form starts a fresh conversation in a throwaway in-memory datastore:
@@ -484,6 +487,11 @@ def turn(llm_settings: env,
     `markup`: How to mark thought blocks in the stored reply text: `"ansi"`, `"markdown"`, or `None` to
               keep them as they arrived. `None` is what a script wants.
 
+    `maybe_abort`: A `raven.common.netutil.Abort` handle, if the turn should be abandonable from another
+                   thread. Firing it raises `netutil.Aborted` out of this call promptly, including while the
+                   backend is still reading the prompt, which an `on_progress` answering `action_stop`
+                   cannot reach. What the turn had already stored stays in `datastore`.
+
     Returns a `TurnRecord`, which see. A backend failure is not raised: `ai_turn` materializes it as an
     assistant message, so the record comes back with that text as its `reply` — the same thing a user
     would see, and rerollable in the same way.
@@ -551,6 +559,7 @@ def turn(llm_settings: env,
                                      write_docs_query=write_docs_query,
                                      docs_num_results=docs_num_results,
                                      markup=markup,
+                                     maybe_abort=maybe_abort,
                                      on_docs_start=None, on_docs_progress=None, on_docs_query=None, on_docs_done=None,
                                      on_prompt_ready=prompts.append,
                                      on_llm_start=None, on_llm_progress=on_progress, on_llm_done=None,
@@ -605,7 +614,8 @@ def stream_log(file: TextIO, label: str | None = None) -> Callable[[dict], sym]:
     return on_progress
 
 
-def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS) -> str:
+def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
+        maybe_abort: netutil.Abort | None = None) -> str:
     """Ask one question and get the answer text: no character, no tools, no retrieval, no history.
 
     `llm_settings`: as `turn`, which see.
@@ -614,6 +624,8 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
 
     `max_tokens`: cap on the reply, `None` to use whatever `llm_settings` carries. The default is *not*
                   that setting, deliberately — see below.
+
+    `maybe_abort`: as `turn`, which see.
 
     Returns the reply text, with nothing else around it.
 
@@ -626,11 +638,12 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
     PATH` on any tool built over this keeps it. `ask_record` returns the trace instead of logging it,
     for a caller that wants to keep it beside its results rather than in a log file.
     """
-    return ask_record(llm_settings, prompt, max_tokens).reply or ""
+    return ask_record(llm_settings, prompt, max_tokens, maybe_abort).reply or ""
 
 
 def ask_record(llm_settings: env, prompt: str,
-               max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS) -> TurnRecord:
+               max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
+               maybe_abort: netutil.Abort | None = None) -> TurnRecord:
     """`ask`, but handing back the whole record rather than only the reply text.
 
     Arguments and failure behaviour are `ask`'s, which see — the cap on the reply and the `RuntimeError`
@@ -665,7 +678,8 @@ def ask_record(llm_settings: env, prompt: str,
                       tools_enabled=False,
                       internet_enabled=False,
                       docs_enabled=False,
-                      markup=None)
+                      markup=None,
+                      maybe_abort=maybe_abort)
     finally:
         if max_tokens is not None:
             if previous is None:

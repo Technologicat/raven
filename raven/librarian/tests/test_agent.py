@@ -707,6 +707,24 @@ class TestAskRecord:
         with pytest.raises(RuntimeError, match="no generation"):
             agent.ask_record(llm_settings, "Question?")
 
+    def test_an_abort_handle_reaches_the_backend_call(self, monkeypatch, llm_settings):
+        # What makes a batch cancellable while the backend is still reading the prompt: the handle has to
+        # arrive at `invoke`, the only place that can close the read. The fake raises `Aborted` only for
+        # the handle it was meant to get, so a handle dropped on the way fails this rather than passing.
+        from raven.common import netutil
+        handle = netutil.Abort()
+
+        def fake_invoke(**kw):
+            if kw.get("maybe_abort") is handle:
+                raise netutil.Aborted("abandoned mid-read")
+            return make_invoke_result(content="an answer that should never have been read")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        with pytest.raises(netutil.Aborted):
+            agent.ask_record(llm_settings, "Question?", maybe_abort=handle)
+        with pytest.raises(netutil.Aborted):
+            agent.ask(llm_settings, "Question?", maybe_abort=handle)
+
 
 class TestParseJsonReply:
     """What a model actually sends back when asked for JSON and nothing else."""
