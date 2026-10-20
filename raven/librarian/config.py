@@ -73,6 +73,23 @@ llm_backend_flavor = None
 # the backend knows (see the list at `GET {llm_backend_url}/v1/models`).
 llm_model = None
 
+# Whether a thinking model gets back its thinking from earlier turns. **Match this to your model.**
+#
+# `True` (default): every stored thinking trace is sent, and the context-fill readout counts them. A model
+# trained to keep its thinking across turns builds on its earlier reasoning instead of restarting it each
+# turn, and writes less new thinking per turn.
+#
+# `False`: thinking from before the latest user message is dropped before sending. Thinking within the
+# current turn, across its tool calls, is always sent.
+#
+# Whether a sent trace is actually used is up to the model's chat template, and neither Raven nor the backend
+# can tell the other what the template does. So set this to agree with it: a template that strips earlier
+# thinking wants `False`. Left at `True` there, the readout over-reports, which is the safe direction to be
+# wrong in. Some templates take a variable that switches it, such as `preserve_thinking`; on LM Studio a
+# template can be overridden per model, which is where that is set, and where a saved override can turn
+# retention off without anyone noticing.
+llm_retain_thinking = True
+
 # Optional local tokenizer for *exact* token counting against backends without a token-count endpoint
 # (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage` stats
 # and a calibrated tokens-per-character estimate.

@@ -20,6 +20,7 @@ from unpythonic import dyn
 from unpythonic.env import env
 
 from raven.common import netutil
+from raven.librarian import chattree
 from raven.librarian import chatutil
 from raven.librarian import llmclient
 from raven.librarian import llmtools
@@ -2292,12 +2293,66 @@ class TestInvokeTypedEvents:
 # serialize_history_for_wire: text scrub + image-part preservation + sidecar resolution
 # ---------------------------------------------------------------------------
 
+class TestThinkingRetention:
+    """`settings.retain_thinking` decides which stored thinking traces are sent, and the count agrees."""
+
+    EARLIER, CURRENT = "EARLIER-THOUGHT " * 50, "CURRENT-THOUGHT " * 50
+
+    @staticmethod
+    def _settings(retain_thinking):
+        return env(personas={"user": "U", "assistant": "AI", "system": None, "tool": None},
+                   context_length=100000, tokens_per_character=0.25, tokenizer=None, backend_flavor="lmstudio",
+                   retain_thinking=retain_thinking)
+
+    def _history(self):
+        """Two turns: an earlier answer with its thinking, then a tool round of the current turn with its own."""
+        return [{"role": "user", "content": [chatutil.text_content_part("first question")]},
+                {"role": "assistant", "content": [chatutil.text_content_part("first answer")],
+                 "reasoning_content": self.EARLIER},
+                {"role": "user", "content": [chatutil.text_content_part("second question")]},
+                {"role": "assistant", "content": [chatutil.text_content_part("")], "reasoning_content": self.CURRENT,
+                 "tool_calls": []},
+                {"role": "tool", "content": [chatutil.text_content_part("a tool result")]}]
+
+    def _branch(self, history):
+        forest = chattree.Forest()
+        node_id = None
+        for message in history:
+            node_id = forest.create_node(payload={"message": message, "general_metadata": {}}, parent_id=node_id)
+        return forest, node_id
+
+    @staticmethod
+    def _traces(wire):
+        return [message.get("reasoning_content") for message in wire]
+
+    def test_retained_thinking_is_all_sent(self):
+        wire = llmclient.serialize_history_for_wire(self._settings(True), self._history(), continue_=False)
+        assert self._traces(wire) == [None, self.EARLIER, None, self.CURRENT, None]
+
+    def test_without_retention_only_the_current_turn_s_thinking_is_sent(self):
+        wire = llmclient.serialize_history_for_wire(self._settings(False), self._history(), continue_=False)
+        assert self._traces(wire) == [None, None, None, self.CURRENT, None], \
+            "the current turn's tool rounds must keep their thinking, the earlier turn's must not"
+
+    def test_the_count_follows_the_setting(self):
+        forest, head = self._branch(self._history())
+        retained, _ = llmclient.count_branch_tokens(self._settings(True), forest, head)
+        dropped, _ = llmclient.count_branch_tokens(self._settings(False), forest, head)
+        without_traces, _ = llmclient.count_branch_tokens(
+            self._settings(False), *self._branch([{key: value for key, value in message.items() if key != "reasoning_content"}
+                                                  for message in self._history()]))
+        trace_tokens = len(self.EARLIER) * 0.25
+        assert retained - dropped == pytest.approx(trace_tokens, abs=2), "retention did not change the count by the earlier trace"
+        assert dropped - without_traces == pytest.approx(trace_tokens, abs=2), "the current turn's thinking was not counted"
+
+
 class TestSerializeHistoryForWire:
     # The token-accounting fields are what the attachment fold sizes itself against: a 10000-token window
     # at 0.25 tokens/character is 40000 characters, of which the 25% reserve leaves 30000 for attachments.
     settings = env(personas={"user": "U", "assistant": "AI", "system": None, "tool": None},
                    context_length=10000,
-                   tokens_per_character=0.25)
+                   tokens_per_character=0.25,
+                   retain_thinking=True)
 
     def test_text_only_message_scrubbed_to_single_text_part(self):
         history = _history("hello there")

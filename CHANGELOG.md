@@ -22,6 +22,10 @@
 #### Raven-librarian
 
 - **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
+- **A setting for whether the AI gets back its thinking from earlier turns**: `llm_retain_thinking` in `raven.librarian.config`, on by default.
+  - Off, thinking from before your latest message is no longer sent. Thinking within the current reply, across its tool calls, still is.
+  - The context-fill readout now counts the thinking that is sent. It used to count none.
+  - Set it to match your model's chat template, which neither *Librarian* nor the backend can see; the README's *Thinking* toggle says how to tell.
 
 #### Raven-deduplicate
 

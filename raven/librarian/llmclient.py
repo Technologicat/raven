@@ -32,6 +32,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            # Counting what a prompt costs
            "count_tokens",
            "image_token_cost",
+           "keeps_reasoning",  # which stored thinking traces a prompt carries
            "count_branch_tokens",
 
            # ...and fitting things into what is left
@@ -459,6 +460,10 @@ def setup(backend_url: str,
                                            as *which mechanism*, and `invoke` uses it that way — the two
                                            mechanisms differ in what comes back, and only the prefill one
                                            is known to return the continuation alone.
+
+        `retain_thinking: bool`: Whether thinking traces from before the latest user message are sent, and
+                                 counted, or dropped. `config.llm_retain_thinking`, which see; a per-run
+                                 override is a write to this field. See `keeps_reasoning`.
 
         `system_prompt: str`: Currently empty. Used to be a generic system prompt for the LLM (the LLaMA 3 preset from SillyTavern), to make it follow the character card.
 
@@ -1006,6 +1011,7 @@ def configure(model_info: env,
                    model_record=model_info,  # the whole record `resolve_model_info` returned; see the docstring
                    backend_is_reachable=backend_is_reachable,  # whether anything answered at `backend_url`; see `backend_status`
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
+                   retain_thinking=librarian_config.llm_retain_thinking,  # send earlier turns' thinking traces; see `keeps_reasoning`
                    tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background below
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
                    system_prompt=system_prompt,
@@ -1251,6 +1257,20 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
             break
     return int(chosen(height, width)) if callable(chosen) else int(chosen)
 
+def keeps_reasoning(settings: env, messages: list[dict]) -> list[bool]:
+    """Which of `messages` keep their thinking trace (`reasoning_content`) in a prompt, one flag per message.
+
+    All of them when `settings.retain_thinking` is true. Otherwise only those after the latest user message:
+    the current turn's thinking, across its tool rounds, is what the model is working from, and the chat
+    templates that strip earlier thinking keep exactly that span. `serialize_history_for_wire` drops the
+    rest and `count_branch_tokens` leaves it out, so what is sent and what is counted agree.
+    """
+    if settings.retain_thinking:
+        return [True] * len(messages)
+    last_user_index = max((index for index, message in enumerate(messages) if message.get("role") == "user"),
+                          default=-1)
+    return [index > last_user_index for index in range(len(messages))]
+
 def count_branch_tokens(settings: env,
                         datastore: chattree.Forest,
                         head_node_id: str,
@@ -1261,6 +1281,10 @@ def count_branch_tokens(settings: env,
     therefore under-reports the real prompt slightly: the system prompt's framing, the per-turn injects and
     the tool definitions all add tokens that are not in the stored messages. For the backend's own exact
     figure, submit the prompt and read `usage["prompt_tokens"]`; that is what `prefill` is for.
+
+    Thinking traces are counted where the prompt carries them (`keeps_reasoning`). That is an assumption
+    about the chat template, which `settings.retain_thinking` states and nothing can check: a template that
+    strips traces Raven sends makes this over-report until the backend's figure replaces it.
 
     Attachments are counted in the two different ways they cost context. An image consumes tokens the
     tokens-per-character ratio cannot see, so it is added as a per-family estimate (`image_token_cost`) and forces
@@ -1293,10 +1317,12 @@ def count_branch_tokens(settings: env,
     attachments = []  # (extracted text, budget kind)
     image_tokens = 0
     counted_every_attachment = True  # cleared when `extract_attachments=False` meets one that is not extracted yet
-    for node_id in datastore.linearize_up(head_node_id):
-        payload = datastore.get_payload(node_id)
+    payloads = [datastore.get_payload(node_id) for node_id in datastore.linearize_up(head_node_id)]
+    for payload, keeps_trace in zip(payloads, keeps_reasoning(settings, [payload["message"] for payload in payloads])):
         message = payload["message"]
         text_segments.append(chatutil.content_to_text(message.get("content")))
+        if keeps_trace:
+            text_segments.append(message.get("reasoning_content") or "")
         sidecars_meta = payload.get("general_metadata", {}).get("sidecars", {})
         for part in message.get("content") or []:
             part_type = part.get("type")
@@ -1920,10 +1946,10 @@ def serialize_history_for_wire(settings: env,
     Per-message transform, applied to every message (or all but the last when `continue_`):
 
       - **Text.** All text parts are joined and scrubbed (`scrub(thoughts_mode="discard")`) into a single text
-        part. Reasoning (thinking) rides out-of-band in the `reasoning_content` sibling field, untouched here —
-        the supported families' chat templates (Qwen 3, Gemma 4) read it on input and apply their own
-        strip-prior / preserve-current-turn policy via the last-user-message boundary, so Raven doesn't
-        second-guess them. The scrub is mostly a legacy safety net now: it strips any inline `<think>` blocks
+        part. Reasoning (thinking) rides out-of-band in the `reasoning_content` sibling field. A trace
+        `keeps_reasoning` does not keep is dropped, which is everything before the latest user message when
+        `settings.retain_thinking` is false; the rest is sent untouched, and the chat template decides what
+        it renders. The scrub is mostly a legacy safety net now: it strips any inline `<think>` blocks
         still embedded in OLD content (pre-migration data) and normalizes the persona prefix; on new-parser
         content it's a no-op on the text.
 
@@ -1964,6 +1990,9 @@ def serialize_history_for_wire(settings: env,
     # without it (throwaway tasks / prefill on attachment-free chats) there are no `text_file` parts anyway.
     scrubbed_texts = []
     attachments = []  # (message index, display name, extracted text, budget kind)
+    for message, keeps_trace in zip(messages, keeps_reasoning(settings, messages)):
+        if not keeps_trace:
+            message.pop("reasoning_content", None)
     for message_index, message in enumerate(messages):
         scrubbed_texts.append(chatutil.scrub(persona=settings.personas.get(message["role"], None),
                                              text=chatutil.content_to_text(message["content"]),
