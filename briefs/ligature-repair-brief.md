@@ -52,6 +52,25 @@ editor and they survive into the index, and that is the *better* of the availabl
 text is still recoverable from them. Only 3 of ECCOMAS's 2520 records are affected, so the cost of waiting is
 small — which is also the measurement behind "build the fixbib half, specify the indexer half" below.
 
+## A third defect of the same family: a space inside a word
+
+Found 2026-10-20 by the `raven-pdf2bib` live run on four ECCOMAS 2024 abstracts. One title came out flagged
+by the check that every title word appears in the source text, and the title was right: it agrees with the
+hand-fixed reference. The text layer has the word split, `ADDITIVE\nMANUF ACTURING AND CONTINUUM FRACTURE`,
+with a space between a tightly kerned F and A that the extractor took for a word break (presumably; not
+checked against the PDF's own text operators). Asking again gave the same flag, the check being
+deterministic once the text is.
+
+Same family as the ligatures and the lost hyphens: the text a PDF hands us differs from the text on the
+page, and every consumer downstream inherits the difference. Two remedies, not decided:
+
+- **At the consumer**: `raven-pdf2bib`'s title and keyword checks compare with whitespace removed from both
+  sides. Cheap, and it fixes the false flags, but leaves the split word in the text the abstract field is
+  cut from, and in whatever else reads it.
+- **At the source**: repair in `docextract`, which has to tell `MANUF ACTURING` from two real words. That is
+  the same kind of question the ligature repair answers with a vocabulary (does the joined form occur
+  elsewhere in the document or the corpus), so it could share that machinery.
+
 ## The shape
 
 **The mapping is a property of the font, not of Unicode.** `U+001C` means "file separator" in general and
