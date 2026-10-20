@@ -4,9 +4,9 @@ New items go at the **top**, directly below the `<!-- New items go below this li
 this introduction. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
-**A triage pass is due after Researchers' Night 2026** (2026-09-25; noted 2026-09-04). Several gates here
-name releases that were guesses when written, and the file is long enough that its length is itself the
-obstacle to reading it. Expect a meaningful fraction to be already done or already stale.
+**Last triaged 2026-09-30 – 10-01**, in five passes (done items removed, duplicates merged, every gate
+re-set), recorded in `briefs/done/yrityspaiva/README.md`. Gates that name a release are guesses when written,
+so the next triage should start with them.
 
 **Finished items are deleted, not archived** — git is the history. `## Declined` at the bottom is for
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
@@ -1011,21 +1011,19 @@ Raised while rewriting that notice (2026-09-09).
 
 *Cluster: chat-graph · Cost: S · Gate: none · Filed: 2026-09-08 · Narrowed: 2026-09-25*
 
-A stored message's glyph comes from `DPGChatController.icon_texture_for(role, persona)`, which both views
-ask with the persona stored on the message. It returns a character's own icon only when that persona is the
+A stored message's glyph comes from `chattextures.SpeakerGlyphs.icon_texture_for(role, persona)`, which
+both views ask with the persona stored on the message. It returns a character's own icon only when that persona is the
 *configured* character; every other character gets the generic AI glyph (the HAL 9000 eye). So after
 switching `llm_char_name` from Aria to Juha, Aria's earlier messages lose her icon. That is the intended
 fallback — never somebody else's face — but it is plain, and the reason for it is gone.
 
 **The mapping this was waiting for now exists.** `raven.avatar.characters` (0.2.9) maps a name to a
-`Character`, and `Character.icon_path` is its chat glyph. The controller does not use it yet:
-`_load_instance_textures` still finds the configured character's icon from `avatar_image_path` by the
-`_icon` filename convention, and loads only that one.
+`Character`, and `Character.icon_path` is its chat glyph. `SpeakerGlyphs.__init__` uses it, but for the
+configured character only, so that is the one icon loaded.
 
 **The fix:** at construction, load one texture per declared character that has an `icon_path`, into a
 `{name: texture}` table; `icon_texture_for` then looks the persona up in it, falling back to the generic
-glyph. `avatar_image_path` is then no longer needed for the icon. The cast is small (two declared today), so
-loading all of it eagerly is cheap. That avoids the lazy load-and-cache on a worker this item used to call
+glyph. The cast is small (two declared today), so loading all of it eagerly is cheap. That avoids the lazy load-and-cache on a worker this item used to call
 for, which assumed the characters would be found by scanning the datastore. A character declared *while the
 app runs* would not get its icon until restart. That seems acceptable, since `characters()` caches its own
 scan anyway.

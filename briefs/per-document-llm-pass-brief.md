@@ -249,7 +249,10 @@ spamming the log.
     emits something, so it cannot reach prompt processing.
   - A cancel flag is also checked between batches, for a cancel that lands between turns.
 
-## What this brief must settle before implementation
+## The questions the decisions answer
+
+All seven are settled, in *Decided 2026-09-29* and *Decided 2026-09-30* above, which cite them by number.
+They are kept as the record of what was asked.
 
 1. **Where it lives, and its name.** Beside `agent` as a sibling module, or as a layer in the same file.
    Brief 15 left its own naming open for the same reason and the answer came from what the module did; do

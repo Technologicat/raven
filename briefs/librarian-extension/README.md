@@ -16,8 +16,7 @@ probes shared across briefs live in `manual_tests/`.
 07 (export disclosure), 08 (context injects), 10 (RAG tool surface), and the unnumbered
 `self-sizing-tooltip` — a `raven/common/gui` component so a tooltip whose caption changes stops rendering
 one frame at the wrong size. It was filed here because Librarian was the first consumer, not because it
-belonged to this sprint's scope; Visualizer took it too. Measurements in `investigations/dpg-autosize/`.
-**09 is the one in progress**, and the last thing v0.2.8 is waiting on.
+belonged to this sprint's scope; Visualizer took it too. Measurements in `investigations/dpg-autosize/`. 09 (retrieval query side) closed 2026-08-06 as an experiment set; see *Order of work* below.
 
 ## Order of work, decided 2026-07-29
 
