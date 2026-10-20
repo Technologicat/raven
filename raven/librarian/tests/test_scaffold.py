@@ -2175,7 +2175,7 @@ class TestPromptAssemblyFromOutside:
         # the view's docstring being revisited.
         assert len(plain) == 2
         assert chatutil.format_date_now() in plain
-        assert chatutil.format_loaded_model(settings.model, settings.context_length) in plain
+        assert chatutil.format_loaded_model(settings.model_record, settings.context_length) in plain
 
         assert spent == plain + [chatutil.format_notice_that_tools_are_spent()]
 

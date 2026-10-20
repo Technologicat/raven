@@ -400,9 +400,9 @@ def format_date_now() -> str:
     weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
     return f"[System information: Today is {weekday}, {isodate} (in ISO format).]"
 
-def format_loaded_model(model: str, context_length: int) -> str:
-    """Return the text content of a dynamic system message stating which model is loaded, and how much
-    context it has.
+def format_loaded_model(model_record: env, context_length: int) -> str:
+    """Return the text content of a dynamic system message stating which model is loaded, how it is
+    quantized where the backend says, and how much context it has.
 
     This is for a dynamic injection, and it is one for the same reason the date is. Both are facts that were
     true when the app started and need not be true now: the user can load a different model in the backend
@@ -411,17 +411,22 @@ def format_loaded_model(model: str, context_length: int) -> str:
     once, at app start, and stored in the chat datastore as the message the chat is rooted at - either fact
     becomes a confident falsehood the model has no way to question.
 
-    `model`: The human-facing model identity, i.e. `settings.model`.
+    `model_record`: The loaded model's record, i.e. `settings.model_record`.
 
     `context_length`: The loaded context window in tokens, i.e. `settings.context_length`.
     """
-    # TODO: On LM Studio this says the context size twice, in two units - its model label is rich
-    # TODO: ("qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context"), so the sentence that follows repeats it in
-    # TODO: tokens. ooba's label is a bare GGUF filename with no size in it, which is why the sentence is
-    # TODO: there at all. A backend-agnostic fix would have to either parse the label or stop composing it
-    # TODO: in `resolve_model_info` and carry the parts separately; neither is worth doing before something
-    # TODO: needs the parts. Harmless meanwhile - the two agree.
-    return f'[System information: The loaded model is "{model}". The length of its context window is {context_length} tokens.]'
+    # A loaded model is named by its id rather than by its label: LM Studio's label is composed from the
+    # id, the quantization and the context length ("qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context"), so
+    # quoting it would state the context twice. Anything not loaded keeps the label, which is what says
+    # "no model information" rather than guessing — a generic backend's `model_id` may be only the
+    # configured name.
+    if model_record.loaded and model_record.model_id:
+        model = f'"{model_record.model_id}"'
+        if model_record.quantization:
+            model += f", quantized as {model_record.quantization}"
+    else:
+        model = f'"{model_record.label}"'
+    return f"[System information: The loaded model is {model}. The length of its context window is {context_length} tokens.]"
 
 def format_time_now() -> str:
     """Return the text content of a dynamic system message containing the current local time.

@@ -322,6 +322,37 @@ class TestFormatDatetime:
         assert len(parts) == 3  # weekday, date, time
 
 
+class TestFormatLoadedModel:
+    @staticmethod
+    def _record(**fields):
+        """A model record with every field `llmclient.resolve_model_info` returns, defaulting to "not reported"."""
+        return env(**(dict(label="No model information is available", model_id=None, context_length=None,
+                           is_vlm=None, loaded=None, quantization=None, bits_per_weight=None, load_config=None) |
+                      fields))
+
+    def test_lm_studio_states_the_context_once(self):
+        record = self._record(label="qwen3.8-27b, Q4_K_XL, 186 Ki context", model_id="qwen3.8-27b",
+                              context_length=190464, loaded=True, quantization="Q4_K_XL")
+        text = chatutil.format_loaded_model(record, 190464)
+        assert '"qwen3.8-27b", quantized as Q4_K_XL' in text
+        assert "Ki context" not in text, "the label's context length was quoted beside the one in tokens"
+        assert "190464 tokens" in text
+
+    def test_a_loaded_model_with_no_quantization_reported_is_named_alone(self):
+        record = self._record(label="model-q4.gguf", model_id="model-q4.gguf", loaded=True)
+        text = chatutil.format_loaded_model(record, 65536)
+        assert 'The loaded model is "model-q4.gguf".' in text
+        assert "quantized" not in text
+
+    def test_a_backend_that_cannot_tell_keeps_the_label(self):
+        # A generic backend with several models: the id is only the configured name, and the label says so
+        # honestly rather than asserting it as the identity.
+        record = self._record(model_id="configured-model")
+        text = chatutil.format_loaded_model(record, 65536)
+        assert '"No model information is available"' in text
+        assert "configured-model" not in text
+
+
 # ---------------------------------------------------------------------------
 # Disclosure manifest (EU AI Act Article 50(2) origin marking)
 # ---------------------------------------------------------------------------

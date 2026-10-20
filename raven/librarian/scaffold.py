@@ -540,7 +540,7 @@ def build_system_postamble(llm_settings: env,
     """
     formatters = llm_settings.formatters
     postamble = [formatters.date_now(),
-                 formatters.loaded_model(llm_settings.model, llm_settings.context_length)]
+                 formatters.loaded_model(llm_settings.model_record, llm_settings.context_length)]
     if tools_are_spent:
         postamble.append(formatters.notice_that_tools_are_spent())
     return postamble

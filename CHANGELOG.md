@@ -54,6 +54,7 @@
 - **Librarian reads the loaded model from LM Studio's `/api/v1` REST API.**
   - An LM Studio too old to serve it is treated as a generic OpenAI-compatible backend. Chat still works there, but the context window falls back to the default and vision support is not detected.
   - Reloading the same model with different settings, such as another quantization or flash attention toggled, is now followed as a model change.
+  - The per-turn note telling the model which model it is names its quantization, and states the context length once rather than twice.
 
 #### Raven-deduplicate
 
