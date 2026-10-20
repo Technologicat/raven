@@ -79,6 +79,14 @@ class TestLedger:
             f.write(json.dumps({"id": "b", "v": "ffff0000", "status": "ok", "answer": 2}) + "\n")
         assert ours.answers() == {"a": 1}
 
+    def test_reasking_keeps_the_earlier_answer_in_the_file(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "first answer")
+        ledger.write_answer("b", "kept")
+        ledger.reask(["a"])
+        assert ledger.answers() == {"b": "kept"}
+        assert "first answer" in ledger.path.read_text(), "the superseded answer is still there to compare with"
+
     def test_headers_are_read_back_in_order(self, tmp_path):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
         ledger.write_header({"model_id": "m1"})
@@ -107,6 +115,20 @@ class TestSweep:
         assert result.failed == 2
         traces = [json.loads(line) for line in ledger.traces_path.read_text().splitlines()]
         assert traces[0]["turns"][0]["reply"] == "not JSON at all"
+
+    def test_a_reasked_item_is_asked_again_and_only_it(self, llm_settings, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("item0", "first answer")
+        ledger.write_answer("item1", "kept")
+        ledger.reask(["item0"])
+        asked = []
+
+        def ask(llm_settings, batch, maybe_abort):
+            asked.extend(item_id for item_id, _ in batch)
+            return {item_id: "second answer" for item_id, _ in batch}, []
+        sweep.Sweep(llm_settings, ask, _items(2), ledger).run()
+        assert asked == ["item0"]
+        assert ledger.answers() == {"item0": "second answer", "item1": "kept"}
 
     def test_a_rerun_asks_only_what_is_not_answered(self, llm_settings, tmp_path):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")

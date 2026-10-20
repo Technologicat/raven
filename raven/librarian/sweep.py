@@ -131,6 +131,15 @@ class Ledger:
         """Record that an item was tried and failed, so a later run tries it again."""
         self._append(self.path, {"id": item_id, "v": self.fingerprint, "status": "failed", "error": error})
 
+    def reask(self, item_ids: Sequence[str], reason: str = "asked again on request") -> None:
+        """Have the next run ask these items again, answered or not.
+
+        An append, so nothing is lost: the earlier answers stay in the file, superseded, and can be read
+        for comparison.
+        """
+        for item_id in item_ids:
+            self.write_failure(item_id, reason)
+
     def write_trace(self, item_ids: Sequence[str], turns: Sequence[agent.TurnRecord]) -> None:
         """Record the model calls of one batch, whole, naming the items that shared them.
 
