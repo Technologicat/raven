@@ -128,9 +128,12 @@ was settled as `v1` only (Juha, 2026-10-19), so an LM Studio without it detects 
 `env` now carries `quantization`, `bits_per_weight` and `load_config` beside the `label` composed from
 them, and those three are `None` on the other flavors. Two things the build leaves for the pass:
 
-- **The parts are not copied into `llm_settings`**, which keeps only the `label`. Read them when the run
-  starts, or add them to `configure` and `follow_model_swap` together. A swap is detected by comparing the
-  label, so a reload with different settings and the same context length would go unnoticed.
+- **The parts are in `llm_settings`**, settled 2026-10-20 (Juha): the whole record as `model_record`, kept
+  current by `follow_model_swap`, which counts any change to it as a swap. Rejected: reading the record
+  separately in the pass, which would have been a second reader beside the one Librarian already polls.
+  **The pass calls `follow_model_swap` after each batch and stops the run when it returns `True`.** A
+  `False` also comes back when the backend did not answer, so after one the pass checks
+  `backend_is_reachable`, which is where the mid-run reconnect hooks in.
 - **`resolve_model_info` is public** since 2026-10-20, in `llmclient.__all__`.
 
 Decided 2026-09-30 (Juha): the instrument stamp needs the model's identity, and Librarian already builds
