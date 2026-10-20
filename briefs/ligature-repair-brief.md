@@ -69,7 +69,16 @@ page, and every consumer downstream inherits the difference. Two remedies, not d
   cut from, and in whatever else reads it.
 - **At the source**: repair in `docextract`, which has to tell `MANUF ACTURING` from two real words. That is
   the same kind of question the ligature repair answers with a vocabulary (does the joined form occur
-  elsewhere in the document or the corpus), so it could share that machinery.
+  elsewhere in the document or the corpus), so it could share that machinery. Two stages, of which the
+  first is the hard one (Juha, 2026-10-20):
+  - **Spot the candidates without a model.** A token pair is a candidate when its joined form occurs
+    elsewhere in the document or the corpus (here `MANUFACTURING` is in the same abstract's keywords), or
+    when a half is not a word on its own (`MANUF`, `ACTURING`), where a split between two real words
+    leaves words on both sides. Both want the vocabulary the ligature half builds.
+  - **Score them with the Flair language model the dehyphenator already loads**
+    (`nlptools.load_dehyphenator`, a `dehyphen.FlairScorer`): the split form against the joined one, by
+    perplexity, as `dehyphen` decides a hyphen at a line break. A title in capitals may want both forms
+    lower-cased before scoring; not tried.
 
 ## The shape
 
