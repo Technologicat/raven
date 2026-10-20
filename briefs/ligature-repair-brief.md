@@ -79,6 +79,11 @@ page, and every consumer downstream inherits the difference. Two remedies, not d
     (`nlptools.load_dehyphenator`, a `dehyphen.FlairScorer`): the split form against the joined one, by
     perplexity, as `dehyphen` decides a hyphen at a line break. A title in capitals may want both forms
     lower-cased before scoring; not tried.
+  - **Proper names split too, and defeat both stages** (Juha, 2026-10-20). A name is in no vocabulary, so
+    "a half is not a word" fires on every name whether split or not, and a language model has little to
+    score a rare name with; lower-casing would also drop the capital that marks it. For names, the joined
+    form occurring elsewhere (an author's name unsplit in the affiliation line, say) is probably the only
+    trustworthy evidence, and the scorer should not overrule it.
 
 ## The shape
 
