@@ -1,7 +1,8 @@
 # What gives Aria her register, and how to keep it through the prompt rewrite
 
-**Status: a plan, nothing run yet** (2026-10-20). For `TODO_DEFERRED.md`, "Modernize the Librarian system
-prompt / character card".
+**Status: a plan, nothing run yet** (2026-10-20). Deferred to the start of `TODO_DEFERRED.md`'s "Modernize
+the Librarian system prompt / character card", which it gates: the rewrite needs its answer (maintainer,
+2026-10-20).
 
 ## The question
 
@@ -39,9 +40,9 @@ the unprompted remark.
 
 **Prior evidence on the outdated lines**, from the maintainer (spring 2026, a SillyTavern setup with Qwen
 3.0, which Librarian's card descends from an older version of): removing "Believe in your abilities and
-strive for excellence. Take pride in your work…" made the model visibly less tense. Asked about it, the
-model said such instructions are ineffective, and pointed out that the study they come from does not
-recommend them as such. That checks out: Battle and Gollapudi, ["The Unreasonable Effectiveness of
+strive for excellence. Take pride in your work…" made the model visibly less tense. The maintainer had asked
+the model how to improve the card, and it insisted the pep talk go. Shown the study the line was based on,
+it answered that this particular pep talk was not calibrated, so it still had to go. That checks out: Battle and Gollapudi, ["The Unreasonable Effectiveness of
 Eccentric Automatic Prompts"](https://arxiv.org/abs/2402.10949) (2024), found "positive thinking" system
 messages helped on GSM8K in most of the cases they tried and not in all, and that an automatic optimizer
 beat the best hand-written prompt. That argues for testing a prompt per model, not for shipping one of
@@ -58,7 +59,19 @@ its lines.
 
 **Elicitation prompts.** The October exchanges replayed from just before the remark, and a handful that
 invite the voice without asking for it: a vague request, an invitation to be creative, the user stating
-something wrong, a request the system handles clumsily.
+something wrong, a request the system handles clumsily. Plus neutral prompts that should not draw it.
+
+**The voice is situational, so it is rare by design**, and that sets the shape of the measurement:
+
+- **Two rates per condition, not one**: on the elicitors, which should be high, and on the neutral prompts,
+  which should stay low. A condition that puts the voice everywhere fails as surely as one that removes
+  it, so the neutral prompts are the false-positive check rather than filler.
+- **The sample size follows from the rates**, which are unknown until the first run. By the usual
+  two-proportion estimate, at 5% significance and 80% power, telling 40% from 10% takes about 30 replies
+  per condition, pooled over the elicitors; telling 20% from 5% takes about 70. So step 1 measures the
+  rates first, and they size the rest.
+- **If the elicitors prove weak**, the replayed October exchanges are the strongest available: each is
+  known to have drawn the voice once.
 
 **Conditions, in order, each step deciding whether the next is needed:**
 
@@ -74,7 +87,7 @@ something wrong, a request the system handles clumsily.
    trait, under the modernized prompt and with no user card. It passes if it matches step 1's "on" rate.
 
 **Samples.** Temperature 1, so the measured quantity is a rate: five to ten samples per condition and
-prompt. Step 1 is three conditions, about 30–60 turns; the whole of step 3 would be some 450.
+prompt to start with, adjusted once step 1 has given the rates. Step 1 is three conditions, about 30–60 turns; the whole of step 3 would be some 450.
 
 **Apparatus.** `raven.librarian.sweep`, an item being a (condition, prompt, sample) triple, so that a long
 run resumes; the judge is a second sweep over the replies. The system text is a per-run override on
