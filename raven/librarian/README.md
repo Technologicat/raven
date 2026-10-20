@@ -1414,7 +1414,7 @@ When self-hosting, certain things are done to reduce the LLM's VRAM usage to a l
 
 - The LLM is quantized. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
   - That is, the LLM's weights are quantized. The result is the `some_model_q4_k_xl.gguf` file you download when you install an LLM.
-- [**Flash-attention**](https://arxiv.org/abs/2205.14135) is used to bring the memory cost of the LLM's context down to *O(n)*, where *n* is the context length. Many LLM backends have an option to do this.
+- [**Flash-attention**](https://arxiv.org/abs/2205.14135) (Dao et al., 2022), or a similar attention kernel, is enabled. It computes attention in tiles, never holding the whole *n* × *n* matrix of attention scores in memory, where *n* is the context length. So the working memory of attention grows as *O(n)* rather than *O(n²)*, and fewer trips to GPU memory make it faster too. The computation itself is still *O(n²)*. Many LLM backends have an option for this.
 - Some backends optionally quantize the attention mechanism's KV cache, thus enabling larger context lengths.
   - This is completely separate from weight quantization, and is done at runtime in the LLM backend software.
     - Some backends have separate quantization settings for K and V, while some use the same quantization for both.
