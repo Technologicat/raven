@@ -464,3 +464,77 @@ class TestBuildDuringShutdown:
         view, added = self._view(monkeypatch, n_messages=3, shut_down_after=3)
         view.build()
         assert added == ["n0", "n1", "n2"]
+
+
+class TestThinkingRetentionMismatch:
+    """The prefill notices `llm_retain_thinking` on against a template that drops earlier thinking.
+
+    A stand-in controller with what `_context_prefill_entrypoint` touches, and `llmclient.prefill` faked to
+    report a chosen prompt size: that is the backend's half, and the only one under the test's control.
+    """
+
+    TRACE = "Let me weigh the evidence before I answer. " * 200  # large against the rest of the chat
+    FRAMING = 150  # what the backend counts beyond the stored messages: injects and template markup
+
+    def _controller(self, llm_settings, monkeypatch, reported_as):
+        from unpythonic.env import env
+        from raven.librarian import chattree, llmclient
+        forest = chattree.Forest()
+
+        def add(role, text, parent, **kw):
+            message = chatutil.create_chat_message(llm_settings=llm_settings, role=role, text=text, **kw)
+            return forest.create_node({"message": message, "general_metadata": {"timestamp": 0}}, parent_id=parent)
+        head = add("system", "You are a helpful assistant.", None)
+        for i in range(2):
+            head = add("user", f"Question {i}?", head)
+            head = add("assistant", f"Answer {i}.", head, reasoning_content=self.TRACE)
+        head = add("user", "One more?", head)
+
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        controller.datastore = forest
+        controller.llm_settings = llm_settings
+        controller.app_state = {"HEAD": head, "docs_enabled": False, "internet_enabled": False}
+        controller.retriever = None
+        controller.gui_updates_safe = True
+        controller.is_generating = lambda: False
+        controller.indicator_glow_animation = None
+        controller.indicator_hold = types.SimpleNamespace(show=lambda widget: None, hide=lambda widget: None)
+        controller.llm_indicator_widget = controller.attachment_read_indicator_widget = None
+        controller.retention_mismatch_warned = False
+        controller.rendered = []
+        controller._render_context_fill = lambda count, is_exact: controller.rendered.append(count)
+
+        with_traces = llmclient.count_branch_tokens(llm_settings, forest, head)[0]
+        without_traces = llmclient.count_branch_tokens(llm_settings, forest, head, retain_thinking=False)[0]
+        reported = self.FRAMING + (without_traces if reported_as == "strips" else with_traces)
+        monkeypatch.setattr(llmclient, "prefill", lambda *args, **kwargs: env(usage={"prompt_tokens": reported}))
+        task_env = env(cancelled=False, head_node_id=head, maybe_abort=None)
+        return controller, task_env, reported
+
+    def test_a_stripping_template_s_figure_is_believed_and_the_setting_named_once(
+            self, llm_settings, monkeypatch, caplog):
+        controller, task_env, reported = self._controller(llm_settings, monkeypatch, "strips")
+        with caplog.at_level("WARNING", logger="raven.librarian.chat_controller"):
+            controller._context_prefill_entrypoint(task_env)
+            controller._context_prefill_entrypoint(task_env)
+        assert len(controller.rendered) == 4, "each run shows the estimate, then the backend's figure"
+        assert controller.rendered[1] == reported, "the backend's correct figure was refused as a short count"
+        warnings = [r.message for r in caplog.records if "llm_retain_thinking" in r.message]
+        assert len(warnings) == 1, "the setting is named once per session, not at every prefill"
+
+    def test_a_keeping_template_says_nothing(self, llm_settings, monkeypatch, caplog):
+        controller, task_env, reported = self._controller(llm_settings, monkeypatch, "keeps")
+        with caplog.at_level("WARNING", logger="raven.librarian.chat_controller"):
+            controller._context_prefill_entrypoint(task_env)
+        assert controller.rendered[-1] == reported
+        assert not [r for r in caplog.records if "llm_retain_thinking" in r.message]
+
+    def test_without_the_check_the_same_figure_is_refused(self, llm_settings, monkeypatch):
+        # The control for the first test: there, the figure is believed because of the check, not because
+        # the short-count bound happened to let it through. Disable the check and it must be refused.
+        from raven.librarian import llmclient
+        controller, task_env, reported = self._controller(llm_settings, monkeypatch, "strips")
+        monkeypatch.setattr(llmclient, "template_strips_thinking", lambda *args: False)
+        controller._context_prefill_entrypoint(task_env)
+        assert reported not in controller.rendered, "the short figure got through without the check"
+        assert len(controller.rendered) == 1, "only the estimate should have been shown"
