@@ -270,6 +270,19 @@ Settled with Juha before the first line of the module.
   code without asking anything, must give the same outputs. A live pilot of a few batches under the new
   fingerprint then checks the run end to end.
 
+Two more, found while building it and agreed with Juha the same day:
+
+- **The probe after a failure is `follow_model_swap` and then `backend_status`, not `reconnect`.** This
+  replaces *Decided 2026-09-29* (4)'s `llmclient.reconnect(settings)`. `reconnect` rebuilds every field
+  of the settings from a fresh `connect`, which would drop a run's own overrides: a replaced prompt, a
+  per-run setting. The pair asks the same question and changes only what describes the model. It runs
+  after every batch, failed or not, which is also what the step 0 decision asks for.
+- **`extract_fields.py` loses its `--model` flag**, and nothing replaces it: load the wanted model in the
+  backend. The fingerprint reads the loaded model, so a model requested by name would answer under the
+  loaded one's stamp. And requesting it makes LM Studio load it, which changes the model record, so the
+  run would stop after its first batch. Rejected: making the fingerprint follow the requested model,
+  since detecting the model that actually answered is the more reliable of the two.
+
 ## The questions the decisions answer
 
 All seven are settled, in *Decided 2026-09-29* and *Decided 2026-09-30* above, which cite them by number.
