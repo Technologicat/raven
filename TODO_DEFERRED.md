@@ -1120,6 +1120,9 @@ The sharper version is to read the reasoning trace and ask whether it was still 
 end — a judgement the trace supports and a token count does not. That is system-2 prompting, an idea
 originally floated by Seth Herd on LessWrong; raised here by Juha (2026-09-03) as the v2 of the cap.
 
+**The v1 policy is settled** (2026-10-20): the cap plus a flag for a reply cut off at it, so that a wedged
+item of a batch run becomes a failed one; see `briefs/per-document-llm-pass-brief.md`. This item is the v2.
+
 **Check before building that the failure still happens.** Executive function has improved markedly in
 recent model releases and looks likely to keep improving, so this may retire itself — which is also why it
 is not on the critical path.

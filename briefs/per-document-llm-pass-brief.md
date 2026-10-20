@@ -307,6 +307,21 @@ The `raven-pdf2bib` port, settled with Juha the same day:
 - **`extract` moves from `agent.turn` to `ask_record`.** `turn` turns a backend failure into an assistant
   message, whose text is not empty, so it passed the retry loops' check and reached the `.bib` as a field.
 
+What is left before this brief closes, settled with Juha the same evening:
+
+- **A wedged reply's policy is the cap plus a flag.** The cap is `agent.DEFAULT_MAX_REPLY_TOKENS`, as now.
+  The flag is the roadmap's "status flag for a reply that hit the token limit" (`TODO.md`, "pdf2bib
+  overthinking"): nothing reads `finish_reason` today, so a reply cut off at the cap looks finished to
+  everything downstream, and a half-written field passes the not-blank check. So `invoke` reads it, the
+  reply's `generation_metadata` and `TurnRecord` carry it, `agent.ask_until` does not accept a reply cut
+  off there, and the chat log notes it under the reply as it notes an interruption. A wedged item then
+  becomes a failed one, asked again on the next run. Telling wedged from hard by reading the trace stays
+  `TODO_DEFERRED.md`'s "Tell a wedged reply from a hard one", gated as it says.
+- **To build first thing on 2026-10-21**, then close the brief: hand the importer's `_summarize` to
+  `briefs/design/corpus-interrogation-sketch.md`, where lifting `summarize` already belongs, retire
+  `TODO_DEFERRED.md`'s pointer item and "Batch tools: LLM reconnect mid-run" (stopping and re-running is
+  the decided recovery, and `raven-pdf2bib` does it), and move the brief to `briefs/done/`.
+
 ## The questions the decisions answer
 
 All seven are settled, in *Decided 2026-09-29* and *Decided 2026-09-30* above, which cite them by number.
