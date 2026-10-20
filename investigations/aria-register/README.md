@@ -41,7 +41,7 @@ blind sample (`blind-sample-7.md`, 30 replies) has been rated by hand** and comp
   remarks use the technical material as the vehicle ("a minute wearing a tie", "Same move, wetter.",
   "you've offloaded the I/O to another agent"); `plain`'s are generic ("Ah, a classic!", "Gross, but
   effective."). The shoelace prompt draws something from every condition (5, 4, 5 of 5), so it separates
-  nothing by rate and a lot by kind. A rubric item for *what carries the remark* would capture this.
+  nothing by rate and a lot by kind. A rubric item for *what carries the remark* is to be added (agreed 2026-10-20), and the replies judged again.
 - **False positives remaining** include a checklist summary ("image pass-through ✓, …") and "it's a common
   mix-up, so worth correcting". A handful in 150; the blind sample will size it.
 - `creative` drew `card_on`'s thinking to plan the reply as "tight, witty, peer-to-peer" — the user card read
