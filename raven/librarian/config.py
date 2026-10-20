@@ -86,9 +86,11 @@ llm_model = None
 # can tell the other what the template does. So set this to agree with it: a template that strips earlier
 # thinking wants `False`. Left at `True` there, the readout over-reports, which is the safe direction to be
 # wrong in — but with an exact local count (`llm_tokenizer_path`) it shows the over-count as exact, the
-# tokenizer counting exactly the text sent and knowing nothing of what the template then drops. Some templates take a variable that switches it, such as `preserve_thinking`; on LM Studio a
-# template can be overridden per model, which is where that is set, and where a saved override can turn
-# retention off without anyone noticing.
+# tokenizer counting exactly the text sent and knowing nothing of what the template then drops.
+#
+# Some templates take a variable that switches it, such as `preserve_thinking`; on LM Studio a template can
+# be overridden per model, which is where that is set, and where a saved override can turn retention off
+# without anyone noticing.
 llm_retain_thinking = True
 
 # Optional local tokenizer for *exact* token counting against backends without a token-count endpoint
