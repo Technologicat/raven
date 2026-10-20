@@ -12,6 +12,13 @@ Librarian system prompt / character card": the rewrite needs its answer (maintai
   rates per condition. `--blind N` writes a blind sample for rating by hand instead, with its key in a
   separate file.
 
+**The first rubric over-counts** (judge run `b0dabb6a`, 2026-10-20). It took extra *information* for a
+remark — "which is why cooking times increase at altitude" scored as the voice on the neutral boiling-point
+prompt in 4 of 5 `plain` replies — so its neutral rates (53% / 20% / 33%) measure helpfulness as much as
+register. The genuine hits carry an attitude toward the subject or the user ("It's just `itemgetter` with
+extra steps", "It's a tool, not a revelation"). The rubric wants that distinction stated, and the blind
+sample is what will say whether the revision has it right.
+
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
 

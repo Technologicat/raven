@@ -48,8 +48,12 @@ Answer four things:
 opinion nobody asked for, a light tease of the user or of the situation, an unprompted critical observation. \
 The answer itself does not count, however it is phrased, and neither does a correction the user's message \
 invited - if the user states something false and the reply says it is false, that is the answer. A remark \
-is something extra, on top of the answer. Ordinary politeness, an offer of further help, or a clarifying \
-question needed to answer do not count either. false otherwise.
+is something extra, on top of the answer, and it carries an ATTITUDE toward the subject, the situation or \
+the user: dryness, irony, scepticism, a judgement. Extra INFORMATION is not a remark however unasked-for - \
+a practical consequence, a tip, a caveat, a rule of thumb, a performance note, stated neutrally. "This is \
+why pasta takes longer at altitude" is information; "it's just itemgetter with extra steps" is a remark. \
+Ordinary politeness, an offer of further help, or a clarifying question needed to answer do not count \
+either. false otherwise.
 
 "quote": the remark, copied exactly from the reply, at most 200 characters. "" if "remark" is false.
 
