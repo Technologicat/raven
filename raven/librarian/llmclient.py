@@ -1284,7 +1284,8 @@ def count_branch_tokens(settings: env,
 
     Thinking traces are counted where the prompt carries them (`keeps_reasoning`). That is an assumption
     about the chat template, which `settings.retain_thinking` states and nothing can check: a template that
-    strips traces Raven sends makes this over-report until the backend's figure replaces it.
+    strips traces Raven sends makes this over-report until the backend's figure replaces it, and an exact
+    count (a local tokenizer, ooba's endpoint) is then exactly the size of text the template does not use.
 
     Attachments are counted in the two different ways they cost context. An image consumes tokens the
     tokens-per-character ratio cannot see, so it is added as a per-family estimate (`image_token_cost`) and forces
