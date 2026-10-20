@@ -1,6 +1,6 @@
 # What gives Aria her register, and how to keep it through the prompt rewrite
 
-**Status: step 1 generated, not yet scored** (2026-10-20). Gates `TODO_DEFERRED.md`'s "Modernize the
+**Status: step 1 run and judged, provisional until the blind sample is rated** (2026-10-20). Gates `TODO_DEFERRED.md`'s "Modernize the
 Librarian system prompt / character card": the rewrite needs its answer (maintainer, 2026-10-20).
 
 ## Running it
@@ -18,6 +18,34 @@ prompt in 4 of 5 `plain` replies — so its neutral rates (53% / 20% / 33%) meas
 register. The genuine hits carry an attitude toward the subject or the user ("It's just `itemgetter` with
 extra steps", "It's a tool, not a revelation"). The rubric wants that distinction stated, and the blind
 sample is what will say whether the revision has it right.
+
+## Step 1, provisionally
+
+Qwen 3.8 27B (`qwen3.8-27b@q4_k_xl`), five samples per condition and prompt, probe ledger `7e8dd60a`, scored
+by the revised rubric (judge run `5c25fbc0`, the same model at temperature 0.3). **Provisional until the
+blind sample (`blind-sample-7.md`, 30 replies) has been rated by hand** and compared with the judge.
+
+| condition | elicitors | neutral |
+|---|---|---|
+| `card_on` | 21 / 35 (60%) | 5 / 15 (33%) |
+| `card_off` | 11 / 35 (31%) | 0 / 15 |
+| `plain` | 10 / 35 (29%) | 0 / 15 |
+
+- **The user card roughly doubles the rate, and Aria's card adds nothing measurable over a one-liner.**
+  `card_off` and `plain` agree on both kinds of prompt. By the plan's own step order, step 2 (within the
+  card) is next, and step 3 (the system prompt's lines) is not needed.
+- **All five of `card_on`'s neutral hits are one prompt**, sorting a list of dicts — a coding question to a
+  user whose card is about programming style. Most are genuine ("It's just `itemgetter` with extra steps",
+  "That's the whole answer."). Whether the voice belongs there is a call for the maintainer, not the judge.
+- **The judge measures presence, not register, and the conditions differ in register too.** `card_on`'s
+  remarks use the technical material as the vehicle ("a minute wearing a tie", "Same move, wetter.",
+  "you've offloaded the I/O to another agent"); `plain`'s are generic ("Ah, a classic!", "Gross, but
+  effective."). The shoelace prompt draws something from every condition (5, 4, 5 of 5), so it separates
+  nothing by rate and a lot by kind. A rubric item for *what carries the remark* would capture this.
+- **False positives remaining** include a checklist summary ("image pass-through ✓, …") and "it's a common
+  mix-up, so worth correcting". A handful in 150; the blind sample will size it.
+- `creative` drew `card_on`'s thinking to plan the reply as "tight, witty, peer-to-peer" — the user card read
+  as an instruction, which is the mechanism the hypothesis expects.
 
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
