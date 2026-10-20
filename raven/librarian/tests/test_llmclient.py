@@ -1570,7 +1570,7 @@ class TestModelInfoResolution:
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
             _lmstudio_model("other", loaded=False, quantization="Q8"),
             _lmstudio_model("qwen3.5-4b", quantization="Q4_K_XL", context_length=131072, vision=True))))
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.label == "qwen3.5-4b, Q4_K_XL, 128 Ki context"
         assert info.model_id == "qwen3.5-4b"
         assert info.context_length == 131072
@@ -1580,7 +1580,7 @@ class TestModelInfoResolution:
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
             _lmstudio_model("qwen3.5-4b", quantization="Q4_K_XL", context_length=131072, vision=True,
                             parallel=1, flash_attention=True))))
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.quantization == "Q4_K_XL"
         assert info.bits_per_weight == 4
         assert info.load_config == {"context_length": 131072, "parallel": 1, "flash_attention": True}
@@ -1588,7 +1588,7 @@ class TestModelInfoResolution:
     def test_other_flavors_report_no_parts(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
-        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        info = llmclient.resolve_model_info("http://x", "oobabooga")
         assert (info.quantization, info.bits_per_weight, info.load_config) == (None, None, None)
 
     def test_lmstudio_a_loaded_embedding_model_is_not_the_model(self, monkeypatch):
@@ -1596,7 +1596,7 @@ class TestModelInfoResolution:
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(
             _lmstudio_model("text-embedding-nomic-embed-text-v1.5", type="embedding", context_length=2048),
             _lmstudio_model("qwen3.5-4b", context_length=131072, vision=True))))
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.model_id == "qwen3.5-4b"
         assert info.n_loaded == 1
 
@@ -1606,7 +1606,7 @@ class TestModelInfoResolution:
         model["loaded_instances"].append({"id": "qwen3.5-4b:2", "config": {"context_length": 8192}})
         model["loaded_instances"].reverse()
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(model)))
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.model_id == "qwen3.5-4b:2"
         assert info.context_length == 8192
         assert info.n_loaded == 2
@@ -1626,7 +1626,7 @@ class TestModelInfoResolution:
     def test_oobabooga_filename_label_no_context(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "Qwen3-4B-Thinking.gguf"}}))
-        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        info = llmclient.resolve_model_info("http://x", "oobabooga")
         assert info.label == "Qwen3-4B-Thinking.gguf"
         assert info.model_id == "Qwen3-4B-Thinking.gguf"
         assert info.context_length is None
@@ -1634,13 +1634,13 @@ class TestModelInfoResolution:
     def test_generic_single_model_named(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/models": {"data": [{"id": "the-only-model"}]}}))
-        info = llmclient._resolve_model_info("http://x", "generic")
+        info = llmclient.resolve_model_info("http://x", "generic")
         assert info.label == "the-only-model"
 
     def test_generic_ambiguous_never_guesses(self, monkeypatch):
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/models": {"data": [{"id": "a"}, {"id": "b"}]}}))
-        info = llmclient._resolve_model_info("http://x", "generic")
+        info = llmclient.resolve_model_info("http://x", "generic")
         assert info.label == llmclient.NO_MODEL_INFO
 
     def test_lmstudio_jit_idle_nothing_loaded(self, monkeypatch):
@@ -1648,7 +1648,7 @@ class TestModelInfoResolution:
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False),
                                                                             _lmstudio_model("b", loaded=False))))
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.label == llmclient.NO_MODEL_INFO
         assert info.context_length is None
 
@@ -1659,20 +1659,20 @@ class TestModelInfoResolution:
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a"))))
-        assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is True
+        assert llmclient.resolve_model_info("http://x", "lmstudio").loaded is True
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False))))
-        assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is False
+        assert llmclient.resolve_model_info("http://x", "lmstudio").loaded is False
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
-        assert llmclient._resolve_model_info("http://x", "oobabooga").loaded is True
+        assert llmclient.resolve_model_info("http://x", "oobabooga").loaded is True
 
         # A generic backend's model list says what it *has*, which is not what is resident -- LM Studio's
         # own list would read as "loaded" by that test with nothing running at all.
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/models": {"data": [{"id": "the-only-model"}]}}))
-        assert llmclient._resolve_model_info("http://x", "generic").loaded is None
+        assert llmclient.resolve_model_info("http://x", "generic").loaded is None
 
     def test_oobabooga_says_nothing_is_loaded_with_the_string_None(self, monkeypatch):
         # ooba's own `list_models_openai_format` tests `model_name != 'None'` before deciding it has a model
@@ -1680,7 +1680,7 @@ class TestModelInfoResolution:
         # instance here to confirm it against, which is also true of the whole ooba path.
         monkeypatch.setattr(llmclient.requests, "get", _route_get({
             "/v1/internal/model/info": {"model_name": "None"}}))
-        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        info = llmclient.resolve_model_info("http://x", "oobabooga")
         assert info.loaded is False
         assert info.label == llmclient.NO_MODEL_INFO  # ...and it is not reported as a model called "None"
         assert info.model_id is None
@@ -1689,13 +1689,13 @@ class TestModelInfoResolution:
         # `is_vlm=False` hard-refuses image attachment, so it must mean the backend said so. Every LLM record
         # LM Studio returns carries `capabilities`; a record without one has not answered the question.
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a"))))
-        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is None
+        assert llmclient.resolve_model_info("http://x", "lmstudio").is_vlm is None
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", vision=False))))
-        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is False
+        assert llmclient.resolve_model_info("http://x", "lmstudio").is_vlm is False
 
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", vision=True))))
-        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is True
+        assert llmclient.resolve_model_info("http://x", "lmstudio").is_vlm is True
 
     def test_naming_a_model_does_not_make_it_resident(self, monkeypatch):
         # LM Studio's JIT loads on demand, so a configured model name is a request the backend will *try* to
@@ -1703,7 +1703,7 @@ class TestModelInfoResolution:
         # what a request would ask for, not whether the backend can answer now.
         monkeypatch.setattr(llmclient.requests, "get", _route_get(_lmstudio(_lmstudio_model("a", loaded=False))))
         monkeypatch.setattr(llmclient.librarian_config, "llm_model", "qwen3.6-35b-a3b")
-        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        info = llmclient.resolve_model_info("http://x", "lmstudio")
         assert info.label == "qwen3.6-35b-a3b"
         assert info.loaded is False
 
@@ -1822,7 +1822,7 @@ class TestFollowModelSwap:
 
     def _backend_has(self, monkeypatch, **info):
         fields = dict(label="a-model", model_id=None, context_length=4096, is_vlm=True, loaded=True) | info
-        monkeypatch.setattr(llmclient, "_resolve_model_info", lambda backend_url, flavor: env(**fields))
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: env(**fields))
 
     def test_the_same_model_changes_nothing(self, settings, monkeypatch):
         self._backend_has(monkeypatch)
@@ -1852,7 +1852,7 @@ class TestFollowModelSwap:
     def test_a_backend_that_does_not_answer_changes_nothing(self, settings, monkeypatch):
         def _refuse(backend_url, flavor):
             raise llmclient.requests.exceptions.ConnectionError("nothing listening")
-        monkeypatch.setattr(llmclient, "_resolve_model_info", _refuse)
+        monkeypatch.setattr(llmclient, "resolve_model_info", _refuse)
         assert llmclient.follow_model_swap(settings) is False
         assert settings.model == "a-model"
         assert llmclient.backend_status(settings) is llmclient.backend_unreachable, "a frontend could not tell"
@@ -2027,7 +2027,7 @@ class TestConfigureMatchesSetup:
         from_setup = llmclient.setup("http://test-backend", quiet=True)
 
         flavor = llmclient.detect_backend_flavor("http://test-backend")
-        model_info = llmclient._resolve_model_info("http://test-backend", flavor)
+        model_info = llmclient.resolve_model_info("http://test-backend", flavor)
 
         # From here on, any HTTP at all is a bug: `configure` must not contact the backend. Breaking
         # `requests.get` outright is what distinguishes "does not need it" from "happens not to have used it".
@@ -2053,7 +2053,7 @@ class TestConfigureMatchesSetup:
         # A backend that reports no context window is the case the 64k default exists for, and the default
         # has to live in `configure` — a caller synthesizing a `model_info` gets it too, or the split leaks.
         self._patch_generic_backend(monkeypatch)
-        model_info = llmclient._resolve_model_info("http://test-backend", "generic")
+        model_info = llmclient.resolve_model_info("http://test-backend", "generic")
         assert model_info.context_length is None, "precondition: generic backend reports no context length"
 
         settings = llmclient.configure(model_info=model_info,

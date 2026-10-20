@@ -428,7 +428,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - Assistant prefill works there too.
   - Response carries `stop_reason` and `usage.cache_read_input_tokens`, i.e. the real Anthropic shape rather than a thin alias.
 
-  Where it lands in the code: `llmclient.detect_backend_flavor` already probes by *payload shape* and returns `"lmstudio"` / `"oobabooga"` / `"generic"`, and `backend_flavor` already gates request details at a handful of sites (`_resolve_model_info`, the continue flag, the sampler block). So the seam exists. What is genuinely different about the Anthropic shape, and needs designing rather than switching on:
+  Where it lands in the code: `llmclient.detect_backend_flavor` already probes by *payload shape* and returns `"lmstudio"` / `"oobabooga"` / `"generic"`, and `backend_flavor` already gates request details at a handful of sites (`resolve_model_info`, the continue flag, the sampler block). So the seam exists. What is genuinely different about the Anthropic shape, and needs designing rather than switching on:
 
   - **`system` is a top-level request field, not a message with `role="system"`.** Raven's history is a list of role-tagged messages and the system prompt is a node in the chat tree, so the wire builder has to lift it out.
   - **Tool calls and results are content *blocks*** (`tool_use` / `tool_result`) inside a message, rather than a separate `tool_calls` field plus `role="tool"` messages. Raven's content is already a typed-parts list, which is the right shape to map from — but `perform_tool_calls` and the streaming parser both speak the OpenAI spelling today.

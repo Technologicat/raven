@@ -123,7 +123,7 @@ thousand "failed" documents that were never tried properly.
 
 ## Step 0: one model record in `llmclient`, shared with Librarian
 
-**Done 2026-10-19.** `llmclient._resolve_model_info` reads `/api/v1/models` only. The open question below
+**Done 2026-10-19.** `llmclient.resolve_model_info` reads `/api/v1/models` only. The open question below
 was settled as `v1` only (Juha, 2026-10-19), so an LM Studio without it detects as a generic backend. Its
 `env` now carries `quantization`, `bits_per_weight` and `load_config` beside the `label` composed from
 them, and those three are `None` on the other flavors. Two things the build leaves for the pass:
@@ -131,8 +131,7 @@ them, and those three are `None` on the other flavors. Two things the build leav
 - **The parts are not copied into `llm_settings`**, which keeps only the `label`. Read them when the run
   starts, or add them to `configure` and `follow_model_swap` together. A swap is detected by comparing the
   label, so a reload with different settings and the same context length would go unnoticed.
-- **`_resolve_model_info` is still private.** Whether the pass calls it as it is or it gets a public name
-  is decided where the pass is written.
+- **`resolve_model_info` is public** since 2026-10-20, in `llmclient.__all__`.
 
 Decided 2026-09-30 (Juha): the instrument stamp needs the model's identity, and Librarian already builds
 one for its character card, so both come from one function rather than two copies. It is the first step
@@ -143,7 +142,7 @@ of this build, not a separate item, because the stamp is what needs it.
   instance's whole `config` block. Librarian formats its label from that; the stamp hashes it and writes
   the block into report headers (see *Decided 2026-09-29*, the cache key).
 - **What moves.** `llmclient` reads LM Studio's `v0` in two places: backend-flavor detection, which keys
-  on the `state` field, and `_resolve_model_info`. Loaded or not, vision, and context length all move to
+  on the `state` field, and `resolve_model_info`. Loaded or not, vision, and context length all move to
   `v1`'s shapes — `loaded_instances` for `state`, `capabilities.vision` for `type == "vlm"`, the instance
   config's `context_length` for `loaded_context_length` (field names checked against a live instance,
   2026-09-30). About ten fixtures in `test_llmclient.py` mock `v0` and change with it.

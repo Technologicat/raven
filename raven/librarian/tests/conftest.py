@@ -79,7 +79,7 @@ def llm_settings(monkeypatch):
                      loaded=True)  # a test that gets as far as a turn is testing one against a backend that could answer
     # Asked again before every turn (`follow_model_swap`), and answered here rather than over the network: the
     # backend this fixture stands in for keeps serving the same model.
-    monkeypatch.setattr(llmclient, "_resolve_model_info", lambda backend_url, flavor: model_info)
+    monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: model_info)
     return llmclient.configure(model_info=model_info,
                                backend_flavor="lmstudio",
                                backend_url="http://test-backend",

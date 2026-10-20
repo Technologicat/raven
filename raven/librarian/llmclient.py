@@ -21,6 +21,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            "list_models",
            "test_connection",
            "detect_backend_flavor",
+           "resolve_model_info",
            "setup",
 
            # For frontends that open a window whether or not a backend answers
@@ -187,7 +188,7 @@ def list_models(backend_url: str) -> list[str]:
     """List the model ids available at `backend_url`, via the standard OpenAI `/v1/models` endpoint.
 
     Used for a model picker and the connection probe (order irrelevant). For the *loaded* model's identity,
-    see `_resolve_model_info` instead — this list can't tell you which model is actually loaded on LM Studio
+    see `resolve_model_info` instead — this list can't tell you which model is actually loaded on LM Studio
     under just-in-time loading.
     """
     response = requests.get(f"{backend_url}/v1/models",
@@ -280,7 +281,7 @@ def _warn_if_lmstudio_parallel(backend_url: str) -> None:
     except Exception as exc:
         logger.debug(f"_warn_if_lmstudio_parallel: could not read LM Studio's load settings: {type(exc)}: {exc}")
 
-def _resolve_model_info(backend_url: str, flavor: str) -> env:
+def resolve_model_info(backend_url: str, flavor: str) -> env:
     """Resolve the loaded model's identity and context window for `flavor`.
 
     Returns an `env` with:
@@ -373,7 +374,7 @@ def _model_info(label: str = NO_MODEL_INFO,
                 bits_per_weight: float | None = None,
                 load_config: dict | None = None,
                 **extra) -> env:
-    """Build a model-info `env` as `_resolve_model_info` returns it, every field present; the defaults say
+    """Build a model-info `env` as `resolve_model_info` returns it, every field present; the defaults say
     "not reported". `extra` carries flavor-specific fields (LM Studio's `n_loaded`)."""
     return env(label=label, model_id=model_id, context_length=context_length, is_vlm=is_vlm, loaded=loaded,
                quantization=quantization, bits_per_weight=bits_per_weight, load_config=load_config, **extra)
@@ -406,7 +407,7 @@ def setup(backend_url: str,
 
         `model: str`: Human-facing identity of the loaded model, for the character card — a rich line on
                       LM Studio (id, quant, context), the GGUF filename on ooba, or "No model information is
-                      available" when a generic backend can't disambiguate (never a guess). See `_resolve_model_info`.
+                      available" when a generic backend can't disambiguate (never a guess). See `resolve_model_info`.
 
         `model_id: str | None`: The model id sent in each request's `model` field: `config.llm_model`, which
                                 LM Studio's JIT loads on demand, or else the model loaded now, kept current by
@@ -495,12 +496,12 @@ def setup(backend_url: str,
                                               The "system" and "tool" roles typically have no persona; for them, the persona is stored as `None`.
     """
     # Identify the backend, then resolve the loaded model's identity and context window for the character card.
-    # A few request/response details differ between backends (see `detect_backend_flavor`, `_resolve_model_info`).
+    # A few request/response details differ between backends (see `detect_backend_flavor`, `resolve_model_info`).
     #
     # These two calls are the whole of what `setup` needs a live backend for; everything after them is
     # `configure`, which is pure. That is the split, and it is why it is drawn here.
     backend_flavor = librarian_config.llm_backend_flavor or detect_backend_flavor(backend_url)
-    model_info = _resolve_model_info(backend_url, backend_flavor)
+    model_info = resolve_model_info(backend_url, backend_flavor)
     if backend_flavor == "lmstudio" and model_info.loaded and not quiet:
         _warn_if_lmstudio_parallel(backend_url)
         if getattr(model_info, "n_loaded", 1) > 1 and not librarian_config.llm_model:
@@ -596,7 +597,7 @@ def backend_status(settings: env) -> sym:
 
     `backend_ready`: as far as can be told, a turn would work. Includes the backends that do not report
                      whether a model is loaded, since "cannot tell" is not a fault to report — see
-                     `_resolve_model_info`.
+                     `resolve_model_info`.
 
     The three are worth distinguishing rather than collapsing into "not working": the user meets all of them
     at the same moment, having done nothing wrong, and what they should do about it differs.
@@ -642,7 +643,7 @@ def follow_model_swap(settings: env) -> bool:
     if not settings.backend_is_reachable:
         return False
     try:
-        info = _resolve_model_info(settings.backend_url, settings.backend_flavor)
+        info = resolve_model_info(settings.backend_url, settings.backend_flavor)
     except requests.exceptions.RequestException:
         settings.backend_is_reachable = False
         return False
@@ -869,7 +870,7 @@ def configure(model_info: env,
     third of the real object and a stand-in system prompt, so a probe claiming to measure "what Raven sends"
     measures something else — the failure this split exists to remove.
 
-    `model_info`: What `_resolve_model_info` returns: an `env` with `label`, `model_id`, `context_length`,
+    `model_info`: What `resolve_model_info` returns: an `env` with `label`, `model_id`, `context_length`,
                   `is_vlm` and `loaded`. Synthesize one to configure against a hypothetical model;
                   `context_length` may be `None`, which defaults as it does for a backend that does not
                   report one, and `is_vlm`/`loaded` may be `None`, which is how a backend that reports
