@@ -37,15 +37,19 @@ def main() -> None:
     conf.add_argument("--note", dest="conference_note", default=None, type=str, metavar="NOTE", help="Conference note, e.g. dates and location (optional).")
     conf.add_argument("--url", dest="conference_url", default=None, type=str, metavar="URL", help="Conference URL (optional).")
 
-    parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
-    parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
-    parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at the various processing steps for author extraction, when the processing fails. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it starts overthinking and fails to produce a final response within the maximum token limit for a reply.")
+    parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Rewritten at the end of every run, from the ledger (see --ledger-dir), so it always holds every entry answered so far.")
+    parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for flagged entries (default: send these too to the success output): those the heuristics say want a manual check. Rewritten at the end of every run, like --success. A document with no usable answer at all gets no entry, and is asked again on the next run.")
+    parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at each processing step, when it gives no usable reply. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it starts overthinking and fails to produce a final response within the maximum token limit for a reply.")
     parser.add_argument("-l", "--log", metavar="log.txt", default=None, help="Output logfile, for a copy of the console log (overwritten each run). Useful for seeing what went wrong in each specific failed entry.")
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
-    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; allows easily continuing later). If also `-of` is specified, then only successful files will be moved to the `-o` directory; failed files will be moved to the `-of` directory.")
-    parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move failed done files into (optional; allows easily continuing later)")
+    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; for sorting, since the ledger is what resumes a run). If also `-of` is specified, then only successful files will be moved to the `-o` directory; flagged files will be moved to the `-of` directory. A document with no usable answer stays where it is.")
+    parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move flagged files into (optional), with each one's notes as `<name>_errors.txt` and its entry as `<name>.bib`")
+    parser.add_argument("--ledger-dir", dest="ledger_dir", default=None, type=str, metavar="dir", help="directory for the run's ledger, `pdf2bib-<slug>-<instrument>.jsonl`, which is what makes a run resumable: running the same command again asks only what is not yet answered (default: beside the --success file, else the current directory). The instrument is a hash of the prompts, the model and its quantization, and --declare, so changing any of them starts a fresh ledger")
+    parser.add_argument("--declare", dest="declare", default=None, type=str, metavar="TEXT", help="LLM backend settings the backend does not report, such as the KV cache quantization ('KV cache q4_0'). Part of the instrument, and recorded in the ledger")
+    parser.add_argument("--reask-flagged", dest="reask_flagged", action="store_true", help="ask the LLM again about every document flagged so far. One that comes back clean then counts as done, and its PDF moves from -of to -o. The earlier answers stay in the ledger, superseded")
+    parser.add_argument("--reask", dest="reask", nargs="+", default=None, metavar="NAME", help="ask the LLM again about these documents, named by their PDF filename without the .pdf, whatever their earlier outcome")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively, skipping output dirs)")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
@@ -53,7 +57,9 @@ def main() -> None:
     from ..common import logsetup  # noqa: PLC0415 -- not needed to parse
     logsetup.configure(level=getattr(logging, opts.log_level),
                        logfile=opts.log,
-                       allow=["raven.papers.pdf2bib"])  # the library's own log only
+                       # The library's own log, and the two layers it runs on: the sweep says which model it is
+                       # asking and how far it has got, and `agent.ask_until` says when a step is asked again.
+                       allow=["raven.papers.pdf2bib", "raven.librarian.sweep", "raven.librarian.agent"])
 
     from . import pdf2bib  # noqa: PLC0415 -- heavy, and imported after logging is set up
     pdf2bib.run(opts)

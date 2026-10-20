@@ -138,9 +138,12 @@ The extracted text is sanitized with the dehyphenator before it is written to th
 
 Every PDF under `-i` is converted, descending into subdirectories, one directory at a time in Unicode lexicographical order by filename. Without `-i`, the working directory is used. The directories named by `-o` and `-of` are skipped while descending, so `-o some_input_directory/done_success` is safe.
 
-**The output buffers are flushed after each entry**, so a text editor that notices changed files can be used to watch progress.
+**A long run is resumable: stop it, run the same command again, and it picks up what is left.** Each PDF's fields go to a ledger as they arrive, `pdf2bib-<slug>-<instrument>.jsonl` beside the `-s` file (or in `--ledger-dir`). `-s` and `-f` are then **rewritten** from the ledger at the end of every run, including one that stopped, so they always hold every entry answered so far. Point them at files of their own: what was in them before is replaced.
 
-**A long run is resumable, and that is what the directory moving is for.** A PDF is moved to `-o` only if it was processed successfully, and only *after* its entry has been written; `-of` moves the failures likewise. Stop the job and run the same command again — the success bib, the failure bib and the log are all appended to — and it picks up what is left. `-r` sets how many attempts one paper gets, three by default.
+- **The ledger is named for the instrument**: a hash of the prompts, the model and its quantization, and anything you state with `--declare` that the backend cannot report, such as `--declare "KV cache q4_0"`. Change any of these and the run starts a fresh ledger, rather than mixing answers from two setups.
+- **Each document comes out one of three ways.** *Done*: its entry goes to `-s`. *Flagged*: the heuristics say a person should look; its entry goes to `-f`. *No usable answer*: a step stayed empty through all its attempts (`-r`, three by default), so it gets no entry, is listed at the end of the run, and is asked again by the next one.
+- **The run stops if the LLM backend goes away, or its model changes**, saying which, instead of marking the remaining documents as failed. The model is named at the start of the run, so a wrong one is caught before it has answered anything.
+- **`-o` and `-of` are for sorting** processed PDFs from unprocessed ones: done PDFs move to `-o`, flagged ones to `-of`, and those with no usable answer stay where they are. Resuming does not depend on them, and a run finds the PDFs in them too, so one asked again needs no moving back.
 
 #### How it works, and why you should check its output
 
@@ -150,7 +153,7 @@ Every PDF under `-i` is converted, descending into subdirectories, one directory
 
 **The extracted data is double-checked by heuristics** where that is reasonably possible, and anything suspicious is flagged with a warning. **It is very strongly recommended to check a flagged entry against the original PDF**, because a flagged entry is very likely to be wrong in one or more ways.
 
-Failures go to `-f`, are logged to `-l`, and their full LLM traces are written into the *input* directory beside the file — `myfile.pdf` leaves `myfile_errors.txt`. LLMs being stochastic, simply moving the PDF back and retrying sometimes works.
+Flagged entries go to `-f` and are logged to `-l`. With `-of` (or `-o`), each also gets its notes, with the full LLM traces of the steps that raised them, beside the moved PDF: `myfile.pdf` leaves `myfile_errors.txt` and `myfile.bib`. Every model call of every document, the replies included, is also kept beside the ledger, in its `-traces.jsonl`. LLMs being stochastic, asking again sometimes works: `--reask-flagged` asks again about every flagged document, and `--reask NAME …` about the ones named, by filename without the `.pdf`. A document that comes back clean counts as done, and its PDF moves from `-of` to `-o`. The earlier answers stay in the ledger, superseded.
 
 People do submit abstracts with no author list, or no title at all. The converter tries to catch that and does not always manage it. And an LLM may confabulate, answer incorrectly, or fail to follow an instruction — which is what the heuristics and the flagging are for, and why a flagged entry is worth the minute it takes to check.
 

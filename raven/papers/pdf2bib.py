@@ -6,14 +6,15 @@ The heavy lifting is done by `raven.common.docextract` (PDF text extraction) and
 
 The command line is `raven-pdf2bib`, in `raven.papers.pdf2bib_cli`, which calls `run`.
 
-With `-o done`, each input PDF is moved into `done` as it is processed, which allows easily continuing later
-if there are lots of input files. A file is moved if and only if it was successfully processed, AFTER
-printing its BibTeX entry.
+A run is a `raven.librarian.sweep`: each PDF's fields go to a ledger as they arrive, so running the same
+command again resumes, and the `.bib` outputs are rewritten from the ledger at the end of every run. With
+`-o done`, each PDF is also moved into `done` once answered, which sorts what is processed from what is not.
 """
 
 __all__ = ["full_output_trace", "extract", "setup_prompts",
 
-           "listpdf", "process_one", "process_abstracts",
+           "listpdf", "extract_fields", "format_entry", "write_outputs",
+           "collect_items", "sort_pdf", "process_abstracts",
 
            "run"]
 
@@ -29,9 +30,9 @@ import re
 import shutil
 import sys
 from textwrap import dedent
-from typing import Dict, List
+from collections.abc import Callable
 
-from unpythonic import sym, timer, ETAEstimator, maybe_open, uniqify
+from unpythonic import sym, timer, uniqify
 from unpythonic.env import env
 
 from ..client import api
@@ -39,19 +40,28 @@ from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import docextract
+from ..common import netutil
 from ..common import utils as common_utils
 
 from ..librarian import agent
 from ..librarian import chatutil
 from ..librarian import llmclient
+from ..librarian import sweep
 
 from .utils import bibtex_escape
 
 # --------------------------------------------------------------------------------
 # Bootup
 
+# How a document came out. Flagged means there is an answer and a person should look at it: the document
+# seems to lack a field, or an answer looks wrong. A document with no usable answer at all is neither: it
+# is a failed item of the sweep, and is asked again on the next run.
 status_success = sym("success")
-status_failed = sym("failed")
+status_flagged = sym("flagged")
+
+class _NoAnswer(Exception):
+    """A step of one document gave no usable reply after its attempts. Not a property of the document, so
+    the document is asked again on the next run rather than written out flagged."""
 
 # What the prompts ask the LLM to reply when a field is absent from the abstract. Without one, the model
 # describes the absence in prose, and the sentence lands in the BibTeX field as if it were the data.
@@ -112,32 +122,54 @@ def full_output_trace(record: agent.TurnRecord) -> str:
     return "\n\n".join(chatutil.format_message_text_for_export(message) for message in record.messages)
 
 def extract(llm_settings: env,
+            context: env,
             instruction: str,
-            progress_symbol: str) -> agent.TurnRecord:
+            progress_symbol: str,
+            label: str,
+            attempts: int = 1,
+            accept: Callable[[str], bool] = lambda reply: bool(reply.strip())) -> agent.TurnRecord:
     """Run one extraction step on the LLM, and return the resulting `agent.TurnRecord`.
+
+    `context`: the document's: `unique_id`, `maybe_abort` (the sweep's handle for the call in flight), and
+               `turns`, to which every attempt's record is appended for the sweep's traces.
 
     `instruction`: The complete prompt: what to extract, followed by the text to extract it from.
 
     `progress_symbol`: Printed to stderr as the LLM writes, so that a run of several thousand PDFs shows
                        which step is working. See `llmclient.make_console_progress_handler`.
 
+    `label`: names the step in log messages and in the failure reason, e.g. "EXTRACT AUTHORS".
+
+    `attempts`, `accept`: as `agent.ask_until`. The default accepts any reply that is not blank.
+
+    Raises `_NoAnswer` when no attempt is accepted, and `RuntimeError` when the backend did not generate.
+
     The step runs without a character and without tools: every prompt here asks for a plain-text answer
     that this module then parses, whereas the character card asks for Markdown, for a reported train of
     thought, and for conversational prose. Each prompt states its own role and procedure, so what the card
     would contribute is exactly the part that would have to be undone afterwards.
     """
-    return agent.turn(llm_settings,
-                      instruction,
-                      use_character_card=False,
-                      tools_enabled=False,
-                      on_progress=llmclient.make_console_progress_handler(progress_symbol))
+    # `ask_until` rather than `agent.turn`, which turns a backend failure into an assistant message: its text
+    # is not blank, so it would pass `accept` and reach the BibTeX as a field.
+    records, accepted = agent.ask_until(llm_settings,
+                                        instruction,
+                                        accept=accept,
+                                        attempts=attempts,
+                                        label=f"Input file '{context.unique_id}': {label}",
+                                        maybe_abort=context.maybe_abort,
+                                        on_progress=llmclient.make_console_progress_handler(progress_symbol))
+    context.turns.extend(records)
+    if not accepted:
+        plural_s = "s" if attempts != 1 else ""
+        raise _NoAnswer(f"{label}: no usable reply in {attempts} attempt{plural_s}")
+    return records[-1]
 
 def setup_prompts(llm_settings: env,
                   n_retries: int,
                   conference_year: str,
                   conference_booktitle: str | None = None,
                   conference_note: str | None = None,
-                  conference_url: str | None = None) -> Dict:
+                  conference_url: str | None = None) -> tuple[dict, str]:
     """Set up the LLM task handlers.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -146,9 +178,10 @@ def setup_prompts(llm_settings: env,
                  This is an LLM overthinking guard; the model may sometimes think so much that it fails to
                  produce a reply in the maximum token limit.
 
-    Returns a dict, in the format `{bibtex_fieldname: (kind: str,
-                                                       thing: Union[str, Callable],
-                                                       progress_symbol: str)}`,
+    Returns `(prompts, material)`. `material` is every prompt's text, for `sweep.fingerprint`. `prompts` is a
+    dict, in the format `{bibtex_fieldname: (kind: str,
+                                             thing: str | Callable,
+                                             progress_symbol: str)}`,
 
     where the RHS are instructions for the main loop as to what to write into the field `bibtex_fieldname`.
     Although the content is hardcoded in the implementation of this function, we document the data structure here:
@@ -160,10 +193,12 @@ def setup_prompts(llm_settings: env,
        "prompt": Treat `thing: str` as a prompt for the LLM. Send in the prompt, a Markdown separator, and the complete text content of the PDF.
                  Use `progress_symbol` to indicate progress on the console. Inject the LLM's output (after heuristic cleaning) into the field.
 
-       "function": Call `thing: Callable` with arguments `(unique_id, text)`, where `text` is the complete text content of the PDF.
-                   Return value must be `(status, output)`.
+       "function": Call `thing: Callable` with arguments `(context, unique_id, text)`, where `context` is the
+                   document's (see `extract`) and `text` is the complete text content of the PDF.
+                   Return value must be `(status, error_info, output)`.
 
-                   `status` must be `status_success` or `status_failed`, to indicate whether the text was processed successfully.
+                   `status` must be `status_success`, or `status_flagged` when a person should look at the
+                   result. A step with no usable reply raises `_NoAnswer` instead, through `extract`.
 
                    Inject `output` into the field.
                    Except, if `output` is `None`, omit that field from the BibTeX.
@@ -257,7 +292,7 @@ def setup_prompts(llm_settings: env,
     IMPORTANT: Reply ONLY with the reformatted list.
     """)
 
-    def extract_authors(unique_id: str, text: str) -> str:
+    def extract_authors(context: env, unique_id: str, text: str) -> tuple[sym, str, str | None]:
         status = status_success
         error_info = io.StringIO()
         text = strip_postamble(text)
@@ -438,26 +473,16 @@ def setup_prompts(llm_settings: env,
         #     else:
         #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        for retry in range(n_retries):
-            record_1 = extract(llm_settings, f"{prompt_get_authors}\n-----\n\n{text}", "A")
-            scrubbed_output_text_1 = record_1.reply
-            logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
-            if scrubbed_output_text_1.strip() != "":
-                break
-            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1} out of {n_retries}")
-        else:
-            error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
-            logger.warning(error_msg)
-            error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
-            return status_failed, error_info.getvalue(), ""
+        record_1 = extract(llm_settings, context, f"{prompt_get_authors}\n-----\n\n{text}", "A", "EXTRACT AUTHORS", n_retries)
+        scrubbed_output_text_1 = record_1.reply
+        logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
 
         if _is_sentinel(scrubbed_output_text_1, _NO_AUTHORS):
             error_msg = f"Input file '{unique_id}': LLM found no author list; omitting the field, manual check recommended."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
             error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
-            return status_failed, error_info.getvalue(), None
+            return status_flagged, error_info.getvalue(), None
 
         # Usually the output is correct, but sometimes:
         #   - The list may use commas instead of the word "and"
@@ -466,36 +491,15 @@ def setup_prompts(llm_settings: env,
         # so we perform some post-processing and checking.
 
         # Here the LLM (Qwen3 2507) sometimes gets stuck overthinking.
-        for retry in range(n_retries):
-            record_2 = extract(llm_settings, prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1), "a")
-            scrubbed_output_text_2 = record_2.reply
-            logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
-            if scrubbed_output_text_2.strip() != "":
-                break
-            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1} out of {n_retries}")
-        else:
-            error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
-            logger.warning(error_msg)
-            error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
-            return status_failed, error_info.getvalue(), ""
+        record_2 = extract(llm_settings, context, prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1), "a",
+                           "DROP AFFILIATIONS", n_retries)
+        scrubbed_output_text_2 = record_2.reply
+        logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
 
-        for retry in range(n_retries):
-            record_3 = extract(llm_settings, prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2), ".")
-            scrubbed_output_text_3 = record_3.reply
-            logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
-            if scrubbed_output_text_3.strip() != "":
-                break
-            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1} out of {n_retries}")
-        else:
-            error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
-            logger.warning(error_msg)
-            error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
-            return status_failed, error_info.getvalue(), ""
+        record_3 = extract(llm_settings, context, prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2), ".",
+                           "REFORMAT SEPARATORS", n_retries)
+        scrubbed_output_text_3 = record_3.reply
+        logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
 
         if scrubbed_output_text_3.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
             scrubbed_output_text_3 = scrubbed_output_text_3[:-3]
@@ -524,7 +528,7 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
             error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
             error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
-            status = status_failed
+            status = status_flagged
 
         # No author should be listed more than once.
         authors_counter = collections.Counter(authors_list)
@@ -540,7 +544,7 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
             error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
             error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
-            status = status_failed
+            status = status_flagged
 
         # Add missing periods for abbreviated first and middle names. Sometimes these drop out during the LLM correction passes.
         def fix_abbrevs(author: str) -> str:
@@ -613,7 +617,7 @@ def setup_prompts(llm_settings: env,
                             error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
                             error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
                             format_warning_logged = True
-                            status = status_failed
+                            status = status_flagged
                             break
             else:
                 parts = [author.strip()]  # needed for the other check.
@@ -647,7 +651,7 @@ def setup_prompts(llm_settings: env,
                         error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
                         error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
                         llm_warning_logged = True
-                        status = status_failed
+                        status = status_flagged
                         break
 
         return status, error_info.getvalue(), authors
@@ -665,19 +669,22 @@ def setup_prompts(llm_settings: env,
     If the abstract has no title, reply only with: {_NO_TITLE}
     """)
 
-    def extract_title(unique_id: str, text: str) -> str:
+    def extract_title(context: env, unique_id: str, text: str) -> tuple[sym, str, str | None]:
         """Extract the title from the fulltext of a conference abstract.
 
+        `context`: the document's, as `extract` takes it.
         `unique_id`: input file identifier, for error messages
         `text`: the full text
 
-        Returns the title.
+        Returns `(status, notes, title)`, the title `None` when the document seems to have none.
         """
         status = status_success
         error_info = io.StringIO()
         text = strip_postamble(text)
 
-        record = extract(llm_settings, f"{prompt_get_title}\n-----\n\n{text}", "T")
+        # Not blank once the quotation marks and periods it is stripped of below are gone.
+        record = extract(llm_settings, context, f"{prompt_get_title}\n-----\n\n{text}", "T", "EXTRACT TITLE", n_retries,
+                         accept=lambda reply: bool(reply.strip().strip("\"'.").strip()))
         scrubbed_output_text = record.reply
         logger.debug(f"\n        original : {scrubbed_output_text}")
 
@@ -689,38 +696,31 @@ def setup_prompts(llm_settings: env,
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
             error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
-            return status_failed, error_info.getvalue(), None
+            return status_flagged, error_info.getvalue(), None
 
-        if not title:
-            status = status_failed
-            error_msg = f"Input file '{unique_id}': LLM returned empty title; manual check recommended."
+        # Strip spurious period
+        while title.endswith("."):
+            title = title[:-1]
+
+        # Strip spurious quotation marks (they may still occasionally happen even though we instruct the LLM not to emit them)
+        while (title.startswith('"') and title.endswith('"')) or (title.startswith("'") and title.endswith("'")):
+            title = title[1:-1]
+
+        # Strip spurious period, again (inside quotation marks)
+        while title.endswith("."):
+            title = title[:-1]
+
+        # Sanity check: are all words of the LLM-extracted title present in the original text?
+        components = title.split()
+        if any(component not in text for component in components):
+            error_msg = f"Input file '{unique_id}': Possible LLM error in processed title: one or more of the title words not found in original text; manual check recommended: '{title}'"
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
+            error_info.write(f"Final result for EXTRACT TITLE: {scrubbed_output_text}\n")
             error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
-        else:
-            # Strip spurious period
-            while title.endswith("."):
-                title = title[:-1]
+            status = status_flagged
 
-            # Strip spurious quotation marks (they may still occasionally happen even though we instruct the LLM not to emit them)
-            while (title.startswith('"') and title.endswith('"')) or (title.startswith("'") and title.endswith("'")):
-                title = title[1:-1]
-
-            # Strip spurious period, again (inside quotation marks)
-            while title.endswith("."):
-                title = title[:-1]
-
-            # Sanity check: are all words of the LLM-extracted title present in the original text?
-            components = title.split()
-            if any(component not in text for component in components):
-                error_msg = f"Input file '{unique_id}': Possible LLM error in processed title: one or more of the title words not found in original text; manual check recommended: '{title}'"
-                logger.warning(error_msg)
-                error_info.write(f"{error_msg}\n")
-                error_info.write(f"Final result for EXTRACT TITLE: {scrubbed_output_text}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
-                status = status_failed
-
-            logger.debug(f"\n        formatted: {title}")
+        logger.debug(f"\n        formatted: {title}")
 
         return status, error_info.getvalue(), title
 
@@ -739,13 +739,14 @@ def setup_prompts(llm_settings: env,
     IMPORTANT: The list of keywords in the original abstract may end abruptly. This is fine. Do NOT add additional keywords from the main text.
     """)
 
-    def extract_keywords(unique_id: str, text: str) -> str:
+    def extract_keywords(context: env, unique_id: str, text: str) -> tuple[sym, str, str | None]:
         """Extract the keywords from the fulltext of a conference abstract.
 
+        `context`: the document's, as `extract` takes it.
         `unique_id`: input file identifier, for error messages
         `text`: the full text
 
-        Returns the comma-separated keywords as a string.
+        Returns `(status, notes, keywords)`, the keywords comma-separated, or `None` when the document lists none.
         """
         status = status_success
         error_info = io.StringIO()
@@ -757,26 +758,17 @@ def setup_prompts(llm_settings: env,
             logger.warning(f"Input file '{unique_id}': No keywords provided in original input, skipping keyword extraction.")
             keywords = None  # No keywords provided
         else:
-            for retry in range(n_retries):
-                record = extract(llm_settings, f"{prompt_get_keywords}\n-----\n\n{text}", "K")
-                scrubbed_output_text = record.reply
-                logger.debug(f"\n        original : {scrubbed_output_text}")
-
-                # Remove spurious heading and surrounding whitespace
+            def strip_heading(reply: str) -> str:
+                """Remove a spurious heading and surrounding whitespace."""
                 for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-                    if scrubbed_output_text.startswith(heading):
-                        scrubbed_output_text = scrubbed_output_text[len(heading):]
-                keywords = scrubbed_output_text.strip()
-
-                if keywords:
-                    break
-                logger.warning(f"Input file '{unique_id}': Keywords empty at attempt {retry + 1} out of {n_retries}")
-            else:
-                error_msg = f"Input file '{unique_id}': Keywords empty after retries exhausted; giving up."
-                logger.warning(error_msg)
-                error_info.write(f"{error_msg}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
-                return status_failed, error_info.getvalue(), ""
+                    if reply.startswith(heading):
+                        reply = reply[len(heading):]
+                return reply.strip()
+            record = extract(llm_settings, context, f"{prompt_get_keywords}\n-----\n\n{text}", "K", "EXTRACT KEYWORDS", n_retries,
+                             accept=lambda reply: bool(strip_heading(reply)))
+            scrubbed_output_text = record.reply
+            logger.debug(f"\n        original : {scrubbed_output_text}")
+            keywords = strip_heading(scrubbed_output_text)
 
             # Strip spurious period(s) at end
             while keywords[-1] == ".":
@@ -794,7 +786,7 @@ def setup_prompts(llm_settings: env,
                 error_info.write(f"{error_msg}\n")
                 error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
                 error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
-                status = status_failed
+                status = status_flagged
             keywords = list(keywords_counter.keys())
 
             # Sanity check: are all LLM-extracted extracted keywords present in the original text?
@@ -812,7 +804,7 @@ def setup_prompts(llm_settings: env,
                     error_info.write(f"{error_msg}\n")
                     error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
                     error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
-                    status = status_failed
+                    status = status_flagged
                     break
 
             keywords = ", ".join(keywords)  # de-duplicate
@@ -844,31 +836,21 @@ def setup_prompts(llm_settings: env,
     Note that the reference list has already been stripped. It is normal for the abstract to refer to citations not listed here.
     """)
 
-    def extract_abstract(unique_id: str, text: str) -> str:
+    def extract_abstract(context: env, unique_id: str, text: str) -> tuple[sym, str, str | None]:
         """Extract the main text from the fulltext of a conference abstract.
 
+        `context`: the document's, as `extract` takes it.
         `unique_id`: input file identifier, for error messages
         `text`: the full text
 
-        Returns the main text of the conference abstract.
+        Returns `(status, notes, abstract)`, the abstract being the main text of the conference abstract.
         """
         status = status_success
         error_info = io.StringIO()
         text = strip_postamble(text)
 
-        for retry in range(n_retries):
-            record = extract(llm_settings, f"{prompt_get_abstract}\n-----\n\n{text}", ".")
-            abstract = record.reply.strip()
-
-            if abstract:
-                break
-            logger.warning(f"Input file '{unique_id}': Abstract empty at attempt {retry + 1} out of {n_retries}")
-        else:
-            error_msg = f"Input file '{unique_id}': Abstract empty after retries exhausted; giving up."
-            logger.warning(error_msg)
-            error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{full_output_trace(record)}\n")
-            return status_failed, error_info.getvalue(), ""
+        record = extract(llm_settings, context, f"{prompt_get_abstract}\n-----\n\n{text}", ".", "EXTRACT ABSTRACT", n_retries)
+        abstract = record.reply.strip()
 
         abstract = _get_dehyphenator().dehyphenate(abstract)
 
@@ -889,13 +871,15 @@ def setup_prompts(llm_settings: env,
         prompts["url"] = ("literal", conference_url, None)
     prompts["keywords"] = ("function", extract_keywords, None)
     prompts["abstract"] = ("function", extract_abstract, None)
-    return prompts
+    material = "\x00".join((prompt_get_authors, prompt_drop_author_affiliations, prompt_reformat_author_separators,
+                            prompt_get_title, prompt_get_keywords, prompt_get_abstract))
+    return prompts, material
 
 
 # --------------------------------------------------------------------------------
 # Processing logic
 
-def listpdf(path: str) -> List[str]:
+def listpdf(path: str) -> list[str]:
     """Return a sorted list of the PDF filenames directly in `path` (this one directory, non-recursive).
 
     Recursion across a directory tree is the caller's job: `main` walks the input directory with `os.walk`
@@ -904,169 +888,235 @@ def listpdf(path: str) -> List[str]:
     """
     return list(sorted(filename for filename in os.listdir(path) if filename.endswith(".pdf")))
 
-def process_one(llm_settings: env,
-                prompts: Dict,
-                conference_slug: str,
-                unique_id: str,
-                text: str) -> str:
-    """Convert one conference abstract from free-form text to BibTeX.
+def extract_fields(llm_settings: env,
+                   prompts: dict,
+                   unique_id: str,
+                   text: str,
+                   maybe_abort: netutil.Abort | None = None) -> tuple[dict | sweep.Failure, list[agent.TurnRecord]]:
+    """Ask the LLM for one conference abstract's fields: the ledger's answer for the document.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
     `prompts`: Obtain by calling `setup_prompts` at app start time.
-    `conference_slug`: Short conference identifier for BibTeX entry keys.
     `unique_id`: input file identifier, for error messages
     `text`: The text to process (extracted from a conference abstract PDF).
+    `maybe_abort`: the sweep's handle for the call in flight, so that cancelling reaches it.
 
-    Returns the BibTeX record as a string.
+    Returns `(answer, turns)`. `answer` is `{"status", "fields", "notes"}`: `"success"` or `"flagged"`, the
+    value per BibTeX field (`None` to omit the field), and the notes explaining a flag. Or a
+    `sweep.Failure` when a step gave no usable reply, so that the document is asked again on the next run.
+    `turns` are every model call made, for the sweep's traces. The conference literals are not in the
+    answer; `format_entry` applies them, so a changed literal needs no re-asking.
     """
-    # Process one field at a time.
-    #   - Fill whatever we can programmatically.
-    #   - Use the LLM to populate the actual field content only, giving it one small task at a time.
-    #
-    entry_key = f"{conference_slug}-{unique_id}"
-    bibtex_entry = io.StringIO()
-    bibtex_entry.write(f"@incollection{{{entry_key},\n")
-    entry_status = status_success
-    error_infos = []
+    # One field at a time: whatever can be filled programmatically is, and the LLM gets one small task at a
+    # time, populating only the field's content.
+    context = env(unique_id=unique_id, maybe_abort=maybe_abort, turns=[])
+    status = status_success
+    fields = {}
+    notes = []
+    maybe_failure = None
     with timer() as tim:
         print("    ", end="", file=sys.stderr)  # Indent the progress indicator
         sys.stderr.flush()
-        for field_key, (data_kind, data, progress_symbol) in prompts.items():
-            if data_kind == "literal":
-                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(data)}}},\n")
-                field_status = status_success
-            elif data_kind == "prompt":
-                # To keep things simple, we use a single-turn conversation for querying the LLM.
-                # Note this typically causes a full prompt rescan for every query.
-                record = extract(llm_settings, f"{data}\n-----\n\n{text}", "p")  # "p" for "prompt mode"
-                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(record.reply)}}},\n")
-                field_status = status_success
-            elif data_kind == "function":
-                field_status, field_error_info, function_output = data(unique_id, text)
-                if field_status is status_failed:  # aggregate: failing at least one field means a this whole entry failed (and should be manually checked)
-                    entry_status = status_failed
-                    error_infos.append(field_error_info)
-                if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned. Inject also when we suspect an error.
-                    bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(function_output)}}},\n")
-            else:
-                raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
+        try:
+            for field_key, (data_kind, data, progress_symbol) in prompts.items():
+                if data_kind == "literal":
+                    continue
+                elif data_kind == "prompt":
+                    # A single-turn conversation per query, which typically costs a full prompt rescan each time.
+                    fields[field_key] = extract(llm_settings, context, f"{data}\n-----\n\n{text}", "p", field_key).reply  # "p" for "prompt mode"
+                elif data_kind == "function":
+                    field_status, field_notes, fields[field_key] = data(context, unique_id, text)
+                    if field_status is status_flagged:  # one flagged field flags the entry, which wants a manual check
+                        status = status_flagged
+                        notes.append(field_notes)
+                else:
+                    raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
+        except _NoAnswer as exc:
+            maybe_failure = sweep.Failure(str(exc))
+    if maybe_failure is not None:
+        print(f"no answer, in {tim.dt:0.2f}s", file=sys.stderr)
+        return maybe_failure, context.turns
     print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
-    bibtex_entry.write("}")
-    bibtex_entry = bibtex_entry.getvalue()
-    return entry_status, "\n\n".join(error_infos), bibtex_entry
+    return {"status": "success" if status is status_success else "flagged",
+            "fields": fields,
+            "notes": "\n\n".join(notes)}, context.turns
 
-def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
+def format_entry(prompts: dict, conference_slug: str, unique_id: str, answer: dict) -> str:
+    """One BibTeX entry, from a ledger answer and the conference literals in `prompts`.
+
+    Fields come in the order `prompts` lists them; one whose value is `None` is left out.
+    """
+    lines = [f"@incollection{{{conference_slug}-{unique_id},"]
+    for field_key, (data_kind, data, _progress_symbol) in prompts.items():
+        value = data if data_kind == "literal" else answer["fields"].get(field_key)
+        if value is not None:
+            lines.append(f"    {field_key} = {{{bibtex_escape(value)}}},")
+    lines.append("}")
+    return "\n".join(lines)
+
+def write_outputs(ledger: sweep.Ledger, prompts: dict, opts: argparse.Namespace) -> collections.Counter:
+    """Rewrite the BibTeX outputs from everything `ledger` holds, and return how many entries are which.
+
+    From the whole ledger rather than this run's items: an earlier run's PDFs may have been moved out of the
+    input directory, and their entries belong in the output all the same. Flagged entries go to the failed
+    output when there is one, and to the success output otherwise; each also gets an `_errors.txt` with
+    its notes and a `.bib` of its own, beside its PDF, when a directory for those was given.
+    """
+    answers = ledger.answers()
+    counts = collections.Counter(answer["status"] for answer in answers.values())
+    success, flagged = [], []
+    for unique_id in sorted(answers):
+        answer = answers[unique_id]
+        entry = format_entry(prompts, opts.conference_slug, unique_id, answer)
+        if answer["status"] == "success":
+            success.append(entry)
+            # Left behind by an earlier, flagged answer that asking again has replaced.
+            for directory in (opts.failed_output_dir, opts.output_dir):
+                for stale in (f"{unique_id}_errors.txt", f"{unique_id}.bib"):
+                    if directory is not None and os.path.exists(path := os.path.join(directory, stale)):
+                        os.remove(path)
+            continue
+        flagged.append(entry)
+        maybe_flagged_dir = opts.failed_output_dir or opts.output_dir
+        if maybe_flagged_dir is not None:
+            with open(os.path.join(maybe_flagged_dir, f"{unique_id}_errors.txt"), "w", encoding="utf-8") as f:
+                f.write(answer["notes"])
+            with open(os.path.join(maybe_flagged_dir, f"{unique_id}.bib"), "w", encoding="utf-8") as f:
+                f.write(f"{entry}\n\n")
+    if opts.failed_filename is None:
+        success, flagged = success + flagged, []
+    for maybe_filename, entries in ((opts.success_filename, success), (opts.failed_filename, flagged)):
+        text = "".join(f"{entry}\n\n" for entry in entries)  # one blank line after each entry
+        if maybe_filename is None:
+            sys.stdout.write(text)
+        else:
+            with open(maybe_filename, "w", encoding="utf-8") as f:
+                f.write(text)
+    return counts
+
+def collect_items(paths: list[str], opts: argparse.Namespace) -> list[tuple[str, str]]:
+    """The PDFs a run covers, as `(unique_id, fullpath)`: those in `paths`, and those already sorted into
+    `-o` and `-of`, so that one asked again is found wherever it was moved. The sweep skips what is answered,
+    so listing the sorted ones costs nothing.
+
+    Raises `ValueError` when two PDFs have the same filename stem, since their BibTeX entries would get the
+    same key.
+    """
+    directories = list(paths) + [directory for directory in (opts.output_dir, opts.failed_output_dir)
+                                 if directory is not None and directory not in paths]
+    items = []
+    for directory in directories:
+        if not os.path.isdir(directory):
+            continue
+        for filename in listpdf(directory):
+            items.append((os.path.splitext(filename)[0], os.path.join(directory, filename)))  # "/foo/blah.pdf" -> "blah"
+    stems = collections.Counter(unique_id for unique_id, _ in items)
+    if duplicates := sorted(unique_id for unique_id, count in stems.items() if count > 1):
+        raise ValueError(f"These filenames occur in more than one directory, and would give BibTeX entries the same key: "
+                         f"{duplicates}. Rename them apart, or remove the copies.")
+    return items
+
+def sort_pdf(fullpath: str, status: str, opts: argparse.Namespace) -> str:
+    """Move an answered PDF to where its outcome says, and return where it is now.
+
+    Done goes to `-o`, flagged to `-of` (or `-o`, when there is no `-of`). Where the outcome names no
+    directory, a PDF already sorted elsewhere goes back to the input directory, so that a flagged document
+    cleared by asking again does not stay among the flagged ones.
+    """
+    maybe_target = opts.output_dir
+    if status == "flagged" and opts.failed_output_dir is not None:
+        maybe_target = opts.failed_output_dir
+    current = os.path.dirname(fullpath)
+    if maybe_target is None:
+        if current not in (opts.output_dir, opts.failed_output_dir):
+            return fullpath  # unsorted, and staying so
+        maybe_target = opts.input_dir
+    if os.path.abspath(current) == os.path.abspath(maybe_target):
+        return fullpath
+    destination = os.path.join(maybe_target, os.path.basename(fullpath))
+    shutil.move(fullpath, destination)
+    return destination
+
+def process_abstracts(paths: list[str], opts: argparse.Namespace) -> None:
     """Process all PDFs under `paths`, recursively.
 
     Each PDF is assumed to contain a conference abstract (the final file sent to the conference organizers in PDF format), and nothing else.
+
+    A run is a `raven.librarian.sweep` over the PDFs, keyed on the filename stem, which the BibTeX entry key
+    is built from. Its ledger is what makes a run resumable: running the same command again asks only what
+    is not yet answered, and asks again what had no usable reply. The `.bib` outputs are rewritten from the
+    ledger at the end of every run, stopped ones included.
     """
-    # Connect to the LLM. A batch tool stops here rather than starting: this run can take hours, so a
-    # precise diagnosis at document 1 beats an HTTP 400 per document for the rest of the corpus. Reachable
-    # and reachable-with-a-model are separate questions, and the second one is the one that reads as a bug
-    # when it is not checked — the backend answers, so nothing looks wrong until every extraction is empty.
-    #
-    # This is a check at the start and nothing more: a backend that goes away mid-run is not recovered from,
-    # and every remaining document fails. Known and accepted for now — recovering properly means deciding
-    # how long to wait and what to do with the documents already done, which is a design question rather
-    # than a missing line. The interactive frontends do reconnect; see `llmclient.reconnect`.
+    # A batch tool stops here rather than starting when there is no model: a precise diagnosis at document
+    # 1 beats an extraction failure per document. A backend that goes away mid-run stops the run too; the
+    # sweep sees to that.
     if not llmclient.test_connection(opts.backend_url):
         raise RuntimeError("Failed to connect to LLM backend, cannot proceed.")
     llm_settings = llmclient.setup(backend_url=opts.backend_url)
     if (status := llmclient.backend_status(llm_settings)) is llmclient.backend_has_no_model:
         headline, advice = llmclient.describe_backend_status(status, opts.backend_url)
         raise RuntimeError(f"{headline} {advice}")
-    prompts = setup_prompts(llm_settings,
-                            n_retries=opts.retries,
-                            conference_year=opts.conference_year,
-                            conference_booktitle=opts.conference_booktitle,
-                            conference_note=opts.conference_note,
-                            conference_url=opts.conference_url)
+    prompts, material = setup_prompts(llm_settings,
+                                      n_retries=opts.retries,
+                                      conference_year=opts.conference_year,
+                                      conference_booktitle=opts.conference_booktitle,
+                                      conference_note=opts.conference_note,
+                                      conference_url=opts.conference_url)
     logger.info(f"Connected to LLM backend at {opts.backend_url}")
     plural_s = "s" if opts.retries != 1 else ""
     logger.info(f"    prompts set up to use up to {opts.retries} attempt{plural_s}")
-    # logger.info("    available models:")
-    # response = requests.get(f"{opts.backend_url}/v1/internal/model/list",
-    #                         headers=headers,
-    #                         verify=False)
-    # payload = response.json()
-    # for model_name in sorted(payload["model_names"], key=lambda s: s.lower()):
-    #     logger.info(f"        {model_name}")
-    logger.info(f"    model: {llm_settings.model}")
-    # No character logged: the extraction steps run with `use_character_card=False`, so `llm_settings.char`
-    # names a persona that takes no part in this run.
+    # No character logged: the extraction steps run with no character card, so `llm_settings.char` names a
+    # persona that takes no part in this run.
 
-    # Process the PDFs
-    #
-    # bibtex_entries = []
-    with maybe_open(opts.success_filename, mode="a", fallback=sys.stdout) as f_success:
-        with maybe_open(opts.failed_filename, mode="a", fallback=sys.stdout) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
-            try:
-                for path in paths:
-                    logger.info(f"Processing directory \"{path}\"...")
-                    # results = []
-                    filenames = listpdf(path)
-                    est = ETAEstimator(total=len(filenames), keep_last=10)
-                    for idx, filename in enumerate(filenames):
-                        fullpath = os.path.join(path, filename)
-                        unique_id = os.path.splitext(os.path.basename(fullpath))[0]  # "/foo/blah.pdf" -> "blah"
-                        logger.info(f"{fullpath} [{idx + 1} out of {len(filenames)}, {est.formatted_eta}]")
+    items = collect_items(paths, opts)
+    ledger = sweep.Ledger(opts.ledger_dir, f"pdf2bib-{opts.conference_slug}",
+                          sweep.fingerprint(llm_settings, material, declared=opts.declare))
+    logger.info(f"Ledger: {ledger.path}")
 
-                        # Extract the text content from the PDF via the shared extractor (`raven.common.docextract`),
-                        # the single PDF-text backend across Raven.
-                        #
-                        # Since we'll be using an LLM for the processing step, it doesn't matter if the extraction isn't perfect
-                        # (e.g. the LLM will clean the author names if they have affiliation symbols or such).
-                        #
-                        # `extract_text` returns `None` for a PDF with no text layer (a scanned/image-only paper); pass the
-                        # empty string on to the LLM step in that case, matching the previous behavior where such a PDF
-                        # simply yielded no text.
-                        try:
-                            text_from_pdf = docextract.extract_text(fullpath) or ""
-                        except (docextract.DocumentExtractionError, FileNotFoundError) as err:
-                            logger.error(f"When processing {fullpath}: text extraction failed: {type(err)}: {err}")
-                            raise
+    reask = set(opts.reask or ())
+    if opts.reask_flagged:
+        reask |= {unique_id for unique_id, answer in ledger.answers().items() if answer["status"] == "flagged"}
+    if unknown := sorted(reask - {unique_id for unique_id, _ in items}):
+        logger.warning(f"--reask: no PDF found for {unknown}, so these cannot be asked again.")
+    if reask := sorted(reask - set(unknown)):
+        logger.info(f"Asking again: {reask}")
+        ledger.reask(reask)
 
-                        status, error_info, bibtex_entry = process_one(llm_settings,
-                                                                       prompts,
-                                                                       opts.conference_slug,
-                                                                       unique_id,
-                                                                       text_from_pdf)
-                        # bibtex_entries.append(bibtex_entry)
+    def ask_batch(llm_settings: env, batch: list, maybe_abort: netutil.Abort) -> tuple[dict, list]:
+        ((unique_id, fullpath),) = batch  # one PDF per call; each PDF already takes several
+        logger.info(f"{fullpath}")
+        # The extraction need not be perfect, the LLM cleaning up what it does not get right (affiliation
+        # symbols in author names, say). A PDF with no text layer (a scan) gives `None`, so the LLM gets
+        # the empty string and says it found nothing.
+        text_from_pdf = docextract.extract_text(fullpath) or ""
+        answer, turns = extract_fields(llm_settings, prompts, unique_id, text_from_pdf, maybe_abort)
+        return {unique_id: answer}, turns
 
-                        f = f_success
-                        output_dir = opts.output_dir
-                        if status is status_failed:
-                            # If provided, use the separate output file and item directory for failed items
-                            if opts.failed_filename is not None:
-                                f = f_failed
-                            if opts.failed_output_dir is not None:
-                                output_dir = opts.failed_output_dir
-                        f.write(f"{bibtex_entry}\n\n")  # one blank line after each entry
-                        f.flush()
+    fullpaths = dict(items)
 
-                        if status is status_failed:
-                            # Shunt LLM traces for detected errors into a separate file
-                            error_info_filename = f"{unique_id}_errors.txt"
-                            error_info_path = os.path.join(output_dir, error_info_filename)
-                            logger.info(f"When processing {fullpath}: Heuristics flagged possible errors in output, treating this file as failed and writing details to {error_info_path}")
-                            with open(error_info_path, "w", encoding="utf-8") as f_errors:
-                                f_errors.write(error_info)
+    def move_done(event: env) -> None:
+        """Sort each PDF just answered, where directories for that were given. Optional: resuming does not
+        depend on it, the ledger knowing what is done."""
+        latest = ledger.latest()
+        for unique_id in event.ids:
+            entry = latest.get(unique_id)
+            if entry is None or entry["status"] != "ok":  # failed: stays, and is asked again next run
+                continue
+            fullpaths[unique_id] = sort_pdf(fullpaths[unique_id], entry["answer"]["status"], opts)
 
-                            # Save a copy of the failed bib entry as a separate file, for easy inspection
-                            error_bib_filename = f"{unique_id}.bib"
-                            error_bib_path = os.path.join(output_dir, error_bib_filename)
-                            with open(error_bib_path, "w", encoding="utf-8") as f_error_bib:
-                                f_error_bib.write(f"{bibtex_entry}\n\n")
+    result = sweep.Sweep(llm_settings, ask_batch, items, ledger,
+                         header=sweep.instrument_header(llm_settings, declared=opts.declare),
+                         on_item=move_done).run()
 
-                        # Move input file to done directory if specified (allows continuing later)
-                        if output_dir is not None:
-                            shutil.move(fullpath, os.path.join(output_dir, os.path.basename(fullpath)))
-
-                        est.tick()
-            finally:
-                pass
-                # bibtex_str = "\n\n".join(bibtex_entries)
-                # print(bibtex_str)
+    counts = write_outputs(ledger, prompts, opts)
+    failed = sorted(unique_id for unique_id, entry in ledger.latest().items() if entry["status"] == "failed")
+    # Counts moved behind labels, so that no verb has to agree with them.
+    logger.info(f"Entries written: {counts['success']} done, {counts['flagged']} flagged for a manual check. "
+                f"Documents without a usable answer, to be asked again on the next run: {len(failed)}.")
+    for unique_id in failed:
+        logger.info(f"    {unique_id}: {ledger.latest()[unique_id]['error']}")
+    if result.outcome is not sweep.completed:
+        raise RuntimeError(f"The run stopped ({result.outcome}): {result.message or 'cancelled'} Run again to resume.")
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -1100,6 +1150,11 @@ def run(opts: argparse.Namespace) -> None:
         opts.input_dir = "."
     opts.input_dir = str(pathlib.Path(opts.input_dir).expanduser().resolve())
     logger.info(f"Processing PDF files from {opts.input_dir}.")
+
+    if opts.ledger_dir is None:
+        opts.ledger_dir = str(pathlib.Path(opts.success_filename).parent) if opts.success_filename is not None else "."
+    opts.ledger_dir = str(pathlib.Path(opts.ledger_dir).expanduser().resolve())
+    logger.info(f"Keeping the ledger in {opts.ledger_dir}.")
 
     if opts.output_dir is not None:
         opts.output_dir = str(pathlib.Path(opts.output_dir).expanduser().resolve())

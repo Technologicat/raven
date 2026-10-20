@@ -71,6 +71,21 @@
 
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
 
+#### Raven-pdf2bib
+
+- **A run is resumable by running it again, and the output files are rewritten from what it has learned.**
+  - Each PDF's fields go to a ledger as they arrive, `pdf2bib-<slug>-<instrument>.jsonl`, beside the `-s` file or in the new `--ledger-dir`. A re-run asks only what is not yet answered.
+  - **`-s` and `-f` are rewritten at the end of every run**, from everything the ledger holds, where they used to be appended to. Give them files of their own.
+  - The ledger is named for the prompts, the model and its quantization, and the new `--declare`, for settings the backend cannot report. Changing any of them starts a fresh one.
+  - Changing a conference option such as `--year` needs no re-asking: the options are applied when the files are written.
+- **A document comes out done, flagged, or with no usable answer**, which used to be lumped together as failed.
+  - Flagged, a person should look: the entry goes to `-f`, as failures used to.
+  - No usable answer, a step stayed empty through its attempts: no entry, it is listed at the end of the run, and the next run asks again.
+  - `-r` now applies to every step, the title included.
+- **The run stops when the LLM backend goes away or its model changes**, saying why, and names the model before it starts. `-o` and `-of` still sort the PDFs, but resuming no longer depends on them.
+- **Every model call is kept**, replies included, in a `-traces.jsonl` beside the ledger.
+- **`--reask-flagged` and `--reask NAME …` ask the LLM again** about every flagged document, or the ones named. One that comes back clean counts as done, and its PDF moves from `-of` to `-o`.
+
 #### Constellation-wide
 
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
@@ -86,6 +101,8 @@
 
 #### Raven-pdf2bib
 
+- **An LLM backend failing mid-run no longer writes its error message into the BibTeX as a field.** It used to pass for an answer.
+- **A flagged document no longer crashes a run that was given no `-o` or `-of`.** Its notes are written only where a directory for them was given.
 - **An abstract with no author list or no title leaves that field out**, and the entry is flagged for a check by hand (into `--failed`, when given). Before, the model's description of the absence, such as "The abstract does not list any authors", was written into the field as if it were the data. A section heading reported as the title, such as "Abstract", is treated the same way.
 
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
