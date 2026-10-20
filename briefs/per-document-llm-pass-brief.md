@@ -251,6 +251,25 @@ spamming the log.
     emits something, so it cannot reach prompt processing.
   - A cancel flag is also checked between batches, for a cancel that lands between turns.
 
+## Decided 2026-10-20: the build
+
+Settled with Juha before the first line of the module.
+
+- **The name: `raven.librarian.sweep`.** A sweep over a set of items, which need not be documents.
+  Rejected: `docpass`, which is narrower than the users are, and `batchrun`, since "batch" already means
+  the items in one call inside it.
+- **The fingerprint hashes the model's id and quantization**, beside the caller's material and the
+  declared settings. The whole load configuration goes into the ledger's header and nowhere else, so a
+  change of batch size or speculative decoding keeps the cache. A setting changed *mid-run* still stops
+  it, since `follow_model_swap` compares the whole record. Rejected: hashing the whole configuration,
+  under which toggling flash attention would discard a finished run.
+- **`extract_fields.py` is ported in place**, its domain code kept and its loop replaced. Rejected: a copy
+  beside it, which would leave two scripts answering one question.
+- **The comparison against the reference run is a replay**, which tests seeding at the same time: a
+  ledger seeded from `extracted-446e1705.jsonl` under that run's fingerprint, read back through the new
+  code without asking anything, must give the same outputs. A live pilot of a few batches under the new
+  fingerprint then checks the run end to end.
+
 ## The questions the decisions answer
 
 All seven are settled, in *Decided 2026-09-29* and *Decided 2026-09-30* above, which cite them by number.
