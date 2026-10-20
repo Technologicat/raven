@@ -22,6 +22,12 @@
 #### Raven-librarian
 
 - **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
+- **`raven.librarian.sweep`, for asking the same question of every item in a set**, from a script.
+  - Each answer goes to a ledger as it arrives, so an interrupted run resumes where it stopped, and failed items are tried again.
+  - The ledger is named for the instrument: the question, the model and its quantization, and any setting you declare that the backend cannot report. Change any of them and the run starts a fresh ledger rather than mixing the answers.
+  - A backend that goes away, or a model swapped mid-run, stops the run with a message, instead of marking every remaining item as failed.
+  - Several items per model call, progress and an ETA for a console or a GUI, and cancelling that reaches the call in flight.
+  - `agent.turn`, `agent.ask` and `agent.ask_record` take `maybe_abort`, which is what makes that cancel possible.
 - **A setting for whether the AI gets back its thinking from earlier turns**: `llm_retain_thinking` in `raven.librarian.config`, on by default.
   - Off, thinking from before your latest message is no longer sent. Thinking within the current reply, across its tool calls, still is.
   - The context-fill readout now counts the thinking that is sent. It used to count none.
