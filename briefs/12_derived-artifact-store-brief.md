@@ -44,9 +44,10 @@ inside `llmclient.count_branch_tokens`, which `update_context_fill_indicator` ca
 synchronously on every HEAD change* — and a HEAD change happens inside a DPG callback, so it holds the
 callback thread. Switching a chat sibling onto a branch carrying three PDF attachments took **3038 ms**,
 against 38 ms and 289 ms for two switches that paid no extraction; every key pressed meanwhile queued behind
-it, so the app read as frozen. Details and the fingerprint that identifies this class of stall are in
-`TODO_DEFERRED.md` ("A HEAD change extracts every attached document synchronously") and `dpg-notes.md`
-("Hotkeys dead while the mouse wheel still scrolls").
+it, so the app read as frozen. That count now skips documents not yet extracted (the comment in
+`DPGChatController.update_context_fill_indicator` records the measurement), so the stall is gone, but the
+extraction still happens once per process. The fingerprint that identifies this class of stall is in
+`dpg-notes.md` ("Hotkeys dead while the mouse wheel still scrolls").
 
 That does not change this brief's design, and it is not an argument for building it sooner than the rest of
 the sprint allows. What it changes is the *cost of not having it*: the once-per-process extraction is a

@@ -1453,7 +1453,7 @@ drift, so the two are noticed together even though they are independent faults.
 
 ## Switching a chat sibling rebuilds the view on the callback thread, so it eats every key pressed meanwhile
 
-*Cluster: librarian-responsiveness · Cost: M · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: the item below on what makes the rebuild slow*
+*Cluster: librarian-responsiveness · Cost: M · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: `briefs/12_derived-artifact-store-brief.md`, on what made the rebuild slowest*
 
 Reported by Juha while live-testing the keyboard mark: switching siblings near the top of a long chat leaves
 the scroll hotkeys dead, and the log stays where it was. Neither is what it looks like. The sibling callback
@@ -1471,45 +1471,12 @@ looking at, so switching siblings of an *early* message became possible from the
 messages are where the rebuild has the most to redo. Juha's reading, which fits: the switcher was not
 stress-tested after PDF attachment support landed.
 
-**The fix is not "make the rebuild faster"** — that is the item below, and it is worth doing separately.
+**The fix is not "make the rebuild faster"** — the slowest part was extracting attached documents, which
+no longer happens on this path, and persisting their text is brief 12's.
 This one is that a slow rebuild must not silently swallow input: either build off the callback thread, or
 say that a rebuild is in progress. The Visualizer already has the second in its info panel dimmer. The same
 fault is recorded from the other end in `fdialog.py`'s `_forget_listing`, where a rebuild on close left the
 *opening* button looking dead.
-
-## A HEAD change extracts every attached document synchronously, so landing on a PDF branch costs seconds
-
-*Cluster: librarian-responsiveness · Cost: S · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: the item above, which is what makes this *visible* as a stall*
-
-Three sibling switches in one session, timed from `DPGLinearizedChatView.build`'s log line to `scroll_view`'s:
-**38 ms, 289 ms, 3038 ms**. The slow one landed on a branch with three PDF attachments.
-
-**The chain, read out rather than guessed** (Juha's hunch, confirmed): `update_context_fill_indicator` runs
-an immediate local count on every HEAD change → `llmclient.count_branch_tokens` → for each `text_file` part
-→ `textfilestore.sidecar_to_text` → `docextract.extract_text_from_bytes` → **pypdf**. A HEAD change happens
-inside the sibling callback, so all of that is on DPG's callback thread.
-
-**It is a first-visit-per-session cost, which is why it reproduces so erratically.** `sidecar_to_text` is
-memoized in a process-level dict, so the first switch onto a branch pays for extracting its documents and
-every later switch to the same branch is instant. Two of the three timings above are cached-or-empty cases.
-Anyone re-testing this needs a *fresh app* and a branch not yet visited, or it will look fine.
-
-Not any of these, all checked while looking: not the amount rendered (the 3-second branch was the
-*shortest*, `max_y_scroll` 1610 px against 4483 and 4899), not the exact-prompt-size prefill (a debounced
-background `ManagedTask`), not the attachment row (three buttons and a name, no sidecar read).
-
-**The interim shipped on 2026-08-21**, so the stall itself is gone: the readout's immediate count now passes
-`extract_attachments=False` and skips documents it has not extracted, leaving them to the debounced
-background prefill, which the two-stage readout was already shaped for. The undercount shows as `~X%` for
-the moment before the exact figure lands.
-
-**What remains is the durable fix, and it is designed elsewhere — this item must not become a second copy
-of it.** `briefs/12_derived-artifact-store-brief.md` persists derived text, and its
-motivating table names this very case ("not persisted, extracts on demand, memoized on the
-content-addressed filename"). A note recording the 3038 ms and the thread it happened on has been added
-there. Until it lands, the extraction still happens once per process — just no longer where a keystroke is
-waiting behind it. The remaining user-visible cost is the first *wire build* of a chat with a big PDF, which
-is a wait during a request rather than a frozen GUI.
 
 ## The test suite hung once on Windows CI, in `cherrypick/tests/test_grid.py`
 
