@@ -12,9 +12,17 @@ from raven.librarian import llmclient, sweep
 def _items(n):
     return [(f"item{i}", f"text {i}") for i in range(n)]
 
+class _Turn:
+    """Stands in for an `agent.TurnRecord`, which is all the sweep does with one: `to_dict` it."""
+    def __init__(self, reply):
+        self.reply = reply
+
+    def to_dict(self):
+        return {"reply": self.reply, "reasoning": [f"thought about {self.reply}"]}
+
 def _echo(llm_settings, batch, maybe_abort):
-    """Answers every item with its own text upper-cased, and a trace naming the batch."""
-    return {item_id: item.upper() for item_id, item in batch}, (f"thought about {len(batch)}",)
+    """Answers every item with its own text upper-cased, and one turn naming the batch."""
+    return {item_id: item.upper() for item_id, item in batch}, [_Turn(f"{len(batch)} answers")]
 
 
 class TestFingerprint:
@@ -89,6 +97,16 @@ class TestSweep:
         assert ledger.answers() == {f"item{i}": f"TEXT {i}" for i in range(5)}
         traces = [json.loads(line) for line in ledger.traces_path.read_text().splitlines()]
         assert [trace["ids"] for trace in traces] == [["item0", "item1"], ["item2", "item3"], ["item4"]]
+        assert traces[2]["turns"] == [{"reply": "1 answers", "reasoning": ["thought about 1 answers"]}]
+
+    def test_a_batch_answered_with_nothing_still_keeps_its_turn(self, llm_settings, tmp_path):
+        # The reply is what explains a batch whose answers did not parse, so it has to be on disk.
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        result = sweep.Sweep(llm_settings, lambda s, batch, a: ({}, [_Turn("not JSON at all")]),
+                             _items(2), ledger, batch_size=2).run()
+        assert result.failed == 2
+        traces = [json.loads(line) for line in ledger.traces_path.read_text().splitlines()]
+        assert traces[0]["turns"][0]["reply"] == "not JSON at all"
 
     def test_a_rerun_asks_only_what_is_not_answered(self, llm_settings, tmp_path):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")

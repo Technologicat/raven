@@ -41,6 +41,7 @@ from unpythonic.env import env
 
 from ..common import netutil
 
+from . import agent
 from . import llmclient
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class Ledger:
     `directory`: where the files go. Created if missing.
 
     `name`: what the run is called; the files are `{name}-{fingerprint}.jsonl` and, beside it,
-            `{name}-{fingerprint}-traces.jsonl` for the reasoning traces.
+            `{name}-{fingerprint}-traces.jsonl` for the model calls themselves.
 
     `fingerprint`: the instrument's, from `fingerprint`, or one recorded elsewhere. Opening a ledger under
                    an older instrument's fingerprint and writing answers into it is how answers made
@@ -130,9 +131,14 @@ class Ledger:
         """Record that an item was tried and failed, so a later run tries it again."""
         self._append(self.path, {"id": item_id, "v": self.fingerprint, "status": "failed", "error": error})
 
-    def write_trace(self, item_ids: Sequence[str], reasoning: Sequence[str]) -> None:
-        """Record the reasoning of one model call, naming the items that shared it."""
-        self._append(self.traces_path, {"ids": list(item_ids), "v": self.fingerprint, "reasoning": list(reasoning)})
+    def write_trace(self, item_ids: Sequence[str], turns: Sequence[agent.TurnRecord]) -> None:
+        """Record the model calls of one batch, whole, naming the items that shared them.
+
+        Whole rather than the reasoning alone: the reply is what explains a batch whose answers did not
+        parse, and it is the part a trace of the thinking leaves out.
+        """
+        self._append(self.traces_path, {"ids": list(item_ids), "v": self.fingerprint,
+                                        "turns": [turn.to_dict() for turn in turns]})
 
     def latest(self) -> dict[str, dict]:
         """The latest line for each item, answered or failed, keyed by id."""
@@ -170,12 +176,13 @@ class Sweep:
 
     `llm_settings`: as `agent.turn`. Kept current while the run goes, by `llmclient.follow_model_swap`.
 
-    `ask_batch`: `ask_batch(llm_settings, batch, maybe_abort) -> (answers, reasoning)`. `batch` is a list
-                 of `(id, item)` pairs, `answers` a dict from id to answer, anything JSON can hold, and
-                 `reasoning` the call's thinking traces, a sequence of strings, empty if there are none.
+    `ask_batch`: `ask_batch(llm_settings, batch, maybe_abort) -> (answers, turns)`. `batch` is a list of
+                 `(id, item)` pairs, `answers` a dict from id to answer, anything JSON can hold, and `turns`
+                 the `agent.TurnRecord` of each model call made, which go to the ledger's traces file whole.
                  Pass `maybe_abort` on to `agent.ask_record` or `agent.turn`, which is what makes `cancel`
                  reach a call in flight. An id the answers leave out is recorded as failed; an exception
-                 fails the whole batch.
+                 fails the whole batch, and its turns are not kept, so return rather than raise where the
+                 reply is worth reading afterwards.
 
     `items`: `(id, item)` pairs, ids unique strings. Those the ledger already answers are skipped.
 
@@ -195,7 +202,8 @@ class Sweep:
 
     def __init__(self,
                  llm_settings: env,
-                 ask_batch: Callable[[env, list[tuple[str, Any]], netutil.Abort], tuple[dict[str, Any], Sequence[str]]],
+                 ask_batch: Callable[[env, list[tuple[str, Any]], netutil.Abort],
+                                     tuple[dict[str, Any], Sequence[agent.TurnRecord]]],
                  items: Sequence[tuple[str, Any]],
                  ledger: Ledger,
                  batch_size: int = 1,
@@ -254,19 +262,22 @@ class Sweep:
         t0 = time.monotonic()
         done = failed = 0
         last_logged = None
+        last_logged_count = None
         outcome, message = completed, ""
 
         def report(ids: list[str], final: bool = False) -> None:
-            nonlocal last_logged
+            nonlocal last_logged, last_logged_count
             elapsed = time.monotonic() - t0
             status_line = f"{done + failed} / {len(todo)} items, {failed} failed; {eta.formatted_eta}"
             with self._lock:
                 self._progress = env(done=done, failed=failed, total=len(todo), elapsed=elapsed, eta=eta,
                                      status_line=status_line)
             now = time.monotonic()
-            if final or last_logged is None or now - last_logged >= self.log_interval:
+            # The final line is always written, unless the last one already said the same.
+            if (last_logged is None or now - last_logged >= self.log_interval or
+                    (final and done + failed != last_logged_count)):
                 logger.info(f"Sweep.run: {status_line}")
-                last_logged = now
+                last_logged, last_logged_count = now, done + failed
             if self.on_item is not None and ids:
                 self.on_item(env(done=done, failed=failed, total=len(todo), ids=ids, elapsed=elapsed, eta=eta))
 
@@ -285,7 +296,7 @@ class Sweep:
                 maybe_abort = self._maybe_abort = netutil.Abort()
             ids = [item_id for item_id, _ in batch]
             try:
-                answers, reasoning = self.ask_batch(self.llm_settings, batch, maybe_abort)
+                answers, turns = self.ask_batch(self.llm_settings, batch, maybe_abort)
             except netutil.Aborted:
                 outcome = cancelled  # the batch is dropped unwritten; a resumed run starts with it
                 break
@@ -299,8 +310,8 @@ class Sweep:
                         done += 1
                     else:
                         fail(item_id, "the reply had no answer for this item")
-                if reasoning:
-                    self.ledger.write_trace(ids, reasoning)
+                if turns:
+                    self.ledger.write_trace(ids, turns)
             finally:
                 with self._lock:
                     self._maybe_abort = None
