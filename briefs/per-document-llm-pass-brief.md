@@ -283,6 +283,30 @@ Two more, found while building it and agreed with Juha the same day:
   run would stop after its first batch. Rejected: making the fingerprint follow the requested model,
   since detecting the model that actually answered is the more reliable of the two.
 
+The `raven-pdf2bib` port, settled with Juha the same day:
+
+- **The field-level "ask again if empty" loops become one helper, `agent.ask_until`**: ask, check the
+  reply with a predicate, ask again up to N times. Rejected: leaving the loops, which are the eight the
+  brief counts.
+- **One PDF is one sweep item, keyed on its filename stem**, which the BibTeX entry key is already built
+  from and so must already be unique. Rejected: a content hash, which would tell apart two PDFs the entry
+  keys cannot.
+- **The ledger stores the model-derived fields; the `.bib` files are rewritten from it** at the end of
+  every run, stopped ones included, with the conference literals applied then. So a changed literal
+  needs no re-asking, and a crashed run loses nothing. Rejected: storing the finished entry and appending
+  as before.
+- **Three outcomes, by what the remedy is.** *Done*: no check fired. *Flagged*: an answer exists and a
+  person should look, because the document seems to lack a field (no author list, no title) or the answer
+  looks wrong (broken or duplicate names, words not in the text). Written to the failed `.bib` with its
+  notes, as before, and not re-asked automatically, since a re-ask at temperature 1 would replace a
+  checkable answer with a different one. *Failed*: no usable answer, a field empty after its retries or
+  the backend gone, so the item is retried on the next run and gets no entry. The split was Juha's
+  question, whether the failures differ meaningfully; they do, in exactly this way.
+- **The `--output-dir` / `--failed-output-dir` moves stay**, optional, as a way of sorting processed
+  PDFs. Resume no longer depends on them.
+- **`extract` moves from `agent.turn` to `ask_record`.** `turn` turns a backend failure into an assistant
+  message, whose text is not empty, so it passed the retry loops' check and reached the `.bib` as a field.
+
 ## The questions the decisions answer
 
 All seven are settled, in *Decided 2026-09-29* and *Decided 2026-09-30* above, which cite them by number.
