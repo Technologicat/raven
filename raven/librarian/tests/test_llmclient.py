@@ -2345,6 +2345,43 @@ class TestThinkingRetention:
         assert retained - dropped == pytest.approx(trace_tokens, abs=2), "retention did not change the count by the earlier trace"
         assert dropped - without_traces == pytest.approx(trace_tokens, abs=2), "the current turn's thinking was not counted"
 
+    def test_a_count_can_be_asked_the_other_way_without_touching_the_setting(self):
+        forest, head = self._branch(self._history())
+        settings = self._settings(True)
+        asked_off, _ = llmclient.count_branch_tokens(settings, forest, head, retain_thinking=False)
+        assert asked_off == llmclient.count_branch_tokens(self._settings(False), forest, head)[0]
+        assert asked_off < llmclient.count_branch_tokens(settings, forest, head)[0]
+        assert settings.retain_thinking is True
+
+
+class TestTemplateStripsThinking:
+    """Reading the template's retention policy off the prompt size the backend reports.
+
+    Counts as `count_branch_tokens` gives them: 1000 with the earlier traces, 200 without, so 800 of trace.
+    """
+
+    def test_a_keeping_template_never_reads_as_stripping(self):
+        # Kept, the backend counts the traces plus framing the local count omits, so it is never below 1000.
+        for framing in (0, 50, 5000):
+            assert llmclient.template_strips_thinking(1000 + framing, 1000, 200) is False
+
+    def test_a_stripping_template_is_noticed(self):
+        assert llmclient.template_strips_thinking(200, 1000, 200) is True
+        assert llmclient.template_strips_thinking(200 + 150, 1000, 200) is True  # with some framing
+        # And it is the case that matters: the short-count check alone would have refused this figure.
+        assert llmclient.prompt_size_report_looks_whole(350, 1000) is False
+
+    def test_framing_over_half_the_traces_is_missed_but_then_believed_anyway(self):
+        assert llmclient.template_strips_thinking(200 + 500, 1000, 200) is False
+        assert llmclient.prompt_size_report_looks_whole(700, 1000) is True
+
+    def test_the_short_count_glitch_is_not_taken_for_stripping(self):
+        # An order of magnitude short of even the trace-free count is the backend's glitch, as before.
+        assert llmclient.template_strips_thinking(20, 1000, 200) is False
+
+    def test_no_traces_says_nothing(self):
+        assert llmclient.template_strips_thinking(100, 1000, 1000) is False
+
 
 class TestSerializeHistoryForWire:
     # The token-accounting fields are what the attachment fold sizes itself against: a 10000-token window

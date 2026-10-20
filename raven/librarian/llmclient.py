@@ -48,7 +48,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            "serialize_history_for_wire",  # for scripting: the wire form of what a turn would send
            "thinking_token_count", "phase_report",  # reading a finished turn's numbers back
            "thinking_request_fields",  # ...and asking for the reasoning in the first place
-           "invoke", "prompt_size_report_looks_whole", "prefill",
+           "invoke", "template_strips_thinking", "prompt_size_report_looks_whole", "prefill",
            "make_console_progress_handler"]
 
 import logging
@@ -1257,15 +1257,17 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
             break
     return int(chosen(height, width)) if callable(chosen) else int(chosen)
 
-def keeps_reasoning(settings: env, messages: list[dict]) -> list[bool]:
+def keeps_reasoning(settings: env, messages: list[dict], retain_thinking: bool | None = None) -> list[bool]:
     """Which of `messages` keep their thinking trace (`reasoning_content`) in a prompt, one flag per message.
 
-    All of them when `settings.retain_thinking` is true. Otherwise only those after the latest user message:
+    All of them when retention is on. Otherwise only those after the latest user message:
     the current turn's thinking, across its tool rounds, is what the model is working from, and the chat
     templates that strip earlier thinking keep exactly that span. `serialize_history_for_wire` drops the
     rest and `count_branch_tokens` leaves it out, so what is sent and what is counted agree.
+
+    `retain_thinking`: overrides `settings.retain_thinking` for this call; `None` uses the setting.
     """
-    if settings.retain_thinking:
+    if settings.retain_thinking if retain_thinking is None else retain_thinking:
         return [True] * len(messages)
     last_user_index = max((index for index, message in enumerate(messages) if message.get("role") == "user"),
                           default=-1)
@@ -1274,7 +1276,8 @@ def keeps_reasoning(settings: env, messages: list[dict]) -> list[bool]:
 def count_branch_tokens(settings: env,
                         datastore: chattree.Forest,
                         head_node_id: str,
-                        extract_attachments: bool = True) -> tuple[int, bool]:
+                        extract_attachments: bool = True,
+                        retain_thinking: bool | None = None) -> tuple[int, bool]:
     """Estimate the token size of the conversation ending at `head_node_id`. Returns `(count, is_exact)`.
 
     Counts the *visible conversation content* — every message from the root down to `head_node_id`. It
@@ -1313,13 +1316,17 @@ def count_branch_tokens(settings: env,
 
                            The budget caller passes the default, and must: an under-reported context would
                            let `fetch_document` return more than actually fits.
+
+    `retain_thinking`: as `keeps_reasoning`; `None` (default) counts as the setting says. For asking what the
+                       count would be the other way, which `template_strips_thinking` needs.
     """
     text_segments = []
     attachments = []  # (extracted text, budget kind)
     image_tokens = 0
     counted_every_attachment = True  # cleared when `extract_attachments=False` meets one that is not extracted yet
     payloads = [datastore.get_payload(node_id) for node_id in datastore.linearize_up(head_node_id)]
-    for payload, keeps_trace in zip(payloads, keeps_reasoning(settings, [payload["message"] for payload in payloads])):
+    for payload, keeps_trace in zip(payloads, keeps_reasoning(settings, [payload["message"] for payload in payloads],
+                                                              retain_thinking)):
         message = payload["message"]
         text_segments.append(chatutil.content_to_text(message.get("content")))
         if keeps_trace:
@@ -2806,6 +2813,29 @@ def invoke(settings: env,
 # would show it being wrong.
 _WHOLE_PROMPT_MIN_FRACTION_OF_ESTIMATE = 0.5
 
+
+def template_strips_thinking(reported: int, with_traces: int, without_traces: int) -> bool:
+    """Whether a backend's reported prompt size says its chat template dropped the earlier thinking it was sent.
+
+    `reported`: the backend's `prompt_tokens` for a prompt carrying earlier turns' thinking traces.
+
+    `with_traces`, `without_traces`: the local count of the same messages, with those traces and without.
+
+    For noticing `settings.retain_thinking` set on against a template that strips earlier thinking, which
+    nothing else can tell: neither the frontend nor the backend can see what the template does. `False`
+    when there are no traces to tell by, and for a figure too short to be a whole prompt at all
+    (`prompt_size_report_looks_whole`).
+    """
+    # The backend counts the messages plus framing the local count leaves out (system prompt, injects, tool
+    # definitions), F >= 0. A template keeping the traces reports with_traces + F >= with_traces; one stripping
+    # them, without_traces + F. Below the midpoint is then impossible for a keeping template when the counts
+    # are exact, and an estimate would have to overshoot by half the traces' size to fake it. A stripping
+    # template with F above half the traces is missed, but its figure is then large enough to be believed
+    # anyway, so nothing on screen is wrong.
+    if without_traces >= with_traces:
+        return False
+    return (reported < (with_traces + without_traces) / 2 and
+            prompt_size_report_looks_whole(reported, without_traces))
 
 def prompt_size_report_looks_whole(reported: int, estimate: int) -> bool:
     """Whether a backend's reported `prompt_tokens` is plausibly the size of the *whole* prompt.

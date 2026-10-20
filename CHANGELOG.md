@@ -32,6 +32,7 @@
   - Off, thinking from before your latest message is no longer sent. Thinking within the current reply, across its tool calls, still is.
   - The context-fill readout now counts the thinking that is sent. It used to count none.
   - Set it to match your model's chat template, which neither *Librarian* nor the backend can see; the README's *Thinking* toggle says how to tell.
+  - Left on for a model whose template drops earlier thinking, it is usually noticed from the prompt size the backend reports: the readout then takes the backend's figure, and the log says to turn the setting off.
 
 #### Raven-deduplicate
 

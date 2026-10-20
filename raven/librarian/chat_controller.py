@@ -1642,6 +1642,7 @@ class DPGChatController:
         # `running_poll_interval` chunks) and the single-in-flight guarantee; we just submit one per HEAD change.
         # Created only when the feature is enabled (`config.context_prefill_idle_delay is not None`).
         self.context_prefill_task = None
+        self.retention_mismatch_warned = False  # see `_context_prefill_entrypoint`: said once per session
         if librarian_config.context_prefill_idle_delay is not None:
             self.context_prefill_task = bgtask.ManagedTask(category="raven_librarian_chat_controller_context_prefill",
                                                            entrypoint=self._context_prefill_entrypoint,
@@ -2337,7 +2338,22 @@ class DPGChatController:
         maybe_tokenizer = self.llm_settings.tokenizer
         prefix_estimate = (llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index])[0]
                            if cut_index >= 0 else 0)
-        if not llmclient.prompt_size_report_looks_whole(reported, prefix_estimate):
+        believed = llmclient.prompt_size_report_looks_whole(reported, prefix_estimate)
+        # With retention on, the estimate counts every earlier thinking trace, so a template that strips them
+        # makes the backend's correct figure look short - short enough, in a chat heavy with thinking, to be
+        # refused above as LM Studio's short-count glitch. The figure itself says which it is.
+        if self.llm_settings.retain_thinking and cut_index >= 0:
+            prefix_without_traces = llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index],
+                                                                  retain_thinking=False)[0]
+            if llmclient.template_strips_thinking(reported, prefix_estimate, prefix_without_traces):
+                believed = True
+                if not self.retention_mismatch_warned:
+                    self.retention_mismatch_warned = True
+                    logger.warning(f"DPGChatController._context_prefill_entrypoint: the backend counted {reported} prompt tokens "
+                                   f"where the earlier turns' thinking alone would make it at least {prefix_estimate}, so this "
+                                   f"model's chat template drops that thinking. Set `llm_retain_thinking = False` in "
+                                   f"`raven.librarian.config` so that the context readout counts what the model sees.")
+        if not believed:
             return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
         branch_estimate = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)[0]
         # A tokenizer that finishes loading between the two counts still mixes the methods. That window is a few
