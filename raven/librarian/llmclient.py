@@ -422,7 +422,8 @@ def setup(backend_url: str,
 
         `model_is_vlm: bool | None`: Whether the loaded model accepts image input, as a tri-state — `True` /
                                         `False` when the backend reports it (LM Studio, via the model record's
-                                        `type == "vlm"`), or `None` when it can't be determined (ooba / generic).
+                                        `capabilities.vision`), or `None` when it can't be determined (ooba /
+                                        generic).
                                         The image-attach UI gates on this: a definite `False` refuses attachment
                                         with a clear message; `None` allows it and lets the backend reject.
 
@@ -431,6 +432,14 @@ def setup(backend_url: str,
                                            generic backend, whose model list says what it has rather than what
                                            is running. The frontends show a definite `False`; `None` is not a
                                            fault and is not shown.
+
+        `model_record: env`: The loaded model's record as `resolve_model_info` returns it, every field
+                             present — its parts (`model_id`, `quantization`, `bits_per_weight`,
+                             `load_config`) as well as what the fields above are derived from. Kept current
+                             by `follow_model_swap`, which counts any change to it as a swap, a reload with
+                             different settings included. Where it disagrees with the fields above, they
+                             win: they carry the defaults (`context_length`) and the configured name
+                             (`model_id`) that the record, being only what the backend said, does not.
 
         `backend_is_reachable: bool`: Whether anything answered at `backend_url` when these settings were
                                       built. Always `True` from `setup`, which cannot return otherwise;
@@ -634,8 +643,12 @@ def follow_model_swap(settings: env) -> bool:
 
     Cheap enough to call before every turn: one request, and nothing more unless the model changed. Only what
     describes the model is updated — its identity, context window, whether it sees images, whether it is
-    loaded, and the name requests carry unless `config.llm_model` sets one — together with what was fitted
-    to the old one, the token-count calibration and the local tokenizer. Everything else in `settings` is left alone, including any per-run overrides a caller has set.
+    loaded, its whole record (`model_record`), and the name requests carry unless `config.llm_model` sets
+    one — together with what was fitted to the old one, the token-count calibration and the local tokenizer.
+    Everything else in `settings` is left alone, including any per-run overrides a caller has set.
+
+    "Changed" means any field of the record: the same model reloaded with different settings — another
+    quantization, flash attention toggled — counts, as does loading a second model beside it.
 
     When the backend does not answer, it only records that (`backend_is_reachable`, which `backend_status`
     reads), so that a frontend can say so; recovering is `reconnect`'s job. Returns `False` then.
@@ -647,12 +660,13 @@ def follow_model_swap(settings: env) -> bool:
     except requests.exceptions.RequestException:
         settings.backend_is_reachable = False
         return False
-    context_length = info.context_length if info.context_length is not None else _DEFAULT_CONTEXT_LENGTH
-    if (info.label, context_length, info.is_vlm, info.loaded) == (settings.model, settings.context_length,
-                                                                  settings.model_is_vlm, settings.model_is_loaded):
+    if info == settings.model_record:
         return False
 
-    logger.info(f"follow_model_swap: the backend's model changed from '{settings.model}' to '{info.label}'; following it.")
+    if info.label == settings.model:
+        logger.info(f"follow_model_swap: the backend has '{info.label}' loaded with different settings now; following it.")
+    else:
+        logger.info(f"follow_model_swap: the backend's model changed from '{settings.model}' to '{info.label}'; following it.")
     if getattr(info, "n_loaded", 1) > 1:
         logger.warning(f"follow_model_swap: the backend has {info.n_loaded} models loaded; using '{info.label}', the first it lists. "
                        f"Set '{librarian_config.__name__}.llm_model' to choose, or unload the others.")
@@ -663,9 +677,10 @@ def follow_model_swap(settings: env) -> bool:
             settings.request_data["model"] = info.model_id
         else:
             settings.request_data.pop("model", None)
-    settings.context_length = context_length
+    settings.context_length = info.context_length if info.context_length is not None else _DEFAULT_CONTEXT_LENGTH
     settings.model_is_vlm = info.is_vlm
     settings.model_is_loaded = info.loaded
+    settings.model_record = info
     settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
     settings.tokenizer = None
     if settings.backend_flavor == "lmstudio" and info.loaded:
@@ -874,7 +889,8 @@ def configure(model_info: env,
                   `is_vlm` and `loaded`. Synthesize one to configure against a hypothetical model;
                   `context_length` may be `None`, which defaults as it does for a backend that does not
                   report one, and `is_vlm`/`loaded` may be `None`, which is how a backend that reports
-                  neither is represented.
+                  neither is represented. Fields it leaves out (`quantization`, `bits_per_weight`,
+                  `load_config`) read as not reported.
 
     `backend_flavor`: "oobabooga", "lmstudio" or "generic". Gates a few request/response details.
 
@@ -890,6 +906,7 @@ def configure(model_info: env,
 
     Returns the same `env` as `setup`; see its docstring for the fields.
     """
+    model_info = _model_info(**model_info)  # every field present, so a reader of `model_record` needs no `getattr`
     model = model_info.label  # human-facing identity for the character card (never a guess)
     # The configured model if there is one, else the one loaded now. A name is needed either way: LM Studio
     # refuses a request that names none while two models are loaded. The loaded one is re-read before every
@@ -986,6 +1003,7 @@ def configure(model_info: env,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
                    model_is_loaded=model_info.loaded,  # whether the backend has a model resident: True/False, or None if unknown (drives the backend-status readout)
+                   model_record=model_info,  # the whole record `resolve_model_info` returned; see the docstring
                    backend_is_reachable=backend_is_reachable,  # whether anything answered at `backend_url`; see `backend_status`
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background below

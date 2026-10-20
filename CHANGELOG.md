@@ -53,6 +53,7 @@
   - This suits `raven.librarian.agent` scripting and tests, which build datastores of their own and should not have them written out at exit by default.
 - **Librarian reads the loaded model from LM Studio's `/api/v1` REST API.**
   - An LM Studio too old to serve it is treated as a generic OpenAI-compatible backend. Chat still works there, but the context window falls back to the default and vision support is not detected.
+  - Reloading the same model with different settings, such as another quantization or flash attention toggled, is now followed as a model change.
 
 #### Raven-deduplicate
 

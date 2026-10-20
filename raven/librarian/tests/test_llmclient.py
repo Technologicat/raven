@@ -1822,12 +1822,29 @@ class TestFollowModelSwap:
 
     def _backend_has(self, monkeypatch, **info):
         fields = dict(label="a-model", model_id=None, context_length=4096, is_vlm=True, loaded=True) | info
-        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: env(**fields))
+        # A full record, as `resolve_model_info` always returns one.
+        monkeypatch.setattr(llmclient, "resolve_model_info",
+                            lambda backend_url, flavor: llmclient._model_info(**fields))
 
     def test_the_same_model_changes_nothing(self, settings, monkeypatch):
         self._backend_has(monkeypatch)
         assert llmclient.follow_model_swap(settings) is False
         assert settings.tokens_per_character == 0.5, "the calibration was reset with no model change"
+
+    def test_a_reload_with_different_settings_is_followed(self, settings, monkeypatch):
+        # Same label, context length, vision and loaded state: only the load settings differ, which is the
+        # change a comparison of the derived fields alone cannot see.
+        self._backend_has(monkeypatch, load_config={"context_length": 4096, "flash_attention": True})
+        assert llmclient.follow_model_swap(settings) is True
+        assert settings.model_record.load_config == {"context_length": 4096, "flash_attention": True}
+        assert settings.tokens_per_character == llmclient._DEFAULT_TOKENS_PER_CHARACTER
+
+    def test_the_record_s_parts_reach_the_settings(self, settings, monkeypatch):
+        self._backend_has(monkeypatch, label="b-model, Q4_K_XL, 4 Ki context", model_id="b-model",
+                          quantization="Q4_K_XL", bits_per_weight=4.5, load_config={"context_length": 4096})
+        llmclient.follow_model_swap(settings)
+        record = settings.model_record
+        assert (record.model_id, record.quantization, record.bits_per_weight) == ("b-model", "Q4_K_XL", 4.5)
 
     def test_a_swapped_model_is_followed_and_overrides_survive(self, settings, monkeypatch):
         self._backend_has(monkeypatch, label="b-model", model_id="b-model", context_length=8192, is_vlm=False)

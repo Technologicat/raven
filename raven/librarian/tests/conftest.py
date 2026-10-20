@@ -2,8 +2,6 @@
 
 import pytest
 
-from unpythonic.env import env
-
 from raven.librarian import chattree, llmclient
 
 
@@ -72,11 +70,11 @@ def llm_settings(monkeypatch):
         these tests are about, and a configured tokenizer would otherwise be fetched.
     """
     monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
-    model_info = env(label="test-model",
-                     model_id="test-model",
-                     context_length=32768,
-                     is_vlm=None,  # "cannot tell", as a backend that does not report it gives
-                     loaded=True)  # a test that gets as far as a turn is testing one against a backend that could answer
+    model_info = llmclient._model_info(label="test-model",  # a full record, as the backend's reader returns
+                                       model_id="test-model",
+                                       context_length=32768,
+                                       is_vlm=None,  # "cannot tell", as a backend that does not report it gives
+                                       loaded=True)  # a test that gets as far as a turn is testing one against a backend that could answer
     # Asked again before every turn (`follow_model_swap`), and answered here rather than over the network: the
     # backend this fixture stands in for keeps serving the same model.
     monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: model_info)
