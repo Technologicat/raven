@@ -176,6 +176,20 @@ class TestSweep:
         result = sweep.Sweep(llm_settings, ask, _items(3), ledger).run()
         assert result.outcome is sweep.model_changed
         assert set(ledger.answers()) == {"item0"}, "the batch the old model answered is kept, and no more is asked"
+        assert "'test-model' was reloaded with other settings" in result.message
+
+    def test_the_run_names_the_model_before_asking_and_both_on_a_swap(self, llm_settings, tmp_path, monkeypatch,
+                                                                       caplog):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        other = llmclient._model_info(**(dict(llm_settings.model_record) | {"label": "small-model", "model_id": "small-model"}))
+
+        def ask(llm_settings, batch, maybe_abort):
+            monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: other)
+            return _echo(llm_settings, batch, maybe_abort)
+        with caplog.at_level(logging.INFO, logger="raven.librarian.sweep"):
+            result = sweep.Sweep(llm_settings, ask, _items(3), ledger).run()
+        assert any("asking 'test-model'" in r.message for r in caplog.records)
+        assert "from 'test-model' to 'small-model'" in result.message
 
     def test_with_nothing_wrong_the_probe_does_not_stop_the_run(self, llm_settings, tmp_path):
         # The control for the two above: the shared fixture's backend keeps serving the same model, so a

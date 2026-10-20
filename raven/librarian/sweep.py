@@ -255,6 +255,10 @@ class Sweep:
                     f"{len(todo)} to do in {len(batches)} {'batch' if len(batches) == 1 else 'batches'}.")  # plural
         if self.header is not None and todo:
             self.ledger.write_header(self.header)
+        if todo:
+            # Said before the first call, so that a run started against the wrong model loaded is caught
+            # before it has spent anything.
+            logger.info(f"Sweep.run: asking '{self.llm_settings.model}'.")
 
         # Counted in batches, which is the unit the time goes into; and from this run's start, so that a
         # resumed run's estimate is not flattered by the items an earlier run did.
@@ -319,6 +323,7 @@ class Sweep:
 
             # One probe after every batch, failed or not: a backend that has gone away fails every batch
             # from here on, and one that has swapped models answers them with another instrument.
+            model_before = self.llm_settings.model
             swapped = llmclient.follow_model_swap(self.llm_settings)
             status = llmclient.backend_status(self.llm_settings)
             report(ids)
@@ -328,8 +333,10 @@ class Sweep:
                 break
             if swapped:
                 outcome = model_changed
-                message = (f"The backend's model changed to '{self.llm_settings.model}' during the run. Answers "
-                           f"from another model are another measurement; run again to continue under it.")
+                change = (f"from '{model_before}' to '{self.llm_settings.model}'"
+                          if self.llm_settings.model != model_before else f"'{model_before}' was reloaded with other settings")
+                message = (f"The backend's model changed during the run: {change}. Answers from another model are "
+                           f"another measurement; run again to continue under it.")
                 break
 
         report([], final=True)
