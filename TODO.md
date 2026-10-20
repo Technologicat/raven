@@ -213,9 +213,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Urgent / in-flight
 
-- **[Medium]** The context-fill meter should count prior reasoning on templates that keep it. It counts none, which is right for Qwen (whose template discards prior reasoning) and a large under-report on Gemma (whose template re-sends every stored trace). Counting it unconditionally would be as wrong the other way, so the meter needs a per-model "template retains reasoning" flag, in the `model_is_vlm` family. The debounced prefill corrects the readout once the chat settles; it is the immediate estimate that is off. Measurements in `investigations/thinking-toggle/`.
-
-- **[Low]** Qwen 3.6's `preserve_thinking` (keep every turn's reasoning in the prompt) is unreachable through LM Studio's HTTP APIs, every route measured. The one untried surface is LM Studio's per-model config, the way it evidently sets `enable_thinking`. If it works, the context meter has to learn about the mode at the same time. `investigations/thinking-toggle/`.
+- **[Medium]** Librarian needs a thinking-retention setting, and the token count has to follow it. Decided 2026-10-20 (Juha): an option in `raven.librarian.config` saying whether earlier turns' thinking is kept.
+  - **Off: `llmclient` drops `reasoning_content` from earlier turns before the wire**, so nothing is retained whatever the template would do. Today it sends every stored trace and leaves the choice to the template (checked 2026-10-20).
+  - **On: the traces are sent, and the token count includes them.** `count_branch_tokens` counts none today, so the immediate readout and the summarization estimates undercount wherever a template keeps them, until the debounced prefill replaces the figure.
+  - **Templates disagree**, which is why it is a setting rather than a constant. Qwen 3.5 and 3.6 strip earlier thinking by default, 3.6 keeping it only when `preserve_thinking` is set true, presumably in a template override (that route is measured on 3.8 only); Qwen 3.8 keeps it unless an override sets that variable false; Gemma 4 always keeps it.
+  - **Neither end can tell the other**, so the setting is the user's to match to their model, and the documentation has to say so. Measurements in `investigations/thinking-toggle/`.
 
 - **[Low]** `chatutil.scrub`'s `<think>` repair is a backstop for models that emit malformed or missing tags where reasoning arrives inline. **Keep it.** The July record expected it never to fire on LM Studio, which delivers reasoning on its own channel — but spurious `</think>` tags were seen arriving in the content channel from Qwen 3.5 9B on LM Studio the week of 2026-09-21 (maintainer), so something may still reach it there. Next step, if it matters: scan the chat datastore for `</think>` in stored content, which says how often. The ooba re-test is the other half (`TODO_DEFERRED.md`, "Upgrade oobabooga…"). `investigations/thinking-toggle/`.
 

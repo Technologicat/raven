@@ -72,6 +72,7 @@ costs the KV cache.
   - **Qwen 3.6 wants its thinking history kept, and we currently can't grant that.** The two templates differ on reasoning retention (read from the GGUFs, 2026-07-27):
     - **3.5** renders prior reasoning only when `loop.index0 > ns.last_query_index` — older thinking is always stripped, no opt-out.
     - **3.6** adds a `preserve_thinking` kwarg: `(preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index)`. Set it, and *all* prior reasoning is retained. Default is still strip, so this is opt-in.
+    - **3.8** reverses the default: `preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last_query_index`, read from the saved LM Studio config's template 2026-10-20. Prior reasoning is kept unless a template override sets the variable false. Measured the same day with no such override, LM Studio's per-model template being the route the probes below did not try: a `reasoning_content` of about 420 tokens on the earlier assistant turn took the prompt from 57 to 480 tokens, so all of it was rendered.
 
     `preserve_thinking` is a `chat_template_kwargs` key, which LM Studio ignores — and prefill can't substitute, since this governs how *history* renders rather than how the next turn starts. **Probed exhaustively 2026-07-27; it is unreachable by every route tried.** Measured by prompt size, since a retained ~700-token reasoning blob would be unmissable:
 
