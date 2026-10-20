@@ -3152,7 +3152,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 *Cluster: ? · Cost: S · Gate: 0.2.11 (2026-10-09) · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
-**Keep the Aria persona** (maintainer, 2026-10-01), and test how the model responds to the new card.
+**Keep the Aria persona** (maintainer, 2026-10-01), and test how the model responds to the new card. **Her voice too**: the dry, candid register Qwen shows under the current configuration. What produces it, and how to keep it on purpose, is planned as `investigations/aria-register/` (2026-10-20).
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
