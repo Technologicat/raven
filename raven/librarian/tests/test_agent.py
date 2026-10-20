@@ -726,6 +726,50 @@ class TestAskRecord:
             agent.ask(llm_settings, "Question?", maybe_abort=handle)
 
 
+class TestAskUntil:
+    """`ask_record`, asked again while the reply fails a check."""
+
+    @staticmethod
+    def _script(monkeypatch, replies):
+        asked = []
+
+        def fake_invoke(**kw):
+            asked.append(1)
+            return make_invoke_result(content=replies.pop(0))
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        return asked
+
+    def test_a_blank_reply_is_asked_again(self, monkeypatch, llm_settings):
+        asked = self._script(monkeypatch, ["", "  ", "an answer"])
+        records, accepted = agent.ask_until(llm_settings, "Question?", attempts=3)
+        assert accepted and records[-1].reply == "an answer"
+        assert len(records) == len(asked) == 3, "every attempt's record is handed back, not only the last"
+
+    def test_it_stops_at_the_first_accepted_reply(self, monkeypatch, llm_settings):
+        asked = self._script(monkeypatch, ["an answer", "never asked for"])
+        records, accepted = agent.ask_until(llm_settings, "Question?", attempts=3)
+        assert accepted and len(asked) == 1
+
+    def test_attempts_run_out(self, monkeypatch, llm_settings, caplog):
+        self._script(monkeypatch, ["", "", ""])
+        with caplog.at_level("WARNING", logger="raven.librarian.agent"):
+            records, accepted = agent.ask_until(llm_settings, "Question?", attempts=2, label="EXTRACT")
+        assert not accepted and len(records) == 2
+        assert sum("EXTRACT" in r.message for r in caplog.records) == 2
+
+    def test_the_check_is_the_caller_s(self, monkeypatch, llm_settings):
+        self._script(monkeypatch, ["Keywords:", "Keywords: ravens"])
+        records, accepted = agent.ask_until(llm_settings, "Question?",
+                                            accept=lambda reply: bool(reply.removeprefix("Keywords:").strip()))
+        assert accepted and records[-1].reply == "Keywords: ravens"
+
+    def test_a_backend_that_did_not_generate_is_raised_not_retried(self, monkeypatch, llm_settings):
+        asked = self._script(monkeypatch, [None, "never asked for"])
+        with pytest.raises(RuntimeError, match="no generation"):
+            agent.ask_until(llm_settings, "Question?", attempts=3)
+        assert len(asked) == 1
+
+
 class TestParseJsonReply:
     """What a model actually sends back when asked for JSON and nothing else."""
 

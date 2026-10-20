@@ -56,7 +56,7 @@ __all__ = ["DEFAULT_MAX_REPLY_TOKENS",
 
            "TurnRecord", "describe_turn", "turn", "stream_log",
 
-           "ask", "ask_record", "parse_json_reply"]
+           "ask", "ask_record", "ask_until", "parse_json_reply"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -615,7 +615,7 @@ def stream_log(file: TextIO, label: str | None = None) -> Callable[[dict], sym]:
 
 
 def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
-        maybe_abort: netutil.Abort | None = None) -> str:
+        maybe_abort: netutil.Abort | None = None, on_progress: Callable | None = None) -> str:
     """Ask one question and get the answer text: no character, no tools, no retrieval, no history.
 
     `llm_settings`: as `turn`, which see.
@@ -625,7 +625,7 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
     `max_tokens`: cap on the reply, `None` to use whatever `llm_settings` carries. The default is *not*
                   that setting, deliberately — see below.
 
-    `maybe_abort`: as `turn`, which see.
+    `maybe_abort`, `on_progress`: as `turn`, which see.
 
     Returns the reply text, with nothing else around it.
 
@@ -638,12 +638,13 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
     PATH` on any tool built over this keeps it. `ask_record` returns the trace instead of logging it,
     for a caller that wants to keep it beside its results rather than in a log file.
     """
-    return ask_record(llm_settings, prompt, max_tokens, maybe_abort).reply or ""
+    return ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress).reply or ""
 
 
 def ask_record(llm_settings: env, prompt: str,
                max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
-               maybe_abort: netutil.Abort | None = None) -> TurnRecord:
+               maybe_abort: netutil.Abort | None = None,
+               on_progress: Callable | None = None) -> TurnRecord:
     """`ask`, but handing back the whole record rather than only the reply text.
 
     Arguments and failure behaviour are `ask`'s, which see — the cap on the reply and the `RuntimeError`
@@ -679,6 +680,7 @@ def ask_record(llm_settings: env, prompt: str,
                       internet_enabled=False,
                       docs_enabled=False,
                       markup=None,
+                      on_progress=on_progress,
                       maybe_abort=maybe_abort)
     finally:
         if max_tokens is not None:
@@ -692,6 +694,43 @@ def ask_record(llm_settings: env, prompt: str,
     if record.generation is None:
         raise RuntimeError("the backend returned no generation")
     return record
+
+
+def _has_text(reply: str) -> bool:
+    return bool(reply.strip())
+
+def ask_until(llm_settings: env, prompt: str,
+              accept: Callable[[str], bool] = _has_text,
+              attempts: int = 3,
+              label: str = "ask_until",
+              max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
+              maybe_abort: netutil.Abort | None = None,
+              on_progress: Callable | None = None) -> tuple[list[TurnRecord], bool]:
+    """`ask_record`, asked again while the reply fails `accept`, up to `attempts` times in all.
+
+    `accept`: a check on the reply text. The default accepts any reply that is not blank, which is the
+              common failure: a model that thinks until its token cap and has nothing left to say.
+
+    `attempts`: how many times to ask, the first included. At least one.
+
+    `label`: names the step in the warning logged for each rejected attempt.
+
+    The rest are `ask_record`'s, which see; so is the `RuntimeError` on a backend that did not generate,
+    which is raised rather than retried, a dead backend being nothing another attempt can fix.
+
+    Returns `(records, accepted)`: every attempt's `TurnRecord`, the last being the one to use, and whether
+    it passed. All of them, so a caller keeping traces can keep the failed attempts too, which are the
+    ones that explain an answer that never came.
+    """
+    if attempts < 1:
+        raise ValueError(f"ask_until: `attempts` must be at least 1, got {attempts}")
+    records = []
+    for attempt in range(1, attempts + 1):
+        records.append(ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress))
+        if accept(records[-1].reply or ""):
+            return records, True
+        logger.warning(f"{label}: reply not accepted at attempt {attempt} of {attempts}")
+    return records, False
 
 
 def parse_json_reply(text: str):
