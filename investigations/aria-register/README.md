@@ -1,6 +1,6 @@
 # What gives Aria her register, and how to keep it through the prompt rewrite
 
-**Status: step 1 run; the blind sample showed the judge counts more than the voice, so its rates are withdrawn** (2026-10-21). Gates `TODO_DEFERRED.md`'s "Modernize the
+**Status: step 1 run and judged with the three-form rubric, provisional while the judge's precision is about one half** (2026-10-21). Gates `TODO_DEFERRED.md`'s "Modernize the
 Librarian system prompt / character card": the rewrite needs its answer (maintainer, 2026-10-20).
 
 ## Running it
@@ -160,6 +160,60 @@ rather than five, about 50 min — since the conditions cannot be told apart at 
 **The rate is low**: one to four in 30, so roughly 3–13% across conditions. At that rate 35 elicitor
 replies per condition cannot tell the conditions apart, and by the plan's power estimate telling 20% from 5%
 takes about 70.
+
+### The three-form rubric on the blind sample (2026-10-21)
+
+Run while the maintainer was away, as decided. Against the hand ratings of `blind-sample-7.md` (1 yes,
+3 unsure, 26 no):
+
+| judge | ledger | yes caught | unsure caught | no marked as voice | per item |
+|---|---|---|---|---|---|
+| Qwen 3.8 27B, temperature 0.3 | `60d796b1` | 1 / 1 | 3 / 3 | 5 / 26 | ~12 s |
+| Gemma 4 31B, temperature 0.3 | `1e5b9d89` | 1 / 1 | 3 / 3 | 4 / 26 | ~25 s |
+| *the two-form rubric, Qwen, for comparison* | `5c25fbc0` | 1 / 1 | 3 / 3 | 8 / 26 | |
+
+- **Both have the recall and still not the precision**: about half of what either calls the voice is the
+  voice by the hand ratings. Better than the two-form rubric, not yet good.
+- **They are tied, one record apart.** Both mark "No code yet, so no." and the proxy analogy, which were
+  rated no. Gemma files the proxy analogy under `technical_wit`, which is the inept IT humour the rubric
+  describes as not counting.
+- **Qwen judged the rest**, for two reasons. Its false positives are spread across the conditions (one
+  `card_off`, two `card_on`, two `plain`), where Gemma's lean three to one toward `card_on`, which would
+  inflate exactly the condition the hypothesis predicts. And it is twice as fast.
+- **The generation was extended first**: the seven elicitors now have ten samples per condition, the
+  neutral prompts five, 255 replies in all, under the same instrument (`7e8dd60a`).
+
+### Step 1 under the three-form rubric (2026-10-21, provisional)
+
+Judge run `60d796b1` over all 255 replies. **Provisional, because the judge's precision is about one half**
+on the blind sample: these are counts of what it marks, and the voice is perhaps half of that.
+
+| condition | elicitors | directness | deadpan absurd | technical wit | neutral |
+|---|---|---|---|---|---|
+| `card_on` | 33 / 70 (47%) | 24 | 17 | 6 | 0 / 15 |
+| `card_off` | 19 / 70 (27%) | 12 | 9 | 1 | 0 / 15 |
+| `plain` | 22 / 70 (31%) | 11 | 12 | 3 | 0 / 15 |
+
+(A reply can show more than one form, so the three columns overlap.)
+
+- **The user card raises the rate, and Aria's card does nothing measurable over a one-liner.** `card_on`
+  against `card_off`: z = 2.45, p ≈ 0.01. Against `plain`: z = 1.90, p ≈ 0.06. `card_off` against `plain`:
+  z = −0.56, no difference. Two-proportion tests, uncorrected.
+- **The difference is mostly directness**, which doubles with the user card (24 against 12 and 11;
+  p ≈ 0.02 and 0.01). Deadpan absurdism barely moves, outside one prompt.
+- **`creative` is at the ceiling everywhere** (9, 9 and 10 of 10): inventing a unit is deadpan absurdism by
+  construction, so it separates nothing. Without it, `card_on` is 24 of 60 against 10 and 12 (p ≈ 0.005
+  and 0.02).
+- **The neutral prompts drew nothing in any condition**, so the false-positive check passes.
+- **One prompt runs the other way:** the shoelace question drew the voice in 8 of 10 under `plain` and 2 of
+  10 under `card_off`, which suggests Aria's card can suppress something a bare model does. Ten samples
+  each; an observation, not a finding.
+- **A quote not found in its reply in 16 of 255.** Three of them contain an ellipsis; the rest are not yet
+  looked at.
+
+**What this says for step 2**, if the judge's errors are spread as evenly as on the blind sample: the user
+card is the place to look, and its directness-related paragraphs first. The precision of the judge is
+the thing to fix before the numbers are worth more than a direction.
 
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
