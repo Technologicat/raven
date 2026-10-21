@@ -110,6 +110,11 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    section, which needs exact numbers from a pipeline that can be named.
    - **A run whose answers are all saved connects to nothing** (maintainer, 2026-10-07), so a replay works
      with no LLM running.
+   - **Decided (maintainer, 2026-10-21): a replay names its instrument explicitly**, as
+     `extract_fields.py --seed-from` does. `raven.librarian.sweep` names a ledger by a fingerprint that
+     includes the *loaded model's* id, so finding a ledger by fingerprint would need a backend — exactly
+     what the rule above forbids. Naming the fingerprint lets the to-do be read off the ledger first, and a
+     backend is connected only if something is left to ask.
    - **And whether a run will ask anything is decided before its work starts** (maintainer, 2026-10-07).
      Compute what is still unanswered first: if anything is, connect and check the backend then, failing
      at once as before; if nothing is, never connect. Connecting lazily at the first question is not
@@ -152,12 +157,15 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      of the methodology questions the project is asking. The two runs must draw the *same* records, so
      the sample is seeded, and both the seed and the sample size go into the report header (Juha,
      2026-09-30) — the same seed with a different size draws a different set. The second run must also re-ask
-     rather than read the first run's ledger, so the replicate needs a ledger of its own, or a
-     replicate number in the instrument stamp; which of the two is open.
+     rather than read the first run's ledger. **Decided (maintainer, 2026-10-21): a replicate number in
+     the instrument's material**, which gives a replicate its own ledger with nothing added to the sweep.
    - **The agreed sanity checks** (`investigations/aokk-corpus-scope/README.md`, *"Open: is the off-topic
      rate too low to believe?"*) sample each stage's output for hand-checking.
    - **Calibration**, which is the prototype's `--pilot N --seed S` under a general name.
-8. **Whether confidence decides a drop** (maintainer, 2026-10-07: investigate and fix when generalizing).
+8. **Whether confidence decides a drop. Decided (maintainer, 2026-10-21): a drop needs high confidence;
+   any test answered true at medium or low confidence sends the record to review instead.** The record that
+   showed the disagreement below goes to review under that rule. The question as it was raised (maintainer,
+   2026-10-07: investigate and fix when generalizing):
    The prototype's `verdict_of` decides from the three tests alone: any test answered `True` drops, and
    confidence plays no part. `write_outputs`' comment says otherwise — that a low-confidence answer is an
    `unknown` verdict and so is kept. The two disagree, and one record shows it: `shen_directions_2024`, a
@@ -165,6 +173,126 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    drop of the 1084. Both halves are suspect until it is settled which behaviour is wanted; the README's
    *A drop and a keep do not deserve the same standard of proof* is where to start. The record was flagged
    for the team's hand check in the 2026-10-07 report set (`00-pipeline.xlsx`, its notes).
+
+## Draft: the filter definition (questions 1 and 2)
+
+**A draft to iterate on, not a decision** (maintainer, 2026-10-21: "I'd like to see the details so we can
+iterate if needed before we build this"). One file holds everything corpus-specific — the scope question,
+the judge's tests, the extractor's fields and the rules that act on them — and the tool supplies
+everything that is not. Here is the AOKK prototype written in it, with the long descriptions cut short:
+
+```toml
+# aokk.filter.toml — what the corpus filter asks of this corpus, and what it does with the answers.
+
+scope = "studies on different aspects of the use of AI agents in higher education"
+
+# Domain cautions for the judge, beyond what each test says. Optional.
+hints = """
+"Learning assistant" names an AI tool, and is ALSO the term in STEM education research for a HUMAN
+undergraduate who helps teach a course. "Teaching", "training" and "learning" are also how machine
+learning describes what is done to a model; they count as education only when a PERSON is learning.
+"""
+
+# ---- The judge: one test per way of being off topic. True means positive evidence; silence keeps.
+
+[[test]]
+name = "no_ai"
+asks = """true ONLY if the work is positively about something with no artificial intelligence in it -
+human teaching staff, human tutors, or a non-AI technology. False when AI is present in any way, AND
+false when the work does not say what it used."""
+
+[[test]]
+name = "not_education"
+asks = """answered in two steps. FIRST: can you name what this work is about? If not, answer false and
+"low", and stop. SECOND: is that subject entirely outside education? ..."""
+
+[[test]]
+name = "wrong_level"
+asks = """true ONLY if the work is positively set at a level other than higher education - ... False
+when the work does not say what level it is set at."""
+
+# ---- The extractor: what a kept record says. Closed vocabularies, so the rules can act on them.
+
+[[field]]
+name = "level"
+asks = "the educational level the work is set at"
+quote = true            # a value other than `not_stated` must quote the words that settle it
+[field.values]
+higher_education = "a university, college, polytechnic or their students and faculty - degree study"
+school = "primary or secondary schooling, K-12, pupils"
+vocational = "formal vocational or trade education leading to a qualification"
+professional_training = "practitioners already qualified, being coached or trained on the job"
+informal = "learning outside any institution - self-directed learners, the general public"
+not_applicable = "the work is not set in education at all"
+
+[[field]]
+name = "human_learning"
+asks = "whether a PERSON is taught or is learning in this work, as against a model being trained"
+[field.values]
+yes = "a person is taught or learning"
+no = "the only thing being taught or trained is software"
+
+[[field]]
+name = "ai_role"
+asks = "what the AI does in this work, or 'none'"
+max_words = 8           # no `values`: free text, kept for reading, never acted on by a rule
+
+# ---- The rules over the fields. First match wins; a `when` is AND across fields, OR within a list.
+
+[[rule]]
+label = "school or vocational level, stated in the text"
+when = { level = ["school", "vocational"] }
+action = "remove"
+
+[[rule]]
+label = "not about education: no educational level, and no one learning"
+when = { level = ["not_applicable"], human_learning = ["no"] }
+action = "remove"
+
+[[rule]]
+label = "possibly not about education: no educational level, but someone may be learning"
+when = { level = ["not_applicable"] }
+action = "hold"
+
+[[rule]]
+label = "learning outside an institution, e.g. workplace training"
+when = { level = ["professional_training", "informal"] }
+action = "hold"
+```
+
+What the draft decides, each open to change:
+
+- **TOML.** `tomllib` is in the standard library, it takes comments, and its multi-line strings hold
+  prose. JSON has no comments and mangles prose; a Python module would execute a file that arrives with a
+  corpus; Markdown is friendlier for prose but needs conventions of our own for the structure.
+- **The tool supplies the frame, the file supplies the domain.** "Find positive evidence of being off
+  topic; silence keeps; a generic title is `low`; use the venue; judge the work, not the phrase that
+  matched" holds for any corpus, and is the tool's prompt. What is about *this* corpus is the file's. The
+  prototype's rubric splits along that line without much argument; `hints` takes the domain cautions that
+  belong to no single test.
+- **The judge's answer is what the prototype's was**: per test `true`/`false`, one `confidence` of
+  `high`/`medium`/`low`, a `why`, and which pass answered (title or abstract). So importing the prototype's
+  answers is a rename at most, and none where the test names are kept, which question 6 asks for. A drop
+  needs a `true` at `high` (question 8).
+- **Every closed vocabulary gets `not_stated` from the tool**, so a user cannot forget it, and the quotation
+  rule is per field (`quote = true`). Both are lessons from the prototype.
+- **No booleans in the extractor.** `human_learning` becomes a vocabulary, `yes`/`no`, plus the
+  `not_stated` every vocabulary gets — the prototype's `true`/`false`/`"unclear"` mix is what lost a batch
+  to an unquoted `unclear`.
+- **Rules are data**, and the prototype's four tiers fit them unchanged. `hold` is the review list, and the
+  label is what a report shows. A record matching no rule is kept.
+- **The instrument is the parsed file**, normalized, so editing a comment or rewrapping prose does not
+  start a fresh ledger, while changing a test, a field or a value does. Rules are applied when the
+  reports are written rather than asked of the model, so changing one re-asks nothing — as with
+  `raven-pdf2bib`'s conference options.
+
+Open:
+
+- **Where the file lives.** `--definition FILE`, defaulting to `<bib stem>.filter.toml` beside the `.bib`?
+- **A `remove` resting on a quoted field whose quote is not in the text.** The prototype's tier A was
+  trustworthy because every such call carried a quote that checked out. Proposed: such a removal becomes a
+  `hold` automatically, saying why.
+- **Whether `hints` earns its place**, or the cautions belong inside the tests they mostly concern.
 
 ## The final study's numbers
 
