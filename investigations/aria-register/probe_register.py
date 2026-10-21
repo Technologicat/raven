@@ -132,9 +132,9 @@ def build_replay(llm_settings: env, payloads: list[dict]) -> tuple[chattree.Fore
     return datastore, head
 
 
-def make_items(n_samples: int) -> list[tuple[str, dict]]:
+def make_items(n_samples: int, n_neutral_samples: int | None = None) -> list[tuple[str, dict]]:
     """`condition/prompt/sample`, sample-major, so an early stop leaves every cell with the same count
-    give or take one."""
+    give or take one. The neutral prompts stop at `n_neutral_samples`, when given."""
     prompts = ([(f"{name}-{short_hash(text)}", "elicitor", {"text": text}) for name, text in ELICITORS.items()] +
                [(f"{name}-{short_hash(node_id)}", "elicitor", {"replay": node_id}) for name, node_id in REPLAYS.items()] +
                [(f"{name}-{short_hash(text)}", "neutral", {"text": text}) for name, text in NEUTRAL.items()])
@@ -142,6 +142,8 @@ def make_items(n_samples: int) -> list[tuple[str, dict]]:
     for sample in range(n_samples):
         for condition in ("card_on", "card_off", "plain"):
             for prompt_id, kind, stimulus in prompts:
+                if kind == "neutral" and n_neutral_samples is not None and sample >= n_neutral_samples:
+                    continue
                 items.append((f"{condition}/{prompt_id}/{sample}",
                               {"condition": condition, "prompt": prompt_id, "kind": kind, **stimulus}))
     return items
@@ -150,6 +152,9 @@ def make_items(n_samples: int) -> list[tuple[str, dict]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--samples", type=int, default=5, help="replies per condition and prompt")
+    parser.add_argument("--neutral-samples", type=int, default=None, metavar="N",
+                        help="replies per condition for the neutral prompts, when fewer than --samples: the "
+                             "elicitors are where the rates are low enough to want more")
     parser.add_argument("--backend-url", default=None,
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--declare", default=None, metavar="TEXT",
@@ -194,7 +199,7 @@ def main() -> int:
                           "reasoning": list(record.reasoning),
                           "tool_calls": dict(record.tool_calls)}}, [record]
 
-    result = sweep.Sweep(llm_settings, ask_batch, make_items(opts.samples), ledger,
+    result = sweep.Sweep(llm_settings, ask_batch, make_items(opts.samples, opts.neutral_samples), ledger,
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
     if result.outcome is not sweep.completed:
         print(f"\nstopped ({result.outcome}): {result.message or 'cancelled'}\nrun again to resume")
