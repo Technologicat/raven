@@ -73,6 +73,30 @@ and the conclusion drawn from it is withdrawn.**
 - a certain directness, deliberately ignoring social conventions;
 - absurdist humour, played deadpan.
 
+From discussing the ratings (the maintainer, 2026-10-21):
+
+- **"Ah, a classic!" counts for nothing on its own.** It is an LLM-ism by now — possibly something RLAIF
+  rewards, which would explain the overuse.
+- **Technical wit stays in, but only where the tool genuinely fits.** An analogy that pastes programming
+  jargon onto a situation reads as inept IT humour. The kind that counts recognizes that an everyday
+  problem *is* the one a tool was designed for: to pick the juice carton with the earliest best-before
+  date, pay O(n log n) up front to keep the fridge sorted, and the pick is O(1) — trusting the reader to see
+  where the n log n comes from. That is a priority queue, once one looks over the wall between the domains.
+- **"If so, fail." qualifies as detached self-analysis, deadpanned** — the character analyzing its own
+  behaviour from outside and treating that as normal. Played straight it would not qualify, and which
+  reading the text supports is open.
+- **Fourth-wall directness counts**: "did you have any real work for me, or shall we continue testing?",
+  which Aria has said on a few occasions.
+- **The wit is named by examples rather than by definition** — a classifier trained on yes/no cases, likely
+  nonlinear. So the rubric describes three forms (directness, deadpan absurdism, technical wit), scores each
+  separately, rates the whole reply rather than a remark, and keeps its examples out of the blind sample so
+  that the sample can still test it.
+
+**Next** (decided 2026-10-21; runs in the evening, the GPU being in use by day): judge the blind sample alone
+with the three-form rubric (`judge_register.py <ledger> --blind-check blind-sample-7.md`, about 5 min), and
+only if it agrees with the hand ratings, judge all 150 and generate more elicitor samples — ten per prompt
+rather than five, about 50 min — since the conditions cannot be told apart at this rate otherwise.
+
 **The rate is low**: one to four in 30, so roughly 3–13% across conditions. At that rate 35 elicitor
 replies per condition cannot tell the conditions apart, and by the plan's power estimate telling 20% from 5%
 takes about 70.

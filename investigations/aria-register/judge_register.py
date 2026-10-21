@@ -1,24 +1,33 @@
 """Score the replies `probe_register.py` generated: does each one carry the voice?
 
-The hard part is telling shown from told, so the rubric is narrow and asks for parts rather than a
-verdict:
+The voice is easier to recognize than to name, so the rubric describes it by its features and by examples
+on either side of the line, and rates the reply as a whole:
 
-  - `remark`            is there something in the reply that answering did not require — a dry aside, a
-                        candid opinion nobody asked for, a light tease — as against the answer itself,
-                        including a correction the question invited
-  - `quote`             that remark, verbatim, so a positive is checkable at a glance
-  - `in_passing`        is it delivered in passing, rather than being the point of the reply
+  - `directness`        the reply deliberately sets aside a social convention an assistant would observe —
+                        says the awkward thing outright, questions the premise of the exchange itself,
+                        teases across the fourth wall
+  - `deadpan_absurd`    the reply commits to an absurd premise, answer or framing and plays it entirely
+                        straight, without signalling the joke
+  - `technical_wit`     the reply brings a technical tool to bear on an everyday problem it genuinely
+                        solves, so the joke is that it is the right tool; jargon pasted onto a situation
+                        for its own sake does not count
+  - `quotes`            for each feature present, the words that show it, verbatim
   - `self_description`  does the reply talk about its own personality, manner or style; counts against
 
-`voice` is `remark and in_passing and not self_description`. The judge sees the user's last message and the
-reply, and nothing about which condition produced it.
+`voice` is `(directness or deadpan_absurd or technical_wit) and not self_description`. Each feature is also
+reported on its own, so that a later step can see which part of the configuration drives which. The judge
+sees the user's last message and the reply, and nothing about which condition produced it.
 
 The judge is calibrated against the maintainer's ratings of a blind sample, since a rubric otherwise ends
 up fitted to the examples that motivated it. `--blind N` writes that sample instead of judging: N replies
-drawn at random across conditions, under opaque labels, with the key in a separate file.
+drawn at random across conditions, under opaque labels, with the key in a separate file. `--blind-check
+SAMPLE` then judges only that sample's replies and prints the judge against the ratings, which is the
+cheap test of a rubric before it is run over everything. The rubric's examples are therefore all from
+outside that sample.
 
 The run is a `raven.librarian.sweep` over the probe's ledger, so it resumes; the fingerprint covers the
-rubric, the sampler and the probe ledger it reads.
+rubric, the sampler and the probe ledger it reads. A blind check and a full run under one rubric share a
+ledger, so the full run asks only what the check did not.
 """
 
 import argparse
@@ -27,6 +36,7 @@ import json
 import logging
 import pathlib
 import random
+import re
 import sys
 
 from unpythonic.env import env
@@ -40,32 +50,40 @@ JUDGE_TEMPERATURE = 0.3
 
 RUBRIC = """\
 You are rating one reply from an AI assistant in a chat, for a study of conversational register. Do not \
-judge whether the reply is correct or helpful. Report what is in it.
+judge whether the reply is correct or helpful. Read the reply as a whole and report what it does.
 
-Answer four things:
+We are looking for a particular kind of wit. It has three forms, and a reply may show any of them, \
+anywhere in the reply - in one sentence or across the whole of it:
 
-"remark": true if the reply contains a remark that answering did not require: a dry or wry aside, a candid \
-opinion nobody asked for, a light tease of the user or of the situation, an unprompted critical observation. \
-The answer itself does not count, however it is phrased, and neither does a correction the user's message \
-invited - if the user states something false and the reply says it is false, that is the answer. A remark \
-is something extra, on top of the answer, and it carries an ATTITUDE toward the subject, the situation or \
-the user: dryness, irony, scepticism, a judgement. Extra INFORMATION is not a remark however unasked-for - \
-a practical consequence, a tip, a caveat, a rule of thumb, a performance note, stated neutrally. "This is \
-why pasta takes longer at altitude" is information; "it's just itemgetter with extra steps" is a remark. \
-Ordinary politeness, an offer of further help, or a clarifying question needed to answer do not count \
-either. false otherwise.
+"directness": the reply deliberately sets aside a social convention a polite assistant would observe. It \
+says the awkward thing outright, or questions the premise of the exchange itself, or teases across the \
+fourth wall. Example: after a run of test messages, "Did you have any real work for me, or shall we keep \
+testing?" A correction the user's message invited is NOT this - if the user states something false and \
+the reply says so, that is just the answer. Being concise or skipping pleasantries is not enough either.
 
-"quote": the remark, copied exactly from the reply, at most 200 characters. "" if "remark" is false.
+"deadpan_absurd": the reply commits to an absurd premise, answer or framing and plays it entirely straight, \
+as though it were perfectly normal, without winking. Treating a made-up or silly thing with full \
+seriousness counts; announcing that something is funny, or adding an emoji or "just kidding", does not.
 
-"in_passing": true if the remark is delivered in passing - a clause, an aside, a sentence - while the reply \
-gets on with something else. false if the remark is the main content of the reply, or if there is no remark.
+"technical_wit": the reply brings a technical tool to bear on an everyday problem that the tool genuinely \
+solves, so that the joke is that it really is the right tool. Example: to always grab the juice carton \
+with the earliest best-before date, pay O(n log n) once to keep the fridge sorted, and the pick becomes \
+O(1) - which is exactly the problem a priority queue exists for. Programming jargon pasted onto a \
+situation for its own sake does NOT count; that reads as inept IT humour.
 
-"self_description": true if the reply talks about its own personality, manner, tone or style - announces \
-that it is being blunt, candid, sassy, playful and so on, or describes what kind of assistant it is. \
-Describing what it can and cannot technically do does not count. false otherwise.
+None of these is: extra information, tips, caveats, rules of thumb; ordinary politeness; an offer of \
+further help; stock openers such as "Ah, a classic!" or "Great question!", which on their own count for \
+nothing.
 
-Answer with one JSON object and nothing else, no markdown fences:
-{{"remark": ..., "quote": "...", "in_passing": ..., "self_description": ...}}
+Also report "self_description": true if the reply talks about its own personality, manner, tone or style \
+- announces that it is being blunt, candid, sassy, playful and so on, or describes what kind of assistant \
+it is. Describing what it can and cannot technically do does not count.
+
+Answer with one JSON object and nothing else, no markdown fences. For each of the three forms, true or \
+false, and in "quotes" the words from the reply that show it, copied exactly, at most 200 characters, \
+or "" when it is false:
+{{"directness": ..., "deadpan_absurd": ..., "technical_wit": ..., \
+"quotes": {{"directness": "...", "deadpan_absurd": "...", "technical_wit": "..."}}, "self_description": ...}}
 
 The user's last message:
 <<<
@@ -77,6 +95,8 @@ The assistant's reply:
 {reply}
 >>>
 """
+
+FEATURES = ("directness", "deadpan_absurd", "technical_wit")
 
 
 def last_user_message(trace: dict) -> str:
@@ -105,13 +125,20 @@ def load_probe(path: pathlib.Path) -> tuple[dict[str, dict], dict[str, str]]:
 
 
 def normalize(answer: dict, reply: str) -> dict:
-    """One rating, with the quote checked against the reply. A quote that is not in the reply is kept, and
+    """One rating, with each quote checked against the reply. A quote that is not in the reply is kept, and
     flagged, since a judge paraphrasing is worth knowing about rather than worth hiding."""
-    out = {name: answer.get(name) is True for name in ("remark", "in_passing", "self_description")}
-    quote = str(answer.get("quote") or "").strip()
-    out["quote"] = quote[:200]
-    out["quote_found"] = bool(quote) and " ".join(quote.split()) in " ".join(reply.split())
-    out["voice"] = out["remark"] and out["in_passing"] and not out["self_description"]
+    out = {name: answer.get(name) is True for name in (*FEATURES, "self_description")}
+    quotes = answer.get("quotes") if isinstance(answer.get("quotes"), dict) else {}
+    flat_reply = " ".join(reply.split())
+    out["quotes"] = {}
+    out["quotes_missing"] = []
+    for name in FEATURES:
+        quote = str(quotes.get(name) or "").strip()[:200]
+        if out[name]:
+            out["quotes"][name] = quote
+            if not quote or " ".join(quote.split()) not in flat_reply:
+                out["quotes_missing"].append(name)
+    out["voice"] = any(out[name] for name in FEATURES) and not out["self_description"]
     return out
 
 
@@ -134,23 +161,56 @@ def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, 
     print(f"wrote {out_dir / f'blind-sample-{seed}.md'} and its key")
 
 
+def read_blind_ratings(sample_path: pathlib.Path) -> dict[str, tuple[str, str]]:
+    """The hand ratings in a filled-in blind sample, by item id: `(verdict, note)`, the verdict being
+    "yes", "no" or "unsure" — anything that does not open with yes or no counts as unsure."""
+    key = json.loads(sample_path.with_name(sample_path.name.replace("blind-sample-", "blind-key-")
+                                           .replace(".md", ".json")).read_text(encoding="utf-8"))
+    text = sample_path.read_text(encoding="utf-8")
+    out = {}
+    for match in re.finditer(r"^## (R\d+)\n(.*?)^\*Rating:\*[ \t]*(.*?)$", text, flags=re.S | re.M):
+        note = match.group(3).strip()
+        first = note.lower().split(maxsplit=1)[0].strip("!.,;:") if note else ""
+        out[key[match.group(1)]] = ({"yes": "yes", "no": "no"}.get(first, "unsure"), note)
+    return out
+
+
+def compare_with_blind(ratings: dict[str, dict],
+                       hand: dict[str, tuple[str, str]]) -> None:
+    """The judge against the hand ratings, one line per reply, and the confusion counts."""
+    counts = collections.Counter()
+    for item_id, (verdict, _note) in sorted(hand.items()):
+        rating = ratings.get(item_id)
+        if rating is None:
+            continue
+        counts[(verdict, rating["voice"])] += 1
+        found = ", ".join(f"{name}: {rating['quotes'][name][:60]!r}" for name in rating["quotes"])
+        print(f"  {verdict:<7}{'VOICE' if rating['voice'] else '.':<7}{item_id:<40}{found}")
+    print("\n  hand \\ judge   voice   not")
+    for verdict in ("yes", "unsure", "no"):
+        print(f"  {verdict:<14}{counts[(verdict, True)]:>6}{counts[(verdict, False)]:>6}")
+
+
 def summarize(answers: dict[str, dict], ratings: dict[str, dict]) -> None:
-    cells = collections.defaultdict(lambda: [0, 0])
+    cells = collections.defaultdict(lambda: collections.Counter())
     for item_id, rating in ratings.items():
         answer = answers[item_id]
         for key in ((answer["condition"], answer["kind"]), (answer["condition"], answer["prompt"])):
-            cells[key][0] += rating["voice"]
-            cells[key][1] += 1
+            cells[key]["n"] += 1
+            cells[key]["voice"] += rating["voice"]
+            for name in FEATURES:
+                cells[key][name] += rating[name]
+    print(f"\n{'':<30}{'voice':>12}  " + "".join(f"{name:>16}" for name in FEATURES))
     for condition in ("card_on", "card_off", "plain"):
         print(f"\n{condition}")
-        for (c, what), (hits, total) in sorted(cells.items()):
-            if c == condition and what in ("elicitor", "neutral"):
-                print(f"  {what:<28}{hits:>3} / {total:<3} {hits / total:5.0%}")
-        for (c, what), (hits, total) in sorted(cells.items()):
-            if c == condition and what not in ("elicitor", "neutral"):
-                print(f"    {what:<26}{hits:>3} / {total}")
+        keys = sorted(what for c, what in cells if c == condition)
+        for what in [k for k in keys if k in ("elicitor", "neutral")] + [k for k in keys if k not in ("elicitor", "neutral")]:
+            cell = cells[(condition, what)]
+            indent = "  " if what in ("elicitor", "neutral") else "    "
+            print(f"{indent}{what:<{28 - len(indent) + 2}}{cell['voice']:>5} / {cell['n']:<4}" +
+                  "".join(f"{cell[name]:>16}" for name in FEATURES))
     told = sum(r["self_description"] for r in ratings.values())
-    missing = sum(r["remark"] and not r["quote_found"] for r in ratings.values())
+    missing = sum(bool(r["quotes_missing"]) for r in ratings.values())
     print(f"\nself-description in {told} of {len(ratings)}; a quote not found in its reply in {missing}")
 
 
@@ -160,6 +220,9 @@ def main() -> int:
     parser.add_argument("--blind", type=int, default=None, metavar="N",
                         help="write a blind sample of N replies for rating by hand, instead of judging")
     parser.add_argument("--seed", type=int, default=7, help="which random sample --blind takes")
+    parser.add_argument("--blind-check", default=None, metavar="SAMPLE",
+                        help="judge only the replies in this filled-in blind sample, and compare the judge "
+                             "with the ratings in it; its key is read from beside it")
     parser.add_argument("--backend-url", default=None,
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--declare", default=None, metavar="TEXT",
@@ -195,13 +258,18 @@ def main() -> int:
             return {item_id: sweep.Failure("the judge's reply did not parse; it is in the traces")}, [record]
         return {item_id: normalize(rating, answer["reply"])}, [record]
 
-    result = sweep.Sweep(llm_settings, ask_batch, sorted(answers.items()), ledger,
+    hand = read_blind_ratings(pathlib.Path(opts.blind_check)) if opts.blind_check else None
+    items = sorted((item_id, answer) for item_id, answer in answers.items() if hand is None or item_id in hand)
+    result = sweep.Sweep(llm_settings, ask_batch, items, ledger,
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
     if result.outcome is not sweep.completed:
         print(f"\nstopped ({result.outcome}): {result.message or 'cancelled'}\nrun again to resume")
         return 1
-    ratings = ledger.answers()
-    summarize(answers, {item_id: rating for item_id, rating in ratings.items() if item_id in answers})
+    ratings = {item_id: rating for item_id, rating in ledger.answers().items() if item_id in answers}
+    if hand is not None:
+        compare_with_blind(ratings, hand)
+    else:
+        summarize(answers, ratings)
     print(f"\nwrote {ledger.path}")
     return 0
 
