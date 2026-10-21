@@ -194,6 +194,11 @@ learning describes what is done to a model; they count as education only when a 
 """
 
 # ---- The judge: one test per way of being off topic. True means positive evidence; silence keeps.
+#
+# For each record the judge answers every test true or false, and gives one confidence for the whole
+# record - high, medium or low - with a sentence saying why. A test's description may say what confidence
+# to give, as `not_education` does below. Only a true at high confidence drops a record; a true at medium
+# or low sends it to review.
 
 [[test]]
 name = "no_ai"
@@ -203,8 +208,8 @@ false when the work does not say what it used."""
 
 [[test]]
 name = "not_education"
-asks = """answered in two steps. FIRST: can you name what this work is about? If not, answer false and
-"low", and stop. SECOND: is that subject entirely outside education? ..."""
+asks = """answered in two steps. FIRST: can you name what this work is about? If not, answer false with
+low confidence, and stop. SECOND: is that subject entirely outside education? ..."""
 
 [[test]]
 name = "wrong_level"
@@ -212,11 +217,14 @@ asks = """true ONLY if the work is positively set at a level other than higher e
 when the work does not say what level it is set at."""
 
 # ---- The extractor: what a kept record says. Closed vocabularies, so the rules can act on them.
+#
+# Every closed vocabulary also has `not_stated`, added by the tool rather than listed here: the answer
+# when the record does not say. It is never quoted, there being nothing to quote.
 
 [[field]]
 name = "level"
 asks = "the educational level the work is set at"
-quote = true            # a value other than `not_stated` must quote the words that settle it
+quote = true            # any value but the implicit `not_stated` must quote the words that settle it
 [field.values]
 higher_education = "a university, college, polytechnic or their students and faculty - degree study"
 school = "primary or secondary schooling, K-12, pupils"
@@ -286,13 +294,19 @@ What the draft decides, each open to change:
   reports are written rather than asked of the model, so changing one re-asks nothing — as with
   `raven-pdf2bib`'s conference options.
 
+Settled on the draft (maintainer, 2026-10-21), besides agreeing the points above:
+
+- **Where the file lives: `--definition FILE`**, defaulting to `<bib stem>.filter.toml` beside the `.bib`.
+  Good for v1.
+- **A `remove` resting on a quoted field whose quote is not in the text becomes a `hold`**, saying why. The
+  prototype's tier A was trustworthy because every such call carried a quote that checked out.
+- **`hints` stays**: it is the one way to give an instruction that holds across several tests.
+
 Open:
 
-- **Where the file lives.** `--definition FILE`, defaulting to `<bib stem>.filter.toml` beside the `.bib`?
-- **A `remove` resting on a quoted field whose quote is not in the text.** The prototype's tier A was
-  trustworthy because every such call carried a quote that checked out. Proposed: such a removal becomes a
-  `hold` automatically, saying why.
-- **Whether `hints` earns its place**, or the cautions belong inside the tests they mostly concern.
+- **How general the tool's frame is.** The frame above is bibliographic, and its wording assumes
+  a record of published work — a title, an abstract, *the venue*, *the work* as the thing being judged. That is Raven's main use, but not the
+  only kind of corpus a literature search returns (maintainer, 2026-10-21).
 
 ## The final study's numbers
 
