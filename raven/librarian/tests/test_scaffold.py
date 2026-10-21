@@ -30,7 +30,8 @@ def make_invoke_result(content="Hello from the LLM.",
                        phases=None,
                        interrupted=False,
                        finish_reason="stop",
-                       max_tokens=None):
+                       max_tokens=None,
+                       max_tokens_configured=True):
     """Build a fake return value for `llmclient.invoke` — the shape scaffold reads.
 
     `phases`: the phase report (see `llmclient.phase_report`). The default `None` is what `invoke` returns
@@ -38,7 +39,7 @@ def make_invoke_result(content="Hello from the LLM.",
 
     `finish_reason`: what the backend said ended the generation; `"length"` is the token cap.
 
-    `max_tokens`: the cap the request was sent with.
+    `max_tokens`: the cap the request was sent with; `max_tokens_configured`, whether it was the configured one.
     """
     return env(data={"role": "assistant",
                      "content": chatutil.normalize_content(content),  # content-parts list, as invoke returns
@@ -49,7 +50,8 @@ def make_invoke_result(content="Hello from the LLM.",
                phases=phases,
                interrupted=interrupted,
                finish_reason=finish_reason,
-               max_tokens=max_tokens)
+               max_tokens=max_tokens,
+               max_tokens_configured=max_tokens_configured)
 
 
 def make_tool_response(content="tool result",
@@ -415,9 +417,26 @@ class TestAITurnSimple:
         if stored:
             assert meta["truncated"] is True
             assert meta["max_tokens"] == 6400, "the cap it hit, as the request was sent"
+            assert meta["max_tokens_configured"] is True
         else:
             assert "truncated" not in meta
             assert "max_tokens" not in meta
+
+    def test_a_cap_a_script_set_is_not_recorded_as_the_configured_one(self, monkeypatch, llm_settings,
+                                                                      populated_forest):
+        """The chat log names the setting only for a configured cap; naming it for a script's cap would be
+        wrong, and a note that is sometimes wrong gets skipped."""
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="The answer is", finish_reason="length",
+                                                            max_tokens=24, max_tokens_configured=False))
+        meta = forest.get_payload(run_ai_turn(forest, llm_settings, user_head))["generation_metadata"]
+        assert meta["truncated"] is True and meta["max_tokens"] == 24
+        assert "max_tokens_configured" not in meta
 
     def test_an_abandoned_turn_leaves_the_branch_as_it_found_it(self, monkeypatch, llm_settings, populated_forest):
         """Cancelling before the backend answers must cost nothing that was already on the branch.

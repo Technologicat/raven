@@ -1043,7 +1043,8 @@ def ai_turn(llm_settings: env,
             thinking_enabled: bool = True,
             maybe_abort: netutil.Abort | None = None,
             use_character_card: bool = True,
-            write_docs_query: bool = False) -> str:
+            write_docs_query: bool = False,
+            max_tokens: int | None = None) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -1295,6 +1296,9 @@ def ai_turn(llm_settings: env,
 
                    `None` (default) means the turn runs to completion once started.
 
+    `max_tokens`: A cap on each model call's reply, in tokens, in place of the configured one
+                  (`llm_sampler_config["max_tokens"]`). `None` (default) keeps the configured cap.
+
     `write_docs_query`: Whether the model writes the automatic search's query from `docs_query` and the
                         conversation, in one short request with thinking off before the reply; see
                         `on_docs_query` for what can come of it. `False` (default) searches with
@@ -1477,6 +1481,7 @@ def ai_turn(llm_settings: env,
                                    continue_=continue_this_message,
                                    datastore=datastore,  # resolve any sidecar: image refs to data: URLs on the wire
                                    maybe_abort=maybe_abort,
+                                   max_tokens=max_tokens,
                                    on_partial_message=(store_partial if not continue_this_message else None))
         except netutil.Aborted:
             # Not a backend failure: the user asked for this turn to stop. Re-raised ahead of the catch
@@ -1566,11 +1571,14 @@ def ai_turn(llm_settings: env,
                 payload["generation_metadata"]["interrupted"] = True
             # Same reasoning, for the other way a reply ends before the model is done with it: the backend's
             # token cap. Only true is stored, for the same reason, and with it the cap the request was sent
-            # with, since the setting can change afterwards and a script may have overridden it.
+            # with, and whether that was the configured one: the setting can change afterwards, and a
+            # script's own cap is not one a setting would change.
             if out.finish_reason == "length":
                 payload["generation_metadata"]["truncated"] = True
                 if out.max_tokens is not None:
                     payload["generation_metadata"]["max_tokens"] = out.max_tokens
+                if out.max_tokens_configured:
+                    payload["generation_metadata"]["max_tokens_configured"] = True
             # Absent when there is nothing to say about the phases, which is what "the model did not think"
             # and "it generated no text at all" both look like from here. A reader tests for the key rather
             # than for a zero, so an old node from before this was recorded reads the same as a reply that

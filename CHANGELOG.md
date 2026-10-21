@@ -33,8 +33,10 @@
   - The context-fill readout now counts the thinking that is sent. It used to count none.
   - Set it to match your model's chat template, which neither *Librarian* nor the backend can see; the README's *Thinking* toggle says how to tell.
   - Left on for a model whose template drops earlier thinking, it is usually noticed from the prompt size the backend reports: the readout then takes the backend's figure, and the log says to turn the setting off.
-- **A reply cut off at the token limit says so**, under the reply, with the limit it hit and the setting that sets it: *[Cut off — the reply reached the token limit of 6400 (llm_sampler_config.max_tokens)]*. It used to look finished. Unset, the limit is the model's context length.
-  - For scripts, `agent.TurnRecord.truncated` says the same, and `agent.ask_until` does not accept such a reply, however its text reads.
+- **A reply cut off at the token limit says so**, under the reply, with the limit it reached: *[Cut off — the reply reached the token limit of 6400, set by llm_sampler_config.max_tokens in raven.librarian.config]*. It used to look finished.
+  - The setting is named only when it is the one that applied; a limit a script chose is shown without it.
+  - Unset, the limit is the model's context length. The README's *Configuration* says how to set it.
+  - For scripts, `agent.TurnRecord.truncated` says the same, `agent.ask_until` does not accept such a reply however its text reads, and `agent.turn` takes a `max_tokens` of its own.
 
 #### Raven-deduplicate
 

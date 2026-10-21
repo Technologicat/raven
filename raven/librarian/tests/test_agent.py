@@ -648,7 +648,9 @@ class TestAsk:
         sent = []
 
         def fake_invoke(**kw):
-            sent.append(kw["settings"].request_data.get("max_tokens"))
+            # What `invoke` would send: its own `max_tokens` argument, else what the settings carry.
+            sent.append(kw["max_tokens"] if kw.get("max_tokens") is not None
+                        else kw["settings"].request_data.get("max_tokens"))
             return make_invoke_result(content="ok")
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
 

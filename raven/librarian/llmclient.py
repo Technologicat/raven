@@ -504,6 +504,12 @@ def setup(backend_url: str,
 
         `request_data: dict[str, Any]`: Generation settings for the LLM backend.
 
+        `configured_max_tokens: int`: The token cap the configuration gives a reply:
+                                      `llm_sampler_config["max_tokens"]` in `raven.librarian.config`, or the
+                                      context length when that is unset. `request_data` starts with it;
+                                      this keeps it for comparison, so `invoke` can tell a reply that hit
+                                      the configured cap from one that hit a script's own.
+
         `personas: dict[str, str | None]`: Persona (character name) for each of the roles (dict keys) "user", "assistant", "system", and "tool".
                                               Used for constructing chat messages (see `raven.librarian.chatutil.create_chat_message`).
 
@@ -1026,6 +1032,7 @@ def configure(model_info: env,
                    network_tool_names=NETWORK_TOOL_NAMES,  # subset of `TOOLS` gated on the "Internet" switch
                    backend_url=backend_url,
                    request_data=request_data,
+                   configured_max_tokens=request_data["max_tokens"],  # the cap the configuration gives; see `invoke`'s `max_tokens_configured`
                    personas=personas,
                    formatters=chatutil.default_formatters())  # per-run overridable; see its docstring
 
@@ -2401,6 +2408,9 @@ def invoke(settings: env,
         `max_tokens: int | None`: The token cap this request was sent with — the configured one
                                   (`llm_sampler_config["max_tokens"]`, or the context length when that is
                                   unset), or this call's `max_tokens` override. The cap a `"length"` reply hit.
+        `max_tokens_configured: bool`: Whether that cap is the configured one, so that changing the setting
+                                       would change it — as against a per-call override, or a script's own
+                                       write to `request_data`.
     """
     # Every log line below names this call's purpose as well as this function, so that a prefill and a real
     # turn can be told apart in a log — they are otherwise identical from here down.
@@ -2816,7 +2826,12 @@ def invoke(settings: env,
                phases=phases,
                interrupted=interrupted,
                finish_reason=finish_reason,
-               max_tokens=data.get("max_tokens"))
+               max_tokens=data.get("max_tokens"),
+               # Only when nothing replaced the configured cap for this call: neither a `max_tokens` argument
+               # nor a script writing `request_data` directly, which some do. Then the setting is the one a
+               # user would change.
+               max_tokens_configured=(max_tokens is None and
+                                      data.get("max_tokens") == settings.get("configured_max_tokens")))
 
 # How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of
 # the *whole* prompt. Measured 2026-08-24 (`investigations/prompt-size-cache-relative/`): on a prompt whose

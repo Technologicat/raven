@@ -305,7 +305,8 @@ def turn(llm_settings: env,
          docs_num_results: int | None = None,
          continue_: bool = False,
          markup: str | None = None,
-         maybe_abort: netutil.Abort | None = None) -> TurnRecord:
+         maybe_abort: netutil.Abort | None = None,
+         max_tokens: int | None = None) -> TurnRecord:
     """Run one assistant turn — the full agent loop — and return what it did.
 
     The one-liner form starts a fresh conversation in a throwaway in-memory datastore:
@@ -495,6 +496,10 @@ def turn(llm_settings: env,
     `markup`: How to mark thought blocks in the stored reply text: `"ansi"`, `"markdown"`, or `None` to
               keep them as they arrived. `None` is what a script wants.
 
+    `max_tokens`: A cap on each model call's reply, in tokens, in place of the configured one. `None`
+                  (default) keeps the configured cap — the whole context window, unless the configuration
+                  sets one — which for an unattended batch is no cap at all; `ask` passes one.
+
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if the turn should be abandonable from another
                    thread. Firing it raises `netutil.Aborted` out of this call promptly, including while the
                    backend is still reading the prompt, which an `on_progress` answering `action_stop`
@@ -568,6 +573,7 @@ def turn(llm_settings: env,
                                      docs_num_results=docs_num_results,
                                      markup=markup,
                                      maybe_abort=maybe_abort,
+                                     max_tokens=max_tokens,
                                      on_docs_start=None, on_docs_progress=None, on_docs_query=None, on_docs_done=None,
                                      on_prompt_ready=prompts.append,
                                      on_llm_start=None, on_llm_progress=on_progress, on_llm_done=None,
@@ -655,8 +661,8 @@ def ask_record(llm_settings: env, prompt: str,
                on_progress: Callable | None = None) -> TurnRecord:
     """`ask`, but handing back the whole record rather than only the reply text.
 
-    Arguments and failure behaviour are `ask`'s, which see — the cap on the reply and the `RuntimeError`
-    on a backend that did not generate are the two things a batch run needs and `turn` does not provide.
+    Arguments and failure behaviour are `ask`'s, which see — a cap on the reply by default, and the
+    `RuntimeError` on a backend that did not generate, are what a batch run needs and `turn` does not give.
 
     Use this where the reasoning trace is worth **storing**, which for an unattended batch is whenever a
     verdict may later have to be explained. A trace at DEBUG is only useful to somebody who set the log
@@ -667,35 +673,22 @@ def ask_record(llm_settings: env, prompt: str,
     reply, and the reply covers every item in that call. So a caller storing traces should record which
     records shared a call.
     """
-    # `request_data` is what `invoke` deep-copies per call, so the cap has to go through it — and be put
-    # back, since the object belongs to the caller and outlives this function. Not safe against two
-    # threads sharing one `llm_settings`; per-run configuration living on that object is the documented
-    # arrangement (see `turn`), and two runs wanting different caps want two of them.
-    previous = llm_settings.request_data.get("max_tokens")
-    if max_tokens is not None:
-        llm_settings.request_data["max_tokens"] = max_tokens
-    try:
-        # The whole point of this wrapper, and the reason it exists rather than being five keyword
-        # arguments at each call site: `ai_turn` materializes a backend failure as an assistant message,
-        # so `turn` hands back a record whose `reply` reads like an answer and is not one. A frontend
-        # wants that — the user sees the failure and can reroll it. An unattended batch wants the
-        # opposite, because the fabricated text parses as badly as it reads and does so ten thousand
-        # times without anyone watching.
-        record = turn(llm_settings,
-                      prompt,
-                      use_character_card=False,
-                      tools_enabled=False,
-                      internet_enabled=False,
-                      docs_enabled=False,
-                      markup=None,
-                      on_progress=on_progress,
-                      maybe_abort=maybe_abort)
-    finally:
-        if max_tokens is not None:
-            if previous is None:
-                llm_settings.request_data.pop("max_tokens", None)
-            else:
-                llm_settings.request_data["max_tokens"] = previous
+    # The whole point of this wrapper, and the reason it exists rather than being five keyword
+    # arguments at each call site: `ai_turn` materializes a backend failure as an assistant message,
+    # so `turn` hands back a record whose `reply` reads like an answer and is not one. A frontend
+    # wants that — the user sees the failure and can reroll it. An unattended batch wants the
+    # opposite, because the fabricated text parses as badly as it reads and does so ten thousand
+    # times without anyone watching.
+    record = turn(llm_settings,
+                  prompt,
+                  use_character_card=False,
+                  tools_enabled=False,
+                  internet_enabled=False,
+                  docs_enabled=False,
+                  markup=None,
+                  on_progress=on_progress,
+                  maybe_abort=maybe_abort,
+                  max_tokens=max_tokens)
 
     for reasoning in record.reasoning:
         logger.debug(f"ask_record: reasoning trace ({len(reasoning)} characters):\n{reasoning}")

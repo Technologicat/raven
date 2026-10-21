@@ -1157,6 +1157,21 @@ As explained in the main README, configuration is currently fed in as several Py
     - Note that this is a very light form of authentication that only requires providing a shared secret (the API key). The API key is transmitted in plain text.
     - Importantly, the `--secure` mode does **not** encrypt the connection.
 
+## How long a reply may be
+
+- The token limit on one reply: `llm_sampler_config["max_tokens"]` in [`raven.librarian.config`](config.py)
+  - Unset by default, which means no limit of its own: a reply may run until the model's context window is full.
+  - A reply that reaches the limit is cut off there, and says so under the reply, with the limit it reached. **Continue** on the message picks up where it stopped.
+  - To set it in `~/.config/raven/overrides.json` (see the main README), name the entry with a dotted name under the module:
+
+    ```json
+    {
+        "raven.librarian.config": {
+            "llm_sampler_config.max_tokens": 6400
+        }
+    }
+    ```
+
 ## Voice mode
 
 The AI's voice is configured in the AI avatar configuration.

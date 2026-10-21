@@ -305,11 +305,16 @@ def incompleteness_note(generation_metadata: dict) -> str | None:
     if generation_metadata.get("interrupted"):
         return "[Interrupted — the reply was stopped here]"
     if generation_metadata.get("truncated"):
-        # The setting's name is the spelling `overrides.json` takes. Unset, the limit is the context length,
-        # so the number shown can be the whole window; the setting is still the one to look at.
-        if (max_tokens := generation_metadata.get("max_tokens")) is not None:
-            return f"[Cut off — the reply reached the token limit of {max_tokens} (llm_sampler_config.max_tokens)]"
-        return "[Cut off — the reply reached the token limit]"
+        # The setting is named only when it is the one that applied, since a note that names the wrong
+        # setting teaches the reader to skip the note. Named as `overrides.json` takes it: the key under
+        # its module. Unset, the limit is the context length, so the number can be the whole window.
+        max_tokens = generation_metadata.get("max_tokens")
+        if max_tokens is None:
+            return "[Cut off — the reply reached the token limit]"
+        if generation_metadata.get("max_tokens_configured"):
+            return (f"[Cut off — the reply reached the token limit of {max_tokens}, "
+                    "set by llm_sampler_config.max_tokens in raven.librarian.config]")
+        return f"[Cut off — the reply reached the token limit of {max_tokens}]"
     if generation_metadata.get("status") == "incomplete":
         # Only reachable from disk: a live turn cannot outlive the process, so a node still marked this way
         # when the datastore is read back was cut off by the app going away rather than by the user.

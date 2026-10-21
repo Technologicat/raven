@@ -1166,6 +1166,19 @@ class TestInvokeStreamRobustness:
         _fake_stream(monkeypatch, [{"choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": "length"}]}])
         assert llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, max_tokens=1).max_tokens == 1
 
+    @pytest.mark.parametrize("how, configured", [("configured", True), ("argument", False), ("written", False)])
+    def test_whether_the_cap_is_the_configured_one(self, monkeypatch, invoke_settings, how, configured):
+        """Only the configured cap is one a setting would change; a per-call argument and a script's own
+        write to `request_data` are not."""
+        invoke_settings.request_data["max_tokens"] = invoke_settings.configured_max_tokens = 6400
+        if how == "written":
+            invoke_settings.request_data["max_tokens"] = 24
+        _fake_stream(monkeypatch, [{"choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": "length"}]}])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                               max_tokens=(24 if how == "argument" else None))
+        assert out.max_tokens == (6400 if how == "configured" else 24)
+        assert out.max_tokens_configured is configured
+
     def test_a_finished_reply_says_stop(self, monkeypatch, invoke_settings):
         _fake_stream(monkeypatch, [
             {"choices": [{"delta": {"content": "Done."}}]},
