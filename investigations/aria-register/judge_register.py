@@ -5,7 +5,7 @@ on either side of the line, and rates the reply as a whole:
 
   - `directness`        the reply deliberately sets aside a social convention an assistant would observe —
                         says the awkward thing outright, questions the premise of the exchange itself,
-                        teases across the fourth wall
+                        teases across the fourth wall, lets it show that the user is being unreasonable
   - `deadpan_absurd`    the reply commits to an absurd premise, answer or framing and plays it entirely
                         straight, without signalling the joke
   - `technical_wit`     the reply brings a technical tool to bear on an everyday problem it genuinely
@@ -13,8 +13,11 @@ on either side of the line, and rates the reply as a whole:
                         for its own sake does not count
   - `quotes`            for each feature present, the words that show it, verbatim
   - `self_description`  does the reply talk about its own personality, manner or style; counts against
+  - `confrontational`   does the reply insult the user or pick a fight; counts against
 
-`voice` is `(directness or deadpan_absurd or technical_wit) and not self_description`. Each feature is also
+The target is a band rather than a maximum: an edge a reader notices as an undercurrent, not one that
+offends. So `voice` is `(directness or deadpan_absurd or technical_wit) and not (self_description or
+confrontational)`, and a condition that pushes the replies past the band shows up in `confrontational`. Each feature is also
 reported on its own, so that a later step can see which part of the configuration drives which. The judge
 sees the user's last message and the reply, and nothing about which condition produced it.
 
@@ -57,8 +60,10 @@ anywhere in the reply - in one sentence or across the whole of it:
 
 "directness": the reply deliberately sets aside a social convention a polite assistant would observe. It \
 says the awkward thing outright, or questions the premise of the exchange itself, or teases across the \
-fourth wall. Example: after a run of test messages, "Did you have any real work for me, or shall we keep \
-testing?" A correction the user's message invited is NOT this - if the user states something false and \
+fourth wall, or lets it show - without saying so outright - that the user is being unreasonable or silly. \
+Example: after a run of test messages, "Did you have any real work for me, or shall we keep testing?" \
+The edge should be an undercurrent a reader may notice, not an attack: see "confrontational" below. \
+A correction the user's message invited is NOT this - if the user states something false and \
 the reply says so, that is just the answer. Being concise or skipping pleasantries is not enough either.
 
 "deadpan_absurd": the reply commits to an absurd premise, answer or framing and plays it entirely straight, \
@@ -79,11 +84,15 @@ Also report "self_description": true if the reply talks about its own personalit
 - announces that it is being blunt, candid, sassy, playful and so on, or describes what kind of assistant \
 it is. Describing what it can and cannot technically do does not count.
 
+And "confrontational": true if the reply insults the user, calls them stupid, lectures them, or is \
+combative for its own sake - an edge that would actually offend, as against one a reader has to notice.
+
 Answer with one JSON object and nothing else, no markdown fences. For each of the three forms, true or \
 false, and in "quotes" the words from the reply that show it, copied exactly, at most 200 characters, \
 or "" when it is false:
 {{"directness": ..., "deadpan_absurd": ..., "technical_wit": ..., \
-"quotes": {{"directness": "...", "deadpan_absurd": "...", "technical_wit": "..."}}, "self_description": ...}}
+"quotes": {{"directness": "...", "deadpan_absurd": "...", "technical_wit": "..."}}, "self_description": ..., \
+"confrontational": ...}}
 
 The user's last message:
 <<<
@@ -127,7 +136,7 @@ def load_probe(path: pathlib.Path) -> tuple[dict[str, dict], dict[str, str]]:
 def normalize(answer: dict, reply: str) -> dict:
     """One rating, with each quote checked against the reply. A quote that is not in the reply is kept, and
     flagged, since a judge paraphrasing is worth knowing about rather than worth hiding."""
-    out = {name: answer.get(name) is True for name in (*FEATURES, "self_description")}
+    out = {name: answer.get(name) is True for name in (*FEATURES, "self_description", "confrontational")}
     quotes = answer.get("quotes") if isinstance(answer.get("quotes"), dict) else {}
     flat_reply = " ".join(reply.split())
     out["quotes"] = {}
@@ -138,7 +147,7 @@ def normalize(answer: dict, reply: str) -> dict:
             out["quotes"][name] = quote
             if not quote or " ".join(quote.split()) not in flat_reply:
                 out["quotes_missing"].append(name)
-    out["voice"] = any(out[name] for name in FEATURES) and not out["self_description"]
+    out["voice"] = any(out[name] for name in FEATURES) and not (out["self_description"] or out["confrontational"])
     return out
 
 
@@ -211,7 +220,9 @@ def summarize(answers: dict[str, dict], ratings: dict[str, dict]) -> None:
                   "".join(f"{cell[name]:>16}" for name in FEATURES))
     told = sum(r["self_description"] for r in ratings.values())
     missing = sum(bool(r["quotes_missing"]) for r in ratings.values())
-    print(f"\nself-description in {told} of {len(ratings)}; a quote not found in its reply in {missing}")
+    fights = sum(r["confrontational"] for r in ratings.values())
+    print(f"\nself-description in {told} of {len(ratings)}, confrontational in {fights}; "
+          f"a quote not found in its reply in {missing}")
 
 
 def main() -> int:

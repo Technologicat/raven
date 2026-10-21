@@ -92,9 +92,28 @@ From discussing the ratings (the maintainer, 2026-10-21):
   separately, rates the whole reply rather than a remark, and keeps its examples out of the blind sample so
   that the sample can still test it.
 
+- **The target is a band, not a maximum.** Directness includes letting it show that the user is being
+  unreasonable or silly, and the tsundere type has that sharp edge. Aria should have *some* of it: enough
+  that a reader who interprets may notice an undercurrent, never enough to offend or to be confrontational
+  for its own sake. So the rubric also flags `confrontational`, which counts against, and a condition that
+  overshoots the band fails as one that undershoots it does.
+- **It is the prompting, not the model.** Qwen does this naturally under the maintainer's chat
+  configuration and not when running as a Pi agent.
+- **Why the mechanism matters even though only the output is measurable** (the maintainer's point). It may
+  be that the model needs a certain attitude — functionally, in its activations — to produce those phrasings
+  at all, or to raise them to a rate a reader would see. If so, a prompt has to induce the stance; listing
+  phrasings for it would not reach it. That is the hypothesis's own distinction between register and trait,
+  seen from inside the model. The thinking traces are where a stance would be visible, if anywhere: under
+  `card_on`, the `creative` turn planned its reply as "tight, witty, peer-to-peer".
+- **A second judge: Gemma 4** (`gemma4-31b` on the backend). The task is closer to literary analysis than to
+  the technical work Qwen is strongest at, and a judge from another family is less likely to share the
+  generator's blind spot for its own deadpan. Whether the capabilities correlate is not something to assume
+  — a differently shaped mind looks jagged from outside, so generalizing from one shape to another is the
+  invalid step — which is why the blind sample decides rather than either judge's reputation.
+
 **Next** (decided 2026-10-21; runs in the evening, the GPU being in use by day): judge the blind sample alone
-with the three-form rubric (`judge_register.py <ledger> --blind-check blind-sample-7.md`, about 5 min), and
-only if it agrees with the hand ratings, judge all 150 and generate more elicitor samples — ten per prompt
+with the three-form rubric, under Qwen and under Gemma 4 31B (`judge_register.py <ledger> --blind-check blind-sample-7.md`, about 5 min each), and
+only if one of them agrees with the hand ratings, judge all 150 with that one and generate more elicitor samples — ten per prompt
 rather than five, about 50 min — since the conditions cannot be told apart at this rate otherwise.
 
 **The rate is low**: one to four in 30, so roughly 3–13% across conditions. At that rate 35 elicitor
