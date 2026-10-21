@@ -137,9 +137,20 @@ Stance-talk in the reasoning is how thinking models work and does not count agai
 disqualify only by reaching the reply itself, which `self_description` already catches — and the judge is
 shown the reply alone.
 
-**The within-chat test, as first proposed, cannot discriminate**: does the voice in one turn predict it
-in the next? The model carries nothing between turns except the text, so a correlation there is the second
-turn reading the first, and cannot tell a stance from imitation of the previous reply.
+**The within-chat test** — does the voice in one turn predict it in the next? A first objection was that the
+model carries nothing between turns except the text, so a correlation would be the second turn imitating
+the first. The maintainer's answer (2026-10-21): an LLM is offline between inference steps, and loading a
+context sets up the *same* activations whatever produced the text, so for the model there is no difference
+between a stance and re-reading one. The exception is truesight — models are very sensitive to the
+distribution a text came from, and notice when their own words have been edited (Janus's base GPT-3,
+stopped, given a few inserted words and continued, answered almost at once "Dear reader, what are *you*
+doing here?").
+
+So what the test measures is whether the voice sustains itself through the history, which matters for long
+chats. A variant that separates the history from the configuration: splice a voiced `card_on` reply, the
+model's own text from the same model, into a `card_off` chat, and see whether the voice carries on without
+the card. Not yet designed in detail; it needs voiced replies picked by a judge that agrees with the hand
+ratings first.
 
 **Next** (decided 2026-10-21; runs in the evening, the GPU being in use by day): judge the blind sample alone
 with the three-form rubric, under Qwen and under Gemma 4 31B (`judge_register.py <ledger> --blind-check blind-sample-7.md`, about 5 min each), and
