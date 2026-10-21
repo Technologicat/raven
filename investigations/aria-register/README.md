@@ -258,7 +258,19 @@ apply:
   report". Which line suppresses the emoji is not established, and it need not be the card at all: the
   maintainer has seen the more humanlike writing in LM Studio with the user card alone as the system
   prompt. A fainter recollection, from SillyTavern testing of earlier models, is that Aria's card did it
-  too. Step 1's `card_off` and `plain` replies are the material to check that against.
+  too. Step 1's replies, counted (2026-10-21, all 255):
+
+  | condition | emoji | a bulleted or numbered list | headings | mean length |
+  |---|---|---|---|---|
+  | `card_on` | 0 / 85 | 31 (36%) | 1 | 705 characters |
+  | `card_off` | 5 / 85 | 46 (54%) | 6 | 685 |
+  | `plain` | 0 / 85 | 39 (46%) | 6 | 658 |
+
+  The emoji are all on one prompt, the shoelace question (😄 and 🙂). So **Aria's card without the user
+  card is the only condition that drew any**, and the one with the most lists, while the user card gives the
+  fewest lists and headings. A blank system prompt is not among the conditions — `plain` still has a
+  one-line card, the greeting and the per-turn postamble — so the maintainer's observation that a blank one
+  draws the emoji is not tested here.
 
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
