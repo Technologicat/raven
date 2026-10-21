@@ -111,6 +111,36 @@ From discussing the ratings (the maintainer, 2026-10-21):
   — a differently shaped mind looks jagged from outside, so generalizing from one shape to another is the
   invalid step — which is why the blind sample decides rather than either judge's reputation.
 
+### What the thinking was doing (2026-10-21, a first look)
+
+The reasoning behind the four hand-rated replies that were not a no, and three `card_on` no's. Seven
+traces, so a reading rather than a measurement — the same comparison over every reply waits for a judge
+that agrees with the hand ratings.
+
+- **The one yes was not deadpan from the inside.** The `plain` shoelace reply that answered "tie them with
+  your feet" came from a trace calling that "the standard riddle answer": the model believed it. It reads
+  as absurdism played straight because it *was* played straight, with no stance behind it — the "lucky
+  literal phrasing" case.
+- **The technical-analogy no was the user card followed as a recipe.** Its trace quotes the card's tone
+  paragraph back as a checklist — "No setup/punchline padding. Treat definitions/equations/code as the
+  vehicle for the joke" — and picks its analogy to suit the profile: "Juha would appreciate (closures!
+  indirection!)". That is the performed trait the hypothesis warns about, produced by the very paragraph
+  suspected of producing the voice.
+- **The two unsure `creative` replies reasoned about the joke's mechanism** — "the humor should come from
+  the mismatch between the grandeur of a formal unit and the triviality of what it measures … deadpan,
+  technical, with the joke in the definition". Constructed, in other words, and the result was borderline.
+- **The borderline "If so, fail." came from a sincere stance**: the trace is about epistemic honesty ("I
+  should be direct and not play along with a false sense of continuity … Juha values that"), with nothing
+  in it planning a joke.
+
+Stance-talk in the reasoning is how thinking models work and does not count against a reply; it would
+disqualify only by reaching the reply itself, which `self_description` already catches — and the judge is
+shown the reply alone.
+
+**The within-chat test, as first proposed, cannot discriminate**: does the voice in one turn predict it
+in the next? The model carries nothing between turns except the text, so a correlation there is the second
+turn reading the first, and cannot tell a stance from imitation of the previous reply.
+
 **Next** (decided 2026-10-21; runs in the evening, the GPU being in use by day): judge the blind sample alone
 with the three-form rubric, under Qwen and under Gemma 4 31B (`judge_register.py <ledger> --blind-check blind-sample-7.md`, about 5 min each), and
 only if one of them agrees with the hand ratings, judge all 150 with that one and generate more elicitor samples — ten per prompt
