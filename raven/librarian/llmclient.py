@@ -2393,6 +2393,11 @@ def invoke(settings: env,
                                   for a tool).
         `interrupted: bool`: Whether the invocation was interrupted by the `on_progress` callback.
                              This is provided for convenience.
+        `finish_reason: str | None`: Why the backend ended the generation, as it reported it — `"stop"`,
+                                     `"tool_calls"`, or **`"length"` for a reply cut off at the token
+                                     cap** (`max_tokens`), which otherwise looks exactly like a finished
+                                     one. `None` when the stream ended without saying, which an interrupted
+                                     invocation always does.
     """
     # Every log line below names this call's purpose as well as this function, so that a prefill and a real
     # turn can be told apart in a log — they are otherwise identical from here down.
@@ -2529,6 +2534,7 @@ def invoke(settings: env,
     stopped = False  # whether one of the stop strings triggered
     interrupted = False  # whether the progress callback interrupted generation
     usage = None  # token usage stats, once the backend reports them (final chunk)
+    finish_reason = None  # why the backend ended the generation, once it says (final chunk)
     stop = []  # which stopping strings matched at the break point (assigned inside the loop)
 
     # Phase boundaries within this call, for `phase_report` below. Sampled off `perf_counter` because that
@@ -2649,8 +2655,11 @@ def invoke(settings: env,
                     continue
                 if payload.get("usage"):
                     usage = payload["usage"]
+                # Arrives on the last chunk carrying `choices`, beside an empty delta.
+                if payload["choices"][0].get("finish_reason"):
+                    finish_reason = payload["choices"][0]["finish_reason"]
 
-                delta = payload["choices"][0]["delta"]
+                delta = payload["choices"][0].get("delta") or {}
                 # `or ""` coerces {absent, null, ""} all to "": standard OpenAI streaming sends `content: null`
                 # (and `reasoning_content: null`) on the role-priming first delta and on tool-call deltas, and a
                 # plain `.get(..., "")` returns `None` for the present-but-null case, which would crash the parser.
@@ -2802,7 +2811,8 @@ def invoke(settings: env,
                usage=usage,
                dt=tim.dt,
                phases=phases,
-               interrupted=interrupted)
+               interrupted=interrupted,
+               finish_reason=finish_reason)
 
 # How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of
 # the *whole* prompt. Measured 2026-08-24 (`investigations/prompt-size-cache-relative/`): on a prompt whose

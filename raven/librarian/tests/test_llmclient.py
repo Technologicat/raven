@@ -1146,6 +1146,38 @@ class TestInvokeStreamRobustness:
         assert out.usage["prompt_tokens"] == 10
         assert not out.data["tool_calls"]  # create_chat_message normalizes "no tool calls" to []
 
+    def test_a_reply_cut_off_at_the_token_cap_says_so(self, monkeypatch, invoke_settings):
+        # The finishing chunk carries `finish_reason` beside an empty delta, with the usage (LM Studio's shape).
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"content": "The answer is"}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "length"}],
+             "usage": {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13}},
+            "[DONE]",
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.finish_reason == "length"
+        assert chatutil.content_to_text(out.data["content"]).endswith("The answer is")
+
+    def test_a_finished_reply_says_stop(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "Done."}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+            "[DONE]",
+        ])
+        assert llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False).finish_reason == "stop"
+
+    def test_a_finishing_chunk_without_a_delta_is_read(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "The answer is"}}]},
+            {"choices": [{"index": 0, "finish_reason": "length"}]},
+        ])
+        assert llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False).finish_reason == "length"
+
+    def test_a_stream_that_never_says_why_it_ended_reports_none(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [{"choices": [{"delta": {"content": "Hello"}}]}])
+        assert llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False).finish_reason is None
+
     def test_error_event_raises_runtimeerror(self, monkeypatch, invoke_settings):
         # LM Studio reports backend errors as HTTP 200 + an SSE error payload with no `choices`.
         _fake_stream(monkeypatch, [

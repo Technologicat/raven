@@ -33,6 +33,8 @@
   - The context-fill readout now counts the thinking that is sent. It used to count none.
   - Set it to match your model's chat template, which neither *Librarian* nor the backend can see; the README's *Thinking* toggle says how to tell.
   - Left on for a model whose template drops earlier thinking, it is usually noticed from the prompt size the backend reports: the readout then takes the backend's figure, and the log says to turn the setting off.
+- **A reply cut off at the token limit says so**, under the reply: *[Cut off — the reply reached the token limit]*, beside the existing notes for a reply you stopped and one Raven exited in the middle of. It used to look finished.
+  - For scripts, `agent.TurnRecord.truncated` says the same, and `agent.ask_until` does not accept such a reply, however its text reads.
 
 #### Raven-deduplicate
 
@@ -102,6 +104,7 @@
 #### Raven-pdf2bib
 
 - **An LLM backend failing mid-run no longer writes its error message into the BibTeX as a field.** It used to pass for an answer.
+- **A reply cut off at the token limit is asked again**, rather than written into the BibTeX as a half-finished field. One still cut off after its attempts counts as no usable answer, and the next run asks again.
 - **A flagged document no longer crashes a run that was given no `-o` or `-of`.** Its notes are written only where a directory for them was given.
 - **An abstract with no author list or no title leaves that field out**, and the entry is flagged for a check by hand (into `--failed`, when given). Before, the model's description of the absence, such as "The abstract does not list any authors", was written into the field as if it were the data. A section heading reported as the title, such as "Abstract", is treated the same way.
 

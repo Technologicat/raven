@@ -28,11 +28,14 @@ def make_invoke_result(content="Hello from the LLM.",
                        dt=0.1,
                        model="test-model",
                        phases=None,
-                       interrupted=False):
+                       interrupted=False,
+                       finish_reason="stop"):
     """Build a fake return value for `llmclient.invoke` — the shape scaffold reads.
 
     `phases`: the phase report (see `llmclient.phase_report`). The default `None` is what `invoke` returns
               when the model generated no text at all; pass a report to exercise the path that stores one.
+
+    `finish_reason`: what the backend said ended the generation; `"length"` is the token cap.
     """
     return env(data={"role": "assistant",
                      "content": chatutil.normalize_content(content),  # content-parts list, as invoke returns
@@ -41,7 +44,8 @@ def make_invoke_result(content="Hello from the LLM.",
                dt=dt,
                model=model,
                phases=phases,
-               interrupted=interrupted)
+               interrupted=interrupted,
+               finish_reason=finish_reason)
 
 
 def make_tool_response(content="tool result",
@@ -386,6 +390,27 @@ class TestAITurnSimple:
 
         final_head = run_ai_turn(forest, llm_settings, user_head)
         assert "interrupted" not in forest.get_payload(final_head)["generation_metadata"]
+
+    @pytest.mark.parametrize("finish_reason, stored", [("length", True), ("stop", False), (None, False)])
+    def test_a_reply_cut_off_at_the_token_cap_is_recorded_as_such(self, monkeypatch, llm_settings, populated_forest,
+                                                                  finish_reason, stored):
+        """The chat log's "[Cut off]" note and `agent.TurnRecord.truncated` read this, and the text cannot
+        tell: what the cap leaves reads like a reply that finished. Only true is stored, as for `interrupted`,
+        so a node from before this was tracked reads as not cut off."""
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="The answer is", finish_reason=finish_reason))
+
+        final_head = run_ai_turn(forest, llm_settings, user_head)
+        meta = forest.get_payload(final_head)["generation_metadata"]
+        if stored:
+            assert meta["truncated"] is True
+        else:
+            assert "truncated" not in meta
 
     def test_an_abandoned_turn_leaves_the_branch_as_it_found_it(self, monkeypatch, llm_settings, populated_forest):
         """Cancelling before the backend answers must cost nothing that was already on the branch.

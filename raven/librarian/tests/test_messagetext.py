@@ -355,6 +355,12 @@ class TestIncompletenessNote:
         assert "Interrupted" not in note, "the two cases must not collapse into one message"
         assert "Raven exited" in note
 
+    def test_a_reply_cut_off_at_the_token_cap_says_so_in_its_own_words(self):
+        note = messagetext.incompleteness_note({"n_tokens": 4096, "dt": 60.0, "truncated": True})
+        assert note is not None
+        assert "token limit" in note
+        assert "Interrupted" not in note and "Raven exited" not in note
+
     def test_being_stopped_wins_over_the_leftover_marker(self):
         """Belt and braces: a payload carrying both is describing a stopped reply, which is the specific one."""
         note = messagetext.incompleteness_note({"interrupted": True, "status": "incomplete"})

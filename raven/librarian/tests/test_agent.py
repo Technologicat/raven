@@ -185,6 +185,15 @@ class TestTurn:
         # The span is the assistant's turn: the user's message is what prompted it, not part of it.
         assert [message["role"] for message in record.messages] == ["assistant"]
 
+    @pytest.mark.parametrize("finish_reason, truncated", [("length", True), ("stop", False), (None, False)])
+    def test_the_record_says_whether_the_reply_was_cut_off_at_the_cap(self, monkeypatch, llm_settings,
+                                                                      finish_reason, truncated):
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="The answer is", finish_reason=finish_reason))
+        record = agent.turn(llm_settings, "Hello?")
+        assert record.truncated is truncated
+        assert record.to_dict()["truncated"] is truncated
+
     def test_a_datastore_with_nodes_in_it_will_not_be_reset_by_accident(self, monkeypatch, llm_settings):
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: make_invoke_result(content="Hi."))
@@ -735,7 +744,9 @@ class TestAskUntil:
 
         def fake_invoke(**kw):
             asked.append(1)
-            return make_invoke_result(content=replies.pop(0))
+            reply = replies.pop(0)
+            content, finish_reason = reply if isinstance(reply, tuple) else (reply, "stop")
+            return make_invoke_result(content=content, finish_reason=finish_reason)
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
         return asked
 
@@ -762,6 +773,22 @@ class TestAskUntil:
         records, accepted = agent.ask_until(llm_settings, "Question?",
                                             accept=lambda reply: bool(reply.removeprefix("Keywords:").strip()))
         assert accepted and records[-1].reply == "Keywords: ravens"
+
+    def test_a_reply_cut_off_at_the_token_cap_is_asked_again(self, monkeypatch, llm_settings, caplog):
+        """However well its text passes the check: what is there is half an answer."""
+        half = "Title: The Ghost in the Quantum Tur"
+        assert agent._has_text(half), "the cut-off reply passes the default check on its text, or this tests nothing"
+        asked = self._script(monkeypatch, [(half, "length"), "Title: The Ghost in the Quantum Turing Machine"])
+        with caplog.at_level("WARNING", logger="raven.librarian.agent"):
+            records, accepted = agent.ask_until(llm_settings, "Question?", attempts=3, label="EXTRACT")
+        assert accepted and records[-1].reply.endswith("Turing Machine")
+        assert len(asked) == 2 and records[0].truncated and not records[-1].truncated
+        assert any("token cap" in r.message for r in caplog.records)
+
+    def test_a_cut_off_reply_is_not_accepted_on_the_last_attempt_either(self, monkeypatch, llm_settings):
+        self._script(monkeypatch, [("Title: The Gh", "length")])
+        records, accepted = agent.ask_until(llm_settings, "Question?", attempts=1)
+        assert not accepted and records[-1].truncated
 
     def test_a_backend_that_did_not_generate_is_raised_not_retried(self, monkeypatch, llm_settings):
         asked = self._script(monkeypatch, [None, "never asked for"])
@@ -813,7 +840,7 @@ class TestTheSurfaceIsDeclared:
     def test_the_record_names_what_a_probe_asserts_on(self):
         fields = {field.name for field in dataclasses.fields(agent.TurnRecord)}
         assert fields == {"datastore", "head_node_id", "node_ids", "messages", "reply", "reasoning",
-                          "rounds", "tool_calls", "grounded", "generation", "prompts"}
+                          "rounds", "tool_calls", "grounded", "generation", "truncated", "prompts"}
 
     def test_the_record_is_frozen(self, llm_settings):
         forest = chattree.Forest()

@@ -169,6 +169,11 @@ class TurnRecord:
                   otherwise yields a run of plausible-looking replies that all say the same thing. This is
                   the field that distinguishes them, and it is the one to check before trusting a batch.
 
+    `truncated`: Whether the final reply was cut off at the backend's token cap (`max_tokens`). A cut-off
+                 reply reads as a finished one, and a half-written answer passes any check on whether it is
+                 blank, so a script that takes something out of the reply — a title, a JSON answer — reads
+                 this before trusting it. `ask_until` does.
+
     `prompts`: The wire histories actually sent, one per model call, so `prompts[-1]` is the one that
                produced `reply`. This is the assembled prompt including the per-turn injects, after
                attachments are resolved — what a script asserting on "what was actually sent" needs.
@@ -184,6 +189,7 @@ class TurnRecord:
     tool_calls: Mapping[str, int]
     grounded: bool | None
     generation: dict | None
+    truncated: bool
     prompts: tuple[list[dict], ...]
 
     def to_dict(self) -> dict:
@@ -205,6 +211,7 @@ class TurnRecord:
                 "tool_calls": dict(self.tool_calls),
                 "grounded": self.grounded,
                 "generation": self.generation,
+                "truncated": self.truncated,
                 "prompts": list(self.prompts)}
 
 
@@ -276,6 +283,7 @@ def describe_turn(datastore: chattree.Forest,
                       tool_calls=tool_calls,
                       grounded=grounded,
                       generation=generation,
+                      truncated=bool((generation or {}).get("truncated")),
                       prompts=tuple(prompts))
 
 
@@ -711,6 +719,9 @@ def ask_until(llm_settings: env, prompt: str,
     `accept`: a check on the reply text. The default accepts any reply that is not blank, which is the
               common failure: a model that thinks until its token cap and has nothing left to say.
 
+              A reply cut off at the token cap is never accepted, whatever `accept` says of its text: the
+              text is half an answer, and a check on the text alone cannot tell (see `TurnRecord.truncated`).
+
     `attempts`: how many times to ask, the first included. At least one.
 
     `label`: names the step in the warning logged for each rejected attempt.
@@ -727,6 +738,9 @@ def ask_until(llm_settings: env, prompt: str,
     records = []
     for attempt in range(1, attempts + 1):
         records.append(ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress))
+        if records[-1].truncated:
+            logger.warning(f"{label}: reply cut off at the token cap at attempt {attempt} of {attempts}")
+            continue
         if accept(records[-1].reply or ""):
             return records, True
         logger.warning(f"{label}: reply not accepted at attempt {attempt} of {attempts}")

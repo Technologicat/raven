@@ -291,8 +291,8 @@ def incompleteness_note(generation_metadata: dict) -> str | None:
 
     `generation_metadata`: the node's, or `{}` for a node that has none.
 
-    Two ways a reply ends before the model was finished, and they are different events, so they get
-    different words. The reader needs no more than that; the *reason* a backend failed is already in the
+    A reply can end before the model was finished in three ways: the user stopped it, it reached the
+    token cap, or the app went away. They are different events, so they get different words. The reader needs no more than that; the *reason* a backend failed is already in the
     message text, which is why an error is not one of the cases here.
     """
     # Rendered rather than stored, and that is the whole design. Storing the line would put words into the
@@ -304,6 +304,8 @@ def incompleteness_note(generation_metadata: dict) -> str | None:
     # often enough, and by the next session nobody remembers pressing the button.
     if generation_metadata.get("interrupted"):
         return "[Interrupted — the reply was stopped here]"
+    if generation_metadata.get("truncated"):
+        return "[Cut off — the reply reached the token limit]"
     if generation_metadata.get("status") == "incomplete":
         # Only reachable from disk: a live turn cannot outlive the process, so a node still marked this way
         # when the datastore is read back was cut off by the app going away rather than by the user.

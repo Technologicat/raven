@@ -1564,6 +1564,10 @@ def ai_turn(llm_settings: env,
             # a model rambling to a halt looks like. Without this the two are indistinguishable on reload.
             if out.interrupted:
                 payload["generation_metadata"]["interrupted"] = True
+            # Same reasoning, for the other way a reply ends before the model is done with it: the backend's
+            # token cap. Only true is stored, for the same reason.
+            if out.finish_reason == "length":
+                payload["generation_metadata"]["truncated"] = True
             # Absent when there is nothing to say about the phases, which is what "the model did not think"
             # and "it generated no text at all" both look like from here. A reader tests for the key rather
             # than for a zero, so an old node from before this was recorded reads the same as a reply that
