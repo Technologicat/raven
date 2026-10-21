@@ -1155,9 +1155,16 @@ class TestInvokeStreamRobustness:
              "usage": {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13}},
             "[DONE]",
         ])
+        invoke_settings.request_data["max_tokens"] = 3
         out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
         assert out.finish_reason == "length"
+        assert out.max_tokens == 3, "the cap the request was sent with"
         assert chatutil.content_to_text(out.data["content"]).endswith("The answer is")
+
+    def test_a_per_call_cap_is_the_one_reported(self, monkeypatch, invoke_settings):
+        invoke_settings.request_data["max_tokens"] = 6400
+        _fake_stream(monkeypatch, [{"choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": "length"}]}])
+        assert llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, max_tokens=1).max_tokens == 1
 
     def test_a_finished_reply_says_stop(self, monkeypatch, invoke_settings):
         _fake_stream(monkeypatch, [

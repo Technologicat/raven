@@ -29,13 +29,16 @@ def make_invoke_result(content="Hello from the LLM.",
                        model="test-model",
                        phases=None,
                        interrupted=False,
-                       finish_reason="stop"):
+                       finish_reason="stop",
+                       max_tokens=None):
     """Build a fake return value for `llmclient.invoke` — the shape scaffold reads.
 
     `phases`: the phase report (see `llmclient.phase_report`). The default `None` is what `invoke` returns
               when the model generated no text at all; pass a report to exercise the path that stores one.
 
     `finish_reason`: what the backend said ended the generation; `"length"` is the token cap.
+
+    `max_tokens`: the cap the request was sent with.
     """
     return env(data={"role": "assistant",
                      "content": chatutil.normalize_content(content),  # content-parts list, as invoke returns
@@ -45,7 +48,8 @@ def make_invoke_result(content="Hello from the LLM.",
                model=model,
                phases=phases,
                interrupted=interrupted,
-               finish_reason=finish_reason)
+               finish_reason=finish_reason,
+               max_tokens=max_tokens)
 
 
 def make_tool_response(content="tool result",
@@ -403,14 +407,17 @@ class TestAITurnSimple:
                                        head_node_id=head,
                                        user_message_text="Hello")
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
-                            lambda **kw: make_invoke_result(content="The answer is", finish_reason=finish_reason))
+                            lambda **kw: make_invoke_result(content="The answer is", finish_reason=finish_reason,
+                                                            max_tokens=6400))
 
         final_head = run_ai_turn(forest, llm_settings, user_head)
         meta = forest.get_payload(final_head)["generation_metadata"]
         if stored:
             assert meta["truncated"] is True
+            assert meta["max_tokens"] == 6400, "the cap it hit, as the request was sent"
         else:
             assert "truncated" not in meta
+            assert "max_tokens" not in meta
 
     def test_an_abandoned_turn_leaves_the_branch_as_it_found_it(self, monkeypatch, llm_settings, populated_forest):
         """Cancelling before the backend answers must cost nothing that was already on the branch.

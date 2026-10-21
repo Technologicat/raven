@@ -305,6 +305,10 @@ def incompleteness_note(generation_metadata: dict) -> str | None:
     if generation_metadata.get("interrupted"):
         return "[Interrupted — the reply was stopped here]"
     if generation_metadata.get("truncated"):
+        # The setting's name is the spelling `overrides.json` takes. Unset, the limit is the context length,
+        # so the number shown can be the whole window; the setting is still the one to look at.
+        if (max_tokens := generation_metadata.get("max_tokens")) is not None:
+            return f"[Cut off — the reply reached the token limit of {max_tokens} (llm_sampler_config.max_tokens)]"
         return "[Cut off — the reply reached the token limit]"
     if generation_metadata.get("status") == "incomplete":
         # Only reachable from disk: a live turn cannot outlive the process, so a node still marked this way

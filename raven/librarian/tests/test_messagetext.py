@@ -356,10 +356,14 @@ class TestIncompletenessNote:
         assert "Raven exited" in note
 
     def test_a_reply_cut_off_at_the_token_cap_says_so_in_its_own_words(self):
-        note = messagetext.incompleteness_note({"n_tokens": 4096, "dt": 60.0, "truncated": True})
-        assert note is not None
-        assert "token limit" in note
+        note = messagetext.incompleteness_note({"n_tokens": 6400, "dt": 60.0, "truncated": True, "max_tokens": 6400})
+        assert "token limit of 6400" in note
+        assert "llm_sampler_config.max_tokens" in note, "the note says where the limit is set"
         assert "Interrupted" not in note and "Raven exited" not in note
+
+    def test_a_cut_off_reply_that_did_not_record_its_limit_still_says_so(self):
+        note = messagetext.incompleteness_note({"truncated": True})
+        assert "token limit" in note
 
     def test_being_stopped_wins_over_the_leftover_marker(self):
         """Belt and braces: a payload carrying both is describing a stopped reply, which is the specific one."""

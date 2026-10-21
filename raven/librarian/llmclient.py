@@ -2398,6 +2398,9 @@ def invoke(settings: env,
                                      cap** (`max_tokens`), which otherwise looks exactly like a finished
                                      one. `None` when the stream ended without saying, which an interrupted
                                      invocation always does.
+        `max_tokens: int | None`: The token cap this request was sent with — the configured one
+                                  (`llm_sampler_config["max_tokens"]`, or the context length when that is
+                                  unset), or this call's `max_tokens` override. The cap a `"length"` reply hit.
     """
     # Every log line below names this call's purpose as well as this function, so that a prefill and a real
     # turn can be told apart in a log — they are otherwise identical from here down.
@@ -2812,7 +2815,8 @@ def invoke(settings: env,
                dt=tim.dt,
                phases=phases,
                interrupted=interrupted,
-               finish_reason=finish_reason)
+               finish_reason=finish_reason,
+               max_tokens=data.get("max_tokens"))
 
 # How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of
 # the *whole* prompt. Measured 2026-08-24 (`investigations/prompt-size-cache-relative/`): on a prompt whose
