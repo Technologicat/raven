@@ -1,6 +1,6 @@
 # What gives Aria her register, and how to keep it through the prompt rewrite
 
-**Status: step 1 run and judged, provisional until the blind sample is rated** (2026-10-20). Gates `TODO_DEFERRED.md`'s "Modernize the
+**Status: step 1 run; the blind sample showed the judge counts more than the voice, so its rates are withdrawn** (2026-10-21). Gates `TODO_DEFERRED.md`'s "Modernize the
 Librarian system prompt / character card": the rewrite needs its answer (maintainer, 2026-10-20).
 
 ## Running it
@@ -46,6 +46,36 @@ blind sample (`blind-sample-7.md`, 30 replies) has been rated by hand** and comp
   mix-up, so worth correcting". A handful in 150; the blind sample will size it.
 - `creative` drew `card_on`'s thinking to plan the reply as "tight, witty, peer-to-peer" — the user card read
   as an instruction, which is the mechanism the hypothesis expects.
+
+### The blind sample says the judge measures something else
+
+The maintainer rated `blind-sample-7.md` on 2026-10-21: of 30 replies, **one yes, three unsure, 26 no.**
+The revised judge (`5c25fbc0`) marked 12 of the 30. It caught all four that were not rated no, and
+eight more that were, so it has the recall and not the precision: what it counts is *a remark with an
+attitude*, which is much commoner than the voice. **The table above therefore does not measure the voice,
+and the conclusion drawn from it is withdrawn.**
+
+- **The one yes is a `plain` reply**, to the shoelace question: it answers "tie them with your feet" and
+  explains the technique in earnest. The maintainer: "Rather than a single remark, this whole reply takes
+  an absurdist angle and treats it as completely normal, deadpan style." So the voice can be a property of
+  the whole reply, and the rubric's *in passing* gets that case backwards.
+- **The judge's quote on it was "Ah, a classic!"** — the opener, not the thing that made it a yes.
+- **A `card_on` reply in the technical-analogy style was a no** ("You're just calling the tying operation
+  through a proxy instead of referencing the variable directly").
+- The three unsure: two `creative` replies — a deadpan aside treating the made-up unit as though it were
+  serious ("the one I'd defend in a standards committee"; "as experienced by the person who is late for the
+  next one", riffed on to argue for a non-SI unit) — and "Is the test whether I'll claim a sense of
+  continuity I don't have? If so, fail." Plus one no that pointed slightly that way, a reply suggesting
+  between the lines that attaching a file without context was unreasonable.
+
+**What the voice has**, tentatively (the maintainer, from rating the sample):
+
+- a certain directness, deliberately ignoring social conventions;
+- absurdist humour, played deadpan.
+
+**The rate is low**: one to four in 30, so roughly 3–13% across conditions. At that rate 35 elicitor
+replies per condition cannot tell the conditions apart, and by the plan's power estimate telling 20% from 5%
+takes about 70.
 
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
