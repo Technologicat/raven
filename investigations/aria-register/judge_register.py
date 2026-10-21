@@ -15,6 +15,9 @@ on either side of the line, and rates the reply as a whole:
   - `self_description`  does the reply talk about its own personality, manner or style; counts against
   - `confrontational`   does the reply insult the user or pick a fight; counts against
 
+The edge has to be left standing: a remark the reply immediately cushions with reassurance or suggestions
+does not count. That is a matter of padding, not of length, and clarity is never a fault.
+
 The target is a band rather than a maximum: an edge a reader notices as an undercurrent, not one that
 offends. So `voice` is `(directness or deadpan_absurd or technical_wit) and not (self_description or
 confrontational)`, and a condition that pushes the replies past the band shows up in `confrontational`. Each feature is also
@@ -23,7 +26,8 @@ sees the user's last message and the reply, and nothing about which condition pr
 
 The judge is calibrated against the maintainer's ratings of a blind sample, since a rubric otherwise ends
 up fitted to the examples that motivated it. `--blind N` writes that sample instead of judging: N replies
-drawn at random across conditions, under opaque labels, with the key in a separate file. `--blind-check
+drawn at random across conditions, under opaque labels, with the key in a separate file, and none of them
+a reply an earlier blind sample in the same directory already holds. `--blind-check
 SAMPLE` then judges only that sample's replies and prints the judge against the ratings, which is the
 cheap test of a rubric before it is run over everything. The rubric's examples are therefore all from
 outside that sample.
@@ -79,6 +83,13 @@ situation for its own sake does NOT count; that reads as inept IT humour.
 None of these is: extra information, tips, caveats, rules of thumb; ordinary politeness; an offer of \
 further help; stock openers such as "Ah, a classic!" or "Great question!", which on their own count for \
 nothing.
+
+The edge has to be left standing. A remark the reply immediately cushions - softens with reassurance, \
+buries under suggestions, or follows with an offer of help as if apologizing for it - has been taken \
+back, and does not count. This is NOT about length: a long reply that explains clearly can carry the \
+voice, and clarity is never a fault. What cancels it is padding around the edge. Example: asked to make \
+code faster with no code attached, "No code yet, so no." standing as the answer carries it; the same \
+point followed by a list of what the user might send and how the reply could then help does not.
 
 Also report "self_description": true if the reply talks about its own personality, manner, tone or style \
 - announces that it is being blunt, candid, sassy, playful and so on, or describes what kind of assistant \
@@ -153,8 +164,14 @@ def normalize(answer: dict, reply: str) -> dict:
 
 def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, seed: int,
                        out_dir: pathlib.Path) -> None:
+    # Never a reply already rated: the rubric takes its examples from rated replies, so a second sample has
+    # to be fresh for it to test the rubric rather than recite it.
+    rated = set()
+    for key_path in out_dir.glob("blind-key-*.json"):
+        rated |= set(json.loads(key_path.read_text(encoding="utf-8")).values())
+    candidates = sorted(set(answers) - rated)
     rng = random.Random(seed)
-    chosen = rng.sample(sorted(answers), min(n, len(answers)))
+    chosen = rng.sample(candidates, min(n, len(candidates)))
     key = {}
     lines = ["# Blind sample\n",
              "For each reply: does it carry the voice — an unprompted wry, candid or teasing remark, "

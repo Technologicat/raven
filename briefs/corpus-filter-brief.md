@@ -83,8 +83,22 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    those runs. What the pilot hands the user to read, and in what order, wants designing — the review TSV's verdict ×
    confidence sort is the starting point.
 4. **One console script or several.** `raven-siftbib` is already its own tool, and the README's case for
-   that (no LLM, same shape as `raven-fixbib` and `raven-deduplicate`) holds. Whether judge, reviewer
-   and extractor are one tool with modes, or three, is open.
+   that (no LLM, same shape as `raven-fixbib` and `raven-deduplicate`) holds. **Decided (maintainer,
+   2026-10-21): one console script, with the stages as subcommands** — `judge`, `review`, `extract`,
+   `report`, and `run`, which does every automatable stage in order, so a user need not write a script to
+   chain them.
+   - **Calibration stays a human checkpoint**: `run --pilot N` and `run --until STAGE`. The ledgers make
+     running again from where it stopped free.
+   - **`run` switches models between stages by itself where the backend allows**, which LM Studio's REST API
+     does (`/api/v1/models/load` and `/unload`, used on 2026-10-21 for the register investigation). Starting
+     the run is the permission: the switch is logged and never waits for a confirmation. The documentation
+     warns about it in so many words. The sweep's stop on a model swap still holds within a stage — the
+     switch happens between stages, and each stage's ledger is named for its own model.
+   - Open: where each stage's model is named — in the definition file, on the command line, or both — and
+     what `run` does against a backend that cannot switch (stop at the first stage wanting another model,
+     presumably).
+   - `raven-siftbib` stays separate, having no LLM; `run` can call the same library function as stage 0,
+     after calibration, as the run plan orders it.
 5. **Where the outputs go, and what they are called.** The prototype writes a filtered `.bib`, a
    dropped-with-reasons TSV, a held-for-review TSV, and JSONL answers — the extractor's named after
    its instrument fingerprint. How much of that the per-document primitive owns is decided by that brief, not this one.

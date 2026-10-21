@@ -215,6 +215,48 @@ on the blind sample: these are counts of what it marks, and the voice is perhaps
 card is the place to look, and its directness-related paragraphs first. The precision of the judge is
 the thing to fix before the numbers are worth more than a direction.
 
+**The first result, as the maintainer put it on reading these (2026-10-21): the instruction to be direct
+is part of the voice.** And a correction to the hand ratings' reading of one false positive: "No code yet,
+so no." on its own *would* count; the reply it opened went on into suggestions, and that is what made it a
+no. The unit is the whole reply, and an edge cushioned by help has been taken back.
+
+### Making the judge precise enough (decided 2026-10-21)
+
+In this order:
+
+1. **The edge has to be left standing**, now in the rubric. A remark cushioned by reassurance or
+   suggestions does not count — a matter of padding, not of length, since clarity is never a fault. Its
+   example comes from the first blind sample, which is why the next one has to be fresh.
+2. **A second blind sample, from replies not yet rated** (`--blind` now skips them), aimed where the judge
+   is unsure: mostly from what it marked, some from what it did not. That measures precision properly
+   — the first sample's one yes and three unsure are too few positives to tune against — and gives a
+   held-out set for the rubric. To be drawn and rated on 2026-10-22.
+3. **In reserve, if those two do not get the precision up: pairwise judging.** Show two replies to one
+   prompt and ask which has more of the voice. A comparison may be an easier call for a judge than an
+   absolute one (not measured here), and the comparisons rank the conditions directly. A redesign of the judge and more calls.
+4. **Later, if at all: requiring Qwen and Gemma to agree.** On the first blind sample that would have
+   given 4 right of 7 marked, against 4 of 9 and 4 of 8, for a 95-minute Gemma run — and the two share a
+   bath.
+
+### Notes for the prompt rewrite (the maintainer, 2026-10-21)
+
+Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
+apply:
+
+- **Clarity over conciseness.** Pure-mathematics monographs are often *too* concise — lemma, proof,
+  theorem, and the reader sees only individual trees — against Evans's *Partial Differential Equations*,
+  which is pure mathematics and accessible. For a technical argument, clarity first: thinking step by step
+  is a defensive debugging measure. Elsewhere, calibrate to the reader's knowledge.
+- **No emoji, and no bullet lists as a reflex.** The habit comes from early ChatGPT, and even Qwen shows it
+  under a blank system prompt; the current configuration suppresses it, and that makes the output read as
+  written by a person. But structured lists, nested ones included, beat a wall of text where the content is
+  hierarchical — clarity decides that too. A Feynman approach to writing, in short.
+- **Worth being able to ask for on demand**: style as something a user can set, rather than only what the
+  card happens to say.
+- **What the current texts say about length**: nothing in Aria's card or the user card; the interaction
+  block has "go straight to the point" and "prefer writing your raw thoughts rather than a structured
+  report". Which line suppresses the emoji is not established.
+
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
 
