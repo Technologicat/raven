@@ -12,7 +12,6 @@ pieces and the order between them.*
 
 ```mermaid
 flowchart TD
-    PDP["Per-document LLM pass"]
     CF["Corpus filter"]
     MCP["MCP client"]
     SKL["Agent skills"]
@@ -29,7 +28,6 @@ flowchart TD
     MCPS["MCP server side in Librarian"]
     LIBF["Librarian features deferred from 0.2.11"]
 
-    PDP --> CF
     CF -.-> MCP
     CF -.-> SKL
     MCP --> LABMCP
@@ -48,7 +46,7 @@ flowchart TD
 `HS`, `USE` and `SUB` have no edges yet: their place is open.
 
 **The rest of 2026, as decided 2026-10-19 (maintainer):** the *per-document pass → corpus filter* chain
-first, being what blocks the AOKK researchers; then the MCP client with agent skills, which the lab's
+first, being what blocks the AOKK researchers (the pass landed 2026-10-21, as `raven.librarian.sweep`); then the MCP client with agent skills, which the lab's
 December demo blocks on; then everything else. **The linearization stops there on purpose**: build what
 has to be built now, then look at the situation again. The edges below the MCP client are the earlier
 preferences, kept as they were rather than re-decided. **The drydock may slip into 2027**, and that is
@@ -56,17 +54,9 @@ accepted.
 
 ## The nodes
 
-- **Per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`). **First**: the maintainer's part of
-  the AOKK study blocks on it, and that blocks the other researchers on the team. Tentatively from 2026-10-19.
-  - **Its acceptance includes** reconnecting to the LLM backend mid-run (`TODO_DEFERRED.md`, "Batch tools:
-    LLM reconnect mid-run") and a status flag for a reply that hit the token limit (`TODO.md`, "pdf2bib
-    overthinking"), both of which were waiting on it (2026-10-19).
-  - **Decided during the build**: what the pass does with a wedged reply (`TODO_DEFERRED.md`, "Tell a wedged
-    reply from a hard one"). A run over thousands of documents is where one costs most, so it needs some
-    policy, even if that policy is today's token cap.
-- **Corpus filter** (`briefs/corpus-filter-brief.md`). **Gated on the per-document pass**, which it is built
-  on. It is what the AOKK numbers actually wait on, so the pass alone does not unblock the team: the chain is
-  *per-document pass → corpus filter → AOKK numbers*. The study re-run is a day or two of unattended GPU time.
+- **Corpus filter** (`briefs/corpus-filter-brief.md`). **Next.** Built on the per-document pass
+  (`raven.librarian.sweep`, landed 2026-10-21). It is what the AOKK numbers actually wait on, so the pass alone
+  does not unblock the team: the chain is *corpus filter → AOKK numbers*. The study re-run is a day or two of unattended GPU time.
   The tool that drops the records the AOKK team's manual check rejected, possibly a `raven-siftbib`
   criterion (`briefs/done/yrityspaiva/README.md`), is in the same queue, waiting on the team's marked sheet.
 - **0.2.11, the dehydration pass.** After the MCP client since 2026-10-19; until then it came first, as a

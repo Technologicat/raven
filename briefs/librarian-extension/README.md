@@ -339,11 +339,9 @@ callbacks at all, so the bundle stays an independent GUI-side cleanup.
 precedence over `atmospheric-dust.md`** (decided 2026-08-05: the graph adds more value; dust lands only if
 time remains). The dependency runs dust → crt, so dropping dust leaves both `crt` and 16 intact.
 
-**Brief 17 is reserved but unwritten** — a per-document LLM pass with retry, cache, resume and progress, cut
-out of 15 because it has three users of its own (`raven-pdf2bib`, `rag_live_corpus`'s persistence layer, and
-the corpus-interrogation sketch's map stage) and is a batch-execution primitive rather than a scripting
-surface. If it stays unwritten, 17 may end up being something else and 15's reference to it will need
-chasing.
+**Brief 17 was written unnumbered**, as the per-document LLM pass with retry, cache, resume and progress, cut
+out of 15 as a batch-execution primitive rather than a scripting surface. It landed on 2026-10-21 as
+`raven.librarian.sweep` (`briefs/done/per-document-llm-pass-brief.md`), and the number 17 is retired.
 
 **Honest accounting on the folder's own principle**: this session closed no briefs and opened two. The
 dehydration pass is not failing so much as being outvoted — "close briefs faster than new ones open" is a

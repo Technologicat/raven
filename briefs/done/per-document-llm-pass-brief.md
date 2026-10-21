@@ -1,5 +1,10 @@
 # Brief: the per-document LLM pass
 
+**Done 2026-10-21.** Built as `raven.librarian.sweep`, on `raven.librarian.agent`; `raven-pdf2bib` and
+`investigations/aokk-corpus-scope/extract_fields.py` run on it. The importer's `_summarize` was handed to
+`briefs/design/corpus-interrogation-sketch.md`, and telling a wedged reply from a hard one stays in
+`TODO_DEFERRED.md`.
+
 **Unnumbered**, following the convention adopted after brief 15 — `markdown-block-rendering`,
 `wake-word-voice-input` and `ligature-repair` are all unnumbered, and numbering was abandoned at 16.
 

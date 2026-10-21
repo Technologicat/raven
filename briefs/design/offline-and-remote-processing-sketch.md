@@ -40,7 +40,7 @@ Not all data is private, and for the public part, cloud services can do the heav
 ## What that needs
 
 - **Several backends at once, local and cloud.** Today Librarian has exactly one LLM backend. The per-document
-  LLM pass (`briefs/per-document-llm-pass-brief.md`) is where a job meets a backend, so it is probably the
+  LLM pass (`raven.librarian.sweep`; `briefs/done/per-document-llm-pass-brief.md`) is where a job meets a backend, so it is probably the
   layer that would take more than one.
 - **A privacy tag on every record, set at import by where it came from.** Two magic import directories: one
   for public items, where cloud services are allowed, and one for private items, where only local services

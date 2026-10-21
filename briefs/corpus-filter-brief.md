@@ -4,7 +4,8 @@
 tool: given a `.bib` from a literature search and the question the search was meant to answer, flag the
 records that are not about it, with a reason for each, so a person can review them out.
 
-**Gate: `per-document-llm-pass-brief.md` lands first** (Juha, 2026-09-29). Of the prototype's three
+**Gate, now passed: the per-document pass lands first** (Juha, 2026-09-29). It landed on 2026-10-21 as
+`raven.librarian.sweep`; the brief is `briefs/done/per-document-llm-pass-brief.md`. Of the prototype's three
 scripts that call a model, two carry their own copy of a resumable per-record loop and the third is
 driven slice by slice with `--skip`. This tool should be built on the shared primitive rather than lift
 a third copy. That brief lists this as its eighth user, and carries the two

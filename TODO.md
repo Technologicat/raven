@@ -573,8 +573,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - **The mild form is the one that will persist, and it costs tokens rather than correctness.** Qwen3.6-35B, 2026-08-04, asked about Artemis after a websearch: it reconciled a snippet dated April 2026 against its own priors out loud, at length — *"in reality (2024/2025 knowledge), Artemis II is scheduled for late 2024/early 2025 … I must check if there is real news about Artemis II delaying to 2026 or if the snippet is just a hypothetical/future-dated article or if I am misinterpreting the date"* — before accepting the injected date and proceeding correctly. No refusal, no simulation claim, right answer; just a large slice of the thinking budget spent re-deriving that the present is the present, on every turn where retrieved material carries a date.
   - So the success criterion is not "does it refuse" but "how much deliberation does the date cost". That is measurable with the existing probe, and it is worth measuring per model as the fleet upgrades: the erratic form may be disappearing while the expensive form stays.
 
-- **[Medium]** pdf2bib overthinking / token-limit mitigation: detect token-limit-exceeded in `raven.librarian.llmclient`, return a status flag in metadata. Consider executive-function simulation via LLM (in the neuropsychology sense: https://en.wikipedia.org/wiki/Executive_functions) as a recovery strategy — but may be superseded by improved model capabilities; monitor before investing time.
-
 
 
 ---

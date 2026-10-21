@@ -341,7 +341,7 @@ So `synopsis` is not one artifact but a chain of them, one per level, and `param
   This is the extract-or-generate rule above, applied per level. Building downward makes each coarse level
   cheap once a finer one exists; the cost is that a finer level's omissions carry down, which a checkpoint
   resets.
-- **The producer is the per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`), which is what a
+- **The producer is the per-document LLM pass** (`raven.librarian.sweep`; `briefs/done/per-document-llm-pass-brief.md`), which is what a
   multi-hour run over a corpus needs: resumable, cancellable, and stopping on a backend failure.
 
 ## Deferred: measuring what the pivot costs

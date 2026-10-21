@@ -320,18 +320,9 @@ only; its details are also under "Ligature mojibake in PDF-extracted text" below
 become Raven's internal format by default rather than by decision. Wanted *before* the autumn work rather
 than during it (Juha, 2026-08-27, "written or forgotten"); `briefs/design/` is its home.
 
-## Brief: the per-document LLM pass
-
-*Cluster: corpus-pipeline · Cost: ~M–L; step 0 "moderate" · Gate: none — `next` · Filed: 2026-09-30 · See also: `briefs/per-document-llm-pass-brief.md`*
-
-A shared primitive that asks one question per item over thousands of documents: resumable JSONL ledger,
-instrument fingerprint, stop on backend failure, batching, progress, cancellation. Design decided
-2026-09-29/30; step 0 (one model record in `llmclient`) and the pass itself are ready to build. **Eight
-users wait on it**, the corpus filter first — and through that, the AOKK methodology numbers.
-
 ## Brief: the corpus filter
 
-*Cluster: corpus-pipeline · Cost: ~L, plus a day or two of unattended GPU time · Gate: the per-document LLM pass · Filed: 2026-09-30 · See also: `briefs/corpus-filter-brief.md`*
+*Cluster: corpus-pipeline · Cost: ~L, plus a day or two of unattended GPU time · Gate: none — `next`; the per-document pass it is built on landed 2026-10-21 · Filed: 2026-09-30 · See also: `briefs/corpus-filter-brief.md`*
 
 Generalize the AOKK scope-classification prototype into a `raven.papers` tool that flags a `.bib`'s
 off-topic records, with reasons, for human review. Seven questions to settle, some decided 2026-09-30.
@@ -411,10 +402,11 @@ and the parser's `I` branch remain.
 
 ## Sketch: interrogating a selection
 
-*Cluster: corpus-pipeline · Cost: ~L · Gate: a design session; builds on brief 13 and the per-document pass · Filed: 2026-09-30 · See also: `briefs/design/corpus-interrogation-sketch.md`*
+*Cluster: corpus-pipeline · Cost: ~L · Gate: a design session; builds on brief 13 and on `raven.librarian.sweep` · Filed: 2026-09-30 · See also: `briefs/design/corpus-interrogation-sketch.md`*
 
 What Raven is for: map a large corpus, select, run a first-pass reviewer over the selection, and get
-keywords back onto the map. A discussion sketch; its map stage now lives in the per-document pass brief.
+keywords back onto the map. A discussion sketch, which also holds lifting the importer's `summarize` onto
+`raven.librarian.sweep` as its map stage.
 
 ## Sketch: how Raven's parts talk to each other
 
@@ -1121,7 +1113,7 @@ end — a judgement the trace supports and a token count does not. That is syste
 originally floated by Seth Herd on LessWrong; raised here by Juha (2026-09-03) as the v2 of the cap.
 
 **The v1 policy is settled** (2026-10-20): the cap plus a flag for a reply cut off at it, so that a wedged
-item of a batch run becomes a failed one; see `briefs/per-document-llm-pass-brief.md`. This item is the v2.
+item of a batch run becomes a failed one; see `briefs/done/per-document-llm-pass-brief.md`. This item is the v2.
 
 **Check before building that the failure still happens.** Executive function has improved markedly in
 recent model releases and looks likely to keep improving, so this may retire itself — which is also why it
@@ -1879,27 +1871,6 @@ or not this item is done.
 used `torchaudio.functional.forced_align`. `TODO.md` re-scopes that to an acoustic model from `transformers`
 plus an in-house alignment step. Since `forced_align` still runs under current torch, keeping torchaudio
 until that bridge is designed is a legitimate option rather than a risk.
-
-## Batch tools: LLM reconnect mid-run
-
-*Cluster: ? · Cost: ? · Gate: the per-document LLM pass, which supersedes it · Filed: 2026-08-12 · See also: `briefs/per-document-llm-pass-brief.md`*
-
-The model-loaded work made `raven-pdf2bib` and `raven-importer` stop at *start time* on both failure states
-— unreachable, and reachable-with-no-model. The second was the one that most needed it: the backend answers,
-so nothing looks wrong until every extraction comes back empty several hundred documents in.
-
-What remains, recorded as deliberately out of that work's scope: **a backend that goes away mid-run.** Every
-remaining document fails. Wording for all three states now lives in `llmclient.describe_backend_status`,
-printed by four frontends (two batch tools, `minichat`, the GUI tooltip), so the reporting side is already
-centralized — what is missing is the recovery behaviour.
-
-**Do not solve this standalone — it is the per-document-pass brief's territory.** The three open questions
-are that brief's scope exactly: how long to wait before giving up, whether to resume or restart, and what to
-do with the documents already written. `raven-pdf2bib` is one of its named users, with the same symptom on
-record — eight hand-written retry loops around `perform_throwaway_task`, no caching and no resume, so a
-crash at document 2400 restarts from zero. Building reconnect on its own would put a second retry mechanism
-beside the one that brief exists to unify. Same class as *A crash during ingest loses the whole run*: long
-batch runs with no durability, and one resume mechanism answers both.
 
 ## `chat_controller` is not importable without the ML stack
 

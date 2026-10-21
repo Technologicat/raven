@@ -132,7 +132,7 @@ is genuinely open: a query, a list, a table, prose, whatever presents the inform
 *not* optional is that some **analysis** comes attached. A list of summaries is a smaller haystack, not a
 found needle.
 
-**And the first line already exists.** `raven.visualizer.importer.summarize` (`importer.py:873`) is one of
+**And the first line already exists.** The importer's summarize step (`raven.visualizer.importer._summarize`) is one of
 the importer's eight macrosteps, gated on `visualizer_config.summarize` (default `False`): per-entry
 summaries of 1-3 sentences, with progress, ETA and caching, over a whole dataset at import time. So the map
 half is shipped code that is currently switched off. What is missing is `synthesize` — and running the pair
@@ -141,6 +141,14 @@ over a *selection* rather than over everything at import.
 That changes the size of the job from "build a map-reduce engine" to three smaller things: lift `summarize`
 out of the importer into the library, add the reduce, and let both run against a scope rather than a whole
 dataset.
+
+**The lifted `summarize` runs on `raven.librarian.sweep`**, the per-document pass, which landed on 2026-10-21
+(`briefs/done/per-document-llm-pass-brief.md`) and named it as its natural second user. The fit is close: the
+importer's `progress.set_micro_count(total)` and per-item `tick()` map onto the sweep's pushed progress, and
+an item per entry gives the summaries a resumable ledger named for the prompt and the model. What it buys
+beyond resume is the backend check: the importer's LLM stages refuse to *start* without a backend, but one
+that goes away mid-run fails every remaining entry, and the sweep stops instead. Stopping and running again
+is the recovery the pass settled on.
 
 **It also corrects the cost model below.** These summaries are *question-independent*: computed once per
 document and reused for every question afterwards, so a rephrased question re-runs only the reduce, not the
