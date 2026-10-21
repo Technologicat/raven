@@ -302,11 +302,20 @@ Settled on the draft (maintainer, 2026-10-21), besides agreeing the points above
   prototype's tier A was trustworthy because every such call carried a quote that checked out.
 - **`hints` stays**: it is the one way to give an instruction that holds across several tests.
 
-Open:
+- **The tool's frame is worded for any published work**, never for studies (maintainer, 2026-10-21). Its
+  core — positive evidence of being off topic, silence keeps, a generic title is no evidence, judge the
+  work rather than the phrase that matched — holds for any search result. The rest is bibliographic,
+  since the input is a `.bib`: a title, an abstract, where it was published. A `.bib` can hold books,
+  reports, standards or news as well as studies, so "study" and "method" stay out of it.
+- **The file may replace the frame**, as `frame = """..."""`: the escape hatch for a corpus the default
+  does not fit. It is part of the instrument either way.
+- **No built-in frames per kind of corpus**: nothing asks for one yet.
 
-- **How general the tool's frame is.** The frame above is bibliographic, and its wording assumes
-  a record of published work — a title, an abstract, *the venue*, *the work* as the thing being judged. That is Raven's main use, but not the
-  only kind of corpus a literature search returns (maintainer, 2026-10-21).
+**Where this is likely to go next** (maintainer, 2026-10-21): once the drydock merges the Visualizer's and
+Librarian's databases (brief 13), items of other kinds may want the same treatment. Fulltexts fit the
+bibliographic frame; news articles, patent databases, server logs and company-internal documents do not.
+Then the input stops being a `.bib`, and what a record *is* — which fields it has, which of them the
+judge is shown — becomes a parameter too. The `frame` key is the part of that which v1 already has.
 
 ## The final study's numbers
 
