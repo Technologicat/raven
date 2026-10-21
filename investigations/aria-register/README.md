@@ -255,7 +255,10 @@ apply:
   card happens to say.
 - **What the current texts say about length**: nothing in Aria's card or the user card; the interaction
   block has "go straight to the point" and "prefer writing your raw thoughts rather than a structured
-  report". Which line suppresses the emoji is not established.
+  report". Which line suppresses the emoji is not established, and it need not be the card at all: the
+  maintainer has seen the more humanlike writing in LM Studio with the user card alone as the system
+  prompt. A fainter recollection, from SillyTavern testing of earlier models, is that Aria's card did it
+  too. Step 1's `card_off` and `plain` replies are the material to check that against.
 
 Nothing they write is committed (`.gitignore`): the traces carry the system text each condition ran under,
 the user card included, and the replayed chats.
