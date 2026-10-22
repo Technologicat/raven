@@ -204,24 +204,24 @@ class TestThePasses:
             return sweep.Sweep(llm_settings, functools.partial(ask, definition=definition),
                                [(r.key, r) for r in todo], ledger, batch_size=10).run()
 
-        assert run(judge.ask_titles, judge.todo_titles(titles, recs), titles).outcome is sweep.completed
-        escalated = judge.todo_abstracts(titles, abstracts, recs, measures)
+        assert run(judge.ask_titles, judge.todo_titles(recs, titles=titles), titles).outcome is sweep.completed
+        escalated = judge.todo_abstracts(recs, titles=titles, abstracts=abstracts, measures=measures)
         assert [r.key for r in escalated] == ["drop_me", "thin", "teaser"], "every true, a thin title, low confidence"
         assert run(judge.ask_abstracts, escalated, abstracts).outcome is sweep.completed
 
-        final = judge.final_answers(titles, abstracts, recs, measures)
+        final = judge.final_answers(recs, titles=titles, abstracts=abstracts, measures=measures)
         assert {key: a["verdict"] for key, a in final.items()} == {
             "keep_me": "keep", "drop_me": "drop", "thin": "keep", "teaser": "review"}
         assert final["drop_me"]["source"] == "abstract" and final["keep_me"]["source"] == "title"
         assert final["teaser"]["confidence"] == "low", "the teaser's confident drop was tempered"
 
-        assert judge.todo_titles(titles, recs) == [] and judge.todo_abstracts(titles, abstracts, recs, measures) == []
+        assert judge.todo_titles(recs, titles=titles) == [] and judge.todo_abstracts(recs, titles=titles, abstracts=abstracts, measures=measures) == []
 
     def test_a_record_waiting_on_the_abstract_pass_is_not_yet_settled(self, tmp_path):
         titles, abstracts = judge.ledgers(tmp_path, "test0000")
         titles.write_answer("a", answer(not_birds=True))
         titles.write_answer("b", answer())
         recs = [record("a"), record("b")]
-        final = judge.final_answers(titles, abstracts, recs, {"a": INFORMATIVE, "b": INFORMATIVE})
+        final = judge.final_answers(recs, titles=titles, abstracts=abstracts, measures={"a": INFORMATIVE, "b": INFORMATIVE})
         assert set(final) == {"b"}
         assert types.SimpleNamespace(**final["b"]).verdict == "keep"

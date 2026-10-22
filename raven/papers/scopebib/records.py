@@ -107,7 +107,7 @@ def informative_words(title: str) -> int:
     return len([word for word in re.split(r"[\s\-_/]+", title) if any(c.isalpha() for c in word)])
 
 
-def content_word_counts(titles: Sequence[str], nlp: _Pipeline,
+def content_word_counts(titles: Sequence[str], nlp: _Pipeline, *,
                         stopwords: Container[str] | None = None) -> list[int]:
     """How many words of each title are neither function words nor academic filler. One `nlp` call for all.
 
@@ -141,7 +141,7 @@ class TitleMeasure(NamedTuple):
     uninformative: bool
 
 
-def title_measures(records: Iterable[Record], nlp: _Pipeline,
+def title_measures(records: Iterable[Record], nlp: _Pipeline, *,
                    stopwords: Container[str] | None = None) -> dict[str, TitleMeasure]:
     """`TitleMeasure` for each record's title, by citekey. One `nlp` call for the distinct titles.
 
@@ -149,7 +149,7 @@ def title_measures(records: Iterable[Record], nlp: _Pipeline,
     """
     records = list(records)
     distinct = sorted({record.title for record in records})
-    counts = dict(zip(distinct, content_word_counts(distinct, nlp, stopwords)))
+    counts = dict(zip(distinct, content_word_counts(distinct, nlp, stopwords=stopwords)))
     out = {}
     for record in records:
         content, informative = counts[record.title], informative_words(record.title)

@@ -58,24 +58,24 @@ class TestContentWords:
 
     def test_function_words_filler_and_non_words_do_not_count(self):
         counts = records.content_word_counts(["Exploring the potential of graph neural networks 2024"],
-                                             _FakeNLP(), self.STOPWORDS)
+                                             _FakeNLP(), stopwords=self.STOPWORDS)
         assert counts == [3]  # graph, neural, networks; "2024" is not alphabetic
 
     def test_an_inflected_stopword_is_caught_by_its_lemma(self):
         # Without the lemma check, "advantages" would count: the list holds base forms only.
         title = "advantages/advantage of learning"
-        assert records.content_word_counts([title], _FakeNLP(), self.STOPWORDS) == [1]
-        no_lemma = records.content_word_counts(["advantages of learning"], _FakeNLP(), self.STOPWORDS)
+        assert records.content_word_counts([title], _FakeNLP(), stopwords=self.STOPWORDS) == [1]
+        no_lemma = records.content_word_counts(["advantages of learning"], _FakeNLP(), stopwords=self.STOPWORDS)
         assert no_lemma == [2], "this fixture cannot show the lemma check: the surface form already misses"
 
     def test_all_titles_go_in_one_call(self):
         nlp = _FakeNLP()
-        records.content_word_counts(["a b", "c d", "e f"], nlp, self.STOPWORDS)
+        records.content_word_counts(["a b", "c d", "e f"], nlp, stopwords=self.STOPWORDS)
         assert len(nlp.calls) == 1
 
     def test_no_titles_ask_nothing(self):
         nlp = _FakeNLP()
-        assert records.content_word_counts([], nlp, self.STOPWORDS) == []
+        assert records.content_word_counts([], nlp, stopwords=self.STOPWORDS) == []
         assert nlp.calls == []
 
 
@@ -99,7 +99,7 @@ class TestTitleMeasures:
         nlp = _FakeNLP()
         recs = [records.Record(key=k, title=t, abstract="", venue="", link="")
                 for k, t in (("a", "graph neural networks"), ("b", "graph neural networks"), ("c", "the of"))]
-        measures = records.title_measures(recs, nlp, TestContentWords.STOPWORDS)
+        measures = records.title_measures(recs, nlp, stopwords=TestContentWords.STOPWORDS)
         assert nlp.calls == [["graph neural networks", "the of"]]
         assert measures["a"] == measures["b"] == records.TitleMeasure(3, 3, False)
         assert measures["c"] == records.TitleMeasure(0, 2, True)

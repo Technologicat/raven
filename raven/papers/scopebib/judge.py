@@ -150,7 +150,7 @@ def ledgers(directory: str | pathlib.Path, fingerprint: str) -> tuple[sweep.Ledg
 # --------------------------------------------------------------------------------
 # Asking
 
-def _ask(llm_settings: env, prompt: str, batch: list[tuple[str, scope_records.Record]],
+def _ask(llm_settings: env, prompt: str, *, batch: list[tuple[str, scope_records.Record]],
          definition: scope_definition.Definition, source: str,
          maybe_abort: netutil.Abort | None) -> tuple[dict, list[agent.TurnRecord]]:
     """Ask one batch, and read the answers back by item number. An answer whose number does not resolve is
@@ -191,7 +191,7 @@ def ask_titles(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
     items = "\n".join(f"{i}. {record.title}" + (f"\n   [published in: {record.venue}]" if record.venue else "")
                       for i, (_, record) in enumerate(batch))
     prompt = _TITLES.format(rubric=rubric(definition), test_lines=_test_lines(definition), items=items)
-    return _ask(llm_settings, prompt, batch, definition, "title", maybe_abort)
+    return _ask(llm_settings, prompt, batch=batch, definition=definition, source="title", maybe_abort=maybe_abort)
 
 
 def ask_abstracts(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
@@ -206,7 +206,8 @@ def ask_abstracts(llm_settings: env, batch: list[tuple[str, scope_records.Record
         return f"--- item {i} ---\nTitle: {record.title}\n{venue}Abstract{marked}: {abstract}\n"
     items = "\n".join(item(i, record) for i, (_, record) in enumerate(batch))
     prompt = _ABSTRACTS.format(rubric=rubric(definition), test_lines=_test_lines(definition), items=items)
-    answers, turns = _ask(llm_settings, prompt, batch, definition, "abstract", maybe_abort)
+    answers, turns = _ask(llm_settings, prompt, batch=batch, definition=definition, source="abstract",
+                          maybe_abort=maybe_abort)
     records_by_key = dict(batch)
     return {key: answer if isinstance(answer, sweep.Failure) else temper_for_truncation(answer, records_by_key[key])
             for key, answer in answers.items()}, turns
@@ -275,13 +276,13 @@ def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
 # --------------------------------------------------------------------------------
 # What is left, and what is settled
 
-def todo_titles(titles: sweep.Ledger, records: Iterable[scope_records.Record]) -> list[scope_records.Record]:
+def todo_titles(records: Iterable[scope_records.Record], *, titles: sweep.Ledger) -> list[scope_records.Record]:
     """The records the title pass has not answered."""
     answered = titles.answers()
     return [record for record in records if record.key not in answered]
 
 
-def todo_abstracts(titles: sweep.Ledger, abstracts: sweep.Ledger, records: Iterable[scope_records.Record],
+def todo_abstracts(records: Iterable[scope_records.Record], *, titles: sweep.Ledger, abstracts: sweep.Ledger,
                    measures: dict[str, scope_records.TitleMeasure]) -> list[scope_records.Record]:
     """The records whose title answer escalates and that the abstract pass has not answered."""
     by_title, by_abstract = titles.answers(), abstracts.answers()
@@ -290,7 +291,7 @@ def todo_abstracts(titles: sweep.Ledger, abstracts: sweep.Ledger, records: Itera
             and needs_escalation(by_title[record.key], measures[record.key])]
 
 
-def final_answers(titles: sweep.Ledger, abstracts: sweep.Ledger, records: Iterable[scope_records.Record],
+def final_answers(records: Iterable[scope_records.Record], *, titles: sweep.Ledger, abstracts: sweep.Ledger,
                   measures: dict[str, scope_records.TitleMeasure]) -> dict[str, dict]:
     """Each settled record's final answer, with its `verdict`, by key.
 
