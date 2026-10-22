@@ -102,8 +102,9 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      it to a colleague on Windows, who reproduces the run without translating a shell script. `--model`
      wins over the file, stage by stage. A stage named nowhere uses the loaded model, so with neither option
      `run` switches nothing.
-     - Proposed, not yet agreed: **`run` writes that file itself**, naming the model each stage actually
-       used, beside its reports. A finished run then carries its own recipe for repeating it.
+     - **And `run` writes that file itself** (agreed, maintainer, 2026-10-22), naming the model each stage
+       actually used, beside its reports. A finished run then carries its own recipe for repeating it. The
+       information is already in each stage's ledger header.
    - **A backend that cannot switch (decided, maintainer, 2026-10-22): fail fast.** Before any work, `run`
      works out which stages still have something to ask — a stage whose answers are all saved needs no
      model at all — and if one of those wants a model other than the loaded one, it refuses at once,
