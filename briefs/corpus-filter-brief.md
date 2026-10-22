@@ -94,9 +94,22 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      the run is the permission: the switch is logged and never waits for a confirmation. The documentation
      warns about it in so many words. The sweep's stop on a model swap still holds within a stage — the
      switch happens between stages, and each stage's ledger is named for its own model.
-   - Open: where each stage's model is named — in the definition file, on the command line, or both — and
-     what `run` does against a backend that cannot switch (stop at the first stage wanting another model,
-     presumably).
+   - **Where each stage's model is named (decided, maintainer, 2026-10-22): not in the definition file**, which
+     says what to ask of a corpus, where the model says what a machine has. On the command line,
+     `--model STAGE=KEY`, repeatable; **or from a file, `--models FILE`**, naming a model per stage or one
+     for all, so a rerun needs no typing, remembering or digging through ledgers for what each stage used.
+     A data file rather than a `run.sh`, because it is platform-independent: a researcher on Linux can hand
+     it to a colleague on Windows, who reproduces the run without translating a shell script. `--model`
+     wins over the file, stage by stage. A stage named nowhere uses the loaded model, so with neither option
+     `run` switches nothing.
+     - Proposed, not yet agreed: **`run` writes that file itself**, naming the model each stage actually
+       used, beside its reports. A finished run then carries its own recipe for repeating it.
+   - **A backend that cannot switch (decided, maintainer, 2026-10-22): fail fast.** Before any work, `run`
+     works out which stages still have something to ask — a stage whose answers are all saved needs no
+     model at all — and if one of those wants a model other than the loaded one, it refuses at once,
+     naming the model each stage wants. Softened: where the stages that can run come first, it says so and
+     offers `--until` to run those. LM Studio is the only backend treated as able to switch; ooba has a
+     loading API, untested here.
    - `raven-siftbib` stays separate, having no LLM; `run` can call the same library function as stage 0,
      after calibration, as the run plan orders it.
 5. **Where the outputs go, and what they are called.** The prototype writes a filtered `.bib`, a
