@@ -412,6 +412,10 @@ the stages are separable and each is tested alone. The console script is the `cl
    tests; pass 1 on titles, batched; the escalation rule (low confidence, an uninformative title, or any
    drop at all); pass 2 on abstracts; tempering for a truncated abstract; and the verdict by question 8 —
    drop, review or keep. One ledger per pass. Tested against a scripted model, no backend. ~M–L.
+   **Built 2026-10-22.** The frame is the prototype's general half, reworded for any published work and
+   naming a bare arXiv number or DOI as an identifier rather than a description (maintainer). Tempering
+   for a truncated abstract now only lowers the confidence: under question 8 that sends a true to review
+   already, so the prototype's withholding of the tests became redundant (agreed, maintainer).
 4. **`replay`: importing the prototype's answers** (question 6), under the fingerprint of the prompts
    that made them. Early on purpose: it gives the later steps real answers to build and check against
    with no GPU, which is what the replay was for. ~M.
