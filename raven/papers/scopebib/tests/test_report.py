@@ -117,7 +117,12 @@ class TestOutcomes:
         got = outcomes_of(run, definition)
         assert got["dropped"].decided_by == "not_birds" and "not_birds true, high confidence" in got["dropped"].reason
         assert "it counts ravens" in got["rescued"].reason
-        assert got["city"].reason == "urban: setting = city (the city)"
+        assert got["city"].reason == 'setting = city ("the city")', "the reason picks up where `decided_by` leaves off"
+        assert got["nowhere"].reason == 'setting = nowhere ("the city")'
+
+    def test_a_quote_the_model_wrapped_is_not_quoted_twice(self, run, definition):
+        run["extractions"]["city"]["quotes"]["setting"]["text"] = "“the city”"
+        assert outcomes_of(run, definition)["city"].reason == 'setting = city ("the city")'
 
 
 class TestFiles:

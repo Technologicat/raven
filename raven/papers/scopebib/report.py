@@ -42,6 +42,7 @@ from ...common import tabular
 from .. import bibtex
 from .. import siftbib
 from . import definition as scope_definition
+from . import extract as scope_extract
 from . import records as scope_records
 from . import review as scope_review
 from . import rules as scope_rules
@@ -144,12 +145,13 @@ def outcomes(records: Iterable[scope_records.Record], *,
             decision = scope_rules.decide(extractions[record.key], definition)
             label = decision.label or ""
             if decision.action == "remove":
-                out[record.key] = Outcome(REMOVED, "rules", label, _rule_reason(label, extractions[record.key],
-                                                                                definition))
+                out[record.key] = Outcome(REMOVED, "rules", label,
+                                          _rule_evidence(label, extractions[record.key], definition))
             elif decision.action == "hold":
-                note = decision.note or "the rule holds it for a person"
+                # The rule's label is `decided_by` already, so the reason starts where the label leaves off.
+                evidence = _rule_evidence(label, extractions[record.key], definition)
                 out[record.key] = Outcome(TO_A_PERSON, "rules", label,
-                                          f"{label}: {note}; {_rule_evidence(label, extractions[record.key], definition)}")
+                                          f"{decision.note}; {evidence}" if decision.note else evidence)
             else:
                 out[record.key] = Outcome(KEPT, "rules", label, "")
     return out
@@ -164,13 +166,9 @@ def _rule_evidence(label: str, extraction: dict, definition: scope_definition.De
     """The fields a rule matched on, with their quotes: `level = school ("a primary school")`."""
     parts = []
     for name in _rule_fields(label, definition):
-        quote = extraction["quotes"].get(name, {}).get("text", "")
-        parts.append(f"{name} = {extraction['fields'].get(name)}" + (f" ({quote})" if quote else ""))
+        quote = extraction["quotes"].get(name, {}).get("text", "").strip(scope_extract.QUOTE_MARKS + " ")
+        parts.append(f"{name} = {extraction['fields'].get(name)}" + (f' ("{quote}")' if quote else ""))
     return "; ".join(parts)
-
-
-def _rule_reason(label: str, extraction: dict, definition: scope_definition.Definition) -> str:
-    return f"{label}: {_rule_evidence(label, extraction, definition)}"
 
 
 # --------------------------------------------------------------------------------
@@ -198,6 +196,10 @@ def _share(count: int, total: int) -> str:
 
 def _cell(value: bool | None) -> str:
     return {True: "true", False: "false"}.get(value, "no answer")
+
+
+def _yes_no(value: bool | None) -> str:
+    return {True: "yes", False: "no"}.get(value, "no answer")
 
 
 def _filtered(library: bibtexparser.Library, keys: set[str]) -> bibtexparser.Library:
@@ -316,7 +318,7 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
                                                  ",".join(_tests_true(final[key])),
                                                  *_reading_order(by_key[key]))):
             answer = final[key]
-            rows.append((group, key, _cell(reviews[key]["belongs"]), reviews[key]["case"],
+            rows.append((group, key, _yes_no(reviews[key]["belongs"]), reviews[key]["case"],
                          answer["verdict"], answer["confidence"], ", ".join(_tests_true(answer)), answer["why"],
                          *_record_cells(by_key[key])))
     table(REVIEW_AUDIT,
@@ -326,7 +328,7 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
            "drops is not telling them apart",
            "the control is records the judge kept, drawn at the drops' mix of confidence and shown to the "
            "reviewer unlabelled; it is labelled only here, and the reviewer's answer about it changes nothing"],
-          ("group", "key", "belongs", "case", "judge verdict", "judge confidence", "tests true", "judge why",
+          ("group", "key", "reviewer found a case", "reviewer's case", "judge verdict", "judge confidence", "tests true", "judge why",
            *_RECORD_COLUMNS),
           rows)
 
@@ -356,7 +358,11 @@ def _extract_table(table, *, extractions: dict[str, dict], by_key: dict[str, sco
     counts = {action: sum(1 for key in keys if decisions[key].action == action) for action in order}
     tally = "; ".join(f"{action}: {_share(count, len(keys))}" for action, count in counts.items())
     table(EXTRACT_AUDIT,
-          [f"records extracted: {len(keys)}; {tally}",
+          ["what each record the judge kept says, field by field, as a model read it from the title and abstract; "
+           "the definition's rules act on these fields, removing a record, holding it for a person, or keeping it",
+           "a quote is the record's own words for a value, and 'quote found' says whether those words are "
+           "actually in the record: a removal resting on a quote that is not found is held instead",
+           f"records extracted: {len(keys)}; {tally}",
            "the rules are the definition's as it stands, applied when this was written; a value the model gave "
            "outside a field's vocabulary reads as not_stated, and is shown under 'unrecognized'"],
           ("key", "action", "rule", "note", *field_columns, "unrecognized", *_RECORD_COLUMNS),

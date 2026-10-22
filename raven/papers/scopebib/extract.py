@@ -12,7 +12,7 @@ A `raven.librarian.sweep`, batched, with one ledger (`ledger`) named for the ins
 (`instrument_material`): the definition's fields and this module's prompt.
 """
 
-__all__ = ["ABSTRACT_CHARS", "instrument_material", "ledger", "ask_fields", "normalize"]
+__all__ = ["ABSTRACT_CHARS", "QUOTE_MARKS", "instrument_material", "ledger", "ask_fields", "normalize"]
 
 import json
 import logging
@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 #: How much of an abstract the extractor is sent; as the judge's abstract pass.
 ABSTRACT_CHARS = 4000
 
-# Straight and typographic, double and single.
-_QUOTE_MARKS = "\"'“”‘’"
+#: The quotation marks a model may wrap a quote in, which are not part of it: straight and typographic, double and single.
+QUOTE_MARKS = "\"'“”‘’"
 
 _INSTRUCTIONS = """\
 You are reading records from a literature search for: {scope}. You are recording what each record says. You \
@@ -150,6 +150,6 @@ def normalize(answer: dict, definition: scope_definition.Definition, record: sco
         if field.quote:
             text = " ".join(str(answer.get(f"{field.name}_quote") or "").split())
             # A model quoting often wraps the quote in quotation marks of its own, which are not in the record.
-            bare = text.strip(_QUOTE_MARKS + " ")
+            bare = text.strip(QUOTE_MARKS + " ")
             quotes[field.name] = {"text": text, "found": bool(bare) and bare.lower() in haystack}
     return {"fields": fields, "quotes": quotes, "raw": raw}
