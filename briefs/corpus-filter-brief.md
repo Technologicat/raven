@@ -250,7 +250,7 @@ the judge's tests, the extractor's fields and the rules that act on them — and
 everything that is not. Here is the AOKK prototype written in it, with the long descriptions cut short:
 
 ```toml
-# aokk.filter.toml — what the corpus filter asks of this corpus, and what it does with the answers.
+# aokk.scope.toml — what the corpus filter asks of this corpus, and what it does with the answers.
 
 scope = "studies on different aspects of the use of AI agents in higher education"
 
@@ -364,7 +364,7 @@ What the draft decides, each open to change:
 
 Settled on the draft (maintainer, 2026-10-21), besides agreeing the points above:
 
-- **Where the file lives: `--definition FILE`**, defaulting to `<bib stem>.filter.toml` beside the `.bib`.
+- **Where the file lives: `--definition FILE`**, defaulting to `<bib stem>.scope.toml` beside the `.bib`.
   Good for v1.
 - **A `remove` resting on a quoted field whose quote is not in the text becomes a `hold`**, saying why. The
   prototype's tier A was trustworthy because every such call carried a quote that checked out.
@@ -400,8 +400,14 @@ the stages are separable and each is tested alone. The console script is the `cl
    (`looks_truncated`), with the prototype's latest bounds. ~S–M.
 2. **`definition`: the definition file.** Reading it, checking it with errors that name the file and the
    entry, the implicit `not_stated`, the default frame and its replacement, and the normalized material
-   that names the instrument. The AOKK definition, written in full, is the test fixture and ships in the
-   investigation bundle. ~M.
+   that names the instrument. ~M. **Built 2026-10-22.** The AOKK definition, written in full, is
+   `investigations/aokk-corpus-scope/aokk.scope.toml`; one test loads it to keep it valid, skipping where
+   it is absent, and the unit tests use small definitions of their own, so that tests under `raven/` do not
+   depend on a file outside the package. Translating it changed three things, which the replay maps:
+   `human_learning`'s `true`/`false`/`"unclear"` became `yes`/`no`/`not_stated`; `population`'s `unclear`
+   became `not_stated`; and `evidence` became `level`'s quote. The rubric's general half — silence keeps,
+   a generic title is no evidence, use the venue, an identifier is not a description — moves to the
+   judge's frame in step 3.
 3. **`judge`: the two-pass judge on the sweep.** The prompt assembled from the frame, `hints` and the
    tests; pass 1 on titles, batched; the escalation rule (low confidence, an uninformative title, or any
    drop at all); pass 2 on abstracts; tempering for a truncated abstract; and the verdict by question 8 —

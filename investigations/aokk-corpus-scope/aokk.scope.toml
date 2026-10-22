@@ -1,0 +1,145 @@
+# The AOKK corpus's definition for `raven-scopebib`: the prototype in this directory, written in the tool's
+# format. The tests and hints are `judge_scope.py`'s rubric, minus what the tool's own frame says for any
+# corpus (silence keeps, a generic title gives no evidence, use the venue, judge the work rather than the
+# phrase). The fields are `extract_fields.py`'s, and the rules are `filter_keeps.py`'s four tiers.
+
+scope = "studies on different aspects of the use of AI agents in higher education"
+
+hints = """
+A phrase can match in a sense the search did not mean, and this is the main thing to look for. "Learning
+assistant" names an AI tool, and it is ALSO the established term in STEM education research for a HUMAN
+undergraduate who helps teach a course - that second sense has no AI in it and is "no_ai" true.
+"Conversational agent" and "intelligent agent" appear in fields with nothing to do with education.
+
+"Teaching", "training" and "learning" have the same problem, and it is the one most likely to mislead you
+here, because those words are ALSO how the machine-learning field describes what is done to a model. A
+"teachable agent" that crowdworkers correct, a system "trained" on a dataset, a paper about "learning" a
+policy - the thing being taught is software, and no person is being educated. That is NOT an educational
+dimension. The words count as education only when a PERSON is the one learning.
+
+A venue rarely says the LEVEL - an education journal covers schools and universities alike - so it is weak
+evidence for "wrong_level".
+"""
+
+# ---- The judge. For each record it answers every test true or false, with one confidence for the record
+# and a sentence saying why; only a true at high confidence drops a record.
+
+[[test]]
+name = "no_ai"
+asks = """
+true ONLY if the work is positively about something with no artificial intelligence in it - human teaching
+staff, human tutors, human undergraduate learning assistants, or a non-AI technology. False when AI is
+present in any way (an AI agent, assistant, chatbot, tutor or LLM-based tool, or AI in general - including
+its use, its effects, attitudes towards it, policy and ethics about it, and AI literacy), AND false when the
+work does not say what it used: a record that does not say what method it used is NOT "no_ai"; answer false
+and lower your confidence.
+"""
+
+[[test]]
+name = "not_education"
+asks = """
+answered in two steps, in this order. FIRST: can you name what this work is about, from what you were given?
+If you cannot - the title is generic, an editorial or a section heading, or a proper noun or acronym you do
+not recognize - then answer false with low confidence, and stop. SECOND, only if you can name the subject:
+is that subject entirely outside education? Answer true only for a subject you can name that plainly
+involves no teaching, learning, students or courses - a machine-learning methods paper, a computer-vision or
+natural-language-processing study, a finance, engineering, energy or medical application. Teaching,
+learning, students, courses, curricula, training and education policy all count as an educational
+dimension, at ANY level. Here, unlike the other tests, absence is evidence: a study about education says so,
+so a survey of machine-learning techniques that never mentions a learner is "not_education" true, however
+much AI is in it.
+"""
+
+[[test]]
+name = "wrong_level"
+asks = """
+true ONLY if the work is positively set at a level other than higher education - preschool, primary or
+secondary school, K-12, workplace or professional training outside a university, or the general public.
+False when the setting is a university, college or polytechnic, or its students, teachers or courses, AND
+false when the work does not say what level it is set at: these records all matched a higher-education
+search term already, so a record that does not say its level is NOT "wrong_level"; answer false and lower
+your confidence.
+"""
+
+# ---- The extractor: what a kept record says. Every vocabulary also has `not_stated`.
+
+[[field]]
+name = "population"
+asks = "who the work studies"
+[field.values]
+university_students = "students in higher education"
+school_pupils = "pupils in primary or secondary school"
+preservice_teachers = "people studying to become teachers"
+inservice_teachers = "practising teachers"
+researchers = "researchers, as the subjects of the work"
+professionals = "practitioners in a profession other than teaching"
+general_public = "the public at large"
+none = "the work studies no human population - a method, a system, a dataset"
+
+[[field]]
+name = "level"
+asks = """
+the educational level the work is set at. The distinction between these is the SETTING, not the subject
+matter or the age of the learner. A course taught to university students is "higher_education" however
+professional its subject; medicine, law and teacher preparation are degree study. A review, survey or
+meta-analysis has no setting of its own: give it the level its own scope names, and answer not_stated when
+it names none, which is the common case. Many studies never say their level; answer not_stated rather than
+inferring it from the topic, the venue or what would be usual.
+"""
+quote = true
+[field.values]
+higher_education = "a university, college, polytechnic or their students and faculty - degree study"
+school = "primary or secondary schooling, K-12, pupils"
+vocational = "formal vocational or trade education leading to a qualification"
+professional_training = """
+workplace and professional development: practitioners already qualified, being coached, upskilled or trained
+on the job. Psychotherapist training, teacher CPD, staff onboarding
+"""
+informal = """
+learning outside any institution - self-directed learners, the general public, lifelong learning, patient
+or rehabilitation training, museum and hobby settings. It is about the absence of an institution, not the
+absence of a stated year: undergraduates whose year is never given are higher_education
+"""
+not_applicable = """
+the work is not set in education at all - a methods paper, a recommender, a clinical tool. If somebody is
+learning something, the work IS set in education and another value applies
+"""
+
+[[field]]
+name = "human_learning"
+asks = """
+whether a PERSON is taught or is learning in this work, as against a model being trained. "Teaching",
+"training" and "learning" are the machine-learning field's own words for what is done to software: a
+"teachable agent" corrected by crowdworkers, a system "trained" on a corpus, a paper about "learning" a
+control policy - in all of those the thing being taught is software.
+"""
+[field.values]
+yes = "a person is taught or is learning"
+no = "the only thing being taught or trained is software"
+
+[[field]]
+name = "ai_role"
+asks = "what the AI does in this work, or 'none' if there is no AI in it"
+max_words = 8
+
+# ---- The rules: `filter_keeps.py`'s tiers. First match wins.
+
+[[rule]]
+label = "school or vocational level, stated in the text"
+when = { level = ["school", "vocational"] }
+action = "remove"
+
+[[rule]]
+label = "not about education: no educational level, and no one learning"
+when = { level = ["not_applicable"], human_learning = ["no"] }
+action = "remove"
+
+[[rule]]
+label = "possibly not about education: no educational level, but someone may be learning"
+when = { level = ["not_applicable"] }
+action = "hold"
+
+[[rule]]
+label = "learning outside an institution, e.g. workplace training"
+when = { level = ["professional_training", "informal"] }
+action = "hold"
