@@ -434,11 +434,11 @@ class FinishError(ValueError):
 
 
 def _trailing_blank_warning(decisions: list[str], first_row: int) -> str | None:
-    """A warning when the blanks at the end of the sheet look like marking that stopped partway.
+    """A warning when the blanks at the end of a sheet marking only its keeps look like marking that stopped
+    partway.
 
     The tail is suspect when it is the longest run of blanks in the sheet, since stopping partway makes it
-    so; how long that is depends on the person's own marking, so no fixed number is assumed. An explicit
-    `drop` ends a run.
+    so; how long that is depends on the person's own marking, so no fixed number is assumed.
     """
     runs, run = [], 0
     for decision in decisions:
@@ -454,7 +454,7 @@ def _trailing_blank_warning(decisions: list[str], first_row: int) -> str | None:
         return None
     return (f"the last {tail} rows, from row {first_row + len(decisions) - tail} on, have no decision, so they "
             f"will be dropped; that is the longest blank run in the sheet, which is how marking that stopped "
-            f"partway looks. If you meant to drop them, this is normal; marking them '{DROP}' says so")
+            f"partway looks. If you meant to drop them, this is normal")
 
 
 def finish(out_dir: str | pathlib.Path, *,
@@ -470,12 +470,14 @@ def finish(out_dir: str | pathlib.Path, *,
            require_every_decision: bool = False) -> tuple[list[pathlib.Path], list[str]]:
     """Apply a person's decisions on a marked copy of the worklist, and write `FINAL_BIB` and `HAND_AUDIT`.
 
-    `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Its `decision` column holds
-             `KEEP`, `DROP`, or nothing, which drops; case and surrounding space do not matter. A `note`
-             column, where the person added one, is carried into the audit.
+    `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Its `decision` column marks
+             either the keeps alone, `KEEP` with a blank dropping, or every row, `KEEP` or `DROP`; case and
+             surrounding space do not matter. A `note` column, where the person added one, is carried into
+             the audit.
     `library`, `records`, `definition`, `final`, `reviews`, `extractions`, `provenance`, `table_format`:
              as `write_reports` takes them; the worklist is worked out from them afresh.
-    `require_every_decision`: refuse a blank decision rather than reading it as a drop.
+    `require_every_decision`: refuse a blank decision rather than reading it as a drop, so that every row
+                              must be marked.
 
     Returns `(written, warnings)`: the paths written, and what the person should be told — a row whose key
     the run has since settled, which is ignored, and a run of blank rows at the end that looks like marking
@@ -483,7 +485,8 @@ def finish(out_dir: str | pathlib.Path, *,
 
     Raises `FinishError`, writing nothing, when the run is not finished (a record is pending), when the sheet
     has no `key` or `decision` column, when a decision is neither `KEEP`, `DROP` nor blank, when a record of
-    the worklist is missing from the sheet, or, with `require_every_decision`, when a decision is blank.
+    the worklist is missing from the sheet, or when a decision is blank in a sheet that marks a `DROP`, or
+    with `require_every_decision`.
     """
     if table_format not in tabular.FORMATS:
         raise ValueError(f"finish: unknown table format {table_format!r}; expected one of {tabular.FORMATS}")
@@ -515,11 +518,16 @@ def finish(out_dir: str | pathlib.Path, *,
     if missing:
         problems.append(f"{len(missing)} records sent to a person are not in the sheet, so it is not this run's "
                         f"worklist or rows were deleted: {', '.join(missing[:5])}" + (", ..." if len(missing) > 5 else ""))
-    if require_every_decision:
-        blank = [str(first_row + i) for i, decision in enumerate(decisions) if decision == ""]
-        if blank:
-            problems.append(f"{len(blank)} rows have no decision: rows {', '.join(blank[:10])}"
-                            + (", ..." if len(blank) > 10 else ""))
+    # A sheet marks either its keeps alone, a blank dropping, or every row. One `drop` says the person is
+    # marking every row, and a blank beside it is then a row not yet decided.
+    blank = [str(first_row + i) for i, decision in enumerate(decisions) if decision == ""]
+    listed = f"rows {', '.join(blank[:10])}" + (", ..." if len(blank) > 10 else "")
+    if blank and DROP in decisions:
+        problems.append(f"the sheet marks some rows '{DROP}', so a blank is a row not yet decided, and "
+                        f"{len(blank)} are blank ({listed}). Either decide those, or remove every '{DROP}' so "
+                        f"that a blank means drop")
+    elif blank and require_every_decision:
+        problems.append(f"{len(blank)} rows have no decision ({listed})")
     if problems:
         raise FinishError("; ".join(problems))
     if maybe_warning := _trailing_blank_warning(decisions, first_row):

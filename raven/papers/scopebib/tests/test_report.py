@@ -213,8 +213,8 @@ def finish(run, definition, out_dir, sheet, **kwargs):
 
 
 class TestFinish:
-    def test_a_person_keeps_and_drops(self, finished, definition, tmp_path):
-        sheet = mark(tmp_path / "marked.tsv", ("rescued", " Keep ", "looked fine"), ("unsure", "drop", ""),
+    def test_a_person_keeps_and_a_blank_drops(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", " Keep ", "looked fine"), ("unsure", "", ""),
                      ("nowhere", "", ""))
         written, warnings = finish(finished, definition, tmp_path / "out", sheet)
         final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
@@ -248,10 +248,21 @@ class TestFinish:
         with pytest.raises(report.FinishError, match="not finished"):
             finish(run, definition, tmp_path / "out", sheet)
 
-    def test_a_blank_is_refused_on_request(self, finished, definition, tmp_path):
+    def test_a_sheet_marking_every_row_drops_on_drop(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "DROP", ""), ("nowhere", "drop", ""))
+        finish(finished, definition, tmp_path / "out", sheet, require_every_decision=True)
+        kept = {entry.key for entry in bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False).entries}
+        assert "rescued" in kept and not {"unsure", "nowhere"} & kept
+
+    def test_a_blank_beside_a_drop_is_an_undecided_row(self, finished, definition, tmp_path):
         sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "drop", ""), ("nowhere", "", ""))
+        with pytest.raises(report.FinishError, match=r"1 are blank \(rows 4\).*remove every 'drop'"):
+            finish(finished, definition, tmp_path / "out", sheet)
+
+    def test_a_blank_is_refused_on_request(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "", ""), ("nowhere", "", ""))
         finish(finished, definition, tmp_path / "out", sheet)  # the control: a blank drops by default
-        with pytest.raises(report.FinishError, match="1 rows have no decision: rows 4"):
+        with pytest.raises(report.FinishError, match=r"2 rows have no decision \(rows 3, 4\)"):
             finish(finished, definition, tmp_path / "out", sheet, require_every_decision=True)
 
     def test_a_sheet_in_a_spreadsheet_format_is_read(self, finished, definition, tmp_path):
@@ -277,12 +288,8 @@ class TestTrailingBlanks:
     def test_a_tail_no_longer_than_an_earlier_run_is_not(self):
         assert self.warning("", "", "keep", "", "") is None
 
-    def test_an_explicit_drop_ends_the_run(self):
-        assert self.warning("keep", "drop", "drop", "drop") is None
-        assert self.warning("keep", "drop", "drop", "") is not None, "the control: a blank tail of one still warns"
-
     def test_no_keep_at_all_says_everything_drops(self):
-        assert "all 2 records will be dropped" in self.warning("drop", "")
+        assert "all 2 records will be dropped" in self.warning("", "")
 
-    def test_every_record_dropped_explicitly_is_not_suspect(self):
-        assert self.warning("drop", "drop") is None
+    def test_a_sheet_ending_in_a_keep_is_not_suspect(self):
+        assert self.warning("", "", "", "keep") is None

@@ -514,16 +514,18 @@ the stages are separable and each is tested alone. The console script is the `cl
      case rate among the drops with the rate among the control, which is the line to read first.
    - **A fifth stage, `finish`** (maintainer, 2026-10-22, not in the first plan): reads a marked copy of
      `04-CHECK-BY-HAND`, applies the person's decisions, and writes `05-final.bib` and `05-hand-audit`.
-     - **A decision is `keep`, `drop` or blank, which drops**, in any case. Typing one full word per row
-       is friction over hundreds of rows in a spreadsheet, so only the keeps need marking; `drop` is
-       accepted so that a person who marks both ways can say so. Anything else is refused, naming its row,
-       since a typo must not become a drop.
-     - **A blank tail warns**, since a forgotten stretch now drops silently: when the blanks at the end are
-       the longest blank run in the sheet, which is how marking that stopped partway looks. No fixed
-       number, the person's own marking being the yardstick; an explicit `drop` ends a run, so a person
-       who marks both ways never sees it. The warning says that if the drops were meant, this is normal —
-       the same spirit as step 8's announcement of a model switch.
-     - **`--require-every-decision`**, off by default, refuses any blank.
+     - **A sheet marks either its keeps alone or every row**, decisions in any case. Typing one of two
+       full words per row is friction over hundreds of rows for someone with one paste buffer, so the
+       default is to mark only the keeps, a blank dropping. Marking every row, `keep` or `drop`, is the
+       other mode, and **one `drop` anywhere selects it**: a blank in such a sheet is a row not yet decided,
+       and refuses, advising either to decide those rows or to remove every `drop` so that a blank means
+       drop (maintainer). Anything that is not `keep`, `drop` or blank is refused, naming its row, since a
+       typo must not become a drop.
+     - **In the keeps-only mode, a blank tail warns**, since a forgotten stretch drops silently: when the
+       blanks at the end are the longest blank run in the sheet, which is how marking that stopped partway
+       looks. No fixed number, the person's own marking being the yardstick. The warning says that if the
+       drops were meant, this is normal — the same spirit as step 8's announcement of a model switch.
+     - **`--require-every-decision`**, off by default, refuses any blank, so requires the every-row mode.
      - **A worklist record missing from the sheet is refused** (the maintainer leaned to warning or error):
        with blank meaning drop, a missing row would drop unseen, and it means the sheet is not this run's
        worklist. A row whose record the run has since settled is ignored with a warning, and a pending
@@ -548,6 +550,11 @@ the stages are separable and each is tested alone. The console script is the `cl
    means, as the model is told), what `quote` asks for (the record's words that show an answer, checked
    against the record — not a literal), and when a field wants none. A terse test fixture read as "the
    quote must be the literal word", which is the misreading to write against.
+   **And it must say what `finish` refuses and what it only warns about** (maintainer, 2026-10-22): the
+   two marking modes and how one `drop` selects the second; a blank tail in the first, which warns;
+   `--require-every-decision`, which refuses any blank; a worklist record missing from the sheet, and a run
+   with pending records, which refuse; a row whose record the run has since settled, which is ignored with
+   a warning; and that rewriting the reports removes the 05 files, so `finish` runs again after.
    **And it must walk through the process, step by step** (maintainer, 2026-10-22): in which order the
    steps run, which call an LLM, what each does to the data, where a person comes in, which are free to
    re-run (rules and reports ask nothing), and what file each leaves. With illustrative proportions on a
