@@ -884,6 +884,9 @@ def judge_pairs(llm_settings,
     return verdicts
 
 
+# Kept apart from `bibtex.entry_venue`, which reads markup and takes `series` too: this text goes into the
+# judge's prompt, so changing how it is rendered changes the judge's instrument, and with it what a replay
+# of saved answers stands on. Unifying the two is open, at the price of migrating that instrument.
 def _venue_of(record: Record) -> str | None:
     """What a record says about where it was published, or `None` where it says nothing.
 
