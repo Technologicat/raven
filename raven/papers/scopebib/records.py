@@ -11,7 +11,7 @@ The record itself (`Record`, `load_records`) carries what the stages show a mode
 abstract and venue as readable text, and a link.
 """
 
-__all__ = ["Record", "load_records",
+__all__ = ["Record", "records_of", "load_records",
            "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
            "looks_truncated", "describe_abstract"]
@@ -22,6 +22,8 @@ import pathlib
 import re
 from collections.abc import Container, Iterable, Sequence
 from typing import NamedTuple, Protocol
+
+import bibtexparser
 
 from .. import bibtex
 from .. import utils as papers_utils
@@ -35,24 +37,34 @@ class Record:
     `title`, `abstract`, `venue`: readable text — LaTeX markup resolved, whitespace collapsed — or `""`
                                   where the record has none.
     `link`: where to read the paper, by DOI, else by `url`, else `""` (see `raven.papers.utils.paper_url`).
+    `authors`, `year`: as readable text, for a person finding a record they know in a report; no stage
+                       shows them to a model.
     """
     key: str
     title: str
     abstract: str
     venue: str
     link: str
+    authors: str = ""
+    year: str = ""
 
 
-def load_records(bib_path: str | pathlib.Path) -> list[Record]:
-    """Every record of the `.bib` at `bib_path`, in file order."""
-    library = bibtex.parse_file(pathlib.Path(bib_path), split_names=False)
+def records_of(library: bibtexparser.Library) -> list[Record]:
+    """Every record of a parsed `library`, in file order."""
     return [Record(key=entry.key,
                    title=bibtex.readable_text(bibtex.entry_field(entry, "title")),
                    abstract=bibtex.readable_text(bibtex.entry_field(entry, "abstract")),
                    venue=bibtex.entry_venue(entry),
                    link=papers_utils.paper_url(bibtex.entry_field(entry, "doi") or None,
-                                               bibtex.entry_field(entry, "url") or None))
+                                               bibtex.entry_field(entry, "url") or None),
+                   authors=bibtex.readable_text(bibtex.entry_field(entry, "author")),
+                   year=bibtex.entry_field(entry, "year").strip())
             for entry in library.entries]
+
+
+def load_records(bib_path: str | pathlib.Path) -> list[Record]:
+    """Every record of the `.bib` at `bib_path`, in file order."""
+    return records_of(bibtex.parse_file(pathlib.Path(bib_path), split_names=False))
 
 
 # --------------------------------------------------------------------------------

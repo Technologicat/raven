@@ -472,6 +472,50 @@ the stages are separable and each is tested alone. The console script is the `cl
    report in its sort order, the models file. Subcommands `judge`, `review`, `extract`, `report` and
    `run`; `--pilot`, `--sample`/`--seed`, `--replicate`, `--until`, `--model`/`--models`; the to-do worked
    out before connecting, and the fail-fast check on a backend that cannot switch. ~M–L.
+   **Decided 2026-10-22 (maintainer), before building:**
+   - **Four commits**: `report` (pure, over saved answers), the run file, the `cli`, the pilot report.
+   - **`raven-siftbib` runs as stage 0** inside `run`, through `siftbib.sift`, its criteria given on the
+     command line as `raven-siftbib` takes them; no criteria, no sift.
+   - **The names**, the audits marked `-audit` so no reader takes one for a result, and the results sharing
+     the number 04, the worklist in capitals so it is the file that is seen:
+
+     ```
+     00-sift-audit.<fmt>       what the sift removed, and on which criterion
+     00-sifted.bib             what it kept: the judge's input
+     01-judge-audit.<fmt>      every judged record: the verdict, the tests, the judge's reason
+     02-review-audit.<fmt>     the drops and the control, with the reviewer's case
+     03-extract-audit.<fmt>    the judge's keeps: their fields, their quotes, the rule that acted
+     04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why, and a blank `decision` column
+     04-removed-audit.<fmt>    every record removed, by which stage and why, the sift's included
+     04-kept.bib               the records that survived every stage
+     run.toml                  the run file
+     ```
+
+     The descriptions go into the docs.
+   - **`report` owns exactly the names it can write** — those stems in each table format, and the two
+     `.bib`s — rather than every `NN-` file, so a previous run's report in another format is removed while a
+     copy saved as `04-CHECK-BY-HAND-marked.xlsx` survives. The docs' warning is then only about saving over
+     the original name.
+   - **A record is pending while a stage it needs has not answered**: a drop the reviewer has not read
+     (every drop is reviewed, so none is final before), a keep not yet extracted. A pending record is in
+     neither the removals nor the kept `.bib`, and the counts say how many there are.
+   - **The run file is TOML**, matching the definition file and being written by hand as often as by the
+     tool; the writer is the tool's own, for a flat table of strings, rather than a new dependency.
+   - **A named instrument is read-only unless it is today's** (agreed, maintainer): once connected, if the
+     live fingerprint equals the named one, the stage may ask what is left, since today's prompts *are*
+     that instrument. Without that, resuming an interrupted run by passing back its own run file would
+     refuse to finish it. The check before connecting still reports how many records are left under the
+     named fingerprint.
+   - **The control, as the docs must explain it** (maintainer: how it is chosen, how many, and how a user
+     tells it from the real results): kept records drawn by `review.draw_control` at the drops' mix of
+     confidence, seeded; `--control N`, default 40 as in the prototype's `review_drops.py`; labelled only
+     in `02-review-audit`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
+     alone, so a control record cannot reach the worklist or the removals. The audit's header compares the
+     case rate among the drops with the rate among the control, which is the line to read first.
+   - **`report` built 2026-10-22.** Over the prototype's converted answers it reproduces step 6's judge
+     side exactly: 1069 removed, 153 to a person (139 unsure, 14 rescued). On the rules side the 138
+     extractions of the prototype's unknowns now belong to records sent to review, which accounts for the
+     whole difference from step 5's 898/72/264.
 8. **`models`: switching models on LM Studio**, between stages, logged and never asking. Last, being the
    one step that has to be tried against a live backend. ~S–M.
 9. **The acceptance run**: the finished tool over the prototype's corpus, the prototype's answers

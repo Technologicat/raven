@@ -26,6 +26,12 @@ class TestLoadRecords:
                                         venue="Journal of Things", link=record.link)
         assert "10.1000/xyz" in record.link
 
+    def test_a_record_carries_its_authors_and_year_for_a_reader(self, tmp_path):
+        (record,) = records.load_records(_bib(tmp_path, "@misc{k,\n  title = {T},\n"
+                                                        "  author = {M{\\\"u}ller, Anna and Smith, Bo},\n"
+                                                        "  year = { 2024 },\n}\n"))
+        assert (record.authors, record.year) == ("Müller, Anna and Smith, Bo", "2024")
+
     def test_a_missing_field_is_empty_rather_than_absent(self, tmp_path):
         (record,) = records.load_records(_bib(tmp_path, "@misc{k,\n  title = {T},\n}\n"))
         assert (record.abstract, record.venue, record.link) == ("", "", "")
