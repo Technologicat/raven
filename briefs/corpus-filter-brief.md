@@ -426,11 +426,18 @@ Then a live pilot on a new corpus, which is the first GPU time this costs.
 **Decisions the plan needs:**
 
 - **What a case found by the reviewer does to a drop.** The prototype only measured the reviewer; nothing
-  acted on its flags. Proposed: a drop the reviewer makes a case for goes to review rather than out, the
-  same asymmetry that escalates every drop.
-- **The console script's name.** Proposed: `raven-filterbib`, beside `raven-siftbib`, `raven-fixbib` and
-  `raven-burstbib`, since v1 takes a `.bib`. When the drydock makes the input something else, the name can
-  follow.
+  acted on its flags. **Tentatively (maintainer, 2026-10-22): a drop the reviewer rescues goes to review
+  rather than out**, the same asymmetry that escalates every drop — **to be decided on the numbers**,
+  keeping the human-review set as small as it can be without costing much accuracy. The prototype's own
+  are a first estimate: a case for 3.9% of the drops made confidently from a title alone, and 0.3% of
+  those made confidently after reading the abstract (`check_escalation.py`), and every drop now gets the
+  abstract pass. Step 9's acceptance run counts it properly.
+- **The console script's name.** `raven-filterbib` was rejected as too close to `raven-siftbib` — the two
+  would be conflated (maintainer, 2026-10-22). Between the maintainer's two, proposed: **`raven-scopebib`**,
+  which names the question it answers, *is this record in the search's scope?*, where `raven-siftbib`
+  answers *can it be screened at all?*. It also matches the definition's `scope`. `raven-judgebib` names
+  the mechanism instead, which is not unique to this tool: `raven-deduplicate --judge` is an LLM judge
+  too. The package name follows, `raven.papers.scopebib`, if this is taken.
 - **The title measurement needs spaCy**, for lemmas. Proposed: through `raven.client.mayberemote.NLP`,
   as Raven's design intends — raven-server's when it is running, loaded locally when it is not. The
   prototype loads it locally on the CPU instead, giving GPU contention with the LLM as the reason; that
