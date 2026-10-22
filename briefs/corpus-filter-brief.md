@@ -430,7 +430,7 @@ Then a live pilot on a new corpus, which is the first GPU time this costs.
   rather than out**, the same asymmetry that escalates every drop — **to be decided on the numbers**,
   keeping the human-review set as small as it can be without costing much accuracy. The prototype's own
   are a first estimate: a case for 3.9% of the drops made confidently from a title alone, and 0.3% of
-  those made confidently after reading the abstract (`check_escalation.py`), and every drop now gets the
+  those made confidently after reading the abstract (`judge_scope.py`, `needs_escalation`), and every drop now gets the
   abstract pass. Step 9's acceptance run counts it properly.
 - **The console script's name.** `raven-filterbib` was rejected as too close to `raven-siftbib` — the two
   would be conflated (maintainer, 2026-10-22). Between the maintainer's two, proposed: **`raven-scopebib`**,
