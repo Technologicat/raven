@@ -379,6 +379,63 @@ bibliographic frame; news articles, patent databases, server logs and company-in
 Then the input stops being a `.bib`, and what a record *is* — which fields it has, which of them the
 judge is shown — becomes a parameter too. The `frame` key is the part of that which v1 already has.
 
+## Build plan (draft, 2026-10-22)
+
+**A draft to iterate on.** Each step is a commit or a few, tested on its own, and none needs a GPU until
+step 8. The prototype's five scripts are 2100 lines, about half of it prose; what moves into the library is
+the logic, generalized by the definition file.
+
+**Where it lives: a package, `raven.papers.corpusfilter`**, one module per stage, rather than one module:
+the stages are separable and each is tested alone. The console script is the `cli` module.
+
+1. **`records`: a record as the stages see it** — title, abstract, venue, read from a `.bib` — and the
+   two measurements the judge's escalation rests on: whether a title is informative (`judge_scope.py`'s
+   `content_words` and `looks_uninformative`), and whether an abstract is a truncated preview
+   (`looks_truncated`). The constants behind them are derived from the corpus in hand, as decided. ~S–M.
+2. **`definition`: the definition file.** Reading it, checking it with errors that name the file and the
+   entry, the implicit `not_stated`, the default frame and its replacement, and the normalized material
+   that names the instrument. The AOKK definition, written in full, is the test fixture and ships in the
+   investigation bundle. ~M.
+3. **`judge`: the two-pass judge on the sweep.** The prompt assembled from the frame, `hints` and the
+   tests; pass 1 on titles, batched; the escalation rule (low confidence, an uninformative title, or any
+   drop at all); pass 2 on abstracts; tempering for a truncated abstract; and the verdict by question 8 —
+   drop, review or keep. One ledger per pass. Tested against a scripted model, no backend. ~M–L.
+4. **`replay`: importing the prototype's answers** (question 6), under the fingerprint of the prompts
+   that made them. Early on purpose: it gives the later steps real answers to build and check against
+   with no GPU, which is what the replay was for. ~M.
+5. **`extract` and `rules`: the extractor and the rules over its fields.** Vocabularies checked, quotes
+   checked against the text, the rules applied when the reports are written, and a removal whose quote is
+   missing turned into a hold. ~M.
+6. **`review`: the reviewer** over the drops — the prototype's *make the strongest case that this record
+   belongs* — with its control drawn from the keeps. ~M. *What a case found does to the drop is a
+   decision; see below.*
+7. **`report` and `cli`: the reports and the console script.** Stage-numbered outputs through
+   `raven.common.tabular`, the directory owned and stale files removed, the filtered `.bib`, the pilot
+   report in its sort order, the models file. Subcommands `judge`, `review`, `extract`, `report` and
+   `run`; `--pilot`, `--sample`/`--seed`, `--replicate`, `--until`, `--model`/`--models`; the to-do worked
+   out before connecting, and the fail-fast check on a backend that cannot switch. ~M–L.
+8. **`models`: switching models on LM Studio**, between stages, logged and never asking. Last, being the
+   one step that has to be tried against a live backend. ~S–M.
+9. **The acceptance run**: the finished tool over the prototype's corpus, the prototype's answers
+   replayed, against `regenerate_reports.py`'s outputs. They should agree except where question 8's rule
+   differs from the prototype's, and every difference should be explained by it. No GPU. Then the README,
+   the changelog and the console script's entry. ~S–M.
+
+Then a live pilot on a new corpus, which is the first GPU time this costs.
+
+**Decisions the plan needs:**
+
+- **What a case found by the reviewer does to a drop.** The prototype only measured the reviewer; nothing
+  acted on its flags. Proposed: a drop the reviewer makes a case for goes to review rather than out, the
+  same asymmetry that escalates every drop.
+- **The console script's name.** Proposed: `raven-filterbib`, beside `raven-siftbib`, `raven-fixbib` and
+  `raven-burstbib`, since v1 takes a `.bib`. When the drydock makes the input something else, the name can
+  follow.
+- **The title measurement needs spaCy**, for lemmas. The prototype loads it locally on the CPU on
+  purpose: on a single card the GPU may be busy serving the very LLM the run is talking to. Proposed: keep
+  that, rather than going through raven-server's NLP. Either way its tests carry the `ml` marker, so CI
+  covers the rest and not that.
+
 ## The final study's numbers
 
 **Recommended, not yet decided: re-run the judge with the finished tools** for the published numbers,
