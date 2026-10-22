@@ -71,13 +71,16 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
 1. **How a user writes the tests.** The scope question is one string; the named tests are not, and
    each wants a description good enough to be a prompt. A file beside the corpus is the obvious shape.
    Whether the model could *propose* a test list from the scope question, for the user to edit, is an
-   open idea rather than a decision.
+   open idea rather than a decision. **Settled (2026-10-21) by the definition file**, in *Draft: the filter
+   definition* below.
 2. **How the extractor generalizes, which the README does not say.** Its fields — population, level,
    whether a person is learning — are this corpus's, as much as the judge's tests are, and so are
    `filter_keeps.py`'s tiers over them. The same move probably applies (the vocabularies become a
    parameter), but it is untested, and a field turned out unreliable in the prototype's own pilot
    (`human_learning`, wrong about a third of the time), so a user-supplied vocabulary would need a pilot
-   of its own.
+   of its own. **Settled (2026-10-21) by the same file**: the vocabularies and the tiers become its
+   `[[field]]` and `[[rule]]` entries, and question 3's pilot is the pilot a user-supplied vocabulary
+   needs.
 3. **Calibration as a first-class step.** The prototype calibrated with `--pilot N` and `--thin` before
    any full run, which was step 0 of the original brief, and the README's findings come largely from
    those runs. What the pilot hands the user to read, and in what order, wants designing — the review TSV's verdict ×
