@@ -22,11 +22,14 @@ Currently:
     each card against the speech. Used by the avatar's subtitler.
   - `entities`, decoding HTML character entities. Used by the BibTeX tools and
     by `common.utils.unicodize_basic_markup`.
+  - `stopwords`, the words that say nothing about what a piece of research is
+    about. Used by the Visualizer's keyword detection and the papers tools'
+    title check.
 
 Submodules are independently importable; this package also re-exports the public
 API, so callers can `from raven.common import text` and use `text.normalize(...)`.
-`entities` is the exception: `decode` and `resolve` say what they do only beside
-the module name, so it is imported as a module.
+`entities` and `stopwords` are the exceptions, imported as modules: `decode` and
+`resolve` say what they do only beside the module name, and so do the word lists.
 """
 
 from .normalize import normalize  # noqa: F401 -- re-export submodule public API
