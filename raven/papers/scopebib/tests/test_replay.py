@@ -91,21 +91,25 @@ def test_fingerprint_of_is_stable_and_follows_its_texts():
     assert len(replay.fingerprint_of("x")) == 8
 
 
+# Two fields, one of each kind. The keys under `[field.values]` are the answers the extractor may give; the
+# strings are what each answer means, as the model is told. `quote = ["school"]`: an answer of `school` must
+# come with the words from the record that show it, such as "pupils in two schools", which are then checked
+# against the record. `learning` asks for no quote: yes or no is a judgement about the whole work.
 EXTRACTOR_DEFINITION = DEFINITION + """
 [[field]]
 name = "level"
-asks = "the level"
+asks = "the educational level the work is set at"
 quote = ["school"]
 [field.values]
-school = "school"
-not_applicable = "not in education"
+school = "primary or secondary schooling"
+not_applicable = "the work is not set in education at all"
 
 [[field]]
 name = "learning"
-asks = "whether a person learns"
+asks = "whether a person is taught or learning in the work"
 [field.values]
-yes = "a person learns"
-no = "only software learns"
+yes = "a person is taught or learning"
+no = "only software is trained"
 """
 
 

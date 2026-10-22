@@ -462,6 +462,11 @@ the stages are separable and each is tested alone. The console script is the `cl
    and what does not (maintainer, 2026-10-22): rewrapping prose or editing a comment in the definition
    file changes neither the prompt nor the fingerprint, and a rule is applied when the reports are
    written, so changing one asks nothing again; changing a test, a field or a value starts afresh.
+   **And it must teach how to write a definition file** (maintainer, 2026-10-22), field by field, with a
+   worked example: what the keys under `[field.values]` are (the answers) against their strings (what each
+   means, as the model is told), what `quote` asks for (the record's words that show an answer, checked
+   against the record — not a literal), and when a field wants none. A terse test fixture read as "the
+   quote must be the literal word", which is the misreading to write against.
 
 Then a live pilot on a new corpus, which is the first GPU time this costs.
 

@@ -15,8 +15,11 @@ those fields — while the tool supplies everything that is not:
     [[field]]              # what a kept record says
     name = "level"
     asks = "the educational level the work is set at"
-    quote = ["school"]     # these values must quote the words that settle them; `true` is every value
-    [field.values]         # a closed vocabulary; `not_stated` is added to every one
+    quote = ["school"]     # an answer of `school` must come with the record's words that show it, such
+                           # as "pupils in two schools", which are checked against the record; `true` is
+                           # every value, and a value asserting an absence has no words to quote
+    [field.values]         # the answers it may give: answer = "what it means", as the model is told.
+                           # `not_stated` is added to every list
     higher_education = "a university, college, polytechnic or their students and faculty"
     school = "primary or secondary schooling, K-12, pupils"
 
