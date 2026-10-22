@@ -424,9 +424,13 @@ the stages are separable and each is tested alone. The console script is the `cl
    already, so the prototype's withholding of the tests became redundant (agreed, maintainer).
 4. **`replay`: importing the prototype's answers** (question 6), under the fingerprint of the prompts
    that made them. Early on purpose: it gives the later steps real answers to build and check against
-   with no GPU, which is what the replay was for. ~M. **Built 2026-10-22**, for the judge; the extractor's
-   answers are imported with step 5. The fingerprint is the caller's to name (`replay.fingerprint_of`),
-   since which commit's prompts made the prototype's answers is step 9's question.
+   with no GPU, which is what the replay was for. ~M. **Built 2026-10-22, then moved out of the tool the
+   same day** (maintainer: nothing in the final code should refer to the prototype). The prototype's answers
+   are converted once, by `investigations/aokk-corpus-scope/convert_to_scopebib.py`, into the tool's own
+   ledgers, stamped with a hash of the script that made each set as it stood at its last commit before the
+   answers were last written; the script checks the conversion record by record against the prototype's own
+   reading, and a deliberately broken translation was shown to fail it. **In the tool, replay is reading
+   ledgers under a named instrument** (question 6), which step 7's CLI provides.
    - **Replayed over the prototype's corpus (2026-10-22), it reconciles exactly**: of 4314 judged records,
      3092 keep in both; the prototype's 1084 drops become 834 drops (a test true at high confidence) and
      250 reviews (249 at medium, 1 at low); its 138 unknowns become reviews. Every difference is question
@@ -435,7 +439,7 @@ the stages are separable and each is tested alone. The console script is the `cl
      reviewer's rescues move to review.
 5. **`extract` and `rules`: the extractor and the rules over its fields.** Vocabularies checked, quotes
    checked against the text, the rules applied when the reports are written, and a removal whose quote is
-   missing turned into a hold. ~M. **Built 2026-10-22**, with the extractor's replay. Two changes on the way:
+   missing turned into a hold. ~M. **Built 2026-10-22.** Two changes on the way:
    - **`quote` names the values that need one** (decided, maintainer): a value asserting an absence, such
      as `not_applicable`, has nothing to quote, and requiring one turned the prototype's 155 tier-B1
      removals into holds. `quote = true` is every value but `not_stated`; a quote on a free-text field is
@@ -446,8 +450,7 @@ the stages are separable and each is tested alone. The console script is the `cl
      keeps, 72 holds and 264 removals in both, every rule label matching its tier. Translating the AOKK
      definition had dropped the prototype's `mixed` level, which the data showed; it is back.
 6. **`review`: the reviewer** over the drops — the prototype's *make the strongest case that this record
-   belongs* — with its control drawn from the keeps. ~M. **Built 2026-10-22**, with the replay of the
-   prototype's reviews. A rescued drop goes to review. The prompt asks for something in the record to point
+   belongs* — with its control drawn from the keeps. ~M. **Built 2026-10-22.** A rescued drop goes to review. The prompt asks for something in the record to point
    at, for any scope, and the reviewer is shown neither the tests nor the hints, being a reader independent
    of the judge. The control is drawn at the drops' own mix of confidence by default, in place of the
    prototype's hand-written strata.
@@ -473,6 +476,33 @@ the stages are separable and each is tested alone. The console script is the `cl
    means, as the model is told), what `quote` asks for (the record's words that show an answer, checked
    against the record — not a literal), and when a field wants none. A terse test fixture read as "the
    quote must be the literal word", which is the misreading to write against.
+   **And it must walk through the process, step by step** (maintainer, 2026-10-22): in which order the
+   steps run, which call an LLM, what each does to the data, where a person comes in, which are free to
+   re-run (rules and reports ask nothing), and what file each leaves. With illustrative proportions on a
+   round 1000 records, said outright to be an example, the real numbers for a corpus being the pilot
+   report's. The diagram, as agreed:
+
+   ```mermaid
+   flowchart TD
+       BIB[".bib"] --> SIFT["sift<br/>(no LLM)<br/>drops records with nothing to screen"]
+       SIFT --> T["judge: titles<br/>(LLM, every record)"]
+       T -->|"settled from the title"| V{"verdict"}
+       T -->|"unsure, thin title,<br/>or a test true"| A["judge: abstracts<br/>(LLM, escalated only)"]
+       A --> V
+       V -->|"drop"| R["review<br/>(LLM, drops only)<br/>makes the case that each belongs"]
+       R -->|"no case"| OUT1["removed"]
+       R -->|"case found"| PERSON["to a person"]
+       V -->|"review"| PERSON
+       V -->|"keep"| X["extract<br/>(LLM, keeps only)<br/>what each record says"]
+       X --> RULES["rules<br/>(no LLM)"]
+       RULES -->|"remove"| OUT2["removed"]
+       RULES -->|"hold"| PERSON
+       RULES -->|"keep"| KEPT["kept"]
+   ```
+
+   The bottom row needs a sentence, being the part a reader asks about: the judge keeps a record whenever
+   no test is positively true, so a keep carries no reason; the extractor records what each kept record
+   says, and the rules remove what those fields positively rule out.
 
 Then a live pilot on a new corpus, which is the first GPU time this costs.
 

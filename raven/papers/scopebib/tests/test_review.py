@@ -8,7 +8,7 @@ import pytest
 from raven.librarian import agent, sweep
 from raven.papers.scopebib import definition as scope_definition
 from raven.papers.scopebib import records as scope_records
-from raven.papers.scopebib import replay, review
+from raven.papers.scopebib import review
 
 
 @pytest.fixture
@@ -104,23 +104,3 @@ class TestRescues:
         answers = {"a": {"verdict": "drop"}, "b": {"verdict": "drop"}}
         after = review.apply_reviews(answers, {"b": {"belongs": None, "case": ""}})
         assert after["a"]["verdict"] == after["b"]["verdict"] == "drop"
-
-
-class TestReplay:
-    def test_the_prototype_s_tables_are_read_both_groups(self, tmp_path):
-        path = tmp_path / "drop-review-0-2.tsv"
-        path.write_text("group\tbelongs\tkey\tcase\ttitle\n"
-                        "dropped\tyes\ta\tIt is  about ravens.\tT\n"
-                        "control\tno\tb\tNothing to point at.\tT\n"
-                        "dropped\t?\tc\t\tT\n", encoding="utf-8")
-        ledger = review.ledger(tmp_path, "proto000")
-        assert replay.import_prototype_reviews([path], ledger=ledger) == 3
-        answers = ledger.answers()
-        assert answers["a"] == {"belongs": True, "case": "It is about ravens."}
-        assert answers["b"]["belongs"] is False and answers["c"]["belongs"] is None
-
-    def test_a_table_of_something_else_is_refused(self, tmp_path):
-        path = tmp_path / "other.tsv"
-        path.write_text("key\tverdict\na\tdrop\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="no columns belongs, case, group"):
-            replay.import_prototype_reviews([path], ledger=review.ledger(tmp_path, "p"))
