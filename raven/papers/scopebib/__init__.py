@@ -11,6 +11,8 @@ The library behind `raven-scopebib`, one module per stage:
   - `extract`, what a kept record says, field by field, with the record's own words for the values that
     need them.
   - `rules`, the definition's rules over those fields: remove, hold for a person, or keep.
+  - `review`, a second reader over the judge's drops, making the case that each belongs; a drop it makes a
+    case for goes to a person.
   - `replay`, bringing answers made elsewhere into the ledgers under the instrument that made them,
     so they are used without being asked again.
 

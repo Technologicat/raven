@@ -4,6 +4,8 @@ The source is the prototype in `investigations/aokk-corpus-scope/`. `judge_scope
 answer, `{"key", <one boolean per test>, "confidence", "why", "source"}`, `source` being `"title"` or
 `"abstract"` for the pass that answered, a later line for the same key and pass superseding an earlier one.
 `extract_fields.py` kept one flat line per record, `{"key", "v", <one value per field>, "evidence"}`.
+`review_drops.py` wrote a table per slice of the drops, with the columns `group`, `belongs`, `key` and
+`case`, `group` being `"dropped"` or `"control"`.
 
 Replayed answers keep the instrument that made them. They are written under a fingerprint the caller names —
 `fingerprint_of`, over the prompts that produced them, is the honest choice — and never under the tool's
@@ -11,13 +13,16 @@ own, so a report built from them says which judge decided, and a run under the t
 everything afresh.
 """
 
-__all__ = ["fingerprint_of", "ImportCount", "import_prototype_judgements", "import_prototype_extractions"]
+__all__ = ["fingerprint_of", "ImportCount", "import_prototype_judgements", "import_prototype_extractions",
+           "import_prototype_reviews"]
 
 import hashlib
 import json
 import pathlib
+from collections.abc import Iterable
 from typing import NamedTuple
 
+from ...common import tabular
 from ...librarian import sweep
 from . import definition as scope_definition
 from . import extract
@@ -118,4 +123,26 @@ def import_prototype_extractions(path: str | pathlib.Path, *, ledger: sweep.Ledg
             answer[f"{quoted[0]}_quote"] = entry.get("evidence", "")
         ledger.write_answer(entry["key"], extract.normalize(answer, definition, records[entry["key"]]))
         written += 1
+    return written
+
+
+def import_prototype_reviews(paths: Iterable[str | pathlib.Path], *, ledger: sweep.Ledger) -> int:
+    """Write the prototype reviewer's answers in the tables at `paths` into `ledger`. Returns how many.
+
+    `ledger`: normally `review.ledger(directory, fingerprint)` under the replayed instrument's fingerprint.
+
+    Both groups are written, the control's answers being what the reviewer's discrimination is read
+    against. A `belongs` of `yes` or `no` becomes `True` or `False`, anything else `None`. Raises
+    `ValueError` for a table lacking one of the columns.
+    """
+    written = 0
+    for path in map(pathlib.Path, paths):
+        rows = tabular.read_table(path)
+        if rows and (missing := sorted({"group", "belongs", "key", "case"} - set(rows[0]))):
+            raise ValueError(f"{path}: no column{'s' if len(missing) != 1 else ''} {', '.join(missing)}; "
+                             f"is this a table `review_drops.py` wrote?")
+        for row in rows:
+            belongs = {"yes": True, "no": False}.get(row["belongs"].strip().lower())
+            ledger.write_answer(row["key"], {"belongs": belongs, "case": " ".join(row["case"].split())[:300]})
+            written += 1
     return written

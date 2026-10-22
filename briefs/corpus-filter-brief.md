@@ -446,8 +446,14 @@ the stages are separable and each is tested alone. The console script is the `cl
      keeps, 72 holds and 264 removals in both, every rule label matching its tier. Translating the AOKK
      definition had dropped the prototype's `mixed` level, which the data showed; it is back.
 6. **`review`: the reviewer** over the drops — the prototype's *make the strongest case that this record
-   belongs* — with its control drawn from the keeps. ~M. *What a case found does to the drop is a
-   decision; see below.*
+   belongs* — with its control drawn from the keeps. ~M. **Built 2026-10-22**, with the replay of the
+   prototype's reviews. A rescued drop goes to review. The prompt asks for something in the record to point
+   at, for any scope, and the reviewer is shown neither the tests nor the hints, being a reader independent
+   of the judge. The control is drawn at the drops' own mix of confidence by default, in place of the
+   prototype's hand-written strata.
+   - **Replayed end to end over the prototype's corpus**: the reviewer rescued 14 drops, which gives 1069
+     drops, 153 reviews and 3092 keeps under question 8's revised rule — the estimate the revision was
+     decided on. It had seen every drop.
 7. **`report` and `cli`: the reports and the console script.** Stage-numbered outputs through
    `raven.common.tabular`, the directory owned and stale files removed, the filtered `.bib`, the pilot
    report in its sort order, the models file. Subcommands `judge`, `review`, `extract`, `report` and
