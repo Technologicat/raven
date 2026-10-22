@@ -53,6 +53,9 @@ that presentation deliberately, which is not a same-day decision).
    - **Biology**: the human-checked result is **Table 6** of the published paper,
      <https://www.mdpi.com/2227-7102/16/2/201>. The `clustered*.txt` files in `202508/` are not known to
      match it, so transcribe the table rather than trusting them, and say where they differ if they do.
+     `202508/` holds a manuscript dated 2025-11-13, as `.odt` and `.pdf`, which is probably the paper:
+     extract the table from there, and check it against the published Table 6, since a manuscript can
+     predate the final edits. The maintainer can supply the final `.odt` or `.pdf` if it differs.
 
    A human grouping is a reference to compare against, not a target to fit: what a person merged for a
    paper's table reflects the paper's argument as well as the corpus. Do not choose a
