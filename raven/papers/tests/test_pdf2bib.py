@@ -32,7 +32,7 @@ def replies(monkeypatch):
     queue = []
 
     def fake_ask_record(llm_settings, instruction, *args, **kwargs):
-        return types.SimpleNamespace(reply=queue.pop(0), messages=[])
+        return types.SimpleNamespace(reply=queue.pop(0), messages=[], truncated=False)
 
     monkeypatch.setattr(pdf2bib.agent, "ask_record", fake_ask_record)
     return queue
@@ -100,7 +100,7 @@ class TestPrompts:
 
         def recording_ask_record(llm_settings, instruction, *args, **kwargs):
             seen.append(instruction)
-            return types.SimpleNamespace(reply="NO AUTHORS LISTED" if len(seen) == 1 else "NO TITLE", messages=[])
+            return types.SimpleNamespace(reply="NO AUTHORS LISTED" if len(seen) == 1 else "NO TITLE", messages=[], truncated=False)
 
         monkeypatch.setattr(pdf2bib.agent, "ask_record", recording_ask_record)
         run_field(prompts, "author")
