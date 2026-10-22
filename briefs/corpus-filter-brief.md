@@ -431,10 +431,12 @@ Then a live pilot on a new corpus, which is the first GPU time this costs.
 - **The console script's name.** Proposed: `raven-filterbib`, beside `raven-siftbib`, `raven-fixbib` and
   `raven-burstbib`, since v1 takes a `.bib`. When the drydock makes the input something else, the name can
   follow.
-- **The title measurement needs spaCy**, for lemmas. The prototype loads it locally on the CPU on
-  purpose: on a single card the GPU may be busy serving the very LLM the run is talking to. Proposed: keep
-  that, rather than going through raven-server's NLP. Either way its tests carry the `ml` marker, so CI
-  covers the rest and not that.
+- **The title measurement needs spaCy**, for lemmas. Proposed: through `raven.client.mayberemote.NLP`,
+  as Raven's design intends — raven-server's when it is running, loaded locally when it is not. The
+  prototype loads it locally on the CPU instead, giving GPU contention with the LLM as the reason; that
+  does not match how Raven is deployed, where raven-server has a GPU of its own and the LLM another or
+  another machine, and on a single card raven-server shares it with the LLM anyway (maintainer,
+  2026-10-22). Either way its tests carry the `ml` marker, so CI covers the rest and not that.
 
 ## The final study's numbers
 
