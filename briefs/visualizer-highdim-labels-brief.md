@@ -47,9 +47,15 @@ that presentation deliberately, which is not a same-day decision).
    duplicate keys, a placeholder `doi-numero` reused and a DOI-URL key appearing twice, which may also be a
    duplicate record. Try `raven-fixbib` first, then `raven-deduplicate`; anything they cannot repair is a
    case for them rather than for a hand edit.
-   Both folders also hold an earlier grouping (`clustered*.txt`; `geography_clusters.txt` and a cluster
-   table `.odt`). **Ask how those were made before using them**: the shipped 2D pipeline's output is one
-   more method to compare against, while a grouping a person checked would be a yardstick. Do not choose a
+   **Both have a human-checked grouping, which makes them yardsticks** (maintainer, 2026-10-22):
+   - **Geography**: `202512/geography_clusters.txt` is the final human-checked result, which became a
+     table in the geography paper.
+   - **Biology**: the human-checked result is **Table 6** of the published paper,
+     <https://www.mdpi.com/2227-7102/16/2/201>. The `clustered*.txt` files in `202508/` are not known to
+     match it, so transcribe the table rather than trusting them, and say where they differ if they do.
+
+   A human grouping is a reference to compare against, not a target to fit: what a person merged for a
+   paper's table reflects the paper's argument as well as the corpus. Do not choose a
    number against examples written for the purpose. Whatever rule comes out must give the same answer as cut-at-100 on the corpora where 100 was
    measured, or say why it should not.
 2. **Port the cohesion rule from the prototype, not from this summary — and note the prototype has only
