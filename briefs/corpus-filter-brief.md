@@ -183,6 +183,14 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      includes the *loaded model's* id, so finding a ledger by fingerprint would need a backend — exactly
      what the rule above forbids. Naming the fingerprint lets the to-do be read off the ledger first, and a
      backend is connected only if something is left to ask.
+     - **How it is named — proposed 2026-10-22, not yet agreed:** the models file that `run` writes
+       (question 4) names each stage's `instrument` beside its `model`, with `--instrument STAGE=FP` on
+       the command line overriding it stage by stage, as `--model` does. A named instrument is
+       **read-only**: the stage reads that ledger and asks nothing under it, since answers made by today's
+       prompts must never carry the old instrument's fingerprint; records left unanswered are reported by
+       the up-front check, which stops before connecting. `convert_to_scopebib.py` would write such a file
+       for the prototype, so reproducing its numbers is `run --models <that file>`. The file then records
+       how a run was made, so *run file* may be the better name for it.
    - **And whether a run will ask anything is decided before its work starts** (maintainer, 2026-10-07).
      Compute what is still unanswered first: if anything is, connect and check the backend then, failing
      at once as before; if nothing is, never connect. Connecting lazily at the first question is not
