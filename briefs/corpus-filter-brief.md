@@ -436,7 +436,7 @@ Then a live pilot on a new corpus, which is the first GPU time this costs.
   where `raven-siftbib` answers *can it be screened at all?*; it matches the definition's `scope`.
   Rejected: `raven-filterbib`, too close to `raven-siftbib` to keep apart, and `raven-judgebib`, which
   names a mechanism `raven-deduplicate --judge` shares.
-- **The title measurement needs spaCy**, for lemmas. Proposed: through `raven.client.mayberemote.NLP`,
+- **The title measurement needs spaCy**, for lemmas: through `raven.client.mayberemote.NLP` (decided),
   as Raven's design intends — raven-server's when it is running, loaded locally when it is not. The
   prototype loads it locally on the CPU instead, giving GPU contention with the LLM as the reason; that
   does not match how Raven is deployed, where raven-server has a GPU of its own and the LLM another or
