@@ -57,8 +57,9 @@ that presentation deliberately, which is not a same-day decision).
      extract the table from there, and check it against the published Table 6, since a manuscript can
      predate the final edits. The maintainer can supply the final `.odt` or `.pdf` if it differs.
 
-   A human grouping is a reference to compare against, not a target to fit: what a person merged for a
-   paper's table reflects the paper's argument as well as the corpus. Do not choose a
+   A human grouping is a reference to compare against, not a target to fit: **there is no correct grouping
+   of these records** (maintainer, 2026-10-22), as the investigation found for cluster counts, where
+   nothing in the data picks a number. Do not choose a
    number against examples written for the purpose. Whatever rule comes out must give the same answer as cut-at-100 on the corpora where 100 was
    measured, or say why it should not.
 2. **Port the cohesion rule from the prototype, not from this summary — and note the prototype has only
