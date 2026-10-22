@@ -41,6 +41,12 @@ that presentation deliberately, which is not a same-day decision).
    with an abstract; maintainer, 2026-10-22 — it may have moved by Monday). **Keep it out of the
    calibration**: settle the rule on biology and geography, then apply it to health education as the
    held-out case, so that the first time it meets that corpus is the honest test.
+   **It needs cleaning first** (maintainer: a raw file from someone new to BibTeX). Parsed on 2026-10-22,
+   115 of 119 records read, and every one of those has a title and an abstract. The four that do not: two
+   parse failures, at least one from a DOI URL used as the citekey (`@article{https://doi.org/…`), and two
+   duplicate keys, a placeholder `doi-numero` reused and a DOI-URL key appearing twice, which may also be a
+   duplicate record. Try `raven-fixbib` first, then `raven-deduplicate`; anything they cannot repair is a
+   case for them rather than for a hand edit.
    Both folders also hold an earlier grouping (`clustered*.txt`; `geography_clusters.txt` and a cluster
    table `.odt`). **Ask how those were made before using them**: the shipped 2D pipeline's output is one
    more method to compare against, while a grouping a person checked would be a yardstick. Do not choose a
