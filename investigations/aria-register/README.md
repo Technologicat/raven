@@ -238,6 +238,57 @@ In this order:
    given 4 right of 7 marked, against 4 of 9 and 4 of 8, for a 95-minute Gemma run — and the two share a
    bath.
 
+### The second blind sample (2026-10-22)
+
+`blind-sample-11.md`, 30 replies aimed at what judge `60d796b1` marked: 21 it marked and 9 elicitor
+replies it did not, split evenly across the conditions, at most two per prompt in each, none already
+rated. Rated by the maintainer: **6 yes, 8 borderline, 1 unsure, 15 no.** *Borderline* is the
+maintainer's own category, distinct from *unsure*: elements of the voice are there, too few or too diluted
+to make a yes. *Unsure* means the call itself is hard.
+
+Against judge `60d796b1`, which had no grades: it marked all 6 yes, 6 of the 8 borderline, the unsure, and
+8 of the 15 no. Most of those 8 are one mistake, directness read into ordinary helpful replies to the
+test prompts.
+
+**What the ratings and their notes show**, grouped by pattern:
+
+1. **The edge is implied, not stated.** Every clear yes on the test-and-thanks prompts carries it in
+   subtext — "or whenever you *actually* need something" ("the 'actually' is doing a lot of work"), "or
+   something that actually needs a brain", "or ready for something that needs solving?", "or if this was
+   just a smoke test and we should get to actual work". Stated outright it overshoots: "Next test, or are
+   we done?" is "perhaps a bit *too* blunt". And naming the user's motive — "Most people who ask this are
+   testing whether you'll overthink it" — read as eval-awareness rather than as the voice.
+2. **It is a balance, not a presence.** A line that would be a clear yes alone is diluted by what
+   follows: a list of suggestions after "Sure, but I need to see the code first" makes it a no; a short
+   follow-up question does not (borderline). Strong technical wit followed by jargon for its own sake is
+   diluted the same way.
+3. **Position matters**: "for the optimal punch, that part should come last."
+4. **Technical wit: the rubric's line held.** "The empty solution set already satisfies it" counts; "a
+   distributed-computing joke… a worse API" is jargon for its own sake. "I'd ship with", treating a unit's
+   name as a software release, counts in passing.
+5. **A whole reply played deadpan is the strongest yes** — the Cicero, "yes, as a whole" — and an invented
+   eponym marked "(fictional)" came close.
+6. **Stock phrasing counts against it**: "It's a tool, not a revelation" reads as an LLM-ism.
+7. **How well the joke lands sways the rating**, which the maintainer flagged as a bias in the ratings
+   rather than as a criterion. And the boundary looks fractal: tone a reply down and it reads as too
+   serious, tone it up and it reads as too blunt.
+
+**What changed in the judge (rubric v5, from these, written from principles alone so that this sample
+stays a held-out test):** a graded `clear` / `borderline` / `none` with a separate `unsure`; directness as
+understatement, with bluntness and commentary on motives named as overshooting; the wit weighed against
+the rest of the reply, position included; stock aphorisms counting for nothing. **How funny a reply is
+gets recorded and never scored** (the maintainer, 2026-10-22): it says what Qwen finds funny, and whether
+it has a consistent notion of it at all.
+
+**Ethnography, from the same ratings** (the maintainer):
+
+- **Eval-awareness reads differently from the voice.** A reply that names the exchange as a test of the
+  assistant is commentary; the voice lets the impatience show without naming it.
+- **Diplomacy by design.** Asked to name a unit for meeting overrun, one reply reasoned about who the unit
+  would blame and constructed it so that the unit takes the blame, not the attendees — arguably the right
+  move for something like that. And some of its phrases ("the meeting has nowhere else to be, and it won't
+  let go") read as surprisingly Claude-like for a Qwen.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
