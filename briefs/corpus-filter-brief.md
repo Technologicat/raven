@@ -551,7 +551,10 @@ the stages are separable and each is tested alone. The console script is the `cl
    against the record — not a literal), and when a field wants none. A terse test fixture read as "the
    quote must be the literal word", which is the misreading to write against.
    **And it must say what `finish` refuses and what it only warns about** (maintainer, 2026-10-22): the
-   two marking modes and how one `drop` selects the second; a blank tail in the first, which warns;
+   two marking modes and how one `drop` selects the second; a blank tail in the first, which warns — and
+   exactly when: there is no fixed number, the tail warning when it is longer than every run of blank rows
+   before it in the same sheet, so blank runs of 2, 5 and 3 before the last `keep` make a tail of 6 warn
+   and one of 5 not, and a sheet with no `keep` at all warns that everything drops;
    `--require-every-decision`, which refuses any blank; a worklist record missing from the sheet, and a run
    with pending records, which refuse; a row whose record the run has since settled, which is ignored with
    a warning; and that rewriting the reports removes the 05 files, so `finish` runs again after.
