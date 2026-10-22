@@ -82,6 +82,27 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    any full run, which was step 0 of the original brief, and the README's findings come largely from
    those runs. What the pilot hands the user to read, and in what order, wants designing — the review TSV's verdict ×
    confidence sort is the starting point.
+   **Decided (maintainer, 2026-10-22):**
+   - **`run --pilot N`, default 50**, runs the model stages — the judge, the reviewer and the extractor —
+     over a seeded sample of N records: question 7's `sample` machinery. Its answers go into the same
+     ledgers the full run uses, so the full run asks only the rest; after an edit to the definition the
+     instrument changes and the pilot is simply asked again. Its reports go to a `pilot/` subdirectory, so
+     neither set removes the other.
+   - **One pilot report, a spreadsheet with a section column, pre-sorted in reading order**, which is
+     ordered by what a mistake costs:
+     1. **The drops** (true at high confidence), each with the test that fired and its reason. A false drop
+        loses a record silently, so these are read first, all of them.
+     2. **The records sent to review** (true at medium or low). Mostly obvious drops means the tests are
+        too timid; mostly obvious keeps, too eager.
+     3. **A sample of the keeps with their extracted fields**, the rules' removals and holds marked.
+        Anything here that plainly should have gone is a test that is missing.
+     4. **The title-only records**, and how each stage did on them: the inputs most likely to break a
+        rubric. **The set may be empty**, where a sift ran before the pilot, and the section then says so
+        rather than vanishing.
+
+     The constants derived from the corpus (`MIN_INFORMATIVE_WORDS`, `TEASER_CHARS`) head the report as
+     context, the counts go to the console as well, and the run says how many title-only records the
+     sample happened to include.
 4. **One console script or several.** `raven-siftbib` is already its own tool, and the README's case for
    that (no LLM, same shape as `raven-fixbib` and `raven-deduplicate`) holds. **Decided (maintainer,
    2026-10-21): one console script, with the stages as subcommands** — `judge`, `review`, `extract`,
