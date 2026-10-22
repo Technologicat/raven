@@ -34,9 +34,13 @@ that presentation deliberately, which is not a same-day decision).
    the corpus's own clusters, which barely exist at that cut. The cut needs an answer for small corpora.
    **Measure it on real data, and real small corpora exist** (maintainer, 2026-10-22): the education
    corpora under `00_stuff/rawdata/biology_geography_health_education/` — `202508/biology.bib` (163
-   records) and `202512/geography.bib` (135), every record with an abstract, and a health education
-   corpus in `202506/`. Same family and size as Monday's, so they are the calibration set, ahead of
-   subsampling the large corpora (which gives a sparse sample of a big field rather than a small field).
+   records) and `202512/geography.bib` (135), every record with an abstract. Same family and size as
+   Monday's, so they are the calibration set, ahead of subsampling the large corpora (which gives a sparse
+   sample of a big field rather than a small field).
+   **Monday's corpus is the third of the family**, `202506/health_education.bib` (119 records, every one
+   with an abstract; maintainer, 2026-10-22 — it may have moved by Monday). **Keep it out of the
+   calibration**: settle the rule on biology and geography, then apply it to health education as the
+   held-out case, so that the first time it meets that corpus is the honest test.
    Both folders also hold an earlier grouping (`clustered*.txt`; `geography_clusters.txt` and a cluster
    table `.odt`). **Ask how those were made before using them**: the shipped 2D pipeline's output is one
    more method to compare against, while a grouping a person checked would be a yardstick. Do not choose a
