@@ -651,7 +651,8 @@ Nothing about the machinery is AOKK-specific. What is:
 |---|---|
 | `SCOPE_QUESTION` — the corpus's own topic | the two-pass structure: batched titles, then abstracts for the unsure |
 | the rubric's three tests and their domain examples | the escalation rule, and its structural half being computed rather than asked |
-| `MIN_INFORMATIVE_WORDS`, `TEASER_CHARS` — both measured *from this corpus* | resumable JSONL keyed on citekey; `.bib` in, filtered `.bib` plus reasons out |
+| | resumable JSONL keyed on citekey; `.bib` in, filtered `.bib` plus reasons out |
+| | the title bounds (`MIN_CONTENT_WORDS`, `MIN_CONTENT_DENSITY`), calibrated across five corpora, and the ellipsis rule for a teaser |
 | | the review TSV, and the verdict × confidence sort that makes it readable |
 
 **The three tests are the interesting part of the generalization, not the boilerplate.** They are not a

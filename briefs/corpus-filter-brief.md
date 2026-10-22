@@ -26,8 +26,13 @@ What that section settles, in one line each:
 - **The judge's parameter is a list of named tests**, each asking for positive evidence of one way to be
   off topic, with silence keeping. The prototype's three tests are the first worked example rather than
   the schema.
-- **Constants measured from the prototype's corpus are derived at run time** from the corpus in hand:
-  `MIN_INFORMATIVE_WORDS` and `TEASER_CHARS`.
+- **The title and abstract checks are the prototype's latest**, which supersede the README's table
+  (maintainer, 2026-10-22: the more recent design worked better). A title is too thin to judge from when
+  it has fewer than `MIN_CONTENT_WORDS` content words, or, from eight words up, when fewer than
+  `MIN_CONTENT_DENSITY` of them are content words; those bounds were calibrated across five corpora in
+  unrelated domains, so they are fixed rather than derived per corpus. An abstract is a teaser when it
+  ends in an ellipsis, length having been tried and dropped as a signal. The README table's
+  `MIN_INFORMATIVE_WORDS` and `TEASER_CHARS` are the design those replaced.
 - **Five lessons a generalized tool should start with**: stamp the instrument, tiers that separate
   wrong from out of scope, escalate every drop, a `not_stated` value with a quotation rule, no mixing of
   JSON literals with strings in one field.
@@ -106,8 +111,8 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
         rubric. **The set may be empty**, where a sift ran before the pilot, and the section then says so
         rather than vanishing.
 
-     The constants derived from the corpus (`MIN_INFORMATIVE_WORDS`, `TEASER_CHARS`) head the report as
-     context, the counts go to the console as well, and the run says how many title-only records the
+     The title bounds and how many titles they flag in this corpus head the report as context — a corpus
+     where they flag far more than the 0.7–4.9% they flagged in calibration shows at once — the counts go to the console as well, and the run says how many title-only records the
      sample happened to include.
 4. **One console script or several.** `raven-siftbib` is already its own tool, and the README's case for
    that (no LLM, same shape as `raven-fixbib` and `raven-deduplicate`) holds. **Decided (maintainer,
@@ -391,7 +396,7 @@ the stages are separable and each is tested alone. The console script is the `cl
 1. **`records`: a record as the stages see it** — title, abstract, venue, read from a `.bib` — and the
    two measurements the judge's escalation rests on: whether a title is informative (`judge_scope.py`'s
    `content_words` and `looks_uninformative`), and whether an abstract is a truncated preview
-   (`looks_truncated`). The constants behind them are derived from the corpus in hand, as decided. ~S–M.
+   (`looks_truncated`), with the prototype's latest bounds. ~S–M.
 2. **`definition`: the definition file.** Reading it, checking it with errors that name the file and the
    entry, the implicit `not_stated`, the default frame and its replacement, and the normalized material
    that names the instrument. The AOKK definition, written in full, is the test fixture and ships in the
