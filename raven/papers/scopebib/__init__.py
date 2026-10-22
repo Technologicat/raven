@@ -14,7 +14,8 @@ The library behind `raven-scopebib`, one module per stage:
   - `review`, a second reader over the judge's drops, making the case that each belongs; a drop it makes a
     case for goes to a person.
   - `report`, where each record ended up, and the stage-numbered files a run leaves: the audits, the list
-    of records for a person to check, and the filtered `.bib`.
+    of records for a person to check, and the filtered `.bib`; and `finish`, applying that person's decisions.
+  - `runfile`, the run file: which model each stage asks, and under which instrument.
 
 It generalizes the prototype in `investigations/aokk-corpus-scope/`.
 """
