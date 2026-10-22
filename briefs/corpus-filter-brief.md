@@ -91,8 +91,11 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      ledgers the full run uses, so the full run asks only the rest; after an edit to the definition the
      instrument changes and the pilot is simply asked again. Its reports go to a `pilot/` subdirectory, so
      neither set removes the other.
-   - **One pilot report, a spreadsheet with a section column, pre-sorted in reading order**, which is
-     ordered by what a mistake costs:
+   - **One pilot report, a spreadsheet with a section column, pre-sorted**: by section in reading order,
+     then by what decided the record — the test that fired, or the rule — then author, year and title.
+     Grouping by what decided a record puts each test's calls together, which is how a miscalibrated test
+     shows; author, year, title is a reference list's order, so a reader can find a record they know.
+     The sections are ordered by what a mistake costs:
      1. **The drops** (true at high confidence), each with the test that fired and its reason. A false drop
         loses a record silently, so these are read first, all of them.
      2. **The records sent to review** (true at medium or low). Mostly obvious drops means the tests are
