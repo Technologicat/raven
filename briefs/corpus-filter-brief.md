@@ -501,6 +501,20 @@ the stages are separable and each is tested alone. The console script is the `cl
      neither the removals nor the kept `.bib`, and the counts say how many there are.
    - **The run file is TOML**, matching the definition file and being written by hand as often as by the
      tool; the writer is the tool's own, for a flat table of strings, rather than a new dependency.
+   - **The run file is a complete record, allowing a re-run or a replay** (maintainer, 2026-10-22): beside
+     each stage's model and instrument, a `[run]` table holds the input `.bib`, the definition, the sift's
+     criteria, `sample`, `pilot`, `seed` (one, for every draw), `control`, `replicate` and the table format,
+     so `run --run-file run.toml` alone repeats a run. Without it, a repeat that forgot `--control` or the
+     seed would draw another control, which the reviewer would have to be asked about under a read-only
+     instrument. `--until` is not in it, being where to stop rather than how the run was made. The command
+     line wins over the file, option by option. **Paths are written relative to the file**, so a run
+     directory handed over with its input still resolves, on another system too.
+   - **The tool archives a hand-written run file before replacing it** (maintainer): every file the tool
+     writes starts with `# Written by raven-scopebib`, and one at `<out>/run.toml` that does not is moved to
+     `run_orig.toml`, or `run_orig-2.toml` where that exists, so no archive is written over. A file the tool
+     wrote is replaced, hand edits included, since the edits that took effect are in what it records. A
+     hand-written file elsewhere, passed with `--run-file`, is never touched: the tool writes only in its
+     output directory.
    - **A named instrument is read-only unless it is today's** (agreed, maintainer): once connected, if the
      live fingerprint equals the named one, the stage may ask what is left, since today's prompts *are*
      that instrument. Without that, resuming an interrupted run by passing back its own run file would
