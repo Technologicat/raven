@@ -431,7 +431,10 @@ the stages are separable and each is tested alone. The console script is the `cl
 9. **The acceptance run**: the finished tool over the prototype's corpus, the prototype's answers
    replayed, against `regenerate_reports.py`'s outputs. They should agree except where question 8's rule
    differs from the prototype's, and every difference should be explained by it. No GPU. Then the README,
-   the changelog and the console script's entry. ~S–M.
+   the changelog and the console script's entry. ~S–M. **The README must say what starts a fresh ledger**
+   and what does not (maintainer, 2026-10-22): rewrapping prose or editing a comment in the definition
+   file changes neither the prompt nor the fingerprint, and a rule is applied when the reports are
+   written, so changing one asks nothing again; changing a test, a field or a value starts afresh.
 
 Then a live pilot on a new corpus, which is the first GPU time this costs.
 
