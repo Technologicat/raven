@@ -28,8 +28,9 @@ What that section settles, in one line each:
   the schema.
 - **The title and abstract checks are the prototype's latest**, which supersede the README's table
   (maintainer, 2026-10-22: the more recent design worked better). A title is too thin to judge from when
-  it has fewer than `MIN_CONTENT_WORDS` content words, or, from eight words up, when fewer than
-  `MIN_CONTENT_DENSITY` of them are content words; those bounds were calibrated across five corpora in
+  it has fewer than `MIN_CONTENT_WORDS` content words, or when fewer than `MIN_CONTENT_DENSITY` of its
+  words are content words (the prototype exempted titles under eight words from the density, which at
+  these bounds changed no answer, so the exemption was dropped, 2026-10-22); those bounds were calibrated across five corpora in
   unrelated domains, so they are fixed rather than derived per corpus. An abstract is a teaser when it
   ends in an ellipsis, length having been tried and dropped as a signal. The README table's
   `MIN_INFORMATIVE_WORDS` and `TEASER_CHARS` are the design those replaced.

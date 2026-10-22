@@ -12,7 +12,7 @@ abstract and venue as readable text, and a link.
 """
 
 __all__ = ["Record", "load_records",
-           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "MIN_WORDS_FOR_DENSITY",
+           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
            "looks_truncated", "describe_abstract"]
 
@@ -78,14 +78,13 @@ def load_records(bib_path: str | pathlib.Path) -> list[Record]:
 # hand-written filler and genuine titles that it separates completely. Note this is *not* a classifier
 # for vagueness and cannot be one: it is the backstop for the single case the model's own confidence
 # cannot cover, which is being sure about an input that says nothing.
+#
+# Density applies at any length. A short title cannot fail it at these bounds: with at least
+# `MIN_CONTENT_WORDS` content words in under eight words, its density is at least 3/7, above the bound.
+# Recalibrating either bound means checking short titles again, since a raised density bound would start
+# failing short precise ones.
 MIN_CONTENT_WORDS = 3
 MIN_CONTENT_DENSITY = 0.40
-
-# Below this many words, density says nothing — one function word in a four-word title swings it by a
-# quarter — so a short title is judged on the count alone. At the bounds above this changes no answer: a
-# title under eight words with at least `MIN_CONTENT_WORDS` content words already has a density of at
-# least 3/7. It matters only if the bounds move.
-MIN_WORDS_FOR_DENSITY = 8
 
 
 class _Pipeline(Protocol):
@@ -132,9 +131,7 @@ def content_word_counts(titles: Sequence[str], nlp: _Pipeline,
 
 def is_uninformative(content: int, informative: int) -> bool:
     """Whether a title with `content` content words of `informative` words is too thin to judge from."""
-    if content < MIN_CONTENT_WORDS:
-        return True
-    return informative >= MIN_WORDS_FOR_DENSITY and content / informative < MIN_CONTENT_DENSITY
+    return content < MIN_CONTENT_WORDS or content / informative < MIN_CONTENT_DENSITY
 
 
 class TitleMeasure(NamedTuple):

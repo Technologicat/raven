@@ -85,8 +85,7 @@ class TestIsUninformative:
         assert not records.is_uninformative(records.MIN_CONTENT_WORDS, records.MIN_CONTENT_WORDS)
 
     def test_a_long_title_that_is_mostly_padding(self):
-        words = records.MIN_WORDS_FOR_DENSITY + 7
-        content = records.MIN_CONTENT_WORDS
+        words, content = 15, records.MIN_CONTENT_WORDS
         assert content / words < records.MIN_CONTENT_DENSITY, "this fixture is not padded enough to test density"
         assert records.is_uninformative(content, words)
 
