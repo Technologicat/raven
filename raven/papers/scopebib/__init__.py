@@ -8,6 +8,8 @@ The library behind `raven-scopebib`, one module per stage:
     the rules over them, read and checked.
   - `judge`, the two-pass judge: every record from its title, then the ones that cannot be settled so from
     their abstracts, and a verdict of drop, review or keep.
+  - `replay`, bringing answers made elsewhere into the judge's ledgers under the instrument that made them,
+    so they are used without being asked again.
 
 It generalizes the prototype in `investigations/aokk-corpus-scope/`.
 """

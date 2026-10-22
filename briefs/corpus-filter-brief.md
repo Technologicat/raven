@@ -418,7 +418,15 @@ the stages are separable and each is tested alone. The console script is the `cl
    already, so the prototype's withholding of the tests became redundant (agreed, maintainer).
 4. **`replay`: importing the prototype's answers** (question 6), under the fingerprint of the prompts
    that made them. Early on purpose: it gives the later steps real answers to build and check against
-   with no GPU, which is what the replay was for. ~M.
+   with no GPU, which is what the replay was for. ~M. **Built 2026-10-22**, for the judge; the extractor's
+   answers are imported with step 5. The fingerprint is the caller's to name (`replay.fingerprint_of`),
+   since which commit's prompts made the prototype's answers is step 9's question.
+   - **Replayed over the prototype's corpus (2026-10-22), it reconciles exactly**: of 4314 judged records,
+     3092 keep in both; the prototype's 1084 drops become 834 drops (a test true at high confidence) and
+     250 reviews (249 at medium, 1 at low); its 138 unknowns become reviews. Every difference is question
+     8's rule. **So the rule sends about 6% of the corpus to a person that the prototype dropped**, and the
+     249 medium-confidence drops are the lever if that is too many — whether a medium drop made after
+     reading the abstract is ever wrong is the thing to measure before moving it.
 5. **`extract` and `rules`: the extractor and the rules over its fields.** Vocabularies checked, quotes
    checked against the text, the rules applied when the reports are written, and a removal whose quote is
    missing turned into a hold. ~M.
