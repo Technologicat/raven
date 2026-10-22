@@ -512,6 +512,24 @@ the stages are separable and each is tested alone. The console script is the `cl
      in `02-review-audit`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
      alone, so a control record cannot reach the worklist or the removals. The audit's header compares the
      case rate among the drops with the rate among the control, which is the line to read first.
+   - **A fifth stage, `finish`** (maintainer, 2026-10-22, not in the first plan): reads a marked copy of
+     `04-CHECK-BY-HAND`, applies the person's decisions, and writes `05-final.bib` and `05-hand-audit`.
+     - **A decision is `keep`, `drop` or blank, which drops**, in any case. Typing one full word per row
+       is friction over hundreds of rows in a spreadsheet, so only the keeps need marking; `drop` is
+       accepted so that a person who marks both ways can say so. Anything else is refused, naming its row,
+       since a typo must not become a drop.
+     - **A blank tail warns**, since a forgotten stretch now drops silently: when the blanks at the end are
+       the longest blank run in the sheet, which is how marking that stopped partway looks. No fixed
+       number, the person's own marking being the yardstick; an explicit `drop` ends a run, so a person
+       who marks both ways never sees it. The warning says that if the drops were meant, this is normal —
+       the same spirit as step 8's announcement of a model switch.
+     - **`--require-every-decision`**, off by default, refuses any blank.
+     - **A worklist record missing from the sheet is refused** (the maintainer leaned to warning or error):
+       with blank meaning drop, a missing row would drop unseen, and it means the sheet is not this run's
+       worklist. A row whose record the run has since settled is ignored with a warning, and a pending
+       record refuses, the run being unfinished.
+     - **`write_reports` removes the 05 files**, which `finish` writes: built from an older worklist, they
+       would look current. Rewriting the reports means finishing again, which asks nothing of a model.
    - **`report` built 2026-10-22.** Over the prototype's converted answers it reproduces step 6's judge
      side exactly: 1069 removed, 153 to a person (139 unsure, 14 rescued). On the rules side the 138
      extractions of the prototype's unknowns now belong to records sent to review, which accounts for the

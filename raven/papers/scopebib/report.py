@@ -19,6 +19,11 @@ order:
     04-CHECK-BY-HAND.<fmt>   every record sent to a person, with why
     04-removed-audit.<fmt>   every record removed, by which stage and why
     04-kept.bib              the records that survived every stage
+    05-hand-audit.<fmt>      every decision a person made on 04-CHECK-BY-HAND
+    05-final.bib             the kept records, and those a person kept
+
+The 05 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
+built from an older worklist, they would look current while describing another run.
 
 The directory is shared with whatever else the user keeps there, so a write removes only files bearing one
 of these exact names that it did not write this time — a previous run's report in another format, or a
@@ -26,10 +31,11 @@ stage that did not run. A copy saved under any other name is left alone.
 """
 
 __all__ = ["SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
-           "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "OWNED_NAMES",
+           "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
-           "SiftResult", "write_reports"]
+           "SiftResult", "write_reports",
+           "KEEP", "DROP", "FinishError", "finish"]
 
 import dataclasses
 import pathlib
@@ -56,11 +62,13 @@ EXTRACT_AUDIT = "03-extract-audit"
 CHECK_BY_HAND = "04-CHECK-BY-HAND"
 REMOVED_AUDIT = "04-removed-audit"
 KEPT_BIB = "04-kept.bib"
+HAND_AUDIT = "05-hand-audit"
+FINAL_BIB = "05-final.bib"
 
-_TABLES = (SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT)
+_TABLES = (SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
 
 #: Every file name `write_reports` can write, and so every name it may remove as stale.
-OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [SIFTED_BIB, KEPT_BIB])
+OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [SIFTED_BIB, KEPT_BIB, FINAL_BIB])
 
 # Outcomes.
 REMOVED = "removed"
@@ -411,3 +419,134 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
            f"records removed: {sift_count + len(removed)}" + (f", of which {sift_count} by the sift" if maybe_sift else "")],
           ("key", "removed by", "decided by", "why", *_RECORD_COLUMNS),
           rows)
+
+
+# --------------------------------------------------------------------------------
+# A person's decisions
+
+#: The decisions a person writes in the worklist's `decision` column, in any case. A blank cell drops too.
+KEEP = "keep"
+DROP = "drop"
+
+
+class FinishError(ValueError):
+    """A marked worklist `finish` cannot act on, with every row or key at fault named."""
+
+
+def _trailing_blank_warning(decisions: list[str], first_row: int) -> str | None:
+    """A warning when the blanks at the end of the sheet look like marking that stopped partway.
+
+    The tail is suspect when it is the longest run of blanks in the sheet, since stopping partway makes it
+    so; how long that is depends on the person's own marking, so no fixed number is assumed. An explicit
+    `drop` ends a run.
+    """
+    runs, run = [], 0
+    for decision in decisions:
+        run = run + 1 if decision == "" else 0
+        runs.append(run)
+    tail = runs[-1] if runs else 0
+    if not tail:
+        return None
+    if KEEP not in decisions:
+        return (f"no row is marked '{KEEP}', so all {len(decisions)} records will be dropped; "
+                "if that is what you meant, this is normal")
+    if tail <= max(runs[:-tail], default=0):
+        return None
+    return (f"the last {tail} rows, from row {first_row + len(decisions) - tail} on, have no decision, so they "
+            f"will be dropped; that is the longest blank run in the sheet, which is how marking that stopped "
+            f"partway looks. If you meant to drop them, this is normal; marking them '{DROP}' says so")
+
+
+def finish(out_dir: str | pathlib.Path, *,
+           sheet: str | pathlib.Path,
+           library: bibtexparser.Library,
+           records: Sequence[scope_records.Record],
+           definition: scope_definition.Definition,
+           final: dict[str, dict],
+           reviews: dict[str, dict],
+           extractions: dict[str, dict],
+           provenance: Sequence[str],
+           table_format: str = "tsv",
+           require_every_decision: bool = False) -> tuple[list[pathlib.Path], list[str]]:
+    """Apply a person's decisions on a marked copy of the worklist, and write `FINAL_BIB` and `HAND_AUDIT`.
+
+    `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Its `decision` column holds
+             `KEEP`, `DROP`, or nothing, which drops; case and surrounding space do not matter. A `note`
+             column, where the person added one, is carried into the audit.
+    `library`, `records`, `definition`, `final`, `reviews`, `extractions`, `provenance`, `table_format`:
+             as `write_reports` takes them; the worklist is worked out from them afresh.
+    `require_every_decision`: refuse a blank decision rather than reading it as a drop.
+
+    Returns `(written, warnings)`: the paths written, and what the person should be told — a row whose key
+    the run has since settled, which is ignored, and a run of blank rows at the end that looks like marking
+    that stopped partway.
+
+    Raises `FinishError`, writing nothing, when the run is not finished (a record is pending), when the sheet
+    has no `key` or `decision` column, when a decision is neither `KEEP`, `DROP` nor blank, when a record of
+    the worklist is missing from the sheet, or, with `require_every_decision`, when a decision is blank.
+    """
+    if table_format not in tabular.FORMATS:
+        raise ValueError(f"finish: unknown table format {table_format!r}; expected one of {tabular.FORMATS}")
+    result = outcomes(records, definition=definition, final=final, reviews=reviews, extractions=extractions)
+    pending = sorted(key for key, outcome in result.items() if outcome.action == PENDING)
+    if pending:
+        raise FinishError(f"the run is not finished: {len(pending)} records are still waiting on a stage, "
+                          f"e.g. {', '.join(pending[:5])}")
+    rows = tabular.read_table(sheet)
+    if rows and not {"key", "decision"} <= rows[0].keys():
+        raise FinishError(f"'{sheet}' has no 'key' and 'decision' columns; is it a copy of {CHECK_BY_HAND}?")
+
+    # A spreadsheet numbers the header row 1, so the first record is row 2.
+    first_row = 2
+    worklist = {key for key, outcome in result.items() if outcome.action == TO_A_PERSON}
+    warnings, problems, decided = [], [], {}
+    settled = [row["key"] for row in rows if row["key"] not in worklist]
+    if settled:
+        warnings.append(f"{len(settled)} rows name records the run no longer sends to a person, and are ignored: "
+                        f"{', '.join(settled[:5])}" + (", ..." if len(settled) > 5 else ""))
+    rows = [row for row in rows if row["key"] in worklist]
+    decisions = [row["decision"].strip().lower() for row in rows]
+    for i, (row, decision) in enumerate(zip(rows, decisions)):
+        if decision not in (KEEP, DROP, ""):
+            problems.append(f"row {first_row + i} ({row['key']}): '{row['decision']}' is neither '{KEEP}', "
+                            f"'{DROP}' nor blank")
+        decided[row["key"]] = row
+    missing = sorted(worklist - decided.keys())
+    if missing:
+        problems.append(f"{len(missing)} records sent to a person are not in the sheet, so it is not this run's "
+                        f"worklist or rows were deleted: {', '.join(missing[:5])}" + (", ..." if len(missing) > 5 else ""))
+    if require_every_decision:
+        blank = [str(first_row + i) for i, decision in enumerate(decisions) if decision == ""]
+        if blank:
+            problems.append(f"{len(blank)} rows have no decision: rows {', '.join(blank[:10])}"
+                            + (", ..." if len(blank) > 10 else ""))
+    if problems:
+        raise FinishError("; ".join(problems))
+    if maybe_warning := _trailing_blank_warning(decisions, first_row):
+        warnings.append(maybe_warning)
+
+    out_dir = pathlib.Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    by_key = {record.key: record for record in records}
+    hand_kept = {key for key, row in decided.items() if row["decision"].strip().lower() == KEEP}
+    keys = sorted(decided, key=lambda key: (key not in hand_kept, _STAGE_ORDER[result[key].stage],
+                                            result[key].decided_by, *_reading_order(by_key[key])))
+    path = out_dir / f"{HAND_AUDIT}.{table_format}"
+    tabular.write_table(path,
+                        [*provenance,
+                         f"decisions read from: {sheet}",
+                         f"of {len(decided)} records sent to a person: kept {len(hand_kept)}, "
+                         f"dropped {len(decided) - len(hand_kept)}"],
+                        ("key", "decision", "sent by", "decided by", "why", "note", *_RECORD_COLUMNS),
+                        [(key, KEEP if key in hand_kept else DROP, result[key].stage, result[key].decided_by,
+                          result[key].reason, decided[key].get("note", ""), *_record_cells(by_key[key]))
+                         for key in keys])
+    written = [path]
+    kept = {key for key, outcome in result.items() if outcome.action == KEPT} | hand_kept
+    path = out_dir / FINAL_BIB
+    path.write_text(bibtex.write_string(_filtered(library, kept)), encoding="utf-8")
+    written.append(path)
+    for fmt in tabular.FORMATS:
+        if fmt != table_format:
+            (out_dir / f"{HAND_AUDIT}.{fmt}").unlink(missing_ok=True)
+    return written, warnings

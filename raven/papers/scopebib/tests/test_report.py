@@ -190,3 +190,99 @@ class TestOwnership:
         sift = report.SiftResult(dropped=[], criteria=[siftbib.require_field("abstract")])
         written = write(run, definition, tmp_path / "out", maybe_sift=sift)
         assert {path.name for path in written} <= report.OWNED_NAMES
+
+
+@pytest.fixture
+def finished(run):
+    """The same run with nothing pending: the worklist is `rescued`, `unsure` and `nowhere`."""
+    run["reviews"]["unreviewed"] = {"belongs": False, "case": "no case"}
+    run["extractions"]["unextracted"] = extraction("forest")
+    run["final"]["unjudged"] = answer(False)
+    run["extractions"]["unjudged"] = extraction("forest")
+    return run
+
+
+def mark(path, *rows, columns=("key", "decision", "note")):
+    tabular.write_table(path, [], columns, rows)
+    return path
+
+
+def finish(run, definition, out_dir, sheet, **kwargs):
+    return report.finish(out_dir, sheet=sheet, definition=definition, provenance=["raven-scopebib test"],
+                         **{key: value for key, value in run.items()}, **kwargs)
+
+
+class TestFinish:
+    def test_a_person_keeps_and_drops(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", " Keep ", "looked fine"), ("unsure", "drop", ""),
+                     ("nowhere", "", ""))
+        written, warnings = finish(finished, definition, tmp_path / "out", sheet)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert sorted(entry.key for entry in final_bib.entries) == ["forest", "rescued", "unextracted", "unjudged"]
+        audit = {row["key"]: row for row in tabular.read_table(tmp_path / "out" / f"{report.HAND_AUDIT}.tsv")}
+        assert {key: row["decision"] for key, row in audit.items()} == {"rescued": "keep", "unsure": "drop",
+                                                                        "nowhere": "drop"}
+        assert audit["rescued"]["note"] == "looked fine"
+
+    def test_an_unknown_decision_is_refused_and_its_row_named(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "kep", ""), ("unsure", "", ""), ("nowhere", "", ""))
+        with pytest.raises(report.FinishError, match="row 2 \\(rescued\\): 'kep'"):
+            finish(finished, definition, tmp_path / "out", sheet)
+        assert not (tmp_path / "out" / report.FINAL_BIB).exists()
+
+    def test_a_record_missing_from_the_sheet_is_refused(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "keep", ""))
+        with pytest.raises(report.FinishError, match="not in the sheet.*nowhere"):
+            finish(finished, definition, tmp_path / "out", sheet)
+
+    def test_a_row_the_run_has_since_settled_is_ignored_with_a_warning(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("forest", "", ""), ("rescued", "keep", ""), ("unsure", "keep", ""),
+                     ("nowhere", "keep", ""))
+        _, warnings = finish(finished, definition, tmp_path / "out", sheet)
+        assert any("no longer sends to a person" in warning and "forest" in warning for warning in warnings)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert "forest" in [entry.key for entry in final_bib.entries]
+
+    def test_an_unfinished_run_is_refused(self, run, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""))
+        with pytest.raises(report.FinishError, match="not finished"):
+            finish(run, definition, tmp_path / "out", sheet)
+
+    def test_a_blank_is_refused_on_request(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "drop", ""), ("nowhere", "", ""))
+        finish(finished, definition, tmp_path / "out", sheet)  # the control: a blank drops by default
+        with pytest.raises(report.FinishError, match="1 rows have no decision: rows 4"):
+            finish(finished, definition, tmp_path / "out", sheet, require_every_decision=True)
+
+    def test_a_sheet_in_a_spreadsheet_format_is_read(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.xlsx", ("rescued", "keep", ""), ("unsure", "", ""), ("nowhere", "", ""))
+        finish(finished, definition, tmp_path / "out", sheet, table_format="ods")
+        assert (tmp_path / "out" / f"{report.HAND_AUDIT}.ods").exists()
+
+    def test_rewriting_the_reports_removes_the_05_files(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "", ""), ("nowhere", "", ""))
+        written, _ = finish(finished, definition, tmp_path / "out", sheet)
+        assert all(path.exists() for path in written)
+        write(finished, definition, tmp_path / "out")
+        assert not any(path.exists() for path in written)
+
+
+class TestTrailingBlanks:
+    def warning(self, *decisions):
+        return report._trailing_blank_warning(list(decisions), first_row=2)
+
+    def test_a_tail_longer_than_any_earlier_blank_run_is_suspect(self):
+        assert "the last 3 rows, from row 5 on" in self.warning("keep", "", "keep", "", "", "")
+
+    def test_a_tail_no_longer_than_an_earlier_run_is_not(self):
+        assert self.warning("", "", "keep", "", "") is None
+
+    def test_an_explicit_drop_ends_the_run(self):
+        assert self.warning("keep", "drop", "drop", "drop") is None
+        assert self.warning("keep", "drop", "drop", "") is not None, "the control: a blank tail of one still warns"
+
+    def test_no_keep_at_all_says_everything_drops(self):
+        assert "all 2 records will be dropped" in self.warning("drop", "")
+
+    def test_every_record_dropped_explicitly_is_not_suspect(self):
+        assert self.warning("drop", "drop") is None
