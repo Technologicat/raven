@@ -99,8 +99,9 @@ And "confrontational": true if the reply insults the user, calls them stupid, le
 combative for its own sake - an edge that would actually offend, as against one a reader has to notice.
 
 Answer with one JSON object and nothing else, no markdown fences. For each of the three forms, true or \
-false, and in "quotes" the words from the reply that show it, copied exactly, at most 200 characters, \
-or "" when it is false:
+false, and in "quotes" the passage of the reply where it shows most clearly, copied exactly, at most 200 \
+characters. Leave the quote "" when the form is false, and also when the reply as a whole carries it, \
+so that no single passage stands for it:
 {{"directness": ..., "deadpan_absurd": ..., "technical_wit": ..., \
 "quotes": {{"directness": "...", "deadpan_absurd": "...", "technical_wit": "..."}}, "self_description": ..., \
 "confrontational": ...}}
@@ -156,7 +157,8 @@ def normalize(answer: dict, reply: str) -> dict:
         quote = str(quotes.get(name) or "").strip()[:200]
         if out[name]:
             out["quotes"][name] = quote
-            if not quote or " ".join(quote.split()) not in flat_reply:
+            # Empty is an answer: the whole reply carries it. Only a quote given and not found is missing.
+            if quote and " ".join(quote.split()) not in flat_reply:
                 out["quotes_missing"].append(name)
     out["voice"] = any(out[name] for name in FEATURES) and not (out["self_description"] or out["confrontational"])
     return out
@@ -220,7 +222,7 @@ def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, 
              "straight, or a technical tool brought to an everyday problem it really solves. It does not "
              "count when the reply announces a personality, or cushions the edge with reassurance or "
              "suggestions. Mark **yes**, **no** or **unsure** after *Rating:*, and quote what carries it "
-             "if yes.\n"]
+             "if yes, or say that it is the whole reply.\n"]
     for i, item_id in enumerate(chosen, start=1):
         label = f"R{i:02d}"
         key[label] = item_id
