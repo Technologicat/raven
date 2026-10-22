@@ -385,7 +385,7 @@ judge is shown — becomes a parameter too. The `frame` key is the part of that 
 step 8. The prototype's five scripts are 2100 lines, about half of it prose; what moves into the library is
 the logic, generalized by the definition file.
 
-**Where it lives: a package, `raven.papers.corpusfilter`**, one module per stage, rather than one module:
+**Where it lives: a package, `raven.papers.scopebib`**, one module per stage, rather than one module:
 the stages are separable and each is tested alone. The console script is the `cli` module.
 
 1. **`records`: a record as the stages see it** — title, abstract, venue, read from a `.bib` — and the
@@ -425,19 +425,17 @@ Then a live pilot on a new corpus, which is the first GPU time this costs.
 
 **Decisions the plan needs:**
 
-- **What a case found by the reviewer does to a drop.** The prototype only measured the reviewer; nothing
-  acted on its flags. **Tentatively (maintainer, 2026-10-22): a drop the reviewer rescues goes to review
-  rather than out**, the same asymmetry that escalates every drop — **to be decided on the numbers**,
-  keeping the human-review set as small as it can be without costing much accuracy. The prototype's own
-  are a first estimate: a case for 3.9% of the drops made confidently from a title alone, and 0.3% of
-  those made confidently after reading the abstract (`judge_scope.py`, `needs_escalation`), and every drop now gets the
-  abstract pass. Step 9's acceptance run counts it properly.
-- **The console script's name.** `raven-filterbib` was rejected as too close to `raven-siftbib` — the two
-  would be conflated (maintainer, 2026-10-22). Between the maintainer's two, proposed: **`raven-scopebib`**,
-  which names the question it answers, *is this record in the search's scope?*, where `raven-siftbib`
-  answers *can it be screened at all?*. It also matches the definition's `scope`. `raven-judgebib` names
-  the mechanism instead, which is not unique to this tool: `raven-deduplicate --judge` is an LLM judge
-  too. The package name follows, `raven.papers.scopebib`, if this is taken.
+- **What a case found by the reviewer does to a drop: it goes to review rather than out** (decided,
+  maintainer, 2026-10-22), the same asymmetry that escalates every drop. The cost is acceptable at the
+  intended scale of thousands of records: the prototype found a case for 3.9% of the drops made
+  confidently from a title alone and 0.3% of those made confidently after reading the abstract
+  (`judge_scope.py`, `needs_escalation`). Those are shares of the *drops*, so a few per thousand
+  records at most, and every drop now gets the abstract pass. Step 9's acceptance run counts it.
+- **The console script's name: `raven-scopebib`** (decided, maintainer, 2026-10-22), package
+  `raven.papers.scopebib`. It names the question it answers, *is this record in the search's scope?*,
+  where `raven-siftbib` answers *can it be screened at all?*; it matches the definition's `scope`.
+  Rejected: `raven-filterbib`, too close to `raven-siftbib` to keep apart, and `raven-judgebib`, which
+  names a mechanism `raven-deduplicate --judge` shares.
 - **The title measurement needs spaCy**, for lemmas. Proposed: through `raven.client.mayberemote.NLP`,
   as Raven's design intends — raven-server's when it is running, loaded locally when it is not. The
   prototype loads it locally on the CPU instead, giving GPU contention with the LLM as the reason; that
