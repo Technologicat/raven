@@ -289,6 +289,32 @@ it has a consistent notion of it at all.
   move for something like that. And some of its phrases ("the meeting has nowhere else to be, and it won't
   let go") read as surprisingly Claude-like for a Qwen.
 
+### Rubric v5 on the second blind sample (2026-10-22)
+
+Judge run `c0d6412d` (Qwen 3.8 27B, temperature 0.3) over `blind-sample-11.md`, which v5 was written
+without looking at. Against the maintainer's ratings, with judge `60d796b1` on the same sample beside it:
+
+| hand rating | v5: clear | v5: borderline | v5: none | `60d796b1` |
+|---|---|---|---|---|
+| yes (6) | 5 | 1 | 0 | 6 voice |
+| borderline (8) | 5 | 1 | 2 | 6 voice, 2 not |
+| unsure (1) | 1 | 0 | 0 | 1 voice |
+| no (15) | 3 | 4 | 8 | 8 voice, 7 not |
+
+- **The failure the rewrite targeted is mostly gone**: replies rated no that the judge calls clear voice
+  fell from 8 to 3. Counting a hand-rated borderline as half right, `clear` is right in 10 of its 14 calls,
+  against 12 of 21 before.
+- **What is left is the grade boundary**: 5 of the 8 replies rated borderline come out `clear`. The judge
+  is more generous than the hand ratings there, which is the next thing to work on, rather than voice
+  against no voice.
+- **`funny`, recorded for information, agrees at the top**: its only two "very" are the Cicero, the
+  maintainer's favourite, and the invented eponym marked "(fictional)", the other standout. Two data
+  points.
+- **`unsure` is barely used**: once, on a reply rated no.
+
+Not yet run over all 255 replies; step 1's rates under v5 are the next GPU batch, after which the grade
+boundary decides whether a third sample is needed.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
