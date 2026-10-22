@@ -277,12 +277,7 @@ def _clean(text: str) -> str:
 
 @functools.lru_cache(maxsize=None)
 def _nlp():
-    """The spaCy pipeline, loaded once on first use.
-
-    On the CPU deliberately. It is a small model doing a few thousand short titles, and the GPU may be
-    busy serving the very backend this script is talking to — a single card for everything is an ordinary
-    way to run Raven rather than a degraded one.
-    """
+    """The spaCy pipeline, loaded once on first use, locally on the CPU."""
     return nlptools.load_spacy_pipeline(SPACY_MODEL, "cpu")
 
 
