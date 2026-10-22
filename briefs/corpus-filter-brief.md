@@ -122,8 +122,15 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      with nothing in their names saying which stage wrote them or in what order, and
      `dropped-before-escalating-titles.tsv` sitting beside `dropped.tsv` with nothing to mark it
      superseded. That was fine while prototyping, and it is what a user of the tool must not meet.
-   - **A superseded report is either removed or visibly marked** — in its name, or by moving it aside.
-     Which of the two is open; what is not open is leaving it looking like a peer of the current one.
+   - **A superseded report is removed (decided, maintainer, 2026-10-22)**, never left looking like a peer
+     of the current one. Reports are derived data, regenerated from the ledgers, so deleting a stale one
+     loses nothing.
+     - **`report` owns its output directory**: on every write it removes the files matching its own naming
+       pattern that it did not just write, and touches nothing else, so a user's own notes beside them are
+       safe. Dated subfolders per run were rejected: a "current" pointer would need a symlink, which
+       Windows handles poorly.
+     - **A hand-marked copy, such as the team's marked sheet, must be saved under a name of its own**, or the
+       next write removes it. The documentation says so in a sentence, and the tool says so when it writes.
    - **Reports can optionally be written as a spreadsheet, `.ods` or `.xlsx`** (Juha, 2026-09-30), so
      that opening one does not depend on the import dialog's settings. `.ods` costs no new dependency:
      `odfpy` is already one, backing `docextract`'s `.odt`/`.odp`. `.xlsx` needs `openpyxl`, to be
