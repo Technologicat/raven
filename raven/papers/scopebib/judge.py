@@ -7,8 +7,9 @@ Two passes, each a `raven.librarian.sweep` with a ledger of its own:
     low confidence, a title too thin to judge from, or any test answered true at all.
 
 A record's final answer is the abstract pass's where it had one, and the title pass's otherwise
-(`final_answers`). Its verdict (`verdict_of`) is a drop only for a test answered true at high confidence;
-any other true, or a test left unanswered, sends it to review, and a record with no test true is kept.
+(`final_answers`). Its verdict (`verdict_of`) is a drop for a test answered true at high confidence, or at
+medium after reading the abstract; any other true, or a test left unanswered, sends it to review, and a
+record with no test true is kept.
 
 The prompt is the tool's frame (`FRAME`, or the definition's own), the definition's tests, and its hints.
 The instrument (`instrument_material`) covers all of it, so a change to any of them asks again; the two
@@ -251,12 +252,18 @@ def temper_for_truncation(answer: dict, record: scope_records.Record) -> dict:
 def verdict_of(answer: dict) -> str:
     """`"drop"`, `"review"` or `"keep"` for one answer.
 
-    A test answered true drops the record at high confidence and sends it to review at any other. A test
-    left unanswered sends it to review too, a gap being something for a person rather than a keep.
+    A test answered true drops the record at high confidence, and at medium confidence when the abstract
+    pass gave it, having read the fuller text; any other true sends it to review. A test left unanswered
+    sends it to review too, a gap being something for a person rather than a keep.
     """
+    # Medium drops from the abstract pass are trusted because the reviewer goes over every drop and sends
+    # the ones it can make a case for to review. Measured on the prototype's corpus: it contested 0.8% of
+    # the high-confidence drops and 2.8% of the medium ones, so sending every medium drop to a person would
+    # have spent about 250 hand checks to find 7 records with a case.
     tests = answer["tests"].values()
     if True in tests:
-        return "drop" if answer["confidence"] == "high" else "review"
+        trusted = answer["confidence"] == "high" or (answer["confidence"] == "medium" and answer["source"] == "abstract")
+        return "drop" if trusted else "review"
     return "review" if None in tests else "keep"
 
 

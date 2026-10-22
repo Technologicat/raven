@@ -230,8 +230,14 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    - **The agreed sanity checks** (`investigations/aokk-corpus-scope/README.md`, *"Open: is the off-topic
      rate too low to believe?"*) sample each stage's output for hand-checking.
    - **Calibration**, which is the prototype's `--pilot N --seed S` under a general name.
-8. **Whether confidence decides a drop. Decided (maintainer, 2026-10-21): a drop needs high confidence;
-   any test answered true at medium or low confidence sends the record to review instead.** The record that
+8. **Whether confidence decides a drop. Decided (maintainer, 2026-10-21), revised 2026-10-22: a drop is a
+   test answered true at high confidence, or at medium confidence from the abstract pass; any other true
+   sends the record to review, and so does a drop the reviewer rescues.** The revision followed the replay
+   (step 4): the first rule sent the prototype's 249 medium-confidence drops to a person, and the reviewer
+   had contested 7 of them (2.8%, against 0.8% of the high-confidence ones). Trusting the reviewer to
+   catch those takes the review set from about 388 records to about 150 on that corpus. Every final drop
+   there came from the abstract pass. **The maintainer wants a sample from a different corpus before
+   trusting the numbers** — one corpus, the prototype's instrument — to be designed after v1. The record that
    showed the disagreement below goes to review under that rule. The question as it was raised (maintainer,
    2026-10-07: investigate and fix when generalizing):
    The prototype's `verdict_of` decides from the three tests alone: any test answered `True` drops, and
@@ -424,9 +430,9 @@ the stages are separable and each is tested alone. The console script is the `cl
    - **Replayed over the prototype's corpus (2026-10-22), it reconciles exactly**: of 4314 judged records,
      3092 keep in both; the prototype's 1084 drops become 834 drops (a test true at high confidence) and
      250 reviews (249 at medium, 1 at low); its 138 unknowns become reviews. Every difference is question
-     8's rule. **So the rule sends about 6% of the corpus to a person that the prototype dropped**, and the
-     249 medium-confidence drops are the lever if that is too many — whether a medium drop made after
-     reading the abstract is ever wrong is the thing to measure before moving it.
+     8's first rule, which sent about 6% of the corpus to a person that the prototype dropped. Under the
+     revised rule (question 8) the same answers give 1083 drops, 139 reviews and 3092 keeps, before the
+     reviewer's rescues move to review.
 5. **`extract` and `rules`: the extractor and the rules over its fields.** Vocabularies checked, quotes
    checked against the text, the rules applied when the reports are written, and a removal whose quote is
    missing turned into a hold. ~M.

@@ -161,13 +161,15 @@ class TestTruncation:
 class TestVerdict:
     @pytest.mark.parametrize("given, expected", [
         (answer(not_birds=True, confidence="high"), "drop"),
-        (answer(not_birds=True, confidence="medium"), "review"),
+        (answer(not_birds=True, confidence="medium", source="abstract"), "drop"),
+        (answer(not_birds=True, confidence="medium", source="title"), "review"),
+        (answer(not_birds=True, confidence="low", source="abstract"), "review"),
         (answer(wrong_bird=True, confidence="low"), "review"),
         (answer(not_birds=None, confidence="high"), "review"),
         (answer(confidence="low"), "keep"),
         (answer(confidence="high"), "keep"),
     ])
-    def test_only_a_confident_true_drops(self, given, expected):
+    def test_a_true_drops_only_when_confident_enough(self, given, expected):
         assert judge.verdict_of(given) == expected
 
     @pytest.mark.parametrize("given, measure, escalates", [
