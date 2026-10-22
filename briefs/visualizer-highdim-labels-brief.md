@@ -32,9 +32,15 @@ that presentation deliberately, which is not a same-day decision).
    investigation is banichuk at 531, itself unrepresentative. Cut at 100, 150 records leave about 1.5 per
    cluster, so most would be singletons and therefore outliers; and the cohesion floor calibrates against
    the corpus's own clusters, which barely exist at that cut. The cut needs an answer for small corpora.
-   **Measure it on real data**: 150-record subsamples of the corpora the investigation used, several seeds
-   each, and the Monday corpus once imported. Do not choose a number against examples written for the
-   purpose. Whatever rule comes out must give the same answer as cut-at-100 on the corpora where 100 was
+   **Measure it on real data, and real small corpora exist** (maintainer, 2026-10-22): the education
+   corpora under `00_stuff/rawdata/biology_geography_health_education/` — `202508/biology.bib` (163
+   records) and `202512/geography.bib` (135), every record with an abstract, and a health education
+   corpus in `202506/`. Same family and size as Monday's, so they are the calibration set, ahead of
+   subsampling the large corpora (which gives a sparse sample of a big field rather than a small field).
+   Both folders also hold an earlier grouping (`clustered*.txt`; `geography_clusters.txt` and a cluster
+   table `.odt`). **Ask how those were made before using them**: the shipped 2D pipeline's output is one
+   more method to compare against, while a grouping a person checked would be a yardstick. Do not choose a
+   number against examples written for the purpose. Whatever rule comes out must give the same answer as cut-at-100 on the corpora where 100 was
    measured, or say why it should not.
 2. **Port the cohesion rule from the prototype, not from this summary — and note the prototype has only
    half of it.** `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
