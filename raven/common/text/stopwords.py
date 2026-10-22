@@ -5,7 +5,7 @@ bibliographic metadata, rights notices and publisher names. `academic_stopwords`
 be used beside a language's ordinary stopwords (`raven.common.nlptools.default_stopwords`), not instead.
 
 Used by `raven.visualizer.importer` for keyword detection, through the Visualizer's `custom_stopwords`
-setting, and by `raven.papers.scopebib` (planned) to tell an informative title from a thin one. One list,
+setting, and by `raven.papers.scopebib` to tell an informative title from a thin one. One list,
 so that a content word means the same thing in both.
 """
 
