@@ -162,8 +162,34 @@ def normalize(answer: dict, reply: str) -> dict:
     return out
 
 
+CONDITIONS = ("card_on", "card_off", "plain")
+AIMED_SHARE = 0.7  # of an aimed sample, the share drawn from what the judge marked
+PER_PROMPT = 2     # at most this many replies per prompt, per condition and per stratum
+
+
+def _draw(rng: random.Random, pool: list[str], n: int) -> list[str]:
+    """`n` ids from `pool`, at most `PER_PROMPT` per prompt, prompts taken in turn so none dominates."""
+    by_prompt: dict[str, list[str]] = collections.defaultdict(list)
+    for item_id in rng.sample(pool, len(pool)):
+        by_prompt[item_id.split("/")[1]].append(item_id)
+    prompts = sorted(by_prompt)
+    rng.shuffle(prompts)
+    out = []
+    for round_ in range(PER_PROMPT):
+        for prompt in prompts:
+            if len(out) < n and round_ < len(by_prompt[prompt]):
+                out.append(by_prompt[prompt][round_])
+    return out
+
+
 def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, seed: int,
-                       out_dir: pathlib.Path) -> None:
+                       out_dir: pathlib.Path, maybe_marks: dict[str, bool] | None = None) -> None:
+    """Write `n` replies for rating by hand, with their key in a separate file.
+
+    `maybe_marks`: a judge's verdict per reply, to aim the sample with: `AIMED_SHARE` of it from what the
+                   judge marked, the rest from elicitor replies it did not, both split evenly across the
+                   conditions. `None` draws uniformly.
+    """
     # Never a reply already rated: the rubric takes its examples from rated replies, so a second sample has
     # to be fresh for it to test the rubric rather than recite it.
     rated = set()
@@ -171,12 +197,30 @@ def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, 
         rated |= set(json.loads(key_path.read_text(encoding="utf-8")).values())
     candidates = sorted(set(answers) - rated)
     rng = random.Random(seed)
-    chosen = rng.sample(candidates, min(n, len(candidates)))
+    if maybe_marks is None:
+        chosen = rng.sample(candidates, min(n, len(candidates)))
+    else:
+        # Aimed where the judge is unsure of itself, which is in what it marked: precision is the number in
+        # doubt. The unmarked share keeps recall in view, from the elicitors only, since an unmarked reply
+        # to a neutral prompt is a near-certain no and tells nothing.
+        n_marked = round(n * AIMED_SHARE)
+        chosen = []
+        for stratum_n, wanted in ((n_marked, True), (n - n_marked, False)):
+            for i, condition in enumerate(CONDITIONS):
+                per_condition = stratum_n // len(CONDITIONS) + (i < stratum_n % len(CONDITIONS))
+                pool = [item_id for item_id in candidates
+                        if item_id.startswith(condition + "/") and maybe_marks.get(item_id) is wanted
+                        and (wanted or answers[item_id]["kind"] == "elicitor")]
+                chosen += _draw(rng, pool, per_condition)
+        rng.shuffle(chosen)
     key = {}
     lines = ["# Blind sample\n",
-             "For each reply: does it carry the voice — an unprompted wry, candid or teasing remark, "
-             "delivered in passing, without announcing a personality? Mark **yes** / **no** after "
-             "*Rating:*, and quote the remark if yes.\n"]
+             "For each reply: does it carry the voice? Read the whole reply. The voice is wit of one of "
+             "three kinds: directness that sets a social convention aside, absurdity played entirely "
+             "straight, or a technical tool brought to an everyday problem it really solves. It does not "
+             "count when the reply announces a personality, or cushions the edge with reassurance or "
+             "suggestions. Mark **yes**, **no** or **unsure** after *Rating:*, and quote what carries it "
+             "if yes.\n"]
     for i, item_id in enumerate(chosen, start=1):
         label = f"R{i:02d}"
         key[label] = item_id
@@ -248,6 +292,9 @@ def main() -> int:
     parser.add_argument("--blind", type=int, default=None, metavar="N",
                         help="write a blind sample of N replies for rating by hand, instead of judging")
     parser.add_argument("--seed", type=int, default=7, help="which random sample --blind takes")
+    parser.add_argument("--aim", default=None, metavar="JUDGED",
+                        help="with --blind: a judge's ledger, register-judged-<fingerprint>.jsonl, to aim the "
+                             "sample at what that judge marked")
     parser.add_argument("--blind-check", default=None, metavar="SAMPLE",
                         help="judge only the replies in this filled-in blind sample, and compare the judge "
                              "with the ratings in it; its key is read from beside it")
@@ -264,7 +311,12 @@ def main() -> int:
     print(f"{len(answers)} replies in {probe_path.name}")
 
     if opts.blind is not None:
-        write_blind_sample(answers, users, opts.blind, opts.seed, out_dir)
+        maybe_marks = None
+        if opts.aim:
+            judged = sweep.Ledger(pathlib.Path(opts.aim).parent, pathlib.Path(opts.aim).stem.rsplit("-", 1)[0],
+                                  pathlib.Path(opts.aim).stem.rsplit("-", 1)[1])
+            maybe_marks = {item_id: rating["voice"] for item_id, rating in judged.answers().items()}
+        write_blind_sample(answers, users, opts.blind, opts.seed, out_dir, maybe_marks)
         return 0
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
