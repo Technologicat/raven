@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
                                  brace_repair_candidates, decode_html_entities, entries_to_bibtex,
-                                 field_value, header_key, parse_file, parse_string,
+                                 entry_field, entry_venue, field_value, header_key, parse_file,
+                                 parse_string, readable_text,
                                  relocate_rights_notices, repair_duplicate_field_keys,
                                  unbalanced_field_names, write_string)
 
@@ -567,6 +568,32 @@ class TestRepairDuplicateFieldKeys:
 # ---------------------------------------------------------------------------
 # Reading BibTeX by its surface syntax, for when the parser has refused
 # ---------------------------------------------------------------------------
+
+class TestReadingAParsedRecord:
+    """`entry_field`, `readable_text` and `entry_venue`: a parsed record's fields as a reader sees them."""
+
+    @staticmethod
+    def _entry(fields: str):
+        return parse_string("@article{k,\n" + fields + "\n}", split_names=False).entries[0]
+
+    def test_a_field_that_is_only_whitespace_counts_as_absent(self):
+        entry = self._entry("abstract = { },\ntitle = {A study}")
+        assert entry_field(entry, "abstract") == ""
+        assert entry_field(entry, "title") == "A study"
+        assert entry_field(entry, "doi") == ""
+
+    def test_markup_is_resolved_rather_than_stripped(self):
+        # Stripping the braces by hand would leave `\\only`: the braces are what end the LaTeX command.
+        assert readable_text("{\\o}nly  and   Tr{\\c e}bicki") == "ønly and Trȩbicki"
+
+    def test_the_venue_is_the_first_field_that_names_one(self):
+        entry = self._entry("publisher = {Springer},\nbooktitle = {Proceedings of {\\\"O}stberg},\ntitle = {T}")
+        assert entry_venue(entry) == "Proceedings of Östberg", "booktitle comes before publisher"
+        assert entry_venue(self._entry("title = {T}")) == ""
+
+    def test_an_empty_venue_field_is_passed_over(self):
+        assert entry_venue(self._entry("journal = { },\nseries = {LNCS},\ntitle = {T}")) == "LNCS"
+
 
 class TestHeaderKey:
     def test_a_header_line_yields_its_key(self):

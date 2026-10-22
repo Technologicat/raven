@@ -48,7 +48,6 @@ import bibtexparser
 from bibtexparser.model import Entry
 
 from ..common import tabular
-from ..common import utils as common_utils
 
 from .. import __version__
 
@@ -72,23 +71,11 @@ class Criterion:
     holds: Callable[[Entry], bool]
 
 
-def _field_text(entry: Entry, field: str) -> str:
-    """The value of `field`, stripped, or the empty string when the record has no such field.
-
-    Whitespace counts as absent: a database export that writes `abstract = { }` has told us nothing, and a
-    caller asking for records that carry an abstract does not want that one.
-    """
-    fields = entry.fields_dict
-    if field not in fields:
-        return ""
-    return str(fields[field].value or "").strip()
-
-
 def require_field(field: str) -> Criterion:
     """A record must carry `field`, non-empty."""
     return Criterion(describe=f"has a non-empty `{field}`",
                      reason=f"no {field}",
-                     holds=lambda entry: bool(_field_text(entry, field)))
+                     holds=lambda entry: bool(bibtex.entry_field(entry, field)))
 
 
 def min_chars(field: str, length: int) -> Criterion:
@@ -100,7 +87,7 @@ def min_chars(field: str, length: int) -> Criterion:
     """
     return Criterion(describe=f"`{field}` of at least {length} characters",
                      reason=f"{field} shorter than {length} characters",
-                     holds=lambda entry: len(_field_text(entry, field)) >= length)
+                     holds=lambda entry: len(bibtex.entry_field(entry, field)) >= length)
 
 
 def parse_min_chars(spec: str) -> Criterion:
@@ -138,32 +125,6 @@ class DroppedRecord:
 
 AUDIT_COLUMNS = ("key", "reason", "title", "venue", "link", "abstract")
 
-# Where a record says it appeared, in the order a BibTeX record is likely to carry it. Reported in the
-# audit rather than used as a criterion: a reviewer scanning what came out recognizes a venue faster than
-# a citekey, and it is what tells them whether a dropped record is worth chasing by hand.
-_VENUE_FIELDS = ("journal", "booktitle", "series", "publisher")
-
-
-def _readable(text: str) -> str:
-    """A field value as a person should see it in the audit: markup resolved, whitespace collapsed.
-
-    Stripping the case-preservation braces by hand gets the common case right and the interesting cases
-    wrong. `{\\o}nly` becomes `\\only` rather than `ønly`, because the braces are what terminate the
-    LaTeX command, and an accent written `Tr{\\c e}bicki` loses the grouping that says where its argument
-    ends. `unicodize_basic_markup` runs the ligature and accent passes before it strips, which is the
-    whole reason it is longer than a pair of `replace` calls.
-    """
-    return common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(text))
-
-
-def _venue(entry: Entry) -> str:
-    for field in _VENUE_FIELDS:
-        text = _field_text(entry, field)
-        if text:
-            return _readable(text)
-    return ""
-
-
 def sift(library: bibtexparser.Library,
          criteria: list[Criterion]) -> tuple[bibtexparser.Library, list[DroppedRecord]]:
     """Split a library into the records meeting every criterion, and an account of those that do not.
@@ -188,11 +149,11 @@ def sift(library: bibtexparser.Library,
         else:
             dropped.append(DroppedRecord(key=block.key,
                                          reason=failed.reason,
-                                         title=_readable(_field_text(block, "title")),
-                                         venue=_venue(block),
-                                         link=papers_utils.paper_url(_field_text(block, "doi"),
-                                                                     _field_text(block, "url")),
-                                         abstract=_readable(_field_text(block, "abstract"))))
+                                         title=bibtex.readable_text(bibtex.entry_field(block, "title")),
+                                         venue=bibtex.entry_venue(block),
+                                         link=papers_utils.paper_url(bibtex.entry_field(block, "doi"),
+                                                                     bibtex.entry_field(block, "url")),
+                                         abstract=bibtex.readable_text(bibtex.entry_field(block, "abstract"))))
     return kept, dropped
 
 

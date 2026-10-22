@@ -165,7 +165,7 @@ class TestTheAuditIsReadable:
         # what stood here — gets the ordinary case right and these wrong, because the braces are what
         # terminate a LaTeX command. A fixture carrying no ligature or accent cannot tell the two
         # treatments apart, and would pass against either.
-        raw = siftbib._field_text(library(LATEX_TITLE).entries[0], "title")
+        raw = bibtex.entry_field(library(LATEX_TITLE).entries[0], "title")
         naive = " ".join(raw.replace("{", "").replace("}", "").split())
         assert naive != title, "this fixture carries no markup that the naive strip mangles"
 

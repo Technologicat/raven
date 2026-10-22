@@ -25,6 +25,8 @@ from __future__ import annotations
 
 __all__ = ["parse_file", "parse_string", "write_string",
 
+           "entry_field", "readable_text", "VENUE_FIELDS", "entry_venue",
+
            "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
 
            "repair_record", "repair_duplicate_field_keys", "repair_failed_block", "decode_html_entities",
@@ -44,6 +46,7 @@ from bibtexparser import Library
 
 from unpythonic import box, unbox
 
+from ..common import utils as common_utils
 from ..common.text import boilerplate
 from ..common.text import entities
 
@@ -142,6 +145,50 @@ def write_string(library: Library) -> str:
     return bibtexparser.write_string(library,
                                      prepend_middleware=[bibtexparser.middlewares.MergeNameParts(),
                                                          bibtexparser.middlewares.MergeCoAuthors()])
+
+
+# --------------------------------------------------------------------------------
+# Reading a parsed record as a person, or a prompt, should see it
+
+def entry_field(entry: Entry, field: str) -> str:
+    """The value of `field`, stripped, or the empty string when the record has no such field.
+
+    Whitespace counts as absent: a database export that writes `abstract = { }` has told us nothing, and a
+    caller asking for records that carry an abstract does not want that one.
+    """
+    fields = entry.fields_dict
+    if field not in fields:
+        return ""
+    return str(fields[field].value or "").strip()
+
+
+def readable_text(text: str) -> str:
+    """A field value as a person should see it: markup resolved, whitespace collapsed.
+
+    Stripping the case-preservation braces by hand gets the common case right and the interesting cases
+    wrong. `{\\o}nly` becomes `\\only` rather than `ønly`, because the braces are what terminate the
+    LaTeX command, and an accent written `Tr{\\c e}bicki` loses the grouping that says where its argument
+    ends. `unicodize_basic_markup` runs the ligature and accent passes before it strips, which is the
+    whole reason it is longer than a pair of `replace` calls.
+    """
+    return common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(text))
+
+
+# Where a record says it appeared, in the order a BibTeX record is likely to carry it.
+VENUE_FIELDS = ("journal", "booktitle", "series", "publisher")
+
+
+def entry_venue(entry: Entry) -> str:
+    """Where the record says it appeared, readable, from the first of `VENUE_FIELDS` it carries; `""` if none.
+
+    A reader recognizes a venue faster than a citekey, and for a judge it is often the strongest evidence
+    a short title has beside it.
+    """
+    for field in VENUE_FIELDS:
+        text = entry_field(entry, field)
+        if text:
+            return readable_text(text)
+    return ""
 
 
 # --------------------------------------------------------------------------------
