@@ -435,7 +435,16 @@ the stages are separable and each is tested alone. The console script is the `cl
      reviewer's rescues move to review.
 5. **`extract` and `rules`: the extractor and the rules over its fields.** Vocabularies checked, quotes
    checked against the text, the rules applied when the reports are written, and a removal whose quote is
-   missing turned into a hold. ~M.
+   missing turned into a hold. ~M. **Built 2026-10-22**, with the extractor's replay. Two changes on the way:
+   - **`quote` names the values that need one** (decided, maintainer): a value asserting an absence, such
+     as `not_applicable`, has nothing to quote, and requiring one turned the prototype's 155 tier-B1
+     removals into holds. `quote = true` is every value but `not_stated`; a quote on a free-text field is
+     an error, since no rule acts on one.
+   - **A quote is matched without the quotation marks the model wraps it in**, which held two school-level
+     removals whose quotes were in the record.
+   - **Replayed over the prototype's 1234 extractions, it reconciles exactly** with `filter_keeps.py`: 898
+     keeps, 72 holds and 264 removals in both, every rule label matching its tier. Translating the AOKK
+     definition had dropped the prototype's `mixed` level, which the data showed; it is back.
 6. **`review`: the reviewer** over the drops — the prototype's *make the strongest case that this record
    belongs* — with its control drawn from the keeps. ~M. *What a case found does to the drop is a
    decision; see below.*

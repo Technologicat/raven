@@ -1,8 +1,9 @@
 """Bringing answers made elsewhere into the tool's ledgers, so a run can use them without asking again.
 
-The source is the prototype in `investigations/aokk-corpus-scope/`: `judge_scope.py` kept one JSON line per
+The source is the prototype in `investigations/aokk-corpus-scope/`. `judge_scope.py` kept one JSON line per
 answer, `{"key", <one boolean per test>, "confidence", "why", "source"}`, `source` being `"title"` or
 `"abstract"` for the pass that answered, a later line for the same key and pass superseding an earlier one.
+`extract_fields.py` kept one flat line per record, `{"key", "v", <one value per field>, "evidence"}`.
 
 Replayed answers keep the instrument that made them. They are written under a fingerprint the caller names —
 `fingerprint_of`, over the prompts that produced them, is the honest choice — and never under the tool's
@@ -10,7 +11,7 @@ own, so a report built from them says which judge decided, and a run under the t
 everything afresh.
 """
 
-__all__ = ["fingerprint_of", "ImportCount", "import_prototype_judgements"]
+__all__ = ["fingerprint_of", "ImportCount", "import_prototype_judgements", "import_prototype_extractions"]
 
 import hashlib
 import json
@@ -19,7 +20,9 @@ from typing import NamedTuple
 
 from ...librarian import sweep
 from . import definition as scope_definition
+from . import extract
 from . import judge
+from . import records as scope_records
 
 
 def fingerprint_of(*texts: str) -> str:
@@ -68,3 +71,51 @@ def import_prototype_judgements(path: str | pathlib.Path, *, titles: sweep.Ledge
         (titles if source == "title" else abstracts).write_answer(key, judge.normalize(entry, definition, source))
         counts[source] += 1
     return ImportCount(titles=counts["title"], abstracts=counts["abstract"])
+
+
+def import_prototype_extractions(path: str | pathlib.Path, *, ledger: sweep.Ledger,
+                                 definition: scope_definition.Definition,
+                                 records: dict[str, scope_records.Record]) -> int:
+    """Write the prototype extractor's answers in `path` into `ledger`. Returns how many were written.
+
+    `ledger`: normally `extract.ledger(directory, fingerprint)` under the replayed instrument's fingerprint.
+    `definition`: whose fields the answers are read against, by name.
+    `records`: the corpus, by key, against which each quote is checked. A line for a key not in it is
+               skipped, and counted out of the return value.
+
+    Three translations, each the prototype's spelling of something the tool spells differently: a JSON
+    `true`/`false` becomes `"yes"`/`"no"` where the field's vocabulary has those; any value outside a
+    vocabulary becomes `not_stated`, kept in `raw` (the prototype's `"unclear"`); and the prototype's single
+    `"evidence"` becomes the quote of the definition's one quoted field. Raises `ValueError` where that
+    field is not unique, or a line lacks a field the definition names.
+    """
+    path = pathlib.Path(path)
+    quoted = [field.name for field in definition.fields if field.quote]
+    if len(quoted) > 1:
+        raise ValueError(f"the prototype kept one `evidence` per record, and the definition quotes "
+                         f"{', '.join(quoted)}: which one it belongs to cannot be told")
+    written = 0
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}:{number}: not a JSON line ({exc})") from exc
+        if not isinstance(entry, dict) or "key" not in entry:
+            raise ValueError(f"{path}:{number}: not an extraction: needs a `key`")
+        if missing := [field.name for field in definition.fields if field.name not in entry]:
+            raise ValueError(f"{path}:{number}: no value for {', '.join(missing)}")
+        if entry["key"] not in records:
+            continue
+        answer = {}
+        for field in definition.fields:
+            value = entry[field.name]
+            if isinstance(value, bool) and field.values is not None and {"yes", "no"} <= set(field.values):
+                value = "yes" if value else "no"
+            answer[field.name] = value
+        if quoted:
+            answer[f"{quoted[0]}_quote"] = entry.get("evidence", "")
+        ledger.write_answer(entry["key"], extract.normalize(answer, definition, records[entry["key"]]))
+        written += 1
+    return written

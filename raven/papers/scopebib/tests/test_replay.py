@@ -89,3 +89,60 @@ def test_fingerprint_of_is_stable_and_follows_its_texts():
     assert replay.fingerprint_of("a", "b") == replay.fingerprint_of("a", "b")
     assert replay.fingerprint_of("a", "b") != replay.fingerprint_of("ab")
     assert len(replay.fingerprint_of("x")) == 8
+
+
+EXTRACTOR_DEFINITION = DEFINITION + """
+[[field]]
+name = "level"
+asks = "the level"
+quote = ["school"]
+[field.values]
+school = "school"
+not_applicable = "not in education"
+
+[[field]]
+name = "learning"
+asks = "whether a person learns"
+[field.values]
+yes = "a person learns"
+no = "only software learns"
+"""
+
+
+class TestExtractions:
+    @pytest.fixture
+    def definition(self, tmp_path):
+        path = tmp_path / "levels.scope.toml"
+        path.write_text(EXTRACTOR_DEFINITION, encoding="utf-8")
+        return scope_definition.load_definition(path)
+
+    @staticmethod
+    def corpus(*keys):
+        from raven.papers.scopebib import records
+        return {key: records.Record(key, "Pupils in a school", "", "", "") for key in keys}
+
+    def test_the_prototype_s_spellings_are_translated(self, tmp_path, definition):
+        from raven.papers.scopebib import extract
+        path = tmp_path / "extracted.jsonl"
+        lines = [{"key": "a", "v": "p", "level": "school", "learning": True, "evidence": '"a school"'},
+                 {"key": "b", "v": "p", "level": "not_applicable", "learning": "unclear", "evidence": ""},
+                 {"key": "elsewhere", "v": "p", "level": "school", "learning": False, "evidence": ""}]
+        path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+        ledger = extract.ledger(tmp_path, "proto000")
+        written = replay.import_prototype_extractions(path, ledger=ledger, definition=definition,
+                                                      records=self.corpus("a", "b"))
+        assert written == 2, "a key not in the corpus is skipped"
+        a, b = ledger.answers()["a"], ledger.answers()["b"]
+        assert a["fields"] == {"level": "school", "learning": "yes"}
+        assert a["quotes"]["level"] == {"text": '"a school"', "found": True}, "evidence is the quoted field's quote"
+        assert b["fields"]["learning"] == scope_definition.NOT_STATED and b["raw"] == {"learning": "unclear"}
+
+    def test_two_quoted_fields_cannot_take_one_evidence(self, tmp_path, definition):
+        import dataclasses
+        from raven.papers.scopebib import extract
+        doubled = dataclasses.replace(definition, fields=tuple(dataclasses.replace(f, quote=frozenset({"yes"}))
+                                                               if f.name == "learning" else f
+                                                               for f in definition.fields))
+        with pytest.raises(ValueError, match="which one it belongs to cannot be told"):
+            replay.import_prototype_extractions(tmp_path / "unread.jsonl", ledger=extract.ledger(tmp_path, "p"),
+                                                definition=doubled, records={})

@@ -86,7 +86,8 @@ meta-analysis has no setting of its own: give it the level its own scope names, 
 it names none, which is the common case. Many studies never say their level; answer not_stated rather than
 inferring it from the topic, the venue or what would be usual.
 """
-quote = true
+# Every level a record states is quoted; "not_applicable" asserts an absence, which has no words to quote.
+quote = ["higher_education", "school", "vocational", "professional_training", "informal", "mixed"]
 [field.values]
 higher_education = "a university, college, polytechnic or their students and faculty - degree study"
 school = "primary or secondary schooling, K-12, pupils"
@@ -100,6 +101,7 @@ learning outside any institution - self-directed learners, the general public, l
 or rehabilitation training, museum and hobby settings. It is about the absence of an institution, not the
 absence of a stated year: undergraduates whose year is never given are higher_education
 """
+mixed = "the work spans more than one of these levels"
 not_applicable = """
 the work is not set in education at all - a methods paper, a recommender, a clinical tool. If somebody is
 learning something, the work IS set in education and another value applies

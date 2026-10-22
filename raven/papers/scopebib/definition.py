@@ -15,7 +15,7 @@ those fields — while the tool supplies everything that is not:
     [[field]]              # what a kept record says
     name = "level"
     asks = "the educational level the work is set at"
-    quote = true           # a value must quote the words that settle it
+    quote = ["school"]     # these values must quote the words that settle them; `true` is every value
     [field.values]         # a closed vocabulary; `not_stated` is added to every one
     higher_education = "a university, college, polytechnic or their students and faculty"
     school = "primary or secondary schooling, K-12, pupils"
@@ -65,13 +65,14 @@ class Field:
     """One thing the extractor reports about a record.
 
     `values`: the closed vocabulary, value -> description, `NOT_STATED` last; `None` for free text.
-    `quote`: whether a value other than `NOT_STATED` must quote the words that settle it.
+    `quote`: the values that must quote the words that settle them; empty for none. A value that asserts an
+             absence, such as "not set in education at all", has nothing to quote, and is left out.
     `max_words`: the length cap on a free-text answer, `None` for a closed one.
     """
     name: str
     asks: str
     values: dict[str, str] | None
-    quote: bool
+    quote: frozenset[str]
     max_words: int | None
 
 
@@ -181,8 +182,12 @@ def load_definition(path: str | pathlib.Path) -> Definition:
         check_keys(where, entry, _FIELD_KEYS, {"name", "asks"})
         field_name = name(where, entry["name"], seen)
         quote = entry.get("quote", False)
-        if not isinstance(quote, bool):
-            fail(where, "`quote` must be true or false")
+        is_value_list = isinstance(quote, list) and all(isinstance(v, str) for v in quote)
+        if not (isinstance(quote, bool) or is_value_list):
+            fail(where, "`quote` must be true, false, or a list of the values that must be quoted")
+        if quote and "values" not in entry:
+            fail(where, "`quote` needs `values`: only a closed vocabulary is acted on by a rule, so a quote "
+                        "on free text would protect nothing")
         if "values" in entry:
             if "max_words" in entry:
                 fail(where, "`max_words` is for free text; a field with `values` is a closed vocabulary")
@@ -196,14 +201,24 @@ def load_definition(path: str | pathlib.Path) -> Definition:
                 if value == NOT_STATED:
                     fail(where, f"`{NOT_STATED}` is part of every vocabulary already; leave it out")
                 values[value] = text(f"{where}, value {value!r}", description)
+            if quote is True:
+                quoted = frozenset(values)
+            elif quote is False:
+                quoted = frozenset()
+            else:
+                if NOT_STATED in quote:
+                    fail(where, f"`{NOT_STATED}` has nothing to quote; leave it out of `quote`")
+                if unknown := sorted(set(quote) - set(values)):
+                    fail(where, f"`quote` names {', '.join(map(repr, unknown))}, not among the values")
+                quoted = frozenset(quote)
             values[NOT_STATED] = "the record does not say"
-            fields.append(Field(field_name, text(f"{where}, asks", entry["asks"]), values, quote, None))
+            fields.append(Field(field_name, text(f"{where}, asks", entry["asks"]), values, quoted, None))
         else:
             max_words = entry.get("max_words")
             if max_words is not None and (not isinstance(max_words, int) or isinstance(max_words, bool)
                                           or max_words < 1):
                 fail(where, "`max_words` must be a positive whole number")
-            fields.append(Field(field_name, text(f"{where}, asks", entry["asks"]), None, quote, max_words))
+            fields.append(Field(field_name, text(f"{where}, asks", entry["asks"]), None, frozenset(), max_words))
 
     closed = {field.name: field for field in fields if field.values is not None}
     rules = []
@@ -250,6 +265,6 @@ def extract_material(definition: Definition) -> str:
     nothing again.
     """
     return json.dumps({"scope": definition.scope,
-                       "fields": [[field.name, field.asks, field.values, field.quote, field.max_words]
+                       "fields": [[field.name, field.asks, field.values, sorted(field.quote), field.max_words]
                                   for field in definition.fields]},
                       ensure_ascii=False, sort_keys=True)

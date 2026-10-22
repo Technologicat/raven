@@ -53,8 +53,15 @@ class TestLoading:
     def test_every_closed_vocabulary_ends_in_not_stated(self, tmp_path):
         species, method = d.load_definition(write(tmp_path, FULL)).fields
         assert list(species.values) == ["raven", "crow", d.NOT_STATED]
-        assert species.quote and species.max_words is None
-        assert method.values is None and method.max_words == 6 and not method.quote
+        assert species.quote == {"raven", "crow"}, "`quote = true` is every value but not_stated"
+        assert species.max_words is None
+        assert method.values is None and method.max_words == 6 and method.quote == frozenset()
+
+    def test_quote_can_name_the_values_that_need_one(self, tmp_path):
+        text = FULL.replace("quote = true", 'quote = ["crow"]')
+        assert text != FULL, "this fixture changes nothing"
+        species, _ = d.load_definition(write(tmp_path, text)).fields
+        assert species.quote == {"crow"}
 
     def test_a_rule_reads_as_sets_of_values(self, tmp_path):
         (rule,) = d.load_definition(write(tmp_path, FULL)).rules
@@ -108,6 +115,10 @@ class TestErrors:
         (MINIMAL + '[[field]]\nname = "f"\nasks = "x"\n[field.values]\nnot_stated = "x"\n', "part of every vocabulary"),
         (MINIMAL + '[[field]]\nname = "f"\nasks = "x"\nmax_words = 3\n[field.values]\na = "x"\n', "`max_words` is for free text"),
         (MINIMAL + '[[field]]\nname = "f"\nasks = "x"\nmax_words = 0\n', "positive whole number"),
+        (MINIMAL + '[[field]]\nname = "f"\nasks = "x"\nquote = true\n', "`quote` needs `values`"),
+        (FULL.replace("quote = true", 'quote = ["owl"]'), "`quote` names 'owl'"),
+        (FULL.replace("quote = true", 'quote = ["not_stated"]'), "has nothing to quote"),
+        (FULL.replace("quote = true", 'quote = "crow"'), "`quote` must be true, false, or a list"),
         (FULL + '[[rule]]\nlabel = "m"\nwhen = { method = ["x"] }\naction = "hold"\n', "not a field with `values`"),
         (FULL + '[[rule]]\nlabel = "m"\nwhen = { species = ["owl"] }\naction = "hold"\n', "'owl', which is not among its values"),
         (FULL + '[[rule]]\nlabel = "m"\nwhen = { species = ["crow"] }\naction = "drop"\n', "`action` must be one of remove, hold"),
