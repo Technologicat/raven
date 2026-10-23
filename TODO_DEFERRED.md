@@ -27,6 +27,26 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Visualizer: an "[offtopic?]" label on a cluster looser than the corpus background
+
+*Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels landing · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
+
+A cluster whose cohesion (mean pairwise cosine among its members) is below the corpus's mean pairwise
+cosine has members less alike than two records picked at random. At cut 100, the large clusters of that
+kind turned out to be off-topic groups: arXiv AI's junk drawer (wormholes, the Oort cloud, category theory)
+and hydrogen's search false positives (hydrogen *peroxide* production in biology). As a discard rule this
+lost, since such a group is better kept as one cluster a reviewer can select and exclude in one go. As a
+*flag* it needs no knob: the importer computes it per cluster and records it in the dataset, and the GUI
+shows *"[offtopic?]"* beside the cluster's label.
+
+- **Check it across all corpora before relying on it.** Only two flagged clusters have been read. On the
+  crowded corpora (AOKK, the education pair) the background sits close to the cohesion floor and flags more,
+  so it may need a margin there.
+- **Same territory: view filters for outliers.** The Visualizer can select all outliers, but has no view
+  filter for them; showing or hiding a flagged cluster is the same kind of control.
+
+Raised while settling the cohesion floor's size question (2026-10-23).
+
 ## Drop the held records the AOKK team's manual check rejected
 
 *Cluster: papers · Cost: ? · Gate: the team's marked sheet, expected the week of 2026-10-19 · Filed: 2026-10-09*
