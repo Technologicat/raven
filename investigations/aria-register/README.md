@@ -347,8 +347,9 @@ and 225 more in 51 minutes, none failing. Voice is the grade `clear`; the forms 
 **What this says for step 2** is unchanged: the user card is the place to look, its directness-related
 paragraphs first.
 
-**Open: whether the grade boundary needs a third blind sample** before step 2, or whether step 2 can
-proceed on these rates.
+**Decided (maintainer, 2026-10-23): a third blind sample before step 2**, aimed at the grade boundary, to
+tighten `clear` in a rubric v6 and rerun it over all 255. Step 2 compares conditions under one judge, but
+the boundary's generosity need not be the same in every condition, and a level from it may be quoted.
 
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
