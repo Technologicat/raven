@@ -1759,7 +1759,7 @@ def api_websearch2():
     The "max_links" field is a hint; the search engine may return more
     results, especially if you set it to a small value (e.g. 3).
 
-    Output is JSON::
+    The result is JSON::
 
         {"results": preformatted_text,
          "data": [{"title": ...,
@@ -1780,7 +1780,7 @@ def api_websearch2():
     The response is streamed, for two reasons. The client holds it from the start, so it can abandon the
     search by closing the connection, which is also what tells the server to stop; and the server can report
     the search's progress as it goes. So the response opens with a space, which sends the headers at once,
-    then carries the progress lines, then the result. The status has therefore gone out, as 200 OK, before
+    then carries the progress lines, then the result as `{"result": ...}`. The status has therefore gone out, as 200 OK, before
     the search has run, and a failure of the search itself cannot become one: it arrives in the body, as
     `{"error": "..."}`. A bad request is still refused with a status, being checked first. See
     `serverutil.stream_job`.
@@ -1817,7 +1817,7 @@ def api_webfetch():
       - "url" is required.
       - "format" is optional: "markdown" (default) or "text".
 
-    Output is JSON::
+    The result is JSON::
 
         {"content": "...",        # extracted text/markdown, or a canonical user-facing message for a refusal/limit
          "url": "...",            # the effective URL after rewriting (e.g. arXiv abstract -> HTML form)
@@ -1831,7 +1831,7 @@ def api_webfetch():
     The response is streamed, for two reasons. The client holds it from the start, so it can abandon the
     fetch by closing the connection, which is also what tells the server to stop; and the server can report
     the fetch's progress as it goes. So the response opens with a space, which sends the headers at once,
-    then carries the progress lines, then the result. The status has therefore gone out, as 200 OK, before
+    then carries the progress lines, then the result as `{"result": ...}`. The status has therefore gone out, as 200 OK, before
     the fetch has run, and a failure of the fetch itself cannot become one: it arrives in the body, as
     `{"error": "..."}`. A bad request is still refused with a status, being checked first. See
     `serverutil.stream_job`.

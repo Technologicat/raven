@@ -43,6 +43,7 @@
     - [General](#general-1)
         - [GET "/"](#get-)
         - [GET "/health"](#get-health)
+        - [Streamed responses](#streamed-responses)
         - [GET "/api/modules"](#get-apimodules)
     - [Raven-avatar client](#raven-avatar-client-1)
         - [GET "/api/avatar/info"](#get-apiavatarinfo)
@@ -641,6 +642,31 @@ For usage examples, look at the Python bindings of the web API in [`raven.client
   A simple ping endpoint for clients to check that the server is running.
 
   No inputs, no outputs - if you get a 200 OK, it means the server heard you.
+
+
+### Streamed responses
+
+Some endpoints answer with a *streamed job*: currently `/api/websearch2` and `/api/webfetch`, whose work can
+take a while. The response arrives in pieces:
+
+  1. **A single space**, sent at once. It carries the headers, and the status 200 OK, before the work begins.
+  2. **Progress records**, any number of them, one JSON object per line: `{"progress": "Loading the page…"}`.
+     A short human-readable line saying which step the work is on; a client may show it, or ignore it.
+  3. **The outcome**, one last JSON line: `{"result": <the endpoint's result>}`, or `{"error": "<type>: <message>"}`
+     if the work failed.
+
+So read the body line by line: skip the leading space (a JSON parser does that anyway), and act on each
+record by its key.
+
+**The status says only that the request was accepted.** A malformed request is still refused with an error
+status, as it is checked before the work starts. But once the space has gone out the status is fixed, so a
+failure of the work itself arrives in the body, as the `"error"` record.
+
+**Closing the connection cancels the work.** That is what the early space is for: the client holds the
+response from the start, so it has something to close if it stops waiting, and the server notices the
+client has gone and stops at its next step. No result is sent to a client that has left.
+
+The Python client for this is `post_streamed_job` in [`raven.client.util`](../client/util.py).
 
 
 ### GET "/api/modules"
@@ -1646,15 +1672,20 @@ In the input, some fields are optional:
 The `"max_links"` field is a hint; the search engine may return more
 results, especially if you set it to a small value (e.g. 3).
 
-Output is JSON:
+Answered as a [streamed job](#streamed-responses). The result, in its `"result"` record, is:
 
     {"results": preformatted_text,
      "data": [{"title": ...,
                "link": ...,
                "text": ...}],
-              ...}
+              ...,
+     "engineAnswered": true}
 
-In the output, the title field may be missing; not all search engines return it.
+In the result, the title field may be missing; not all search engines return it.
+
+`"engineAnswered"` is `false` when the search engine did not answer — its results page timed out, or loaded
+without results on it — and `"results"` and `"data"` are then empty. With it `true`, empty `"results"` and
+`"data"` mean the engine answered and found nothing.
 
 This format preserves the connection between the text of the result
 and its corresponding link.
@@ -1673,7 +1704,7 @@ Input is JSON:
 
 `"url"` is required. `"format"` is optional: `"markdown"` (default) or `"text"`.
 
-Output is JSON:
+Answered as a [streamed job](#streamed-responses). The result, in its `"result"` record, is:
 
     {"content": "...",
      "url": "...",
@@ -1689,8 +1720,3 @@ Output is JSON:
   - `"title"`: the page title on a successful fetch; `null` for a refusal or a page without one.
 
 Private-network addresses and non-HTTP(S) schemes are refused here, server-side.
-
-The response is streamed: it opens at once with a space and the status 200 OK, carries progress lines while
-the page is fetched, and ends with the result. So a failure of the fetch itself does not show as an error
-status; it arrives in the body, as `{"error": "..."}`. A malformed request is still refused with a status, as
-it is checked first.
