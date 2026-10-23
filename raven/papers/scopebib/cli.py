@@ -29,7 +29,8 @@ COMMANDS = {"run": ("judge", "review", "extract"), "judge": ("judge",), "review"
             "extract": ("extract",), "report": (), "finish": ()}
 
 #: What a setting is when neither the command line nor the run file says.
-DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_format": "tsv"}
+DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_format": "tsv",
+            "maybe_server_nlp": False}
 
 _PILOT_SIZE = 50  # as `pipeline.PILOT_SIZE`, which is not imported here, the parser coming before the heavy imports
 
@@ -73,8 +74,12 @@ def _parser() -> argparse.ArgumentParser:
                              "name shows it. Read-only unless it is today's. Repeatable.")
     common.add_argument("--backend-url", dest="backend_url", default=None, metavar="URL",
                         help="The LLM backend. Default: Raven-librarian's.")
+    common.add_argument("--server-nlp", dest="server_nlp", action=argparse.BooleanOptionalAction, default=None,
+                        help="Measure titles with Raven-server's spaCy model, where it answers. Default: locally, "
+                             "with the model the title bounds were calibrated with, so that a run repeats "
+                             "exactly on any machine.")
     common.add_argument("--server-url", dest="server_url", default=None, metavar="URL",
-                        help="Raven-server, for measuring titles; loaded locally when it does not answer.")
+                        help="Raven-server, for --server-nlp.")
     common.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
     common.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
                         help="How much to log.")
@@ -137,7 +142,8 @@ def resolve(opts: argparse.Namespace) -> Plan:
              "require": tuple(opts.require) if opts.require else None,
              "min_chars": tuple(opts.min_chars) if opts.min_chars else None,
              "maybe_sample": opts.sample, "maybe_pilot": opts.pilot, "maybe_seed": opts.seed,
-             "maybe_control": opts.control, "maybe_replicate": opts.replicate, "maybe_format": opts.format}
+             "maybe_control": opts.control, "maybe_replicate": opts.replicate, "maybe_format": opts.format,
+             "maybe_server_nlp": opts.server_nlp}
     # A sample and a pilot given on the command line replace each other, not only their own setting.
     if opts.sample is not None:
         given["maybe_pilot"] = None
@@ -178,7 +184,7 @@ def resolve(opts: argparse.Namespace) -> Plan:
     return Plan(opts.command, runfile.RunFile(settings, merged.stages), stages, reports_dir, ledger_dir)
 
 
-def _provenance(plan: Plan, stages: dict) -> list[str]:
+def _provenance(plan: Plan, models: dict[str, str], stages: dict, nlp_description: str) -> list[str]:
     settings = plan.run_file.settings
     lines = [f"raven-scopebib {__version__}, {datetime.datetime.now().isoformat(timespec='seconds')}",
              f"input: {settings.maybe_bib}", f"definition: {settings.maybe_definition}"]
@@ -191,16 +197,19 @@ def _provenance(plan: Plan, stages: dict) -> list[str]:
         lines.append(f"sample of {settings.maybe_sample} records, seed {settings.maybe_seed}")
     lines.append(f"reviewer's control: {settings.maybe_control} records, seed {settings.maybe_seed}"
                  + (f"; replicate {settings.maybe_replicate}" if settings.maybe_replicate > 1 else ""))
+    if nlp_description:
+        lines.append(f"titles measured with {nlp_description}")
     for stage, stage_plan in stages.items():
-        lines.append(f"{stage}: model {stage_plan.maybe_model or 'not recorded'}, "
-                     f"instrument {stage_plan.maybe_instrument or 'none'}")
+        lines.append(f"{stage}: model {models[stage]}, instrument {stage_plan.maybe_instrument or 'none'}")
     return lines
 
 
-def execute(plan: Plan, *, nlp, connect, sheet: str | None = None, require_every_decision: bool = False) -> int:
+def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str | None = None,
+            require_every_decision: bool = False) -> int:
     """Carry out `plan`. Returns the exit status.
 
     `nlp`: for measuring titles (`raven.papers.scopebib.records.title_measures`).
+    `nlp_description`: what `nlp` is, for the reports' provenance.
     `connect`: returns the LLM settings, connecting to the backend, as `raven.papers.scopebib.pipeline.run`
                takes it.
     `sheet`, `require_every_decision`: for `finish`.
@@ -229,7 +238,8 @@ def execute(plan: Plan, *, nlp, connect, sheet: str | None = None, require_every
     state = result.state
     common = dict(library=corpus.library, records=corpus.records, definition=definition, final=state.final,
                   reviews=state.reviews, extractions=state.extractions,
-                  provenance=_provenance(plan, result.stages), table_format=settings.maybe_format)
+                  provenance=_provenance(plan, result.models, result.stages, nlp_description),
+                  table_format=settings.maybe_format)
 
     if plan.command == "finish":
         written, warnings = report.finish(plan.reports_dir, sheet=sheet, require_every_decision=require_every_decision,
@@ -281,15 +291,25 @@ def _connector(backend_url: str | None):
     return connect
 
 
-def _nlp(server_url: str | None):
-    """spaCy, on Raven-server where it answers and loaded here otherwise."""
+def _nlp(*, on_server: bool, server_url: str | None):
+    """spaCy for measuring titles, and a line saying which, for the provenance.
+
+    Locally by default, with the pipeline the title bounds were calibrated with. With `on_server`, Raven-server's
+    own, where it answers; then the measure is only as comparable across runs as the server's configuration.
+    """
     from ...client import api, mayberemote
     from ...client import config as client_config
     from . import records as scope_records
-    api.initialize(raven_server_url=server_url or client_config.raven_server_url,
-                   raven_api_key_file=client_config.raven_api_key_file)
-    return mayberemote.NLP(allow_local=True, model_name=scope_records.SPACY_MODEL,
-                           device_string=client_config.devices["nlp"]["device_string"])
+    url = server_url or client_config.raven_server_url
+    if on_server:
+        api.initialize(raven_server_url=url, raven_api_key_file=client_config.raven_api_key_file)
+    nlp = mayberemote.NLP(allow_local=True, allow_remote=on_server, model_name=scope_records.SPACY_MODEL,
+                          device_string=client_config.devices["nlp"]["device_string"])
+    if not nlp.is_local():
+        return nlp, f"Raven-server's spaCy model, at {url}"
+    if on_server:
+        return nlp, f"{scope_records.SPACY_MODEL}, locally: Raven-server at {url} does not measure"
+    return nlp, f"{scope_records.SPACY_MODEL}, locally"
 
 
 def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the logic, and are tested
@@ -303,7 +323,8 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
     from . import pipeline, report, runfile
     try:
         plan = resolve(opts)
-        status = execute(plan, nlp=_nlp(opts.server_url), connect=_connector(opts.backend_url),
+        nlp, nlp_description = _nlp(on_server=plan.run_file.settings.maybe_server_nlp, server_url=opts.server_url)
+        status = execute(plan, nlp=nlp, nlp_description=nlp_description, connect=_connector(opts.backend_url),
                          sheet=getattr(opts, "sheet", None),
                          require_every_decision=getattr(opts, "require_every_decision", False))
     except (UsageError, runfile.RunFileError, scope_definition.DefinitionError, pipeline.PipelineError,

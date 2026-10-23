@@ -76,6 +76,8 @@ class Settings:
     `maybe_control`: how many kept records the reviewer reads as its control.
     `maybe_replicate`: which replicate of the model stages this is.
     `maybe_format`: the table format of the reports, one of `raven.common.tabular.FORMATS`.
+    `maybe_server_nlp`: measure the titles with Raven-server's spaCy model, rather than locally with the one the
+                        title bounds were calibrated with.
     """
     maybe_bib: pathlib.Path | None = None
     maybe_definition: pathlib.Path | None = None
@@ -88,6 +90,7 @@ class Settings:
     maybe_control: int | None = None
     maybe_replicate: int | None = None
     maybe_format: str | None = None
+    maybe_server_nlp: bool | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -179,13 +182,17 @@ def _load_settings(table: dict, path: pathlib.Path) -> Settings:
                 floor = f" of at least {least}" if least is not None else ""
                 raise RunFileError(f"{where}: expected a whole number{floor}, got {value!r}")
             fields[name] = value
+        elif key == "server_nlp":
+            if not isinstance(value, bool):
+                raise RunFileError(f"{where}: expected true or false, got {value!r}")
+            fields["maybe_server_nlp"] = value
         elif key == "format":
             if value not in tabular.FORMATS:
                 raise RunFileError(f"{where}: expected one of {', '.join(tabular.FORMATS)}, got {value!r}")
             fields["maybe_format"] = value
         else:
             raise RunFileError(f"{path}: [run]: unknown key {key!r}; expected one of "
-                               f"{', '.join([*_PATHS, *_LISTS, *_INTS, 'format'])}")
+                               f"{', '.join([*_PATHS, *_LISTS, *_INTS, 'format', 'server_nlp'])}")
     return Settings(**fields)
 
 
@@ -285,6 +292,8 @@ def write_run_file(path: str | pathlib.Path, run_file: RunFile, *,
             run_lines.append(f"{key} = {value}")
     if settings.maybe_format is not None:
         run_lines.append(f"format = {_toml_string(settings.maybe_format)}")
+    if settings.maybe_server_nlp is not None:
+        run_lines.append(f"server_nlp = {'true' if settings.maybe_server_nlp else 'false'}")
     if run_lines:
         lines += ["", "[run]", *run_lines]
     for stage in STAGES:

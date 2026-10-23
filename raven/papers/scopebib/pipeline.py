@@ -199,11 +199,14 @@ class RunResult:
 
     `state`: what the ledgers settle afterwards, for the reports.
     `stages`: each stage's model and instrument, for the run file.
+    `models`: each stage's model as a methods section names it — key, quantization and what was declared —
+              from its ledger's header, or the bare key where the ledger has none.
     `messages`: what the person should be told: a stage that stopped, or one that waits on the judge.
     `connected`: whether a backend was asked anything at all.
     """
     state: State
     stages: dict[str, runfile.StagePlan]
+    models: dict[str, str]
     messages: list[str]
     connected: bool
 
@@ -214,6 +217,18 @@ _TODO_KEYS = {"judge": ("titles", "abstracts"), "review": ("review",), "extract"
 def _model_in_ledger(ledger: sweep.Ledger) -> str | None:
     headers = ledger.headers()
     return headers[-1]["header"].get("model_id") if headers else None
+
+
+def _describe_model(ledger: sweep.Ledger, maybe_model: str | None) -> str:
+    """`qwen3.6-35b-a3b (IQ4_NL_XL; KV cache 4-bit)` from the ledger's latest header; `maybe_model` where it has
+    none, and "not recorded" where neither says."""
+    headers = ledger.headers()
+    if not headers:
+        return maybe_model or "not recorded"
+    header = headers[-1]["header"]
+    details = [detail for detail in (header.get("quantization"), header.get("declared"))
+               if detail and detail != "not stated"]
+    return f"{header.get('model_id')}" + (f" ({'; '.join(details)})" if details else "")
 
 
 def run(corpus: Corpus, definition: scope_definition.Definition, *,
@@ -366,4 +381,5 @@ def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str,
         else:
             model = _model_in_ledger(by_stage[stage]) or wanted_models[stage]
         plans[stage] = runfile.StagePlan(model, fingerprints[stage])
-    return RunResult(state, plans, [], connected)
+    models = {stage: _describe_model(by_stage[stage], plans[stage].maybe_model) for stage in runfile.STAGES}
+    return RunResult(state, plans, models, [], connected)

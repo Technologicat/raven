@@ -137,6 +137,7 @@ class TestARun:
         assert result.connected and connections.counter["connect"] == 1
         assert {stage: plan.maybe_model for stage, plan in result.stages.items()} == dict.fromkeys(runfile.STAGES,
                                                                                                     "test-model")
+        assert result.models["judge"].startswith("test-model"), "described from the ledger's header"
 
     def test_a_run_again_asks_nothing(self, corpus, definition, tmp_path, model, connections):
         run(corpus, definition, tmp_path, connections)

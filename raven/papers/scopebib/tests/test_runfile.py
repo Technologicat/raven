@@ -46,6 +46,7 @@ class TestLoading:
         ('[run]\nmin_chars = ["abstract"]\n', "expected FIELD=N"),
         ('[run]\nformat = "csv"\n', "expected one of"),
         ('[run]\nuntil = "judge"\n', r"\[run\]: unknown key 'until'"),
+        ('[run]\nserver_nlp = "yes"\n', "expected true or false"),
     ])
     def test_a_mistake_is_named_with_its_file(self, tmp_path, text, complaint):
         path = write(tmp_path, text)
@@ -83,7 +84,7 @@ class TestWriting:
                                     maybe_definition=(tmp_path / "out" / "d.scope.toml").resolve(),
                                     require=("abstract",), min_chars=("abstract=200",), maybe_sample=50,
                                     maybe_pilot=50, maybe_seed=42, maybe_control=40, maybe_replicate=2,
-                                    maybe_format="ods"),
+                                    maybe_format="ods", maybe_server_nlp=True),
                            {"judge": StagePlan('a "quoted"\\model\tname\x01', "0970b39f"),
                             "review": StagePlan("b"), "extract": StagePlan()})
         path = tmp_path / "out" / "run.toml"
