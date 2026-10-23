@@ -96,7 +96,7 @@ import unicodedata
 
 from bibtexparser import Library
 from bibtexparser.middlewares import names
-from bibtexparser.model import Entry, Field
+from bibtexparser.model import DuplicateBlockKeyBlock, Entry, Field
 
 from .. import __version__
 
@@ -228,6 +228,8 @@ class Record:
     `surname`: Normalized first-author surname, or `None`. Blocks the fuzzy pass.
     `chapter_version`: Springer living-reference chapter version from the DOI, or `None`.
     `is_preprint`: Whether the DOI names a preprint server or a general repository.
+    `maybe_repeated_key`: The key the file gave this record, where an earlier record already had it and
+                          this one was read under a new `key`; `None` otherwise. See `read_records`.
     """
     index: int
     entry: Entry
@@ -239,6 +241,7 @@ class Record:
     surname: str | None
     chapter_version: int | None
     is_preprint: bool
+    maybe_repeated_key: str | None = None
 
     def field(self, name: str) -> str | None:
         """The value of field `name`, or `None` if the record does not have one worth reading."""
@@ -310,8 +313,8 @@ def _year_of(maybe_year: str | None) -> int | None:
     return int(match.group()) if match else None
 
 
-def _make_record(index: int, entry: Entry) -> Record:
-    """Derive a `Record` from one parsed entry."""
+def _make_record(index: int, entry: Entry, *, maybe_repeated_key: str | None = None) -> Record:
+    """Derive a `Record` from one parsed entry. `maybe_repeated_key` as in `Record`."""
     doi = papers_utils.normalize_doi(_field_value(entry, "doi"))
     if doi is None:
         # arXiv records often carry the identifier and no DOI. The registered form is derivable and is
@@ -331,7 +334,8 @@ def _make_record(index: int, entry: Entry) -> Record:
                   year=_year_of(_field_value(entry, "year")),
                   surname=_first_surname(_field_value(entry, "author")),
                   chapter_version=int(version_match.group(2)) if version_match else None,
-                  is_preprint=doi is not None and doi.startswith(papers_config.preprint_doi_prefixes))
+                  is_preprint=doi is not None and doi.startswith(papers_config.preprint_doi_prefixes),
+                  maybe_repeated_key=maybe_repeated_key)
 
 
 def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
@@ -343,6 +347,9 @@ def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
     The repair is **all of what `raven-fixbib` does** — the entity decoding as much as the structural
     rescue — applied to a copy, so the caller's file is untouched. `raven-fixbib` remains the tool for
     repairing the file itself, and running it first changes nothing about the result.
+
+    A record whose key an earlier record already has is read under a new key, `key-2` and onward, with the
+    one the file gave it in `Record.maybe_repeated_key`. Matching then decides whether it is a duplicate.
     """
     source, _decoded = bibtex.decode_html_entities(source)
     repaired, _recovered, unrecovered = fixbib.repair_bibtex(source)
@@ -352,9 +359,33 @@ def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
     # record is unaffected by the fault, since its author string is only ever copied.
     library = bibtex.parse_string(repaired, split_names=False)
     records = [_make_record(index, entry) for index, entry in enumerate(library.entries)]
+
+    # The parser refuses a second record under a key it has seen, while still reading it. Several files
+    # read as one corpus collide this way whenever two exports share a key scheme, and so does a file
+    # whose records were copied from a template. Without this the second record was neither read nor
+    # reported, the first one's key making `_still_missing` say it was there.
+    # Re-read from its text under the new key, rather than taken from the block's own `ignore_error_block`,
+    # which skipped the middleware: its field names are as the file wrote them, so `Title` never reads as
+    # `title`.
+    taken = {record.key for record in records}
+    unread_repeats = set()
+    for block in library.failed_blocks:
+        if not isinstance(block, DuplicateBlockKeyBlock):
+            continue
+        n = 2
+        while f"{block.key}-{n}" in taken:
+            n += 1
+        new_key = f"{block.key}-{n}"
+        reread = bibtex.parse_string(block.raw.replace(block.key, new_key, 1), split_names=False)
+        if len(reread.entries) != 1 or reread.entries[0].key != new_key:
+            unread_repeats.add(block.key)  # reported below; `_still_missing` would see the first one's key
+            continue
+        taken.add(new_key)
+        records.append(_make_record(len(records), reread.entries[0], maybe_repeated_key=block.key))
+
     return records, [report for report in unrecovered
                      if report.kind not in (fixbib.KIND_UNREADABLE, fixbib.KIND_NAMES)
-                     or _still_missing(report, library)]
+                     or _still_missing(report, library) or report.key in unread_repeats]
 
 
 def _still_missing(report: fixbib.RepairReport, library: Library) -> bool:
@@ -1414,6 +1445,18 @@ def _report(records: list[Record],
     # Named in full rather than counted. Each one says a DOI in the input looks attached to the wrong
     # record, which is a fault worth reading and — unlike a merge — leaves nothing in the audit, since
     # the whole outcome is that no merge happened.
+    # Named in full, for the reason given just below: the record the file names by this key is not the one
+    # the output or the audit names by it.
+    cluster_of = {record.index: cluster for cluster in clusters for record in cluster.records}
+    for record in records:
+        if record.maybe_repeated_key is None:
+            continue
+        namesake = any(other.key == record.maybe_repeated_key for other in cluster_of[record.index].records)
+        if namesake:
+            print(f"    key `{record.maybe_repeated_key}` given twice, to the same paper: merged (in the audit as `{record.key}`)")
+        else:
+            print(f"    key `{record.maybe_repeated_key}` given twice, to different papers: the second kept as `{record.key}`")
+
     for a, b in refused_doi_edges(records):
         print(f"    kept apart despite sharing {a.doi}: `{a.key}` and `{b.key}`")
         print("      different first authors, and the titles do not agree either")

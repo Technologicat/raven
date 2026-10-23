@@ -735,6 +735,41 @@ class TestReadRecords:
         assert [record.key for record in parsed] == ["fine"]
         assert len(unreadable) == 1
 
+    def test_a_second_record_under_a_key_already_taken_is_read_under_a_new_one(self):
+        source = entry("k", title="A Study of Learning Analytics") + entry("k", title="Bananas in Space")
+        parsed, unreadable = dd.read_records(source)
+        assert [(record.key, record.maybe_repeated_key) for record in parsed] == [("k", None), ("k-2", "k")]
+        assert unreadable == []
+        assert parsed[1].field("title") == "Bananas in Space"
+
+    def test_its_fields_are_read_whatever_case_the_file_writes_them_in(self):
+        # The parser's own copy of a refused record skips the middleware, so `Title` stays `Title` there
+        # and reads as no title at all. Exports write field names capitalized as often as not.
+        source = ("@article{k,\n  Title = {A Study of Learning Analytics},\n  Year = {2024},\n}\n"
+                  "@article{k,\n  Title = {Bananas in Space},\n  Year = {2021},\n}\n")
+        parsed, _unreadable = dd.read_records(source)
+        assert parsed[1].field("title") == "Bananas in Space" and parsed[1].year == 2021
+
+    def test_a_third_record_under_the_same_key_gets_the_next_suffix(self):
+        source = entry("k", title="A") + entry("k", title="B") + entry("k", title="C")
+        assert [record.key for record in records(source)] == ["k", "k-2", "k-3"]
+
+    def test_a_repeated_key_on_the_same_paper_is_merged_and_said_so(self, capsys):
+        source = entry("k", title="A Study of Learning Analytics", doi="10.1234/x") * 2
+        parsed = records(source)
+        clusters = dd.cluster_records(parsed)
+        assert len(clusters) == 1 and len(clusters[0]) == 2
+        dd._report(parsed, clusters, [])
+        assert "key `k` given twice, to the same paper: merged" in capsys.readouterr().out
+
+    def test_a_repeated_key_on_different_papers_keeps_both_and_says_so(self, capsys):
+        source = entry("k", title="A Study of Learning Analytics") + entry("k", title="Bananas in Space")
+        parsed = records(source)
+        clusters = dd.cluster_records(parsed)
+        assert len(clusters) == 2
+        dd._report(parsed, clusters, [])
+        assert "key `k` given twice, to different papers: the second kept as `k-2`" in capsys.readouterr().out
+
     def test_an_arxiv_record_with_no_doi_gets_the_registered_one(self):
         """What lets a preprint match its published twin, whose `doi` field says the same thing."""
         source = entry("k", title="A Study", eprint="2401.00001", archiveprefix="arXiv")
