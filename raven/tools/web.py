@@ -64,7 +64,8 @@ def _print_fetched_page(result: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="""Search the web, or fetch a web page's main content, via Raven-server.""",
+    parser = argparse.ArgumentParser(prog="raven-web",  # also under `python -m`, where it would be "web.py"
+                                     description="""Search the web, or fetch a web page's main content, via Raven-server.""",
                                      epilog="""Exit status: 0 on success; 1 when there is no result (the engine did not answer, the page was refused or unreadable, or the job failed on the server); 2 for a usage error; 3 when Raven-server could not be reached or refused the request. A Raven-server on another machine must be started with --listen.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
