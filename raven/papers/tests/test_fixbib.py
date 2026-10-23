@@ -3,7 +3,7 @@
 import logging
 
 from ..fixbib import (repair_bibtex, RepairReport,
-                      KIND_UNBALANCED_BRACES, KIND_DUPLICATE_FIELD_KEYS, KIND_UNREADABLE)
+                      KIND_UNBALANCED_BRACES, KIND_DUPLICATE_FIELD_KEYS, KIND_NAMES, KIND_UNREADABLE)
 from .. import bibtex
 
 # `bibtexparser` warns about every record it cannot read, and these tests feed it unreadable records on
@@ -134,7 +134,7 @@ class TestRepairDuplicateFieldKeys:
 
         assert recovered == []
         assert len(unrecovered) == 1 and unrecovered[0].key == "repeated"
-        assert unrecovered[0].kind == KIND_UNREADABLE
+        assert unrecovered[0].kind == KIND_NAMES
         assert "comma" in unrecovered[0].detail.lower()
 
         assert repaired != source, "the repair the tool could make must survive into the output"
@@ -149,11 +149,28 @@ class TestRepairDuplicateFieldKeys:
         assert len(bibtex.parse_string(repaired).entries) == 2
 
     def test_a_fault_the_tool_cannot_name_still_carries_the_parsers_own_words(self):
-        # No field opens more braces than it closes, so the brace heuristic has nothing to offer and the
-        # report falls back to what the parser said. Nothing here should invent a diagnosis.
-        source = "@article{odd,\n    author = {Bloggs, PhD, MSc, Joan},\n    year = {2022},\n}\n"
+        # A URL used as the key: the `=` in it ends the key for the parser. No field opens more braces than
+        # it closes and no name is involved, so the report falls back to what the parser said. Nothing
+        # here should invent a diagnosis.
+        source = "@article{https://example.org/record?eid=2-s2.0-1,\n    author = {Bloggs, Joan},\n}\n"
         _repaired, recovered, unrecovered = repair_bibtex(source)
         assert recovered == []
         assert len(unrecovered) == 1
         assert unrecovered[0].kind == KIND_UNREADABLE
+        assert "Expected comma after entry key" in unrecovered[0].detail
+
+    def test_an_apa_author_list_is_repaired_and_reported_as_a_name_fault(self):
+        source = ("@article{apa,\n    author = {Martínez, C. E., Hernández, M. E., & Reinoso, M. T.},\n"
+                  "    year = {2022},\n}\n")
+        repaired, recovered, unrecovered = repair_bibtex(source)
+        assert unrecovered == []
+        assert [(r.key, r.kind) for r in recovered] == [("apa", KIND_NAMES)]
+        assert "author = {Martínez, C. E. and Hernández, M. E. and Reinoso, M. T.}" in repaired
+        assert len(bibtex.parse_string(repaired).entries) == 1
+
+    def test_a_name_fault_it_cannot_repair_is_reported_as_one(self):
+        source = "@article{odd,\n    author = {Bloggs, PhD, MSc, Joan},\n    year = {2022},\n}\n"
+        _repaired, recovered, unrecovered = repair_bibtex(source)
+        assert recovered == []
+        assert [r.kind for r in unrecovered] == [KIND_NAMES]
         assert "Too many commas" in unrecovered[0].detail

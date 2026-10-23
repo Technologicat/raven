@@ -42,7 +42,7 @@ import torch
 
 from sklearn.cluster import HDBSCAN
 
-from bibtexparser.model import DuplicateFieldKeyBlock
+from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
 
 from ..client import config as client_config
 from ..client import mayberemote
@@ -304,8 +304,8 @@ def _recover_failed_block(failed_block):
     """Try to rescue one record `bibtexparser` refused. Returns the recovered entry, or `None`.
 
     Only ever runs on a record that has *already* failed, so nothing that currently parses can be affected
-    by it. `bibtex.repair_failed_block`, which see, does the work: it escapes stray braces or merges a
-    field the record names twice, the same repairs `raven-fixbib` makes.
+    by it. `bibtex.repair_failed_block`, which see, does the work: it escapes stray braces, merges a field
+    the record names twice, or rewrites an author list BibTeX could not split, the same repairs `raven-fixbib` makes.
     """
     maybe_repaired = bibtex.repair_failed_block(failed_block)
     if maybe_repaired is None:
@@ -341,8 +341,12 @@ def _report_unparseable_records(filename, library):
 
     for failed_block, entry in recovered:
         library.add(entry)
-        how = ("by merging a field it names more than once" if isinstance(failed_block, DuplicateFieldKeyBlock)
-               else "by escaping unbalanced braces in a field value")
+        if isinstance(failed_block, DuplicateFieldKeyBlock):
+            how = "by merging a field it names more than once"
+        elif isinstance(failed_block, MiddlewareErrorBlock):
+            how = "by rewriting an author list BibTeX could not split"
+        else:
+            how = "by escaping unbalanced braces in a field value"
         logger.warning(f"_parse_input_files: recovered record '{entry.key}' at line {failed_block.start_line} "
                        f"of {filename} {how}. The file itself is unchanged; `raven-fixbib` writes the repair back.")
 

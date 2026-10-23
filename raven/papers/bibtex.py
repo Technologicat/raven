@@ -11,9 +11,9 @@ Reading what a parser refused: `header_key`, `field_value`, `unbalanced_field_na
 `brace_repair_candidates` work on the surface syntax, for saying something useful about a record
 `bibtexparser` has already declined. They are not a second parser and must not become one.
 
-Repairing: `repair_record` and `repair_duplicate_field_keys` each rescue one record `bibtexparser`
-refused, for the two reasons a real-world export gives it — braces that do not balance, and a field name
-that occurs twice. Both take the record's text and hand back text, so a caller may parse the result or
+Repairing: `repair_record`, `repair_duplicate_field_keys` and `repair_name_lists` each rescue one record
+`bibtexparser` refused, for the three reasons a real-world file gives it — braces that do not balance, a
+field name that occurs twice, and authors listed APA-style rather than joined with `and`. Both take the record's text and hand back text, so a caller may parse the result or
 write it to a file; `raven.papers.fixbib` does the latter.
 
 `decode_html_entities` and `relocate_rights_notices` are text-to-text as well, and fix what is *inside*
@@ -29,7 +29,8 @@ __all__ = ["parse_file", "parse_string", "write_string",
 
            "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
 
-           "repair_record", "repair_duplicate_field_keys", "repair_failed_block", "decode_html_entities",
+           "repair_record", "repair_duplicate_field_keys", "repair_name_lists", "repair_failed_block",
+           "decode_html_entities",
            "relocate_rights_notices",
 
            "entries_to_bibtex"]
@@ -41,7 +42,7 @@ import re
 from typing import NamedTuple
 
 import bibtexparser
-from bibtexparser.model import DuplicateFieldKeyBlock, Entry, Field
+from bibtexparser.model import DuplicateFieldKeyBlock, Entry, Field, MiddlewareErrorBlock
 from bibtexparser import Library
 
 from unpythonic import box, unbox
@@ -567,17 +568,123 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
     return candidate if library.entries else None
 
 
+_NAME_SUFFIXES = {"jr.", "sr.", "jr", "sr", "ii", "iii", "iv"}
+
+
+def _is_initials(token: str) -> bool:
+    """Whether `token` is one person's initials as APA writes them: `C.`, `C. G. L.`, `L.-A.`, `Ch.`."""
+    pieces = [piece for piece in re.split(r"[\s-]+", token) if piece]
+    return bool(pieces) and all(re.fullmatch(r"[^\W\d_]{1,2}\.", piece) and piece[0].isupper()
+                                for piece in pieces)
+
+
+def _apa_names_to_bibtex(value: str) -> str | None:
+    """Rewrite an APA-style name list as BibTeX's `and`-separated one. `None` unless it is one, unambiguously.
+
+    APA writes `Surname, I., Surname, I., & Surname, I.`, so every comma separates something and BibTeX,
+    which allows a name at most two, cannot tell where one name ends. The list is accepted only when its
+    comma-separated parts pair up exactly as a surname followed by initials, optionally with a suffix, so
+    a list missing a comma (`Costa, R. Viegas, C.`) is left for a person to read. Tolerated on the way:
+    the `&` before the last name, a trailing comma, a comma typed for the space inside initials
+    (`G.,L.`), and APA's `...` for omitted authors, which becomes BibTeX's `and others`.
+    """
+    text = value.strip()
+    if re.search(r"\sand\s", text):  # already BibTeX's form, or something else entirely
+        return None
+    text = re.sub(r"\s*&\s*", ", ", text)
+    others = bool(re.search(r"\.\.\.|…", text))
+    text = re.sub(r"\.\.\.|…", ",", text)
+    text = re.sub(r",(?=[^\W\d_]\.)", " ", text)  # `G.,L.` -> `G. L.`: a comma with an initial right after it
+    tokens = [token.strip() for token in text.split(",") if token.strip()]
+
+    names, i = [], 0
+    while i < len(tokens):
+        surname = tokens[i]
+        if _is_initials(surname) or surname.casefold() in _NAME_SUFFIXES or i + 1 >= len(tokens):
+            return None
+        initials, suffix = tokens[i + 1], None
+        words = initials.split()
+        if len(words) > 1 and words[-1].casefold() in _NAME_SUFFIXES:  # `E. R. Jr.`
+            initials, suffix = " ".join(words[:-1]), words[-1]
+        if not _is_initials(initials):
+            return None
+        i += 2
+        if suffix is None and i < len(tokens) and tokens[i].casefold() in _NAME_SUFFIXES:  # `E. R., Jr.`
+            suffix = tokens[i]
+            i += 1
+        names.append(f"{surname}, {suffix}, {initials}" if suffix else f"{surname}, {initials}")
+    if not names:
+        return None
+    return " and ".join(names + (["others"] if others else []))
+
+
+def _strip_stray_commas(value: str) -> str | None:
+    """Drop the trailing comma from each name of an `and`-separated list. `None` if there was none.
+
+    `Tan, C. G. L., and Voo, K.` is a list in BibTeX's own form with one comma too many, and a comma at the
+    end of a name carries nothing, so removing it changes no name.
+    """
+    names = re.split(r"\s+and\s+", value.strip())
+    if len(names) < 2:
+        return None
+    stripped = [name.rstrip().rstrip(",").rstrip() for name in names]
+    return " and ".join(stripped) if stripped != [name.rstrip() for name in names] else None
+
+
+def repair_name_lists(raw: str) -> str | None:
+    """Repair one BibTeX record `raw` whose name fields BibTeX cannot split. Returns the text, or `None`.
+
+    Two faults, both written by hand: an APA-style list (see `_apa_names_to_bibtex`), and an `and`-separated
+    list with a stray comma at the end of a name (see `_strip_stray_commas`). Each of `author`, `editor` and
+    `translator` is rewritten when one of the two applies, and everything else in the record is left byte
+    for byte as it was. An APA list that does not pair up unambiguously is left alone, which is what stops
+    this from guessing where a name ends.
+
+    Returning `None` means nothing was rewritten, or the rewrite does not read back as an entry with names
+    split, which is the check this repair exists to pass.
+    """
+    spans = _field_spans(raw)
+    if not spans:
+        return None
+    edits = []
+    for span in spans:
+        if span.key not in _NAME_FIELDS:
+            continue
+        value = _undelimit(raw[span.value_start:span.value_end])
+        maybe_names = _apa_names_to_bibtex(value) or _strip_stray_commas(value)
+        if maybe_names is not None:
+            edits.append((span.value_start, span.value_end, "{" + maybe_names + "}"))
+    if not edits:
+        return None
+
+    pieces, cursor = [], 0
+    for start, end, replacement in edits:
+        pieces.append(raw[cursor:start])
+        pieces.append(replacement)
+        cursor = end
+    pieces.append(raw[cursor:])
+    candidate = "".join(pieces)
+    try:
+        library = parse_string(candidate)
+    except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
+        return None
+    return candidate if library.entries else None
+
+
 def repair_failed_block(failed_block) -> str | None:
     """Repair one record `bibtexparser` refused, choosing the repair by what is wrong with it.
 
     `failed_block`: one of a parsed library's `failed_blocks`. A `DuplicateFieldKeyBlock` gets
-                    `repair_duplicate_field_keys`, told which field names the parser saw repeated; any
-                    other block gets `repair_record`.
+                    `repair_duplicate_field_keys`, told which field names the parser saw repeated; a
+                    `MiddlewareErrorBlock`, whose syntax was fine and whose names could not be split, gets
+                    `repair_name_lists`; any other block gets `repair_record`.
 
     Returns the repaired text, or `None` if the record stays unreadable.
     """
     if isinstance(failed_block, DuplicateFieldKeyBlock):
         return repair_duplicate_field_keys(failed_block.raw, failed_block.duplicate_keys)
+    if isinstance(failed_block, MiddlewareErrorBlock):
+        return repair_name_lists(failed_block.raw)
     return repair_record(failed_block.raw)
 
 

@@ -1,6 +1,7 @@
 r"""Repair BibTeX records that a parser refuses, and say what was wrong with the ones that stay refused.
 
-Two faults are repaired, and they come from opposite ends of the toolchain.
+Three faults that make a parser refuse a record are repaired, and the first two come from opposite ends of
+the toolchain.
 
 **Stray braces in a field value** are what a PDF extractor produces: mathematics reaches a BibTeX file as
 things like `{0 <= rho <= 1`, set-builder notation whose closing brace was dropped somewhere in the
@@ -28,7 +29,13 @@ one, since each holds something different and choosing between them is not a rep
 The second fault is worth knowing about for how *much* of a file it can take: 1598 of the 6934 records in
 one real multi-database export, none of them reported as anything more specific than "unparseable".
 
-**HTML left in the field values** is the third fault repaired here, and the odd one out: the records
+**An author list BibTeX cannot split** is what a person writes who has not met BibTeX: `Surname, I.,
+Surname, I., & Surname, I.`, APA's form, or BibTeX's own with a stray comma (`Tan, C. G. L., and Voo, K.`).
+BibTeX joins names with `and` and allows each at most two commas, so the record is refused for its names.
+An APA list is rewritten into BibTeX's form when its parts pair up exactly as surname and initials, and a
+stray comma is dropped; a list missing a comma, where the pairing would be a guess, is reported instead.
+
+**HTML left in the field values** is the fourth fault repaired here, and the odd one out: the records
 carrying it parse perfectly well, so nothing reported it before. A database that exported its web page
 rather than its record leaves entities behind: a title meaning `Q&A` arrives as `Q\&amp;A`, and left alone
 it would read that way in every tool downstream — a citation, a word cloud, a typeset bibliography. The
@@ -47,7 +54,7 @@ writes a new file by default, and touches the original only when asked to.
 
 from __future__ import annotations
 
-__all__ = ["KIND_UNBALANCED_BRACES", "KIND_DUPLICATE_FIELD_KEYS", "KIND_UNREADABLE",
+__all__ = ["KIND_UNBALANCED_BRACES", "KIND_DUPLICATE_FIELD_KEYS", "KIND_NAMES", "KIND_UNREADABLE",
            "RepairReport", "repair_bibtex", "main"]
 
 from .. import __version__
@@ -67,6 +74,7 @@ from . import bibtex
 
 KIND_UNBALANCED_BRACES = "unbalanced braces"
 KIND_DUPLICATE_FIELD_KEYS = "duplicate field keys"
+KIND_NAMES = "names BibTeX cannot split"
 KIND_UNREADABLE = "unreadable"
 
 
@@ -94,6 +102,16 @@ class RepairReport:
         return f"'{self.key}' at line {self.line}: {self.kind} ({self.detail})"
 
 
+def _error_text(failed_block) -> str:
+    """The parser's own account of why it refused `failed_block`, on one line.
+
+    A record aborted mid-parse carries a `BlockAbortedException` whose message is in `abort_reason`, its
+    `str` being empty; the other failures carry ordinary exceptions.
+    """
+    error = failed_block.error
+    return (getattr(error, "abort_reason", None) or str(error)).replace("\n", " ")
+
+
 def _diagnose(failed_block, key: str, line: int) -> RepairReport:
     """Say what is wrong with one record `bibtexparser` refused.
 
@@ -115,13 +133,15 @@ def _diagnose(failed_block, key: str, line: int) -> RepairReport:
     # a record repaired for one fault and reported for another would otherwise be reported for braces
     # that were never a problem.
     if isinstance(failed_block, MiddlewareErrorBlock):
-        return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
+        detail = _error_text(failed_block)
+        kind = KIND_NAMES if "Cannot split the following name" in detail else KIND_UNREADABLE
+        return RepairReport(key, line, kind, detail)
 
     unbalanced = bibtex.unbalanced_field_names(failed_block.raw)
     if unbalanced:
         return RepairReport(key, line, KIND_UNBALANCED_BRACES,
                             f"suspect field{textutil.plural_s(len(unbalanced))}: {', '.join(unbalanced)}")
-    return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
+    return RepairReport(key, line, KIND_UNREADABLE, _error_text(failed_block))
 
 
 def _residual_fault(repaired: str):

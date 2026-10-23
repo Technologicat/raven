@@ -103,12 +103,21 @@
 - **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.
 - **An embedding model loaded in LM Studio beside the chat model is no longer taken for it.** Before, whichever loaded model LM Studio listed first was the one Librarian named and sent requests to.
 
+#### Raven-visualizer
+
+- **The importer keeps a record whose authors are listed APA-style**, as `Surname, I., Surname, I., & Surname, I.`, or carry a stray comma before an `and`. In v0.2.10 such a record was left out of the dataset, with a warning blaming unbalanced braces. The list is read as `raven-fixbib` now rewrites it.
+
 #### Raven-pdf2bib
 
 - **An LLM backend failing mid-run no longer writes its error message into the BibTeX as a field.** It used to pass for an answer.
 - **A reply cut off at the token limit is asked again**, rather than written into the BibTeX as a half-finished field. One still cut off after its attempts counts as no usable answer, and the next run asks again.
 - **A flagged document no longer crashes a run that was given no `-o` or `-of`.** Its notes are written only where a directory for them was given.
 - **An abstract with no author list or no title leaves that field out**, and the entry is flagged for a check by hand (into `--failed`, when given). Before, the model's description of the absence, such as "The abstract does not list any authors", was written into the field as if it were the data. A section heading reported as the title, such as "Abstract", is treated the same way.
+
+#### Raven-fixbib
+
+- **An author list written APA-style is repaired**, rewritten into BibTeX's `and`-separated form, and so is a stray comma at the end of a name. A list whose parts do not pair up as surname and initials is still reported rather than guessed at. Both kinds are reported as names BibTeX cannot split, where v0.2.10 called them unreadable.
+- **A record the parser abandons mid-header is reported with the parser's reason**, such as a citekey containing `=`. In v0.2.10 the reason came out empty.
 
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 

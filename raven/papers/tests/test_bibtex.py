@@ -2,11 +2,14 @@
 
 from unittest.mock import MagicMock
 
+from bibtexparser.model import MiddlewareErrorBlock
+
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
                                  brace_repair_candidates, decode_html_entities, entries_to_bibtex,
                                  entry_field, entry_venue, field_value, header_key, parse_file,
                                  parse_string, readable_text,
                                  relocate_rights_notices, repair_duplicate_field_keys,
+                                 repair_failed_block, repair_name_lists,
                                  unbalanced_field_names, write_string)
 
 
@@ -563,6 +566,64 @@ class TestRepairDuplicateFieldKeys:
         assert parse_string(repaired, split_names=False).entries[0]["annote"] == "First note\nSecond note"
         # ...and the second fault is untouched, so the record still does not read with names split.
         assert len(parse_string(repaired).failed_blocks) == 1
+
+
+class TestRepairNameLists:
+    @staticmethod
+    def record(author):
+        return f"@article{{k,\n  Author = {{{author}}},\n  Year = {{2024}},\n  Title = {{A Study}},\n}}\n"
+
+    @staticmethod
+    def surnames(raw):
+        return [" ".join(name.last) for name in parse_string(raw).entries[0]["author"]]
+
+    def test_an_apa_list_is_rewritten_with_and(self):
+        raw = self.record("Martínez, C. E., Hernández, M. E., & Reinoso, M. T.")
+        assert parse_string(raw).failed_blocks, "the fixture must be a record the reader refuses"
+        repaired = repair_name_lists(raw)
+        assert self.surnames(repaired) == ["Martínez", "Hernández", "Reinoso"]
+        assert parse_string(repaired).entries[0]["author"][0].first == ["C.", "E."]
+
+    def test_everything_but_the_names_keeps_its_text_byte_for_byte(self):
+        repaired = repair_name_lists(self.record("Teherani, A., Nicastro, T., Clair, M. S."))
+        assert repaired.startswith("@article{k,\n  Author = {")
+        assert repaired.endswith("},\n  Year = {2024},\n  Title = {A Study},\n}\n")
+
+    def test_a_trailing_comma_is_tolerated(self):
+        assert self.surnames(repair_name_lists(self.record("Tan, C. G. L.,"))) == ["Tan"]
+
+    def test_a_comma_typed_for_the_space_inside_initials_stays_inside_them(self):
+        repaired = repair_name_lists(self.record("Carlson, G.,L., English, R., Lee, K."))
+        assert self.surnames(repaired) == ["Carlson", "English", "Lee"]
+        assert parse_string(repaired).entries[0]["author"][0].first == ["G.", "L."]
+
+    def test_omitted_authors_become_and_others(self):
+        repaired = repair_name_lists(self.record("Nishio, A., Sari, D. P., ... & Kobayashi, J."))
+        assert self.surnames(repaired) == ["Nishio", "Sari", "Kobayashi", "others"]
+
+    def test_a_suffix_is_written_where_bibtex_expects_one(self):
+        repaired = repair_name_lists(self.record("Gregorio, E. R. Jr., Sari, D. P., Kobayashi, J."))
+        assert parse_string(repaired).entries[0]["author"][0].jr == ["Jr."]
+
+    def test_a_stray_comma_in_an_and_list_is_dropped(self):
+        raw = self.record("Lim, R. B. T. and Tan, C. G. L., and Voo, K.")
+        assert parse_string(raw).failed_blocks, "the fixture must be a record the reader refuses"
+        assert self.surnames(repair_name_lists(raw)) == ["Lim", "Tan", "Voo"]
+
+    def test_a_list_missing_a_comma_is_left_for_a_person(self):
+        # `R. Viegas` could be two names run together or a typo inside one; pairing it would be a guess.
+        assert repair_name_lists(self.record("Costa, R. Viegas, C., Lima, N.")) is None
+
+    def test_a_name_with_degrees_in_it_is_not_mistaken_for_a_list(self):
+        assert repair_name_lists(self.record("Bloggs, PhD, MSc, Joan")) is None
+
+    def test_a_list_already_joined_with_and_is_not_a_candidate(self):
+        assert repair_name_lists(self.record("Smith, J. and Doe, J. and Roe, R., Jr.")) is None
+
+    def test_the_dispatcher_sends_a_name_fault_here(self):
+        failed = parse_string(self.record("Teherani, A., Nicastro, T., Clair, M. S.")).failed_blocks
+        assert len(failed) == 1 and isinstance(failed[0], MiddlewareErrorBlock)
+        assert repair_failed_block(failed[0]) == repair_name_lists(failed[0].raw) is not None
 
 
 # ---------------------------------------------------------------------------

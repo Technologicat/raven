@@ -353,7 +353,8 @@ def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
     library = bibtex.parse_string(repaired, split_names=False)
     records = [_make_record(index, entry) for index, entry in enumerate(library.entries)]
     return records, [report for report in unrecovered
-                     if report.kind != fixbib.KIND_UNREADABLE or _still_missing(report, library)]
+                     if report.kind not in (fixbib.KIND_UNREADABLE, fixbib.KIND_NAMES)
+                     or _still_missing(report, library)]
 
 
 def _still_missing(report: fixbib.RepairReport, library: Library) -> bool:
