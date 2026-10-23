@@ -87,6 +87,18 @@ by hand; and long-term memory needs the same separation.
     drives it are in `TODO_DEFERRED.md`, *Visualizer: quality flags*. Persisting it waits on the dataset
     format leaving `.pickle` (`TODO.md`, *Data file format*), since a mark kept in a pickle is lost with
     the dataset at a Python upgrade.
+  - **A review's own grouping is a tag tree in this sense** (2026-10-23). The groupings published in the
+    biology and geography teacher-education papers were the clusterer's output, checked and edited by
+    hand, in two levels: theme, then named items within it. Theme/item is parent/child tag. Three things
+    follow, all wanted by the maintainer:
+    - **Shown over the map**, in colour, with every record staying where the embedding puts it. A record
+      the reviewer files under a theme whose region it is not in is visible as such. This is also the
+      better yardstick for comparing a clustering with a human grouping, region by region rather than one
+      agreement score.
+    - **Exported as plain text**, theme, item, then the records, in the shape of the hand-made
+      `geography_clusters.txt` that a review currently assembles by hand.
+    - **Exported as the paper's table**: theme, items with counts, citations, as both papers printed it.
+    - And **importable**, so that an existing grouping can be brought in as tags.
 - **[P] Hierarchical scopes: the fit belongs to the scope you opened; children are a filter or a highlight
   over it, never their own fit.** Open `arxiv_ai` and `2026_07_new_studies` is a colour on the parent map.
   Fit two scopes independently and you need Procrustes to compare them — a problem you can decline to create.
