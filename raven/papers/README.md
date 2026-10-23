@@ -249,7 +249,7 @@ Requiring both signals is what keeps the rule quiet. Either alone would split re
 
 **Everything, rather than the best record.** The surviving copy is the most complete one — preferring the version of record over a preprint, and the higher version of a Springer living-reference chapter. Every field that copy lacks is filled in from a twin that has one, and where two copies disagree about a field, the audit records the value that lost.
 
-**The merged record keeps the surviving copy's key**, so the ranking above decides it too. Where the copies were written in one order rather than ranked, as identical copies are, the earlier one in the input wins.
+**The merged record keeps the surviving copy's key**, so the ranking above decides it too, whether the copies came from one file or several. Where the ranking cannot tell the copies apart, the earlier one in the input wins, and the files count in the order you give them: to keep your own keys where nothing else decides, list your own file first.
 
 **Normalized and stripped forms decide *which* value to keep and never reach the output.** The record that wins is written as it stands, not composed from the ones that lost.
 
