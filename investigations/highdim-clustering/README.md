@@ -512,14 +512,18 @@ hydrogen production, water splitting, heterojunction; biohydrogen production, da
 at different sizes disagree no more than runs at the same size do. At 200 the last one or two keywords
 came out more concrete in three of six runs (TiO₂, graphitic carbon nitride, *Clostridium*, volatile fatty
 acids, where 60 gave *operating parameters*, *hydrogen yield*), which three runs cannot separate from
-chance. The cost of 200 is about 3.5 times the prefill: 42–50 s against 12–14 s on the first run of each.
+chance. **A larger number of runs is wanted before relying on that**, when this part of the importer is next
+built. The cost of 200 is about 3.5 times the prefill: 42–50 s against 12–14 s on the first run of each.
 Later runs of the same prompt hit the backend's cache, so only the first is what an import pays.
 
 **The long thinking traces were the model walking the whole list.** The two longest (1555 and 2220 thinking
 tokens, against about 500) were both at 60 entries, where the model went through every entry one by one;
 at 200 it did not. On the way it named a misclustered record unprompted: a glioma cell-culture paper,
 there for "hydrogen ion", in the biohydrogen cluster. So thinking length measures whether the model chose
-to enumerate as much as whether it was confused, and the model notices misfits without being asked.
+to enumerate as much as whether it was confused. **The misfit was named in two of the three 60-entry runs of
+that cluster and in none of the 200-entry ones**, though the sample includes it at both sizes. Unasked, the
+flag comes and goes, so a prompt that wants it must ask for it. The runs are kept, gitignored, in
+`sample_size_runs/`.
 
 ## Open, and deliberately not answered here
 

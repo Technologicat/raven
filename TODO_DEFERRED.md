@@ -78,9 +78,11 @@ records the maintainer doubted from their titles were their cluster's weakest me
 institute among biomimicry papers), and three were loose fits whose link only the abstract shows. So the
 marker points at records worth opening rather than at records that are wrong.
 
-- **The LLM notices misfits already**: walking a 60-entry sample, it named a glioma cell-culture paper in
-  hydrogen's biohydrogen cluster as misclustered, unprompted (2026-10-23). Asking the keyword prompt to
-  list such records would give a semantic second opinion beside the cosine, for the sampled entries.
+- **The LLM notices misfits, sometimes**: it named a glioma cell-culture paper in hydrogen's biohydrogen
+  cluster as misclustered in two of three 60-entry runs, unprompted, and in none of three 200-entry runs
+  (2026-10-23). **So the prompt must ask for misfits explicitly** (maintainer): an unrequested flag cannot be
+  relied on, and Qwen thinks longer when what it sees does not match what the task led it to expect. That
+  gives a semantic second opinion beside the cosine, for the sampled entries.
 - **Relative within the cluster, not an absolute threshold**: the values ran 0.57–0.70 across clusters,
   so a fixed cut would mark whole clusters. The lowest member, or a margin below the cluster's own
   median, are the first two candidates; neither has been measured.

@@ -10,3 +10,12 @@ clusters_centered_eom_5_1.txt
 # AOKK keyword dumps carry that corpus's titles too, so they stay local for the same reason as
 # the two above.
 aokk_*.txt
+
+# The sample-size probe's runs, every turn whole with its thinking trace. Gitignored like the dumps above:
+# the prompts carry the hydrogen corpus's titles and abstracts. Regenerate with `sample_size_probe.py`.
+sample_size_runs/
+
+# The education corpora's human groupings and a cluster dump, from the 2026-10-23 small-corpus work.
+# `biology_reference.tsv` is Table 7 of the biology manuscript transcribed by hand, the input
+# `small_corpora.py` reads as `--reference`; the corpora themselves are under `00_stuff/`.
+education_corpora/
