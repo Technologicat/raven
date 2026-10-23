@@ -135,6 +135,14 @@ def _open_ledgers(directory: pathlib.Path, fingerprints: dict[str, str | None]) 
                     scope_extract.ledger(directory, fingerprints["extract"]))
 
 
+def _ledger_paths(directory: pathlib.Path, fingerprints: dict[str, str | None]) -> dict[str, pathlib.Path | None]:
+    """The file each stage's answers are in, `None` where the stage has no fingerprint; the judge's by its
+    title pass, which every judged record has an answer in."""
+    ledgers = _open_ledgers(directory, {stage: fingerprint or "" for stage, fingerprint in fingerprints.items()})
+    paths = {"judge": ledgers.titles.path, "review": ledgers.review.path, "extract": ledgers.extract.path}
+    return {stage: path if fingerprints[stage] else None for stage, path in paths.items()}
+
+
 @dataclasses.dataclass(frozen=True)
 class State:
     """What the ledgers settle, and what each stage still has to ask.
@@ -246,6 +254,13 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             return "judge" in stages and not state.judge_settled
         return any(lists)
 
+    # A named instrument with no ledger at all is a typo, or the wrong ledgers directory, far more often than
+    # a stage never run; either way the person should hear where it was looked for.
+    missing = []
+    for stage, path in _ledger_paths(ledger_dir, named).items():
+        if path is not None and not path.exists():
+            missing.append(f"{stage}: no ledger for the named instrument {named[stage]}; looked for {path}")
+
     # Without a connection, where every instrument is named: a replay that finds nothing to ask stops here.
     if all(named.values()):
         state = state_under(named)
@@ -254,7 +269,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             if left:
                 logger.info(f"run: {stage}: {left} records left under the named instrument {named[stage]}")
         if not any(has_work(state, stage) for stage in stages):
-            return _finish(state, named, wanted_models, ledger_dir, stages, connected=False)
+            result = _finish(state, named, wanted_models, ledger_dir, stages, connected=False)
+            return dataclasses.replace(result, messages=missing)
 
     settings = connect()
     loaded = settings.model_record.model_id
@@ -291,7 +307,7 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
         raise PipelineError(message)
 
     header = sweep.instrument_header(settings)
-    messages, asked = skipped, set()
+    messages, asked = missing + skipped, set()
     ledgers = _open_ledgers(ledger_dir, fingerprints)
 
     def sweep_over(stage: str, ask, records: list[scope_records.Record], ledger: sweep.Ledger, batch_size: int):

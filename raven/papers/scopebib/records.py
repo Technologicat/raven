@@ -12,7 +12,7 @@ abstract and venue as readable text, and a link.
 """
 
 __all__ = ["Record", "records_of", "load_records",
-           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY",
+           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
            "looks_truncated", "describe_abstract"]
 
@@ -97,6 +97,9 @@ def load_records(bib_path: str | pathlib.Path) -> list[Record]:
 # failing short precise ones.
 MIN_CONTENT_WORDS = 3
 MIN_CONTENT_DENSITY = 0.40
+
+#: The spaCy pipeline the bounds above were calibrated with, for measuring titles locally.
+SPACY_MODEL = "en_core_web_sm"
 
 
 class _Pipeline(Protocol):

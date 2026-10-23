@@ -160,6 +160,17 @@ class TestConnecting:
         assert not replay.connected and replay.state.final == first.state.final
         assert replay.stages == first.stages, "the models come from the ledgers' headers"
 
+    def test_a_named_instrument_with_no_ledger_is_reported_with_where_it_was_looked_for(self, corpus, definition,
+                                                                                        tmp_path, model, connections):
+        plans = {stage: StagePlan(None, "deadbeef") for stage in runfile.STAGES}
+        result = run(corpus, definition, tmp_path, connections, stages=(), plans=plans)
+        assert not result.connected
+        assert [message.split(":")[0] for message in result.messages] == list(runfile.STAGES)
+        assert all(str(tmp_path / "ledgers") in message for message in result.messages)
+        first = run(corpus, definition, tmp_path, connections)
+        replay = run(corpus, definition, tmp_path, connections, stages=(), plans=first.stages)
+        assert replay.messages == [], "the control: ledgers that exist are not reported"
+
     def test_an_unnamed_instrument_connects_even_with_nothing_to_ask(self, corpus, definition, tmp_path, model,
                                                                      connections):
         run(corpus, definition, tmp_path, connections)

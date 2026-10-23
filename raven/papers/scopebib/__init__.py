@@ -18,6 +18,7 @@ The library behind `raven-scopebib`, one module per stage:
   - `runfile`, the run file: which model each stage asks, and under which instrument.
   - `pipeline`, running the stages in order: what is left to ask, whether a backend is needed for it, and
     asking it.
+  - `cli`, the console script.
 
 It generalizes the prototype in `investigations/aokk-corpus-scope/`.
 """
