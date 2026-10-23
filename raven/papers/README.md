@@ -249,6 +249,8 @@ Requiring both signals is what keeps the rule quiet. Either alone would split re
 
 **Everything, rather than the best record.** The surviving copy is the most complete one — preferring the version of record over a preprint, and the higher version of a Springer living-reference chapter. Every field that copy lacks is filled in from a twin that has one, and where two copies disagree about a field, the audit records the value that lost.
 
+**The merged record keeps the surviving copy's key**, so the ranking above decides it too. Where the copies were written in one order rather than ranked, as identical copies are, the earlier one in the input wins.
+
 **Normalized and stripped forms decide *which* value to keep and never reach the output.** The record that wins is written as it stands, not composed from the ones that lost.
 
 **`copyright` is the one field kept from every copy.** Each notice names one of the exports the record came from, so a merged record says where all of it came from.
@@ -259,7 +261,7 @@ Requiring both signals is what keeps the rule quiet. Either alone would split re
 
 **Two exports that use the same key scheme collide**, and so do records copied from one template. A BibTeX parser keeps the first record under a key and refuses the rest, so they would be lost without a word.
 
-**Here a record repeating an earlier record's key is read under a new one** (`key-2`, then `key-3`) and matched like any other. The run names each repeated key, and says whether the two records were the same paper and merged, or different papers and both kept. In the second case, the new key is the one in the output.
+**Here a record repeating an earlier record's key is read under a new one** (`key-2`, then `key-3`) and matched like any other. The run names each repeated key, and says whether the two records were the same paper and merged, or different papers and both kept. A merge writes the key the file gave them, whichever copy survived; two different papers keep the new key for the second.
 
 This makes `raven-deduplicate` the step to run before importing several BibTeX files into the Visualizer, whether or not their keys clash: the importer reads each file on its own and merges nothing.
 

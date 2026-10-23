@@ -762,6 +762,17 @@ class TestReadRecords:
         dd._report(parsed, clusters, [])
         assert "key `k` given twice, to the same paper: merged" in capsys.readouterr().out
 
+    def test_a_merge_restores_the_repeated_key_when_the_second_copy_is_the_base(self):
+        # The second copy has more fields, so it is the base; the key it was read under must not reach the
+        # output, since merging frees the one both copies had.
+        source = (entry("k", title="A Study of Learning Analytics", doi="10.1234/x")
+                  + entry("k", title="A Study of Learning Analytics", doi="10.1234/x",
+                          journal="Journal A", abstract="Something."))
+        cluster = dd.cluster_records(records(source))[0]
+        assert cluster.records[0].key == "k-2", "the first copy is the base, so this fixture cannot see the key restored"
+        merged, _row = dd.merge_cluster(cluster)
+        assert merged.key == "k"
+
     def test_a_repeated_key_on_different_papers_keeps_both_and_says_so(self, capsys):
         source = entry("k", title="A Study of Learning Analytics") + entry("k", title="Bananas in Space")
         parsed = records(source)

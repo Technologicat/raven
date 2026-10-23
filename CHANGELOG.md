@@ -139,7 +139,7 @@
 
 #### Raven-deduplicate
 
-- **A record whose key an earlier record already has is no longer lost.** In v0.2.10 it was dropped without a word, which happens whenever two exports read as one corpus share a key scheme. It is now read under a new key and matched like any other record. The run names each repeated key, and says whether the two were the same paper and merged, or different papers both kept.
+- **A record whose key an earlier record already has is no longer lost.** In v0.2.10 it was dropped without a word, which happens whenever two exports read as one corpus share a key scheme. It is now read under a new key and matched like any other record. The run names each repeated key, and says whether the two were the same paper and merged, under the key the file gave them, or different papers both kept.
 
 #### Constellation-wide
 

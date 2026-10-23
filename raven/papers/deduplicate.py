@@ -1328,8 +1328,14 @@ def merge_cluster(cluster: Cluster, rejected: frozenset[str] = frozenset()) -> t
     # with whatever was filled in from its twins after it.
     base_order = [field.key for field in base.entry.fields]
     ordered = base_order + sorted(key for key in fields if key not in base_order)
+    # A base read under a new key because its own repeated an earlier record's takes the key back when it
+    # is merged with that record, which frees it. Otherwise the output would carry `k-2`, a key neither
+    # input file has.
+    key = base.key
+    if base.maybe_repeated_key is not None and any(record.key == base.maybe_repeated_key for record in cluster.records):
+        key = base.maybe_repeated_key
     merged = Entry(entry_type=base.entry.entry_type,
-                   key=base.key,
+                   key=key,
                    fields=[Field(key, fields[key]) for key in ordered if key in fields])
 
     differences = [f"abstract: kept {_clip(maybe_abstract or '')} / dropped {_clip(text)}"
