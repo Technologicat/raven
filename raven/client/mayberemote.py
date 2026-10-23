@@ -76,6 +76,10 @@ class MaybeRemoteService:
         In both cases, the API for calling the service is the same. Details depend
         on the service type; see derived classes.
 
+        A service that holds a model says which in `model_info`, in either mode: a dict
+        with at least `"model"`, the name of the model actually in use — the server's
+        in remote mode, which its configuration decides, rather than the one asked for.
+
         This is convenient for some apps, such as Raven-visualizer, which only use
         the server for some NLP work, so that they can run also without the server
         if those features are available locally. This makes using those apps easier,
@@ -171,12 +175,14 @@ class Classifier(MaybeRemoteService):
 
         if "classify" in self.server_modules:
             logger.info(f"Classifier.__init__: Using `classify` module on Raven-server at '{client_config.raven_server_url}'.")
+            self.model_info = api.classify_info()
         else:
             if self.server_available:
                 logger.info(f"Classifier.__init__: No `classify` module loaded on Raven-server at '{client_config.raven_server_url}', loading classifier model locally.")
             self._local_model = nlptools.load_classifier(model_name,
                                                          device_string,
                                                          dtype)
+            self.model_info = {"model": model_name}
 
     def classify(self, text: str) -> Dict[str, float]:
         """Classify the sentiment of `text`.
@@ -226,11 +232,13 @@ class Dehyphenator(MaybeRemoteService):
 
         if "sanitize" in self.server_modules:
             logger.info(f"Dehyphenator.__init__: Using `sanitize` module on Raven-server at '{client_config.raven_server_url}'.")
+            self.model_info = api.sanitize_info()
         else:
             if self.server_available:
                 logger.info(f"Dehyphenator.__init__: No `sanitize` module loaded on Raven-server at '{client_config.raven_server_url}', loading dehyphenator model locally.")
             self._local_model = nlptools.load_dehyphenator(model_name,
                                                            device_string)
+            self.model_info = {"model": model_name}
 
     def dehyphenate(self,
                     text: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -277,12 +285,17 @@ class Embedder(MaybeRemoteService):
 
         if "embeddings" in self.server_modules:
             logger.info(f"Embedder.__init__: Using `embeddings` module on Raven-server at '{client_config.raven_server_url}'.")
+            # `model_name` is a role or a model name; the server lists its models by role.
+            by_role = api.embeddings_info()["models"]
+            self.model_info = by_role.get(model_name) or next((info for info in by_role.values()
+                                                               if info["model"] == model_name), {"model": model_name})
         else:
             if self.server_available:
                 logger.info(f"Embedder.__init__: No `embeddings` module loaded on Raven-server at '{client_config.raven_server_url}', loading semantic embedding model locally.")
             self._local_model = nlptools.load_embedder(model_name,
                                                        device_string,
                                                        dtype)
+            self.model_info = {"model": model_name}
         # Fail-fast; especially important with remote model. If the requested embeddings model isn't loaded on the server, any attempt to encode will HTTP 400.
         self.encode(["The quick brown fox jumps over the lazy dog"])
 
@@ -413,6 +426,8 @@ class Translator(MaybeRemoteService):
 
         if "translate" in self.server_modules:
             logger.info(f"Translator.__init__: Using `translate` module on Raven-server at '{client_config.raven_server_url}'.")
+            info = api.translate_info()
+            self.model_info = {"model": info["models"].get(target_lang, {}).get(source_lang), "spacy": info["spacy"]}
         else:
             if self.server_available:
                 logger.info(f"Translator.__init__: No `translate` module loaded on Raven-server at '{client_config.raven_server_url}', loading translation model locally.")
@@ -423,6 +438,7 @@ class Translator(MaybeRemoteService):
                                                          target_lang=target_lang)
             # Sentence splitter for chunked translation. Reuses any cached spaCy pipeline.
             self._local_nlp = nlptools.load_spacy_pipeline(spacy_model_name, device_string)
+            self.model_info = {"model": model_name, "spacy": nlptools.pipeline_info(self._local_nlp)}
 
     def translate(self, text: Union[str, List[str]]) -> Union[str, List[str]]:
         """Translate `text` from `source_lang` to `target_lang`.
@@ -469,7 +485,9 @@ class STT(MaybeRemoteService):
 
         if "stt" in self.server_modules:
             logger.info(f"STT.__init__: Using `stt` module on Raven-server at '{client_config.raven_server_url}'.")
-            self.sample_rate = api.stt_info()["sample_rate"]
+            info = api.stt_info()
+            self.sample_rate = info["sample_rate"]
+            self.model_info = {"model": info["model"]}
         else:
             if self.server_available:
                 logger.info(f"STT.__init__: No `stt` module loaded on Raven-server at '{client_config.raven_server_url}', loading Whisper model locally.")
@@ -477,6 +495,7 @@ class STT(MaybeRemoteService):
                                                           device_string=device_string,
                                                           dtype=dtype)
             self.sample_rate = self._local_model.sample_rate
+            self.model_info = {"model": self._local_model.model_name}
 
     def transcribe(self,
                    audio: np.ndarray,
@@ -542,7 +561,9 @@ class TTS(MaybeRemoteService):
 
         if "tts" in self.server_modules:
             logger.info(f"TTS.__init__: Using `tts` module on Raven-server at '{client_config.raven_server_url}'.")
-            self.sample_rate = api.tts_info()["sample_rate"]
+            info = api.tts_info()
+            self.sample_rate = info["sample_rate"]
+            self.model_info = {"model": info["model"]}
         else:
             if self.server_available:
                 logger.info(f"TTS.__init__: No `tts` module loaded on Raven-server at '{client_config.raven_server_url}', loading Kokoro pipeline locally.")
@@ -550,6 +571,7 @@ class TTS(MaybeRemoteService):
                                                              device_string=device_string,
                                                              lang_code=lang_code)
             self.sample_rate = self._local_model.sample_rate
+            self.model_info = {"model": self._local_model.model_name}
 
     def list_voices(self) -> List[str]:
         """List installed voices. Remote uses the server's /api/tts/list_voices; local scans the modelsdir."""
