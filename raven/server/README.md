@@ -45,6 +45,7 @@
         - [GET "/health"](#get-health)
         - [GET "/api/modules"](#get-apimodules)
     - [Raven-avatar client](#raven-avatar-client-1)
+        - [GET "/api/avatar/info"](#get-apiavatarinfo)
         - [POST "/api/avatar/load"](#post-apiavatarload)
         - [POST "/api/avatar/reload"](#post-apiavatarreload)
         - [POST "/api/avatar/unload"](#post-apiavatarunload)
@@ -58,25 +59,35 @@
         - [POST "/api/avatar/set_emotion"](#post-apiavatarset_emotion)
         - [POST "/api/avatar/set_overrides"](#post-apiavatarset_overrides)
         - [POST "/api/avatar/modify_overrides"](#post-apiavatarmodify_overrides)
+        - [POST "/api/avatar/start_data_eyes"](#post-apiavatarstart_data_eyes)
+        - [POST "/api/avatar/stop_data_eyes"](#post-apiavatarstop_data_eyes)
+        - [POST "/api/avatar/trigger_animefx"](#post-apiavatartrigger_animefx)
         - [GET "/api/avatar/result_feed"](#get-apiavatarresult_feed)
         - [GET "/api/avatar/get_available_filters"](#get-apiavatarget_available_filters)
     - [Text sentiment classification](#text-sentiment-classification-1)
+        - [GET "/api/classify/info"](#get-apiclassifyinfo)
         - [POST "/api/classify"](#post-apiclassify)
         - [GET "/api/classify/labels"](#get-apiclassifylabels)
     - [Semantic embeddings](#semantic-embeddings-1)
+        - [GET "/api/embeddings/info"](#get-apiembeddingsinfo)
         - [POST "/api/embeddings/compute"](#post-apiembeddingscompute)
     - [Image processing](#image-processing-1)
         - [POST "/api/imagefx/process"](#post-apiimagefxprocess)
         - [POST "/api/imagefx/upscale"](#post-apiimagefxupscale)
     - [Server-side spaCy NLP](#server-side-spacy-nlp-1)
         - [POST "/api/natlang/analyze"](#post-apinatlanganalyze)
+        - [GET "/api/natlang/info"](#get-apinatlanginfo)
     - [Text cleanup](#text-cleanup-1)
+        - [GET "/api/sanitize/info"](#get-apisanitizeinfo)
         - [POST "/api/sanitize/dehyphenate"](#post-apisanitizedehyphenate)
     - [Speech recognition](#speech-recognition)
-        - [POST "/api/tts/transcribe"](#post-apittstranscribe)
+        - [GET "/api/stt/info"](#get-apisttinfo)
+        - [POST "/api/stt/transcribe"](#post-apistttranscribe)
     - [Natural language translation](#natural-language-translation-1)
+        - [GET "/api/translate/info"](#get-apitranslateinfo)
         - [POST "/api/translate"](#post-apitranslate)
     - [Speech synthesizer (TTS)](#speech-synthesizer-tts-1)
+        - [GET "/api/tts/info"](#get-apittsinfo)
         - [GET "/api/tts/list_voices"](#get-apittslist_voices)
         - [POST "/api/tts/speak"](#post-apittsspeak)
         - [GET "/v1/audio/voices"](#get-v1audiovoices)
@@ -84,7 +95,8 @@
     - [Web search](#web-search-1)
         - [POST "/api/websearch"](#post-apiwebsearch)
         - [POST "/api/websearch2"](#post-apiwebsearch2)
-
+    - [Web fetch](#web-fetch)
+        - [POST "/api/webfetch"](#post-apiwebfetch)
 <!-- markdown-toc end -->
 
 # Introduction
@@ -647,6 +659,23 @@ For usage examples, look at the Python bindings of the web API in [`raven.client
 
 AI-animated anime avatar for your LLM.
 
+### GET "/api/avatar/info"
+
+Return metadata about the THA3 posing engine the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"model": "separable_half",
+     "repository": "OktayAlpk/talking-head-anime-3"}
+
+`model` is the THA3 model variant, one of the folder names inside `raven/vendor/tha3/models/`; `repository` is the HuggingFace repository the THA3 models are installed from.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
+
 ### POST "/api/avatar/load"
 
 Start a new avatar instance, and load the avatar sprite posted as a file in the request.
@@ -905,6 +934,47 @@ Here `action` is one of "set", "unset":
 - `"unset"`: remove listed overrides (values ignored). No error even if the override was already removed.
 
 
+### POST "/api/avatar/start_data_eyes"
+
+Activate the scifi "data eyes" cel effect (LLM tool access indicator).
+
+The effect switches on instantly. To switch it off (with fadeout), POST to `/api/avatar/stop_data_eyes`.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string"}
+
+No outputs.
+
+
+### POST "/api/avatar/stop_data_eyes"
+
+Begin fading out the scifi "data eyes" cel effect.
+
+Fade duration is the animator setting `data_eyes_fadeout_duration`, and the fade waits until the effect has
+been on for `data_eyes_min_duration`.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string"}
+
+No outputs.
+
+
+### POST "/api/avatar/trigger_animefx"
+
+Play an anime-style effect from the start, whatever the current emotion.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string",
+     "fx_name": "notice"}
+
+where `"fx_name"` is one of the names in the `"animefx"` animator setting.
+
+No outputs.
+
+
 ### GET "/api/avatar/result_feed"
 
 Video output.
@@ -962,6 +1032,20 @@ You can detect the type from the default value.
 
 ## Text sentiment classification
 
+### GET "/api/classify/info"
+
+Return metadata about the classification model the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"model": "joeddav/distilbert-base-uncased-go-emotions-student"}
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
+
 ### POST "/api/classify"
 
 Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
@@ -993,6 +1077,24 @@ The actual labels depend on the classifier model.
 
 
 ## Semantic embeddings
+
+### GET "/api/embeddings/info"
+
+Return metadata about the embedding models the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"models": {"default": {"model": "Snowflake/snowflake-arctic-embed-l",
+                            "dimension": 1024},
+                ...}}
+
+The keys of `models` are roles, the keys of `embedding_models` in the server config. For each role, `model` is the HuggingFace repo identifier loaded for it, and `dimension` is its output vector length.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
 
 ### POST "/api/embeddings/compute"
 
@@ -1152,7 +1254,40 @@ future server configurations that load multiple pipelines). The `doc` field is s
 the schema is documented upstream at <https://spacy.io/api/doc#to_json>.
 
 
+### GET "/api/natlang/info"
+
+Return metadata about the spaCy pipeline the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"model": "en_core_web_sm",
+     "version": "3.8.0"}
+
+`version` is the version of the pipeline installed on the server, which its name alone does not say.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
+
 ## Text cleanup
+
+### GET "/api/sanitize/info"
+
+Return metadata about the dehyphenation model the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"model": "multi"}
+
+`model` is the Flair contextual embeddings model the dehyphenator uses.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
 
 ### POST "/api/sanitize/dehyphenate"
 
@@ -1220,7 +1355,24 @@ respectively.
 
 ## Speech recognition
 
-### POST "/api/tts/transcribe"
+### GET "/api/stt/info"
+
+Return metadata about the speech recognition model the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"sample_rate": 16000,
+     "model": "openai/whisper-base"}
+
+`sample_rate` is the model's native input rate in Hz.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
+
+### POST "/api/stt/transcribe"
 
 Transcribe speech audio into text.
 
@@ -1294,6 +1446,25 @@ See:
 
 ## Natural language translation
 
+### GET "/api/translate/info"
+
+Return metadata about the translation models the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"models": {"fi": {"en": "Helsinki-NLP/opus-mt-tc-big-en-fi"},
+                ...},
+     "spacy": {"model": "en_core_web_sm",
+               "version": "3.8.0"}}
+
+The keys of `models` are target languages, and under each, source languages, as `translation_models` in the server config. `spacy` is the pipeline the module splits text into sentences with.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
+
 ### POST "/api/translate"
 
 Translate the text posted in the request. Return the translation.
@@ -1329,6 +1500,23 @@ To send several texts, use a list:
 
 :exclamation: *The TTS engine Kokoro-82M uses it as a phonemizer fallback for out-of-dictionary words
 in English, as well as for some non-English languages.* :exclamation:
+
+### GET "/api/tts/info"
+
+Return metadata about the speech synthesis model the module loaded.
+
+No inputs.
+
+Output is JSON:
+
+    {"sample_rate": 24000,
+     "model": "hexgrad/Kokoro-82M"}
+
+`sample_rate` is the model's native output rate in Hz.
+
+A client uses this to say which model served it, and to avoid hardcoding values that might drift if the server
+config changes.
+
 
 ### GET "/api/tts/list_voices"
 
@@ -1470,3 +1658,39 @@ In the output, the title field may be missing; not all search engines return it.
 
 This format preserves the connection between the text of the result
 and its corresponding link.
+
+
+## Web fetch
+
+### POST "/api/webfetch"
+
+Retrieve a web page's main content as clean text or Markdown.
+
+Input is JSON:
+
+    {"url": "https://example.com/article",
+     "format": "markdown"}
+
+`"url"` is required. `"format"` is optional: `"markdown"` (default) or `"text"`.
+
+Output is JSON:
+
+    {"content": "...",
+     "url": "...",
+     "fetched": true,
+     "spaSuspected": false,
+     "title": "..."}
+
+  - `"content"`: the extracted text or Markdown, or a message for the user where the fetch was refused or
+    hit a limit.
+  - `"url"`: the effective URL, after rewriting (e.g. an arXiv abstract page to its HTML form).
+  - `"fetched"`: `true` if `"content"` is the page's own content; `false` for a refusal or a limit.
+  - `"spaSuspected"`: `true` if neither fetch tier could extract usable content, as from a single-page app.
+  - `"title"`: the page title on a successful fetch; `null` for a refusal or a page without one.
+
+Private-network addresses and non-HTTP(S) schemes are refused here, server-side.
+
+The response is streamed: it opens at once with a space and the status 200 OK, carries progress lines while
+the page is fetched, and ends with the result. So a failure of the fetch itself does not show as an error
+status; it arrives in the body, as `{"error": "..."}`. A malformed request is still refused with a status, as
+it is checked first.
