@@ -7,8 +7,8 @@ rest:
   - **It decides before any work whether a backend is needed.** Where every stage's instrument is named
     and nothing named is left to ask, it never connects: a replay needs no backend running.
   - **It refuses before any work when a stage that has something to ask cannot ask it**: the stage wants a
-    model other than the loaded one, or its named instrument is not today's, which makes it read-only.
-    Answers made with today's prompts must never carry another instrument's fingerprint.
+    model other than the loaded one, or its named instrument is not the one the current definition and model
+    make, which makes it read-only. Answers asked now must never be filed under another instrument's fingerprint.
   - **Then it runs the stages in order**, each a `raven.librarian.sweep` with its own ledger. The reviewer
     and the extractor wait until the judge has settled every record, since the reviewer's control is drawn
     from the judge's keeps and a partial judge would draw another one next time.
@@ -295,8 +295,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
         if wanted_models[stage] not in (None, loaded):
             problems[stage] = f"wants the model '{wanted_models[stage]}', and '{loaded}' is loaded"
         elif named[stage] is not None and named[stage] != live[stage]:
-            problems[stage] = (f"its named instrument {named[stage]} is not today's ({live[stage]}), so it is "
-                               f"read-only")
+            problems[stage] = (f"its named instrument {named[stage]} is not the one the current definition and "
+                               f"model make ({live[stage]}), so it is read-only")
     # A stage whose instrument is not named, wanting a model that is not loaded, has a ledger nobody can find:
     # its fingerprint needs that model's record. Refused where the stage is to run; otherwise its answers
     # are simply absent from the reports, and the person is told why.
@@ -371,7 +371,7 @@ def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str,
             loaded: str | None = None, asked: set[str] = frozenset(),
             live: dict[str, str] | None = None) -> RunResult:
     """The result, with each stage's model as the run file should record it: the loaded one where the stage
-    asked or its instrument is today's, else the one its ledger names, else the one that was wanted."""
+    asked or its instrument is the current one, else the one its ledger names, else the one that was wanted."""
     ledgers = _open_ledgers(ledger_dir, fingerprints)
     by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     plans = {}

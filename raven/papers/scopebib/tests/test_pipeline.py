@@ -180,14 +180,14 @@ class TestConnecting:
 
 
 class TestRefusing:
-    def test_a_named_instrument_that_is_not_todays_is_read_only(self, corpus, definition, tmp_path, model,
-                                                                connections):
-        with pytest.raises(pipeline.PipelineError, match="instrument deadbeef is not today's.*read-only"):
+    def test_a_named_instrument_that_is_not_the_current_one_is_read_only(self, corpus, definition, tmp_path,
+                                                                          model, connections):
+        with pytest.raises(pipeline.PipelineError, match="instrument deadbeef is not the one the current definition and model make.*read-only"):
             run(corpus, definition, tmp_path, connections, plans={"judge": StagePlan(None, "deadbeef")})
         assert not model.calls, "refused before asking anything"
 
-    def test_a_named_instrument_that_is_todays_may_finish_its_work(self, corpus, definition, tmp_path, model,
-                                                                   connections, llm_settings):
+    def test_a_named_instrument_that_is_the_current_one_may_finish_its_work(self, corpus, definition, tmp_path,
+                                                                            model, connections, llm_settings):
         live = pipeline.materials(definition)["judge"]
         from raven.librarian import sweep
         plans = {"judge": StagePlan(None, sweep.fingerprint(llm_settings, live))}

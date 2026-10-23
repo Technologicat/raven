@@ -71,7 +71,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="The model a stage asks, overriding the run file. Repeatable.")
     common.add_argument("--instrument", action="append", default=[], metavar="STAGE=FP",
                         help="Read a stage's answers from the ledger of this instrument, as a ledger's file "
-                             "name shows it. Read-only unless it is today's. Repeatable.")
+                             "name shows it. Read-only unless the current definition and model make "
+                             "the same one. Repeatable.")
     common.add_argument("--backend-url", dest="backend_url", default=None, metavar="URL",
                         help="The LLM backend. Default: Raven-librarian's.")
     common.add_argument("--server-nlp", dest="server_nlp", action=argparse.BooleanOptionalAction, default=None,

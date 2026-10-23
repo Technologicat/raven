@@ -190,3 +190,27 @@ class TestCompare:
         runfile.write_run_file(path, runfile.RunFile(runfile.Settings(maybe_bib=corpus, maybe_definition=definition), {}))
         with pytest.raises(cli.UsageError, match="no instrument named"):
             cli.compare_runs(path, path, nlp=_NLP())
+
+
+class TestResuming:
+    def test_a_run_stopped_by_the_backend_resumes_from_its_run_file_alone(self, files, tmp_path, model, connect,
+                                                                           monkeypatch, capsys):
+        from raven.librarian import llmclient
+        corpus, definition = files
+        out = tmp_path / "out"
+        # The backend answers two batches, then goes away. Here each judge pass is one batch, so the judge
+        # finishes and the run stops in the review, before the extractor.
+        statuses = iter([llmclient.backend_ready, llmclient.backend_unreachable])
+        monkeypatch.setattr(llmclient, "backend_status", lambda settings: next(statuses, llmclient.backend_unreachable))
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
+                                      "--control", "2")), nlp=_NLP(), connect=connect)
+        assert "stopped" in capsys.readouterr().out
+        assert (out / "run.toml").exists(), "a stopped run still writes its recipe"
+        assert model.calls["extract"] == 0, "the control: the run really stopped partway"
+
+        monkeypatch.setattr(llmclient, "backend_status", lambda settings: llmclient.backend_ready)
+        judged = (model.calls["titles"], model.calls["abstracts"])
+        cli.execute(cli.resolve(parse("run", "--run-file", str(out / "run.toml"))), nlp=_NLP(), connect=connect)
+        assert (model.calls["titles"], model.calls["abstracts"]) == judged, "what was answered is not asked again"
+        assert model.calls["extract"] > 0, "the rest of the run is done"
+        assert "pending: 0" in capsys.readouterr().out

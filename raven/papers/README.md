@@ -355,7 +355,7 @@ What counts as off topic is yours to say, in a [definition file](#writing-a-defi
 
 **Whether it needs one is worked out before any work starts**, from the answers already saved, and if it does, it connects at once. A backend that cannot be reached, has no model loaded, or has a model other than the one a step asks for, is reported at the start — so a long run that gets going can be left to it.
 
-**The backend is checked again after every batch.** One that goes away during the run, or has its model swapped, stops the run with a message saying so, rather than letting every remaining record fail. The reports are written from what was settled, and running again resumes where it stopped.
+**The backend is checked again after every batch.** One that goes away during the run, or has its model swapped, stops the run with a message saying so, rather than letting every remaining record fail. The reports and `run.toml` are written from what was settled, and `raven-scopebib run --run-file out/run.toml` resumes where it stopped, with none of the original options. A different model loaded by then is refused before any work, rather than finishing the run with it.
 
 ### How it works, step by step
 
@@ -547,7 +547,7 @@ and where every answer is already saved, no backend is asked anything. A pilot's
 - **Paths are relative to the file**, so a run directory moved together with its input still works, on another machine too.
 - **You can write one by hand**, to choose models: a `model` at the top serves every step, and `[judge]`, `[review]` and `[extract]` tables name one per step. If yours is the output directory's own `run.toml`, the run's record replaces it afterwards and yours is kept as `run_orig.toml`; one anywhere else is never touched.
 
-**An instrument** is the eight hex digits in a ledger's file name: a fingerprint of everything that decides what an answer means — the questions as asked, and the model with its quantization. Every answer is filed under the instrument that made it, so answers from a different model or a changed question are never mixed with yours. Naming one in a run file, or with `--instrument STEP=FP`, reads that ledger; **a named instrument that is not the one today's definition and model make is read-only**, so nothing is asked under it. Without named instruments, the tool connects to the backend just to work them out.
+**An instrument** is the eight hex digits in a ledger's file name: a fingerprint of everything that decides what an answer means — the questions as asked, and the model with its quantization. Every answer is filed under the instrument that made it, so answers from a different model or a changed question are never mixed with yours. Naming one in a run file, or with `--instrument STEP=FP`, reads that ledger; **a named instrument that is not the one the current definition and model make is read-only**, so nothing is asked under it. Without named instruments, the tool connects to the backend just to work them out.
 
 **Models.** `--model STEP=KEY` names the model a step should use. A step that wants a model other than the one loaded is refused before any work, naming what it wants; where the steps before it can run, it says so and offers `--until`. Each report names every model in full: its key, quantization, and anything declared about it.
 
