@@ -312,8 +312,42 @@ without looking at. Against the maintainer's ratings, with judge `60d796b1` on t
   points.
 - **`unsure` is barely used**: once, on a reply rated no.
 
-Not yet run over all 255 replies; step 1's rates under v5 are the next GPU batch, after which the grade
-boundary decides whether a third sample is needed.
+Run over all 255 replies on 2026-10-23; see the next section.
+
+### Step 1 under rubric v5 (2026-10-23)
+
+Judge run `c0d6412d` (Qwen 3.8 27B, temperature 0.3) over all 255 replies: the 30 of the blind check above,
+and 225 more in 51 minutes, none failing. Voice is the grade `clear`; the forms are counted at any grade.
+
+| condition | elicitors, `clear` | `borderline` | directness | deadpan absurd | technical wit | neutral, `clear` |
+|---|---|---|---|---|---|---|
+| `card_on` | 27 / 70 (39%) | 5 | 21 | 22 | 9 | 0 / 15 |
+| `card_off` | 14 / 70 (20%) | 5 | 10 | 10 | 2 | 0 / 15 |
+| `plain` | 12 / 70 (17%) | 4 | 6 | 12 | 1 | 0 / 15 |
+
+- **The result of `60d796b1` stands, and sharpens.** `card_on` against `card_off`: z = 2.41, p ≈ 0.016.
+  Against `plain`: z = 2.83, p ≈ 0.005. `card_off` against `plain`: z = 0.43, no difference. Without
+  `creative`, which is at the ceiling again (10, 9 and 9 of 10): 17 of 60 (28%) against 5 (8%) and 3 (5%),
+  p ≈ 0.005 and 0.0006. Two-proportion tests, uncorrected.
+- **The rates are lower than under `60d796b1`** (47%, 27% and 31% then), as expected of a rubric that cut the
+  blind sample's false positives from 8 to 3.
+- **The difference is still mostly directness**: 21 against 10 and 6 (p ≈ 0.03 and 0.001). Deadpan
+  absurdism does not separate `card_off` from `plain`.
+- **The shoelace observation does not survive.** `60d796b1` saw the voice there in 8 of 10 under `plain`;
+  v5 calls 1 of them `clear`, with 0 of 10 under `card_off` and 10 of 10 under `card_on`. The suggestion that
+  Aria's card suppresses something a bare model does rested on replies v5 does not count.
+- **The neutral prompts drew no `clear` in any condition**, and one `borderline` under `card_on`.
+- **Self-description in 3 of 255, confrontational in 0, hard to call in 2; a quote not found in its reply in
+  2**, against 16 under `60d796b1`.
+- **Precision**: on the second blind sample, `clear` was right in 10 of its 14 calls, counting a hand-rated
+  borderline as half. The judge's remaining error is at the grade boundary, where it is more generous than
+  the hand ratings, so these counts lean high.
+
+**What this says for step 2** is unchanged: the user card is the place to look, its directness-related
+paragraphs first.
+
+**Open: whether the grade boundary needs a third blind sample** before step 2, or whether step 2 can
+proceed on these rates.
 
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
