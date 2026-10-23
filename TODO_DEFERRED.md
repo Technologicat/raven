@@ -60,7 +60,12 @@ the titles can say what the number cannot. Two ways to ask, and the choice is a 
 - **As a second call per cluster**, if the first costs too much keyword quality: about a hundred more calls
   on a large corpus, batched like the keyword pass.
 
-Prefer the first if it holds up (maintainer, 2026-10-23).
+Prefer the first if it holds up (maintainer, 2026-10-23). The maintainer expects it to, from reading
+Qwen's thinking traces: the current prompt implicitly assumes one overarching topic, and a low-cohesion
+cluster confuses the model, so a prompt that explicitly allows a cluster with more than one main topic
+should cut the overthinking as well as yield the flag. That makes **thinking length on the low-cohesion
+clusters** a second thing to measure besides keyword quality: shorter there, unchanged on the coherent
+ones, is the prediction.
 
 Raised while settling the cohesion floor's size question, and while reading the biology clusters
 (2026-10-23).
