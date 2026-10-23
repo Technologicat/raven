@@ -64,13 +64,20 @@ class TestResolving:
 
     @pytest.mark.parametrize("argv, complaint", [
         (("run", "--definition", "d.toml", "--out-dir", "o"), "no .bib"),
-        (("run", "c.bib", "--out-dir", "o"), "no definition"),
+        (("run", "c.bib", "--out-dir", "o"), "no definition file.*c.scope.toml"),
         (("run", "c.bib", "--definition", "d.toml"), "no output directory"),
         (("run", "c.bib", "--definition", "d.toml", "--out-dir", "o", "--sample", "0"), "at least 1"),
     ])
     def test_what_is_missing_is_named(self, argv, complaint):
         with pytest.raises(cli.UsageError, match=complaint):
             cli.resolve(parse(*argv))
+
+    def test_the_definition_defaults_to_the_one_beside_the_bib(self, files, tmp_path):
+        corpus, definition = files
+        beside = corpus.with_name(f"{corpus.stem}.scope.toml")
+        beside.write_text(definition.read_text(encoding="utf-8"), encoding="utf-8")
+        plan = cli.resolve(parse("run", str(corpus), "--out-dir", str(tmp_path / "out")))
+        assert plan.run_file.settings.maybe_definition == beside
 
     def test_finish_takes_the_sheet_and_not_a_bib(self):
         opts = parse("finish", "marked.xlsx", "--run-file", "run.toml")

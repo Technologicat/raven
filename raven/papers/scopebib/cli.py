@@ -39,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--definition", default=None, metavar="FILE",
                         help="The definition file: the scope, the judge's tests, the extractor's fields and the "
-                             "rules.")
+                             "rules. Default: <bib stem>.scope.toml beside the .bib.")
     common.add_argument("--run-file", dest="run_file", default=None, metavar="FILE",
                         help="A run file, as every run writes beside its reports: its settings, models and "
                              "instruments, which the options here override.")
@@ -171,7 +171,11 @@ def resolve(opts: argparse.Namespace) -> Plan:
     if settings.maybe_bib is None:
         raise UsageError("no .bib to work on: give it, or a run file naming one")
     if settings.maybe_definition is None:
-        raise UsageError("no definition file: give --definition, or a run file naming one")
+        default = settings.maybe_bib.parent / f"{settings.maybe_bib.stem}.scope.toml"
+        if not default.exists():
+            raise UsageError(f"no definition file: give --definition, or a run file naming one, or put it beside "
+                             f"the .bib as {default}")
+        settings = dataclasses.replace(settings, maybe_definition=default)
     for name in ("maybe_seed", "maybe_control", "maybe_replicate", "maybe_sample", "maybe_pilot"):
         value = getattr(settings, name)
         least = {"maybe_seed": None, "maybe_control": 0}.get(name, 1)
