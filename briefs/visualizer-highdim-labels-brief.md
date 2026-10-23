@@ -80,6 +80,12 @@ that presentation deliberately, which is not a same-day decision).
    biology's high-D clusters as a disqualification test. Tables in the investigation README, *Small
    corpora*. **Fallback for Monday**: group health education with the shipped 2D pipeline, which is
    what the other two papers used, and give high-D a small-corpus rule afterwards.
+   **Decided 2026-10-23: Monday uses the shipped 2D pipeline**, the high-D build not having started.
+   The maintainer's reading of biology's high-D clusters at cut 18 disqualified nothing: #0 is mixed
+   (cohesion exactly on the floor), #1 groups by subject where the paper grouped by teaching method (an
+   embedding of title and abstract sees the subject), and #4 is one theme, competencies and curriculum,
+   absorbing the paper's holistic cluster, which only the abstracts show. So high-D remains the plan, with
+   a small-corpus cut still to find.
 2. **Port the cohesion rule from the prototype, not from this summary — and note the prototype has only
    half of it.** *Done 2026-10-23 as `clusterlab.cohesion_floor`, which reproduces both rows. It
    exposed a gap in the rule as stated above: applied to every cluster, the floor always discards up to
