@@ -16,6 +16,8 @@ The library behind `raven-scopebib`, one module per stage:
   - `report`, where each record ended up, and the stage-numbered files a run leaves: the audits, the list
     of records for a person to check, and the filtered `.bib`; and `finish`, applying that person's decisions.
   - `runfile`, the run file: which model each stage asks, and under which instrument.
+  - `pipeline`, running the stages in order: what is left to ask, whether a backend is needed for it, and
+    asking it.
 
 It generalizes the prototype in `investigations/aokk-corpus-scope/`.
 """

@@ -34,7 +34,7 @@ __all__ = ["SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_A
            "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
-           "SiftResult", "write_reports",
+           "SiftResult", "select", "write_reports",
            "KEEP", "DROP", "FinishError", "finish"]
 
 import dataclasses
@@ -210,7 +210,7 @@ def _yes_no(value: bool | None) -> str:
     return {True: "yes", False: "no"}.get(value, "no answer")
 
 
-def _filtered(library: bibtexparser.Library, keys: set[str]) -> bibtexparser.Library:
+def select(library: bibtexparser.Library, keys: set[str]) -> bibtexparser.Library:
     """`library` with only the entries in `keys`. Every other block — a preamble, `@string`s — is kept."""
     out = bibtexparser.Library()
     for block in library.blocks:
@@ -279,7 +279,7 @@ def write_reports(out_dir: str | pathlib.Path, *,
 
     kept = {key for key, outcome in result.items() if outcome.action == KEPT}
     path = out_dir / KEPT_BIB
-    path.write_text(bibtex.write_string(_filtered(library, kept)), encoding="utf-8")
+    path.write_text(bibtex.write_string(select(library, kept)), encoding="utf-8")
     written.append(path)
 
     for name in sorted(OWNED_NAMES - {path.name for path in written}):
@@ -552,7 +552,7 @@ def finish(out_dir: str | pathlib.Path, *,
     written = [path]
     kept = {key for key, outcome in result.items() if outcome.action == KEPT} | hand_kept
     path = out_dir / FINAL_BIB
-    path.write_text(bibtex.write_string(_filtered(library, kept)), encoding="utf-8")
+    path.write_text(bibtex.write_string(select(library, kept)), encoding="utf-8")
     written.append(path)
     for fmt in tabular.FORMATS:
         if fmt != table_format:
