@@ -65,7 +65,8 @@ Qwen's thinking traces: the current prompt implicitly assumes one overarching to
 cluster confuses the model, so a prompt that explicitly allows a cluster with more than one main topic
 should cut the overthinking as well as yield the flag. That makes **thinking length on the low-cohesion
 clusters** a second thing to measure besides keyword quality: shorter there, unchanged on the coherent
-ones, is the prediction.
+ones, is the prediction. Read a few of the traces as well as counting them; `raven.librarian.agent`
+returns them with each turn.
 
 Raised while settling the cohesion floor's size question, and while reading the biology clusters
 (2026-10-23).
