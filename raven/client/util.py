@@ -80,11 +80,11 @@ def initialize_api(raven_server_url: str,
 
     api_config.raven_server_url = raven_server_url
 
-    if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
+    if raven_api_key_file is not None and os.path.exists(raven_api_key_file):
         with open(raven_api_key_file, "r", encoding="utf-8") as f:
-            raven_api_key = f.read().replace('\n', '')
-        # See `raven.server.app`.
-        api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
+            maybe_authorization = netutil.maybe_authorization_value(f.read())
+        if maybe_authorization is not None:  # the server reads the token of a bearer credential; see `raven.server.app`
+            api_config.raven_default_headers["Authorization"] = maybe_authorization
 
     # Validate local-mode fallback device settings (CUDA → CPU fallback, dtype adjustments,
     # device_name injection). Deferred import of `raven.client.config` — importing it at

@@ -145,28 +145,10 @@ headers = {
 }
 
 
-def _maybe_authorization_value(api_key_file_contents: str) -> str | None:
-    """The `Authorization` header value for the contents of the API key file, or `None` if it is blank.
-
-    A bare key is sent as `Bearer <key>`; a value naming its own scheme (`Bearer ...`, `Basic ...`)
-    is sent as is.
-    """
-    # "Authorization": "Bearer yourPassword123"
-    # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
-    #
-    # An Authorization value is `<scheme> <credentials>`, so it contains a space, and an API key does not.
-    value = api_key_file_contents.replace('\n', '').strip()
-    if not value:
-        return None
-    if " " not in value:
-        value = f"Bearer {value}"
-    return value
-
-
 # Read API key for cloud LLM support
 if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test against a cloud LLM
     with open(librarian_config.llm_api_key_file, "r", encoding="utf-8") as f:
-        maybe_authorization = _maybe_authorization_value(f.read())
+        maybe_authorization = netutil.maybe_authorization_value(f.read())
     if maybe_authorization is not None:
         headers["Authorization"] = maybe_authorization
 

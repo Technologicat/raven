@@ -8,7 +8,9 @@ __all__ = ["Aborted", "Abort",  # cancelling a request that is blocked in a read
            "multipart_x_mixed_replace_payload_extractor",
            "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
 
-           "extract_urls", "url_host", "host_matches_allowlist"]
+           "extract_urls", "url_host", "host_matches_allowlist",
+
+           "maybe_authorization_value"]
 
 import _socket  # the C-level socket type, for the one close Python's wrapper will not perform; see `Abort.abort`
 import io
@@ -349,3 +351,21 @@ def host_matches_allowlist(host: str, allowlist: list[str]) -> bool:
         elif host == entry:
             return True
     return False
+
+
+def maybe_authorization_value(api_key_file_contents: str) -> str | None:
+    """The `Authorization` header value for the contents of an API key file, or `None` if it is blank.
+
+    A bare key is sent as `Bearer <key>`; a value naming its own scheme (`Bearer ...`, `Basic ...`)
+    is sent as is.
+    """
+    # "Authorization": "Bearer yourPassword123"
+    # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
+    #
+    # An Authorization value is `<scheme> <credentials>`, so it contains a space, and an API key does not.
+    value = api_key_file_contents.replace('\n', '').strip()
+    if not value:
+        return None
+    if " " not in value:
+        value = f"Bearer {value}"
+    return value

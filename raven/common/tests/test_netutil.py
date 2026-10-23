@@ -273,3 +273,21 @@ class TestHostMatchesAllowlist:
 
     def test_empty_allowlist(self):
         assert netutil.host_matches_allowlist("arxiv.org", []) is False
+
+
+# --------------------------------------------------------------------------------
+# API key file -> Authorization header
+
+class TestMaybeAuthorizationValue:
+    """What an API key file turns into in the `Authorization` header."""
+
+    def test_bare_key_gets_bearer_scheme(self):
+        assert netutil.maybe_authorization_value("sk-abc123\n") == "Bearer sk-abc123"
+
+    def test_value_with_scheme_is_sent_as_is(self):
+        assert netutil.maybe_authorization_value("Bearer sk-abc123") == "Bearer sk-abc123"
+        assert netutil.maybe_authorization_value("Basic dXNlcjpwYXNz\n") == "Basic dXNlcjpwYXNz"
+
+    def test_blank_file_means_no_key(self):
+        assert netutil.maybe_authorization_value("") is None
+        assert netutil.maybe_authorization_value("  \n") is None

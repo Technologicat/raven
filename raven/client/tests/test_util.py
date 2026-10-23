@@ -140,3 +140,13 @@ class TestPostStreamedJob:
         with pytest.raises(netutil.Aborted):
             util.post_streamed_job(url, {}, timeout=TIMEOUT, maybe_abort=abort)
         assert called == []
+
+
+class TestAuthorizationHeader:
+    def test_the_server_reads_the_key_back_out(self):
+        # The server compares `request.authorization.token` against its key, so the header must parse as
+        # a bearer credential; a bare key parses as an auth scheme with an empty token.
+        from werkzeug.datastructures import Authorization
+        assert Authorization.from_header("abc123").token != "abc123", "a bare key now parses as a token, so this test cannot tell the two forms apart"
+        assert Authorization.from_header(netutil.maybe_authorization_value("abc123\n")).token == "abc123"
+        assert Authorization.from_header(netutil.maybe_authorization_value("Bearer abc123")).token == "abc123"
