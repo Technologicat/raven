@@ -97,6 +97,7 @@ from .llmtools import (TOOLS, TOOL_ENTRYPOINTS,  # noqa: F401 -- re-export
                        maybe_tool_names_for_turn,
                        perform_tool_calls, approve_host_for_session,
 
+                       CANONICAL_EMPTY_SEARCH_QUERY,
                        CANONICAL_NO_WEB_RESULTS, CANONICAL_SEARCH_ENGINE_UNAVAILABLE, CANONICAL_WEBSEARCH_UNAVAILABLE,
                        CANONICAL_NOT_ON_ALLOWLIST, CANONICAL_WEBFETCH_TIMEOUT, CANONICAL_WEBFETCH_UNAVAILABLE,
                        CANONICAL_NO_DOCUMENT_DATABASE, CANONICAL_NO_DOCUMENT_MATCHES,

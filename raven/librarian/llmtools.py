@@ -31,6 +31,7 @@ __all__ = ["TOOLS",
            #
            # The entrypoints are named here as well as reachable through `TOOL_ENTRYPOINTS`: the tests
            # call them directly, and so does anything driving one tool on purpose.
+           "CANONICAL_EMPTY_SEARCH_QUERY",
            "CANONICAL_NO_WEB_RESULTS", "CANONICAL_SEARCH_ENGINE_UNAVAILABLE", "CANONICAL_WEBSEARCH_UNAVAILABLE",
            "websearch",
            "CANONICAL_NOT_ON_ALLOWLIST", "CANONICAL_WEBFETCH_TIMEOUT", "CANONICAL_WEBFETCH_UNAVAILABLE",
@@ -282,6 +283,8 @@ def _formatters() -> env:
 # Canonical strings for the ways a web search can come back without results. Statements of fact, for the same
 # reason as the document tools' below; each says whether trying again is worth it, which is the decision the
 # model has to make next.
+CANONICAL_EMPTY_SEARCH_QUERY = ("The search query was blank, so nothing was searched. A web search query must "
+                                "not be blank: search again with the words to search for.")
 CANONICAL_NO_WEB_RESULTS = ("The web search found no results for that query. A differently worded query "
                             "may find something.")
 CANONICAL_SEARCH_ENGINE_UNAVAILABLE = ("The search engine did not respond. It may be temporarily unavailable; "
@@ -306,6 +309,7 @@ def websearch(query: str,
     the link too is deliberate: a URL carrying zero-width characters is exactly what we want cleaned.
 
     When there are no results to show, returns one of the canonical strings instead, saying why:
+    `CANONICAL_EMPTY_SEARCH_QUERY` (the query was blank — empty or only whitespace — so the server was not asked),
     `CANONICAL_NO_WEB_RESULTS`, `CANONICAL_SEARCH_ENGINE_UNAVAILABLE` (the engine did not answer, or the
     whole call outlasted `librarian_config.web_tool_timeout`), or `CANONICAL_WEBSEARCH_UNAVAILABLE`
     (Raven-server could not be reached, or refused the request), which names the error.
@@ -313,6 +317,8 @@ def websearch(query: str,
     Returns `(output, metadata)`, the metadata declaring whether `output` is grounding material: results are,
     and the canonical strings are not, being non-empty text that retrieved nothing.
     """
+    if not query.strip():  # the server would refuse it, and the model should hear that it was the query
+        return (CANONICAL_EMPTY_SEARCH_QUERY, {"grounding": False})
     if engine is None:
         engine = librarian_config.websearch_engine
     api = _client_api()

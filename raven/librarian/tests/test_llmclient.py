@@ -850,6 +850,13 @@ class TestWebsearchFailures:
     def _patch(monkeypatch, fake_search):
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
 
+    @pytest.mark.parametrize("query", ["", "   \n"])
+    def test_an_empty_query_says_so_without_asking_the_server(self, monkeypatch, query):
+        def fake_search(*args, **kwargs):
+            raise AssertionError("an empty query reached the server")
+        self._patch(monkeypatch, fake_search)
+        assert llmtools.websearch(query) == (llmtools.CANONICAL_EMPTY_SEARCH_QUERY, {"grounding": False})
+
     def test_no_results_says_so(self, monkeypatch):
         self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineAnswered": True})
         assert llmtools.websearch("q") == (llmtools.CANONICAL_NO_WEB_RESULTS, {"grounding": False})
