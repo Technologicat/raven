@@ -86,7 +86,12 @@ that presentation deliberately, which is not a same-day decision).
    a tenth of the records (AOKK: 99% coverage to 90%), and applied to small clusters only, as the
    prototype did, it needs a size to say what small is. Decided 2026-10-23: look for a size-free rule
    first, being simpler for the user, and fall back to a knob only if none works. On hydrogen the
-   all-clusters version drops whole clusters of hundreds, so it is not a candidate as it stands.* `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
+   all-clusters version drops whole clusters of hundreds, so it is not a candidate as it stands.*
+   *Settled the same day: **ship finding 10's rule, the floor applied to clusters under five, with the
+   five a constant and not a user setting.** The size-free candidates (`cohesion_rules.py`; the
+   investigation README, *Looking for a size-free cohesion rule*) turn large off-topic groups into
+   outliers: a junk drawer, a search's false positives. Kept as one cluster, such a group can be selected
+   and excluded in one go, which is the cleaner UX for a review (maintainer, 2026-10-23).* `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
    size-split floor (the 10th percentile over clusters of five or more). The membership-weighted floor,
    which is the one to ship, appears in the README only as a comparison table against the size-split one.
    So write the weighted floor new, and check it against that table before trusting it: it should
