@@ -277,7 +277,7 @@ This makes `raven-deduplicate` the step to run before importing several BibTeX f
 
 ### The audit
 
-**Written by default**, beside the deduplicated file as `<output>_audit.tsv`.
+**Written by default**, beside the deduplicated file as `<output>_audit.xlsx`.
 
 The `.bib` is what you came for; the audit is what lets you stand behind it. A review has to report how many duplicates it removed and answer for the number, and the audit is what that number is computed from: one row per merge, naming what was kept, what was merged away, which key matched, and every value that differed from the one kept.
 
@@ -286,7 +286,7 @@ It carries Raven's version, so a method section can cite a published tool.
 - `--audit PATH` puts it elsewhere.
 - `--no-audit` declines it, at the cost of the only record of what the merge did. A merge cannot be read back out of the merged file.
 
-The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you open it in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
+It is an Excel spreadsheet by default, which opens as it is in any spreadsheet program. `--audit-format ods` writes OpenDocument, and `--audit-format tsv` tab-separated text. Worth knowing if you open a TSV in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
 
 ### `--judge`: asking an LLM about the near misses
 
@@ -313,7 +313,7 @@ That asymmetry decides the edge cases. Two records carrying the same genre label
 A search export carries records of wildly uneven completeness. A record holding nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count.
 
 ```bash
-raven-siftbib corpus.bib --require abstract          # corpus_sifted.bib + corpus_removed.tsv
+raven-siftbib corpus.bib --require abstract          # corpus_sifted.bib + corpus_removed.xlsx
 raven-siftbib corpus.bib --min-chars abstract=200
 raven-siftbib -n corpus.bib --require abstract       # report only
 ```
@@ -330,7 +330,7 @@ raven-siftbib -n corpus.bib --require abstract       # report only
 
 ### What comes out, and the record of it
 
-Two files, named from the input: `<name>_sifted.bib` and `<name>_removed.tsv`.
+Two files, named from the input: `<name>_sifted.bib` and `<name>_removed.xlsx`. `--audit-format ods` or `tsv` writes the audit as OpenDocument or tab-separated text instead.
 
 The audit has one row per removed record, naming the record, where it was published, and which criterion it failed, under a header stamping the tool version, the inputs and the tests applied. The venue is in there because it is what tells you whether a dropped record is worth chasing up by hand.
 
@@ -468,7 +468,7 @@ Within a section, rows are grouped by the test or rule that decided them, so tha
 
 ### What a run leaves
 
-Named by step, so that listing the directory shows the pipeline in order. `<fmt>` is `tsv` by default; `--format xlsx` or `--format ods` writes spreadsheets.
+Named by step, so that listing the directory shows the pipeline in order. `<fmt>` is `xlsx` by default, which opens as it is in any spreadsheet program; `--format ods` writes OpenDocument, and `--format tsv` tab-separated text.
 
 | File | What it is |
 |---|---|

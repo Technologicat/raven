@@ -52,13 +52,13 @@
 
 #### Raven-deduplicate
 
-- **The audit can be an Excel or OpenDocument spreadsheet**, as well as TSV: give `--audit` a path ending in `.xlsx` or `.ods`, or use `--audit-format xlsx` or `ods` for the audit named after the output.
+- **The audit is an Excel spreadsheet by default**, which opens as it is in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV, and a path given to `--audit` chooses by its extension.
   - The lines saying which tool and which input go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each merged paper and carries its full abstract**, so a merge can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
 #### Raven-siftbib
 
-- **The audits can be Excel or OpenDocument spreadsheets**, as well as TSV: `--audit-format xlsx` or `ods`.
+- **The audits are Excel spreadsheets by default**, which open as they are in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV.
   - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each removed paper and carries its full abstract**, so a removal can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
@@ -104,6 +104,11 @@
 #### Raven-deduplicate
 
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
+- **The audit's default name is `<output>_audit.xlsx`**, where v0.2.10 wrote `<output>_audit.tsv`. `--audit-format tsv` keeps the old name.
+
+#### Raven-siftbib
+
+- **The audit's default name is `<name>_removed.xlsx`**, where v0.2.10 wrote `<name>_removed.tsv`. `--audit-format tsv` keeps the old name.
 
 #### Raven-pdf2bib
 

@@ -33,7 +33,7 @@ class TestResolving:
         assert (plan.reports_dir, plan.ledger_dir) == (tmp_path / "out", tmp_path / "out" / "ledgers")
         settings = plan.run_file.settings
         assert (settings.maybe_seed, settings.maybe_control, settings.maybe_replicate, settings.maybe_format) == \
-               (42, 40, 1, "tsv")
+               (42, 40, 1, "xlsx")
         assert settings.maybe_ledgers == tmp_path / "out" / "ledgers", "recorded, so a run file can name it"
 
     def test_a_run_file_supplies_the_rest_and_the_command_line_wins(self, files, tmp_path):
@@ -111,7 +111,7 @@ class TestARun:
                                  str(tmp_path / "out"), "--control", "2"))
         assert cli.execute(plan, nlp=_NLP(), connect=connect) == 0
         out = tmp_path / "out"
-        assert {f"{report.CHECK_BY_HAND}.tsv", report.KEPT_BIB, "run.toml"} <= {p.name for p in out.iterdir()}
+        assert {f"{report.CHECK_BY_HAND}.xlsx", report.KEPT_BIB, "run.toml"} <= {p.name for p in out.iterdir()}
         recorded = runfile.load_run_file(out / "run.toml")
         assert recorded.settings.maybe_control == 2
         assert all(plan.maybe_model == "test-model" and plan.maybe_instrument for plan in recorded.stages.values())
@@ -135,20 +135,20 @@ class TestARun:
         assert plan.reports_dir == pilot and plan.ledger_dir == tmp_path / "out" / "ledgers"
         cli.execute(plan, nlp=_NLP(), connect=connect)
         assert not (pilot / "pilot").exists()
-        assert sorted(path.name for path in pilot.iterdir()) == [f"{report.PILOT_REPORT}.tsv", "run.toml"]
+        assert sorted(path.name for path in pilot.iterdir()) == [f"{report.PILOT_REPORT}.xlsx", "run.toml"]
 
     def test_finish_from_a_marked_copy(self, files, tmp_path, model, connect, capsys):
         corpus, definition = files
         out = tmp_path / "out"
         cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
                                       "--control", "2")), nlp=_NLP(), connect=connect)
-        worklist = tabular.read_table(out / f"{report.CHECK_BY_HAND}.tsv")
+        worklist = tabular.read_table(out / f"{report.CHECK_BY_HAND}.xlsx")
         marked = tmp_path / "marked.tsv"
         tabular.write_table(marked, [], ["key", "decision"], [(row["key"], "keep") for row in worklist])
         assert cli.execute(cli.resolve(parse("finish", str(marked), "--run-file", str(out / "run.toml"))),
                            nlp=_NLP(), connect=connect, sheet=str(marked)) == 0
         assert (out / report.FINAL_BIB).exists()
-        assert (out / f"{report.CHECK_BY_HAND}.tsv").exists(), "finish does not rewrite the reports"
+        assert (out / f"{report.CHECK_BY_HAND}.xlsx").exists(), "finish does not rewrite the reports"
 
 
 class FickleModel(ScriptedModel):
@@ -177,7 +177,7 @@ class TestCompare:
                                       "--control", "2", "--replicate", "2", "--ledgers", str(first / "ledgers"))),
                     nlp=_NLP(), connect=connect)
         main, disagreements = cli.compare_runs(first / "run.toml", second / "run.toml", nlp=_NLP())
-        assert main == second / "compare-with-first.tsv"
+        assert main == second / "compare-with-first.xlsx"
         verdict = next(row for row in tabular.read_table(main) if row["measure"] == "verdict")
         assert verdict["records"] == "7" and float(verdict["agreement"]) == pytest.approx(6 / 7, abs=1e-3)  # written to three places
         rows = tabular.read_table(disagreements)

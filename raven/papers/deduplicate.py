@@ -4,7 +4,7 @@ A literature search run across Scopus, Web of Science, ProQuest, Springer and ar
 holds every paper once per database that indexes it — each copy in that database's own dialect, with a
 different subset of the fields filled in. This tool finds those copies and merges them into one record.
 
-    raven-deduplicate search.bib -o deduped.bib --audit audit.tsv
+    raven-deduplicate search.bib -o deduped.bib --audit audit.xlsx
 
 ## What decides that two records are the same paper
 
@@ -50,7 +50,7 @@ so it is off by default and everything above works without one.
 
 The surviving record is the most complete copy, preferring the version of record over a preprint or
 repository deposit; every field it lacks is filled from a twin that has one. Nothing is dropped silently:
-each merge writes a row to the audit TSV naming what was merged away, which key matched, and every value
+each merge writes a row to the audit naming what was merged away, which key matched, and every value
 that differed from the one kept.
 
 **The `.bib` is what you came for**, and the audit is what lets you stand behind it — a scoping review has
@@ -1462,10 +1462,10 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-o", "--output", dest="output", default=None, type=str, metavar="deduped.bib",
                         help="Where to write the deduplicated bibliography. Without it, the run reports what it would do and writes nothing.")
-    parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.tsv",
-                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. TSV, Excel or OpenDocument, by the extension: `.tsv`, `.xlsx` or `.ods`. Defaults to sitting beside the output, as `<output>_audit.tsv`, or in the format `--audit-format` names.")
+    parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.xlsx",
+                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. TSV, Excel or OpenDocument, by the extension: `.tsv`, `.xlsx` or `.ods`. Defaults to sitting beside the output, as `<output>_audit.xlsx`, or in the format `--audit-format` names.")
     parser.add_argument("--audit-format", dest="audit_format", default=None, choices=tabular.FORMATS,
-                        help="Format of the audit file the tool names itself: TSV, Excel or OpenDocument. With `--audit`, the extension of its path decides instead. Default: tsv.")
+                        help="Format of the audit file the tool names itself: TSV, Excel or OpenDocument. With `--audit`, the extension of its path decides instead. Default: xlsx.")
     parser.add_argument("--no-audit", dest="no_audit", action="store_true", default=False,
                         help="Do not write the audit. A merge cannot be read back out of the merged file, so this discards the only record of what happened.")
     parser.add_argument("--judge", dest="judge", action="store_true", default=False,
@@ -1533,7 +1533,7 @@ def main() -> None:  # pragma: no cover
         audit_path = pathlib.Path(opts.audit).expanduser().resolve()
     elif opts.output and not opts.no_audit:
         output_path = pathlib.Path(opts.output).expanduser().resolve()
-        audit_path = output_path.with_name(f"{output_path.stem}_audit.{opts.audit_format or 'tsv'}")
+        audit_path = output_path.with_name(f"{output_path.stem}_audit.{opts.audit_format or 'xlsx'}")
     if audit_path is not None:
         write_audit(audit_path, rows, sources)
         print(f"audit written to {audit_path}")

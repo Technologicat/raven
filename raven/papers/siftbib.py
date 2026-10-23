@@ -12,7 +12,7 @@ The criterion is a parameter rather than a policy. `--require` names a field the
 satisfies all of them. That is what keeps this from being an abstract-specific tool that grows a second
 flag the first time a corpus needs `--require year`.
 
-The sifted `.bib` is what you came for, and the audit TSV beside it — a record per line with the
+The sifted `.bib` is what you came for, and the audit beside it — a record per line with the
 criterion it failed — is what lets you stand behind it: a review has to account for the records it
 removed before screening, and a filtered file alone gives neither a reader nor its own author any way to
 tell a good cut from a bad one. Two outputs, and the bibliography is the one with lasting value; the
@@ -203,9 +203,9 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_sifted", type=str,
                         metavar="suf", help="Suffix for naming output files (file.bib -> file_sifted.bib).")
     parser.add_argument("--audit-suffix", dest="audit_suffix", default="_removed", type=str,
-                        metavar="suf", help="Suffix for naming audit files (file.bib -> file_removed.tsv).")
-    parser.add_argument("--audit-format", dest="audit_format", default="tsv", choices=tabular.FORMATS,
-                        help="Format of the audit files: TSV, Excel or OpenDocument.")
+                        metavar="suf", help="Suffix for naming audit files (file.bib -> file_removed.xlsx).")
+    parser.add_argument("--audit-format", dest="audit_format", default="xlsx", choices=tabular.FORMATS,
+                        help="Format of the audit files: Excel, OpenDocument or TSV.")
     # A directory rather than a path, because this tool sifts each input on its own: there are as many
     # outputs and audits as there are inputs, and no single path can name them. It covers both files
     # rather than the audit alone — redirecting one and leaving the other beside the input is a

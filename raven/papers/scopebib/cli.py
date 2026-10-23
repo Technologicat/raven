@@ -29,7 +29,7 @@ COMMANDS = {"run": ("judge", "review", "extract"), "judge": ("judge",), "review"
             "extract": ("extract",), "report": (), "finish": ()}
 
 #: What a setting is when neither the command line nor the run file says.
-DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_format": "tsv",
+DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_format": "xlsx",
             "maybe_server_nlp": False}
 
 _PILOT_SIZE = 50  # as `pipeline.PILOT_SIZE`, which is not imported here, the parser coming before the heavy imports
