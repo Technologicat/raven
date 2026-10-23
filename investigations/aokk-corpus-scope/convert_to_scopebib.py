@@ -9,7 +9,8 @@ writes, beside this script (or into `--out-dir`), the ledgers the tool reads:
     review-<fp>.jsonl                                     from drop-review-*.tsv
 
 and prints the three fingerprints, which name the instruments to the tool. After this the tool needs no
-importer: the prototype's answers are ledgers like any other.
+importer: the prototype's answers are ledgers like any other. Each ledger opens with a header naming the
+model that made the answers (`HEADER`), so the reports name it too.
 
 **Each set of answers is stamped with the prototype's own instrument, never the tool's**: a hash of the
 script that made them, as it stood at its last commit before the answers were last written (`SOURCES`).
@@ -54,6 +55,13 @@ SOURCES = {"judge": ("judge_scope.py", "f114ea0b"),
 
 TESTS = ("no_ai", "not_education", "wrong_level")
 
+#: What every set of answers was made with, as a sweep's ledger header records it, so that a report names
+#: the model. The prototype's own files do not record it; the maintainer did (2026-10-23), for all three.
+HEADER = {"backend_flavor": "lmstudio", "model_requested": "qwen3.6-35b-a3b", "model_id": "qwen3.6-35b-a3b",
+          "label": "Qwen 3.6 35B-A3B", "quantization": "IQ4_NL_XL", "bits_per_weight": None, "load_config": None,
+          "not_reported": ["bits_per_weight", "load_config"], "declared": "KV cache 4-bit",
+          "recorded": "at conversion, from the maintainer's account; the prototype's files do not record it"}
+
 
 def fingerprint(stage: str) -> str:
     """The instrument of a stage's answers: eight hex digits of the source of the script that made them."""
@@ -76,6 +84,8 @@ def check(condition: bool, message: str) -> None:
 def convert_judge(definition, out_dir: pathlib.Path) -> str:
     fp = fingerprint("judge")
     titles, abstracts = judge.ledgers(out_dir, fp)
+    titles.write_header(HEADER)
+    abstracts.write_header(HEADER)
     latest = {}
     for entry in lines(HERE / "judged.jsonl"):
         latest[(entry["key"], entry["source"])] = entry
@@ -93,6 +103,7 @@ def convert_judge(definition, out_dir: pathlib.Path) -> str:
 def convert_extract(definition, corpus: dict[str, records.Record], out_dir: pathlib.Path) -> str:
     fp = fingerprint("extract")
     ledger = extract.ledger(out_dir, fp)
+    ledger.write_header(HEADER)
     entries = [entry for entry in lines(HERE / "extracted-446e1705.jsonl") if entry["key"] in corpus]
     for entry in entries:
         answer = {}
@@ -119,6 +130,7 @@ def convert_extract(definition, corpus: dict[str, records.Record], out_dir: path
 def convert_review(out_dir: pathlib.Path) -> str:
     fp = fingerprint("review")
     ledger = review.ledger(out_dir, fp)
+    ledger.write_header(HEADER)
     rows = [row for path in sorted(HERE.glob("drop-review-*.tsv")) for row in tabular.read_table(path)]
     for row in rows:
         belongs = {"yes": True, "no": False}.get(row["belongs"].strip().lower())
