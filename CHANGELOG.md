@@ -115,7 +115,7 @@
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
 - **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.
 - **An embedding model loaded in LM Studio beside the chat model is no longer taken for it.** Before, whichever loaded model LM Studio listed first was the one Librarian named and sent requests to.
-- **A web search with a blank query tells the AI that the query was blank**, and that it must not be. Before, the AI was told the search engine did not respond, which invited it to retry the same blank query.
+- **A web search with a blank query tells the AI that the query was blank**, and that it must not be. Before, the AI was told that the search engine did not respond, which was not what had gone wrong.
   - Raven-server refuses a blank query too, and a `max_links` that is not a positive integer.
 
 #### Raven-visualizer
