@@ -587,9 +587,14 @@ the stages are separable and each is tested alone. The console script is the `cl
      side exactly: 1069 removed, 153 to a person (139 unsure, 14 rescued). On the rules side the 138
      extractions of the prototype's unknowns now belong to records sent to review, which accounts for the
      whole difference from step 5's 898/72/264.
-8. **`models`: switching models on LM Studio**, between stages, logged and never asking. Last, being the
+8. **`models`: switching models on LM Studio**, between stages, logged and never asking. **When it lands,
+   the README's *The run file, and repeating a run* → *Models* paragraph must change with it**: it says
+   today that a stage wanting another model is refused before any work, and it must then warn, in so many
+   words, that `run` loads and unloads models on the backend by itself (question 4). Last, being the
    one step that has to be tried against a live backend. ~S–M.
-9. **The acceptance run**: the finished tool over the prototype's corpus, the prototype's answers
+9. **The docs are written** (2026-10-23): `raven/papers/README.md` → *`raven-scopebib`*, every point listed
+   below, plus the main README's pipeline entry and the changelog. What is left of this step is **the
+   acceptance run**: the finished tool over the prototype's corpus, the prototype's answers
    replayed, against `regenerate_reports.py`'s outputs. They should agree except where question 8's rule
    differs from the prototype's, and every difference should be explained by it. No GPU. Then the README,
    the changelog and the console script's entry. ~S–M. **The README must say what starts a fresh ledger**
