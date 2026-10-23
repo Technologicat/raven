@@ -473,7 +473,33 @@ the stages are separable and each is tested alone. The console script is the `cl
    `run`; `--pilot`, `--sample`/`--seed`, `--replicate`, `--until`, `--model`/`--models`; the to-do worked
    out before connecting, and the fail-fast check on a backend that cannot switch. ~M–L.
    **Decided 2026-10-22 (maintainer), before building:**
-   - **Four commits**: `report` (pure, over saved answers), the run file, the `cli`, the pilot report.
+   - **Five commits**: `report` (pure, over saved answers), the run file, the `cli`, the pilot report, and
+     `compare` (added 2026-10-23).
+   - **The CLI's orchestration, agreed 2026-10-23** (maintainer, on a proposal):
+     - `cli.py` holds the argparse alone, `pipeline.py` the orchestration, so that it is tested against a
+       scripted model. `judge`, `review` and `extract` are `run` restricted to one stage; `report` is `run`
+       with no stages.
+     - The output directory is `--out-dir`, or the run file's own directory when `--run-file` is given, so
+       passing back `<out>/run.toml` runs again in place.
+     - Ledgers live in `<out>/ledgers/`; `--ledgers DIR` points elsewhere, recorded in `[run]`.
+     - A stage whose instrument is not named connects, even under `report`, the fingerprint holding the
+       loaded model's id; the run file is what makes that unnecessary.
+     - The reviewer and the extractor wait until the judge has settled every record: the control is drawn
+       from the judge's keeps, and a partial judge would draw another control next time.
+     - Batches of 40 titles, 10 abstracts, 10 reviews and 10 extractions, the prototype's, outside the
+       fingerprint as there, so the converted ledgers still match.
+     - `--pilot [N]`, default 50, writes the ordinary reports into `pilot/` until the pilot report exists.
+     - Replicate 1 adds nothing to the instrument material, so existing fingerprints hold; a replicate
+       k > 1 adds `"replicate": k`.
+   - **`compare RUN_A RUN_B`** (maintainer, 2026-10-23: without it `--replicate` is not very useful): two
+     run files, each naming its instruments, so it never needs a backend. Over the records both runs
+     answered, it reports per stage — the judge's verdict and each test, the reviewer's `belongs`, each
+     extracted field — percent agreement and Cohen's kappa (1960), with the records the two disagreed on
+     listed. **A replicate runs in an output directory of its own**, since `run.toml` and the reports are
+     per run; replicates may share a ledgers directory, their fingerprints keeping them apart. A replicate
+     measures sampled decoding: the backend draws a random seed per request at temperature 1
+     (`raven.librarian.config`), so one run over a corpus is one draw. Our `--seed` decides only which
+     records a sample and a control draw, and replicates share it so as to draw the same records.
    - **`raven-siftbib` runs as stage 0** inside `run`, through `siftbib.sift`, its criteria given on the
      command line as `raven-siftbib` takes them; no criteria, no sift.
    - **The names**, the audits marked `-audit` so no reader takes one for a result, and the results sharing
