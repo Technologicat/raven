@@ -44,8 +44,8 @@
     - [General](#general-1)
         - [GET "/"](#get-)
         - [GET "/health"](#get-health)
-        - [Streamed responses](#streamed-responses)
         - [GET "/api/modules"](#get-apimodules)
+        - [Streamed responses](#streamed-responses)
     - [Raven-avatar client](#raven-avatar-client-1)
         - [GET "/api/avatar/info"](#get-apiavatarinfo)
         - [POST "/api/avatar/load"](#post-apiavatarload)
@@ -658,6 +658,18 @@ For usage examples, look at the Python bindings of the web API in [`raven.client
   No inputs, no outputs - if you get a 200 OK, it means the server heard you.
 
 
+### GET "/api/modules"
+
+  Get a list of enabled modules.
+
+  No inputs.
+
+  Output format is JSON:
+
+      {"modules": ["modulename0",
+                   ...]}
+
+
 ### Streamed responses
 
 Some endpoints answer with a *streamed job*: currently `/api/websearch2` and `/api/webfetch`, whose work can
@@ -681,18 +693,6 @@ response from the start, so it has something to close if it stops waiting, and t
 client has gone and stops at its next step. No result is sent to a client that has left.
 
 The Python client for this is `post_streamed_job` in [`raven.client.util`](../client/util.py).
-
-
-### GET "/api/modules"
-
-  Get a list of enabled modules.
-
-  No inputs.
-
-  Output format is JSON:
-
-      {"modules": ["modulename0",
-                   ...]}
 
 
 ## Raven-avatar client
