@@ -52,15 +52,17 @@ from ..common.video.upscaler import Upscaler as _LocalUpscaler
 
 class MaybeRemoteService:
     def __init__(self,
-                 allow_local: bool):
+                 allow_local: bool,
+                 *,
+                 allow_remote: bool = True):
         """(1/√2) |remote⟩ + (1/√2) |local⟩
 
         Base class. Specific services derive from this.
 
         Prerequisite: `raven.client.api.initialize(...)` must have been called
-        before instantiating any `MaybeRemoteService`, because the constructor
-        calls through `api.*` (which enforces this via `api.require()`). Apps
-        typically initialize the API once at startup.
+        before instantiating any `MaybeRemoteService` that allows the remote mode,
+        because the constructor calls through `api.*` (which enforces this via
+        `api.require()`). Apps typically initialize the API once at startup.
 
         When a `MaybeRemoteService` is instantiated, it checks whether Raven-server
         can be reached at the URL set in `raven.client.config`.
@@ -102,7 +104,23 @@ class MaybeRemoteService:
                        server is to make the server reachable (e.g. start it if it was not running).
 
                        Avoiding extra model downloads is important, as these models can be multiple GB each.
+
+        `allow_remote`: Whether to allow the remote mode. If `False`, the server is not contacted at all, and the
+                        model is loaded locally; `allow_local` must then be `True`.
+
+                        The counterpart of `allow_local=False`, for a caller whose results must not depend on
+                        how the server happens to be configured: a measurement calibrated against one model,
+                        say, which should be repeatable on any machine. `server_available` is then `False`,
+                        the server not having been asked.
         """
+        if not allow_local and not allow_remote:
+            raise ValueError("MaybeRemoteService.__init__: `allow_local` and `allow_remote` cannot both be `False`.")
+        if not allow_remote:
+            logger.info("MaybeRemoteService.__init__: `allow_remote` is disabled; model will be loaded locally.")
+            self.server_available = False
+            self.server_modules = []
+            self._local_model = None
+            return
         self.server_available = api.raven_server_available()
         if self.server_available:
             server_modules = api.modules()
@@ -128,10 +146,14 @@ class Classifier(MaybeRemoteService):
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
-                 dtype: Optional[Union[str, torch.dtype]] = None):
+                 dtype: Optional[Union[str, torch.dtype]] = None,
+                 *,
+                 allow_remote: bool = True):
         """Text sentiment classification (distilBERT-family, 28-emotion by default).
 
         `allow_local`: See `MaybeRemoteService`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: Required if `allow_local=True`. HuggingFace model name, e.g.
                       `"joeddav/distilbert-base-uncased-go-emotions-student"`. In remote
@@ -142,7 +164,7 @@ class Classifier(MaybeRemoteService):
 
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, or a string `"float32"`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -184,16 +206,20 @@ class Dehyphenator(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
                  model_name: Optional[str],
-                 device_string: Optional[str]):
+                 device_string: Optional[str],
+                 *,
+                 allow_remote: bool = True):
         """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
 
         `allow_local`: See `MaybeRemoteService`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_web_core_sm".
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
 
@@ -226,10 +252,14 @@ class Embedder(MaybeRemoteService):
                  allow_local: bool,
                  model_name: str,
                  device_string: Optional[str],
-                 dtype: Optional[Union[str, torch.dtype]]):
+                 dtype: Optional[Union[str, torch.dtype]],
+                 *,
+                 allow_remote: bool = True):
         """Semantic embeddings (for e.g. vector storage).
 
         `allow_local`: See `MaybeRemoteService`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: HuggingFace model name of the embedding model to load.
 
@@ -239,7 +269,7 @@ class Embedder(MaybeRemoteService):
 
         `dtype`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -277,16 +307,20 @@ class NLP(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
                  model_name: Optional[str],
-                 device_string: Optional[str]):
+                 device_string: Optional[str],
+                 *,
+                 allow_remote: bool = True):
         """spaCy NLP pipeline.
 
         `allow_local`: See `MaybeRemoteService`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_web_core_sm".
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
 
@@ -336,10 +370,14 @@ class Translator(MaybeRemoteService):
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
-                 spacy_model_name: Optional[str] = None):
+                 spacy_model_name: Optional[str] = None,
+                 *,
+                 allow_remote: bool = True):
         """Machine translation between natural languages (Helsinki-NLP / OPUS-MT family).
 
         `allow_local`: See `MaybeRemoteService`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `source_lang`, `target_lang`: Language codes, e.g. `"en"` → `"fi"`. In remote
                                       mode the server must have a translator loaded for
@@ -359,7 +397,7 @@ class Translator(MaybeRemoteService):
                             `nlptools.load_spacy_pipeline`, so sharing the same model
                             with a `MaybeRemote.NLP` instance costs nothing extra.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.model_name = model_name
@@ -397,7 +435,9 @@ class STT(MaybeRemoteService):
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
-                 dtype: Optional[Union[str, torch.dtype]] = None):
+                 dtype: Optional[Union[str, torch.dtype]] = None,
+                 *,
+                 allow_remote: bool = True):
         """Speech-to-text (Whisper).
 
         `allow_local`: See `MaybeRemoteService`. Note that Whisper models are heavy
@@ -405,6 +445,8 @@ class STT(MaybeRemoteService):
                        apps that only occasionally need STT should prefer
                        `allow_local=False` and fail clearly when the server is down
                        rather than trigger a multi-hundred-megabyte download.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: Required if `allow_local=True`. HuggingFace model name, e.g.
                       `"openai/whisper-base"`, `"openai/whisper-large-v3-turbo"`.
@@ -414,7 +456,7 @@ class STT(MaybeRemoteService):
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`,
                  or a string like `"float32"`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -466,12 +508,16 @@ class TTS(MaybeRemoteService):
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
-                 lang_code: str = "a"):
+                 lang_code: str = "a",
+                 *,
+                 allow_remote: bool = True):
         """Text-to-speech (Kokoro).
 
         `allow_local`: See `MaybeRemoteService`. Kokoro-82M weighs ~360 MB;
                        apps that only occasionally need TTS should prefer
                        `allow_local=False`.
+
+        `allow_remote`: See `MaybeRemoteService`.
 
         `model_name`: Required if `allow_local=True`. HuggingFace repo
                       identifier, e.g. `"hexgrad/Kokoro-82M"`.
@@ -483,7 +529,7 @@ class TTS(MaybeRemoteService):
                      `raven.common.audio.speech.tts.load_tts_pipeline` for the
                      full list.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.lang_code = lang_code
@@ -679,7 +725,9 @@ class Postprocessor(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
                  device_string: Optional[str] = None,
-                 dtype: Optional[Union[str, torch.dtype]] = None):
+                 dtype: Optional[Union[str, torch.dtype]] = None,
+                 *,
+                 allow_remote: bool = True):
         """Image postprocessor — applies a filter chain (see `raven.common.video.postprocessor`).
 
         Unlike the other `MaybeRemote` services, this one wraps a server module (`imagefx`)
@@ -691,11 +739,13 @@ class Postprocessor(MaybeRemoteService):
         `allow_local`: See `MaybeRemoteService`. The postprocessor is pure torch — no heavy ML
                        models are downloaded — so `allow_local=True` is usually safe.
 
+        `allow_remote`: See `MaybeRemoteService`.
+
         `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
 
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.device_string = device_string
         self.dtype = dtype
 
@@ -739,7 +789,9 @@ class Upscaler(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
                  device_string: Optional[str] = None,
-                 dtype: Optional[Union[str, torch.dtype]] = None):
+                 dtype: Optional[Union[str, torch.dtype]] = None,
+                 *,
+                 allow_remote: bool = True):
         """Image upscaler (Anime4K-PyTorch, plus bilinear / bicubic / Lanczos fast paths).
 
         Mirrors the `imagefx` upscale endpoint: target resolution, preset, and quality
@@ -750,9 +802,11 @@ class Upscaler(MaybeRemoteService):
         `allow_local`: See `MaybeRemoteService`. Anime4K is small and loads fast; the
                        `bilinear` / `bicubic` / `lanczos` quality settings skip Anime4K entirely.
 
+        `allow_remote`: See `MaybeRemoteService`.
+
         `device_string`, `dtype`: Required if `allow_local=True`. Same semantics as `Postprocessor`.
         """
-        super().__init__(allow_local)
+        super().__init__(allow_local, allow_remote=allow_remote)
         self.device_string = device_string
         self.dtype = dtype
 
