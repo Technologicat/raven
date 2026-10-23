@@ -239,7 +239,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
         control_size: int,
         seed: int,
         replicate: int = 1,
-        on_progress: Callable[[str, env], None] | None = None) -> RunResult:
+        on_progress: Callable[[str, env], None] | None = None,
+        on_instruments: Callable[[dict[str, runfile.StagePlan]], None] | None = None) -> RunResult:
     """Run `stages`, a subset of `raven.papers.scopebib.runfile.STAGES`, over `corpus`.
 
     `plans`: each stage's model and named instrument (`raven.papers.scopebib.runfile.StagePlan`).
@@ -249,6 +250,9 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
     `control_size`, `seed`: the reviewer's control.
     `replicate`: which replicate this is (`materials`).
     `on_progress`: called with the stage and the sweep's progress `env` after each batch.
+    `on_instruments`: called once each stage's model and instrument are known and before anything is asked,
+                      with them as `RunResult.stages` will hold them; for writing the run file at once, so that
+                      a run that dies partway leaves its recipe behind.
 
     Raises `PipelineError` before any work when a stage that has something to ask cannot ask it.
     """
@@ -321,6 +325,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             message += f". The stages before it can run: --until {runnable[-1]}"
         raise PipelineError(message)
 
+    if on_instruments is not None:
+        on_instruments(_stage_plans(fingerprints, wanted_models, ledger_dir, loaded=loaded, live=live))
     header = sweep.instrument_header(settings)
     messages, asked = missing + skipped, set()
     ledgers = _open_ledgers(ledger_dir, fingerprints)
@@ -366,12 +372,11 @@ class _Stopped(Exception):
     pass
 
 
-def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str, str | None],
-            ledger_dir: pathlib.Path, stages: Sequence[str], *, connected: bool,
-            loaded: str | None = None, asked: set[str] = frozenset(),
-            live: dict[str, str] | None = None) -> RunResult:
-    """The result, with each stage's model as the run file should record it: the loaded one where the stage
-    asked or its instrument is the current one, else the one its ledger names, else the one that was wanted."""
+def _stage_plans(fingerprints: dict[str, str], wanted_models: dict[str, str | None], ledger_dir: pathlib.Path, *,
+                 loaded: str | None = None, asked: set[str] = frozenset(),
+                 live: dict[str, str] | None = None) -> dict[str, runfile.StagePlan]:
+    """Each stage's model and instrument as the run file should record them: the model is the loaded one where
+    the stage asked or its instrument is the current one, else the one its ledger names, else the one wanted."""
     ledgers = _open_ledgers(ledger_dir, fingerprints)
     by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     plans = {}
@@ -381,5 +386,16 @@ def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str,
         else:
             model = _model_in_ledger(by_stage[stage]) or wanted_models[stage]
         plans[stage] = runfile.StagePlan(model, fingerprints[stage])
+    return plans
+
+
+def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str, str | None],
+            ledger_dir: pathlib.Path, stages: Sequence[str], *, connected: bool,
+            loaded: str | None = None, asked: set[str] = frozenset(),
+            live: dict[str, str] | None = None) -> RunResult:
+    """The result, with each stage's model and instrument as `_stage_plans` records them."""
+    plans = _stage_plans(fingerprints, wanted_models, ledger_dir, loaded=loaded, asked=asked, live=live)
+    ledgers = _open_ledgers(ledger_dir, fingerprints)
+    by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     models = {stage: _describe_model(by_stage[stage], plans[stage].maybe_model) for stage in runfile.STAGES}
     return RunResult(state, plans, models, [], connected)

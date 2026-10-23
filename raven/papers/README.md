@@ -355,7 +355,7 @@ What counts as off topic is yours to say, in a [definition file](#writing-a-defi
 
 **Whether it needs one is worked out before any work starts**, from the answers already saved, and if it does, it connects at once. A backend that cannot be reached, has no model loaded, or has a model other than the one a step asks for, is reported at the start — so a long run that gets going can be left to it.
 
-**The backend is checked again after every batch.** One that goes away during the run, or has its model swapped, stops the run with a message saying so, rather than letting every remaining record fail. The reports and `run.toml` are written from what was settled, and `raven-scopebib run --run-file out/run.toml` resumes where it stopped, with none of the original options. A different model loaded by then is refused before any work, rather than finishing the run with it.
+**The backend is checked again after every batch.** One that goes away during the run, or has its model swapped, stops the run with a message saying so, rather than letting every remaining record fail. The reports are written from what was settled, and `raven-scopebib run --run-file out/run.toml` resumes where it stopped, with none of the original options. A different model loaded by then is refused before any work, rather than finishing the run with it.
 
 ### How it works, step by step
 
@@ -542,6 +542,8 @@ raven-scopebib run --run-file out/run.toml       # writes into out/ again
 ```
 
 and where every answer is already saved, no backend is asked anything. A pilot's run file is in `pilot/`, and repeats the pilot.
+
+**It is written before anything is asked**, as soon as each step's model and instrument are known, and again at the end. Every step is in it, the ones not yet reached included, with the settings they are going to have. So a run that stops or dies partway — the backend gone, Ctrl+C, a crash — leaves its recipe behind, and passing it back resumes the run, those later steps included, exactly as they would have run.
 
 - **Options override the file**, one by one: `--run-file out/run.toml --seed 7`.
 - **Paths are relative to the file**, so a run directory moved together with its input still works, on another machine too.

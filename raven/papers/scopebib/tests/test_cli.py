@@ -214,3 +214,23 @@ class TestResuming:
         assert (model.calls["titles"], model.calls["abstracts"]) == judged, "what was answered is not asked again"
         assert model.calls["extract"] > 0, "the rest of the run is done"
         assert "pending: 0" in capsys.readouterr().out
+
+    def test_a_run_that_dies_partway_has_already_left_its_run_file(self, files, tmp_path, model, connect, monkeypatch):
+        corpus, definition = files
+        out = tmp_path / "out"
+
+        def interrupted(llm_settings, prompt, maybe_abort=None, **kwargs):
+            if "You are recording what each record says" in prompt:
+                raise KeyboardInterrupt  # the person presses Ctrl+C during the extractor
+            return model(llm_settings, prompt, maybe_abort, **kwargs)
+        monkeypatch.setattr(agent, "ask_record", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
+                                          "--control", "2")), nlp=_NLP(), connect=connect)
+        recorded = runfile.load_run_file(out / "run.toml")
+        assert all(plan.maybe_instrument and plan.maybe_model for plan in recorded.stages.values()), \
+            "every stage is recorded, the one that never finished included"
+
+        monkeypatch.setattr(agent, "ask_record", model)
+        cli.execute(cli.resolve(parse("run", "--run-file", str(out / "run.toml"))), nlp=_NLP(), connect=connect)
+        assert model.calls["extract"] > 0

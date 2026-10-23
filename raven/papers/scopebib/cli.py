@@ -240,9 +240,19 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample, seed=settings.maybe_seed)
     print(f"{len(corpus.records)} records"
           + (f", after the sift removed {len(corpus.maybe_sift.dropped)}" if corpus.maybe_sift else ""))
+    run_path = plan.reports_dir / "run.toml"
+
+    def write_run_file(stages) -> None:
+        maybe_archive = runfile.write_run_file(run_path, runfile.RunFile(settings, stages),
+                                               comments=[f"raven-scopebib {__version__}"])
+        if maybe_archive is not None:
+            print(f"the hand-written {run_path.name} was kept as {maybe_archive.name}")
+
+    # `finish` asks nothing and records no run, so it writes no run file.
     result = pipeline.run(corpus, definition, stages=plan.stages, plans=plan.run_file.stages,
                           ledger_dir=plan.ledger_dir, connect=connect, control_size=settings.maybe_control,
-                          seed=settings.maybe_seed, replicate=settings.maybe_replicate)
+                          seed=settings.maybe_seed, replicate=settings.maybe_replicate,
+                          on_instruments=write_run_file if plan.command != "finish" else None)
     print(report.title_bounds_note(corpus.records, corpus.measures))
     title_only = sum(1 for record in corpus.records if not record.abstract)
     print(f"{title_only} title-only {'record' if title_only == 1 else 'records'}"  # plural
@@ -271,12 +281,8 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
         else:
             written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
                                            **common)
-        run_path = plan.reports_dir / "run.toml"
-        maybe_archive = runfile.write_run_file(run_path, runfile.RunFile(settings, result.stages),
-                                               comments=[f"raven-scopebib {__version__}"])
+        write_run_file(result.stages)
         written.append(run_path)
-        if maybe_archive is not None:
-            print(f"the hand-written {run_path.name} was kept as {maybe_archive.name}")
         if settings.maybe_pilot is None:
             print(f"{report.CHECK_BY_HAND} is rewritten on every run: mark a copy saved under a name of your own")
     outcomes = report.outcomes(corpus.records, definition=definition, final=state.final, reviews=state.reviews,
