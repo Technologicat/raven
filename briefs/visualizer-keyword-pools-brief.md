@@ -372,6 +372,33 @@ the clusters, since distinctive and *meaningful* are different properties.
 choosing — no backend needed, and deterministic.
 It would also give the interim corpus TOC in brief 13 §4 the content description it currently cannot have.
 
+## How much of the cluster a keyword covers (2026-10-23)
+
+**IDF says how distinctive a keyword is across clusters; it says nothing about how much of *this* cluster
+the keyword describes.** A keyword unique to one cluster can still cover 2% of it. The two are different
+axes, and a reader wants both: the first to tell clusters apart, the second to know which keywords to take
+seriously (the maintainer, 2026-10-23).
+
+**The display**: the six shown as the label as above, expandable to the full list, each keyword with its
+share of the cluster, so that keyword #23 at 2% reads as safely ignorable.
+
+**The measurement, chosen 2026-10-23: the LLM tags each entry in its sample with the keywords that fit it,
+and the shares are counted from the tags.**
+
+- **The sample gives an error bar for free.** At the importer's 60 entries (`max_prompt_entries`), a share's
+  standard error is at most √(0.25/60) ≈ 6.5 percentage points, so 40% and 2% are clearly apart. Whether a
+  larger sample would improve the keywords themselves is a separate, pending measurement: hydrogen's
+  photocatalysis cluster at 60 entries against 200.
+- **The cost is output tokens, a few per entry, and a change to the extraction prompt.** That prompt is
+  being reworked anyway, for the *"[incoherent?]"* flag in `TODO_DEFERRED.md` (*Visualizer: cluster quality
+  flags*), so the two changes want measuring together: keyword quality, and thinking length on the
+  low-cohesion clusters.
+- **Considered and not first: embedding the keywords and assigning each member of the whole cluster to its
+  nearest one.** No prompt change and no sampling, but it forces every record onto exactly one keyword
+  where LLM keywords overlap (`Generative AI` against `Educational Chatbots`), and it is untested. Any
+  prominence measure has to be semantic, for the reason *Measured and rejected* above gives: a keyword
+  is an abstraction over the cluster, so counting its words in the text undercounts it.
+
 ## Settled
 
 - ~~**Does the model produce twelve meaningful keywords?**~~ **Yes** — measured 2026-09-01, see above.
