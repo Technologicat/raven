@@ -215,7 +215,8 @@ class Dehyphenator(MaybeRemoteService):
 
         `allow_remote`: See `MaybeRemoteService`.
 
-        `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_web_core_sm".
+        `model_name`: Required if `allow_local=True`. If local mode triggers, the Flair contextual embeddings model to
+                      load, e.g. "multi"; see `raven.common.nlptools.load_dehyphenator`.
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
@@ -316,9 +317,12 @@ class NLP(MaybeRemoteService):
 
         `allow_remote`: See `MaybeRemoteService`.
 
-        `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_web_core_sm".
+        `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_core_web_sm".
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
+
+        The pipeline actually in use, in either mode, is in `model_info`: `{"model": ..., "version": ...}`. In
+        remote mode it is the server's, which its configuration decides, and `model_name` is not it.
         """
         super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
@@ -326,11 +330,13 @@ class NLP(MaybeRemoteService):
 
         if "natlang" in self.server_modules:
             logger.info(f"NLP.__init__: Using `natlang` module on Raven-server at '{client_config.raven_server_url}'.")
+            self.model_info = api.natlang_info()
         else:
             if self.server_available:
                 logger.info(f"NLP.__init__: No `natlang` module loaded on Raven-server at '{client_config.raven_server_url}', loading spaCy NLP model locally.")
             self._local_model = nlptools.load_spacy_pipeline(model_name,
                                                              device_string)
+            self.model_info = nlptools.pipeline_info(self._local_model)
 
     def analyze(self,
                 text: Union[str, List[str]],

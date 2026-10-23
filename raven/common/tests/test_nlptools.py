@@ -80,6 +80,12 @@ def test_load_spacy_pipeline_caches(spacy_pipe):
     again = nlptools.load_spacy_pipeline(SPACY_MODEL, DEVICE)
     assert again is spacy_pipe  # identity, not just equality
 
+def test_pipeline_info_names_the_pipeline_it_was_loaded_as(spacy_pipe):
+    info = nlptools.pipeline_info(spacy_pipe)
+    assert info["model"] == "en_core_web_sm"
+    assert info["version"].count(".") == 2, f"expected a version number, got {info['version']!r}"
+
+
 def test_spacy_analyze_single_str(spacy_pipe):
     docs = nlptools.spacy_analyze(spacy_pipe, "The quick brown fox jumps over the lazy dog.")
     assert isinstance(docs, list)

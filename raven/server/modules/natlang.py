@@ -6,7 +6,7 @@ they can run on a local GPU.
 This module is intended for situations where it is preferred to use the server's GPU.
 """
 
-__all__ = ["init_module", "is_available", "analyze"]
+__all__ = ["init_module", "is_available", "get_info", "analyze"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -37,6 +37,17 @@ def init_module(model_name: str, device_string: str) -> None:
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (nlp_pipeline is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Current fields:
+        `model`: the spaCy pipeline's name, e.g. `"en_core_web_sm"`.
+        `version`: the version of it that is installed.
+    """
+    if nlp_pipeline is None:
+        raise RuntimeError("get_info: pipeline not initialized (did `init_module` succeed?)")
+    return nlptools.pipeline_info(nlp_pipeline)
 
 def analyze(text: Union[str, List[str]], pipes: Optional[List[str]], with_vectors: bool = False) -> Response:
     """Perform NLP analysis on `text`.

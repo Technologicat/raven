@@ -60,7 +60,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "embeddings_compute",
            "imagefx_process", "imagefx_process_file", "imagefx_process_array",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
-           "natlang_analyze",
+           "natlang_info", "natlang_analyze",
            "sanitize_dehyphenate",
            "stt_info",
            "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
@@ -748,6 +748,17 @@ def imagefx_upscale_array(image_data: np.array,
 
 # --------------------------------------------------------------------------------
 # Natlang
+
+def natlang_info() -> dict[str, Any]:
+    """Get metadata about the spaCy pipeline loaded on the server: `{"model": ..., "version": ...}`.
+
+    Clients use this to say which pipeline analyzed their text, which the server's configuration decides.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/natlang/info", headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+    return response.json()
 
 def natlang_analyze(text: str | list[str],
                     pipes: list[str] | None = None,

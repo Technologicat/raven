@@ -1137,6 +1137,29 @@ def api_natlang_analyze():
         traceback.print_exc()
         abort(400, f"api_natlang_analyze: failed, reason: {type(exc)}: {exc}")
 
+@app.route("/api/natlang/info", methods=["GET"])
+def api_natlang_info():
+    """Return metadata about the loaded spaCy pipeline.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"model": "en_core_web_sm",
+         "version": "3.8.0"}
+
+    `model` is the pipeline's name and `version` the version of it installed on the server, so that a
+    client can say which pipeline analyzed its text.
+    """
+    if not natlang.is_available():
+        abort(403, "Module 'natlang' not running")
+    logger.debug("api_natlang_info: capabilities requested")
+    try:
+        return jsonify(natlang.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_natlang_info: failed, reason: {type(exc)}: {exc}")
+
 # ----------------------------------------
 # module: sanitize
 

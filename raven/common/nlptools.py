@@ -15,7 +15,7 @@ Backends:
 """
 
 __all__ = ["default_stopwords",
-           "load_spacy_pipeline", "spacy_analyze",
+           "load_spacy_pipeline", "pipeline_info", "spacy_analyze",
            "serialize_spacy_pipeline", "deserialize_spacy_pipeline",
            "serialize_spacy_docs", "deserialize_spacy_docs",
            "load_classifier", "classify",
@@ -122,6 +122,15 @@ def load_spacy_pipeline(model_name: str, device_string: str) -> spacy.Language:
     logger.info(f"load_spacy_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
     _spacy_pipelines[cache_key] = nlp
     return nlp
+
+def pipeline_info(nlp: spacy.Language) -> dict:
+    """Which spaCy pipeline `nlp` is, from its own metadata: `{"model": "en_core_web_sm", "version": "3.8.0"}`.
+
+    The name a pipeline was loaded under, and the version of it that was installed, which `spacy.load`'s
+    argument alone does not say.
+    """
+    meta = nlp.meta
+    return {"model": f"{meta.get('lang', '')}_{meta.get('name', '')}".strip("_"), "version": meta.get("version", "")}
 
 def spacy_analyze(nlp: spacy.Language,
                   text: Union[str, List[str]],
