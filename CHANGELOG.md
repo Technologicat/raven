@@ -73,6 +73,7 @@
   - Before any work, a run works out whether it needs the LLM at all, and if it does, connects at once: a backend that cannot be reached, has no model loaded, or has the wrong one is reported at the start, not an hour in.
   - A backend that goes away during the run, or swaps its model, stops it with a message saying why; the reports cover what was settled, and passing the stopped run's `run.toml` back with `--run-file` resumes it, without retyping any of the original options, which by then are stored in the run file.
   - `run.toml` is written before anything is asked, naming every step's model and instrument, the steps not yet reached included; so a run that dies partway, by Ctrl+C or a crash, can be resumed the same way.
+  - On LM Studio, each step can use a model of its own, `--model STEP=KEY`: the run loads each in turn, by itself, and loads the starting model again at the end.
   - `--replicate` and `raven-scopebib compare` measure how far two runs agree, with Cohen's kappa: the test-retest reliability of the LLM's answers, or one model against another.
   - How to write a definition file, and the rest, is in [the paper tools' manual](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 

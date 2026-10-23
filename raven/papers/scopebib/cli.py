@@ -73,6 +73,9 @@ def _parser() -> argparse.ArgumentParser:
                         help="Read a stage's answers from the ledger of this instrument, as a ledger's file "
                              "name shows it. Read-only unless the current definition and model make "
                              "the same one. Repeatable.")
+    common.add_argument("--context-length", dest="context_length", type=int, default=None, metavar="N",
+                        help="The context length to load each model with, where a step's model is loaded for it. "
+                             "Default: the one LM Studio has saved for each model.")
     common.add_argument("--backend-url", dest="backend_url", default=None, metavar="URL",
                         help="The LLM backend. Default: Raven-librarian's.")
     common.add_argument("--server-nlp", dest="server_nlp", action=argparse.BooleanOptionalAction, default=None,
@@ -155,7 +158,7 @@ def resolve(opts: argparse.Namespace) -> Plan:
              "min_chars": tuple(opts.min_chars) if opts.min_chars else None,
              "maybe_sample": opts.sample, "maybe_pilot": opts.pilot, "maybe_seed": opts.seed,
              "maybe_control": opts.control, "maybe_replicate": opts.replicate, "maybe_format": opts.format,
-             "maybe_server_nlp": opts.server_nlp}
+             "maybe_server_nlp": opts.server_nlp, "maybe_context_length": opts.context_length}
     # A sample and a pilot given on the command line replace each other, not only their own setting.
     if opts.sample is not None:
         given["maybe_pilot"] = None
@@ -177,7 +180,8 @@ def resolve(opts: argparse.Namespace) -> Plan:
             raise UsageError(f"no definition file: give --definition, or a run file naming one, or put it beside "
                              f"the .bib as {default}")
         settings = dataclasses.replace(settings, maybe_definition=default)
-    for name in ("maybe_seed", "maybe_control", "maybe_replicate", "maybe_sample", "maybe_pilot"):
+    for name in ("maybe_seed", "maybe_control", "maybe_replicate", "maybe_sample", "maybe_pilot",
+                 "maybe_context_length"):
         value = getattr(settings, name)
         least = {"maybe_seed": None, "maybe_control": 0}.get(name, 1)
         if value is not None and least is not None and value < least:
@@ -231,6 +235,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     `sheet`, `require_every_decision`: for `finish`.
     """
     from . import definition as scope_definition
+    from . import models as scope_models
     from . import pipeline, report, runfile
 
     settings = plan.run_file.settings
@@ -252,7 +257,9 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     result = pipeline.run(corpus, definition, stages=plan.stages, plans=plan.run_file.stages,
                           ledger_dir=plan.ledger_dir, connect=connect, control_size=settings.maybe_control,
                           seed=settings.maybe_seed, replicate=settings.maybe_replicate,
-                          on_instruments=write_run_file if plan.command != "finish" else None)
+                          on_instruments=write_run_file if plan.command != "finish" else None,
+                          make_switcher=lambda connected: scope_models.switcher_for(
+                              connected, reconnect=connect, maybe_context_length=settings.maybe_context_length))
     print(report.title_bounds_note(corpus.records, corpus.measures))
     title_only = sum(1 for record in corpus.records if not record.abstract)
     print(f"{title_only} title-only {'record' if title_only == 1 else 'records'}"  # plural

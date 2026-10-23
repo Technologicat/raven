@@ -78,6 +78,8 @@ class Settings:
     `maybe_format`: the table format of the reports, one of `raven.common.tabular.FORMATS`.
     `maybe_server_nlp`: measure the titles with Raven-server's spaCy model, rather than locally with the one the
                         title bounds were calibrated with.
+    `maybe_context_length`: the context length every model the run loads is loaded with; `None` for the one the
+                            backend has saved for each.
     """
     maybe_bib: pathlib.Path | None = None
     maybe_definition: pathlib.Path | None = None
@@ -91,6 +93,7 @@ class Settings:
     maybe_replicate: int | None = None
     maybe_format: str | None = None
     maybe_server_nlp: bool | None = None
+    maybe_context_length: int | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,7 +107,8 @@ class RunFile:
 _PATHS = {"bib": "maybe_bib", "definition": "maybe_definition", "ledgers": "maybe_ledgers"}
 _LISTS = {"require": "require", "min_chars": "min_chars"}
 _INTS = {"sample": ("maybe_sample", 1), "pilot": ("maybe_pilot", 1), "seed": ("maybe_seed", None),
-         "control": ("maybe_control", 0), "replicate": ("maybe_replicate", 1)}
+         "control": ("maybe_control", 0), "replicate": ("maybe_replicate", 1),
+         "context_length": ("maybe_context_length", 1)}
 
 
 def _check_instrument(value: str, where: str) -> str:

@@ -272,3 +272,70 @@ class TestLoadingTheCorpus:
         assert drawn(forward, 1) == drawn(backward, 1) and len(drawn(forward, 1)) == 3
         assert any(drawn(forward, seed) != drawn(forward, 1) for seed in range(2, 6)), \
             "the control: another seed draws another sample"
+
+
+class FakeSwitcher:
+    """Stands in for LM Studio: records each load, and makes the backend report the model just loaded."""
+
+    def __init__(self, llm_settings, monkeypatch, *, available=("test-model", "other-model")):
+        from raven.librarian import llmclient
+        from unpythonic.env import env
+        self.base, self.loads, self.available_models = llm_settings, [], set(available)
+        self.current = llm_settings.model_record
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, flavor: self.current)
+        self._env = env
+
+    def available(self):
+        return self.available_models
+
+    def load(self, model):
+        self.loads.append(model)
+        record = self._env(**{**dict(self.base.model_record.items()), "model_id": model, "label": model})
+        self.current = record
+        settings = self._env(**dict(self.base.items()))
+        settings.model_record = record
+        return settings
+
+
+class TestSwitching:
+    def test_a_stage_wanting_another_model_runs_with_it_and_the_first_comes_back(
+            self, corpus, definition, tmp_path, model, connections, llm_settings, monkeypatch):
+        switcher = FakeSwitcher(llm_settings, monkeypatch)
+        recorded = []
+        result = run(corpus, definition, tmp_path, connections, plans={"extract": StagePlan("other-model")},
+                     make_switcher=lambda settings: switcher, on_instruments=recorded.append)
+        assert switcher.loads == ["other-model", "test-model"], "loaded for the extractor, then put back"
+        assert model.calls["extract"] > 0
+        assert result.stages["extract"].maybe_model == "other-model"
+        assert result.stages["extract"].maybe_instrument not in (None, result.stages["judge"].maybe_instrument)
+        assert recorded[0]["extract"].maybe_instrument is None, "not known until its model is loaded"
+        assert recorded[-1]["extract"].maybe_instrument == result.stages["extract"].maybe_instrument
+
+    def test_a_model_the_backend_lacks_is_refused_before_any_work(self, corpus, definition, tmp_path, model,
+                                                                  connections, llm_settings, monkeypatch):
+        switcher = FakeSwitcher(llm_settings, monkeypatch)
+        with pytest.raises(pipeline.PipelineError, match="no model 'missing-model'"):
+            run(corpus, definition, tmp_path, connections, plans={"review": StagePlan("missing-model")},
+                make_switcher=lambda settings: switcher)
+        assert not model.calls and switcher.loads == []
+
+    def test_a_stage_with_nothing_to_ask_loads_nothing(self, corpus, definition, tmp_path, model, connections,
+                                                       llm_settings, monkeypatch):
+        switcher = FakeSwitcher(llm_settings, monkeypatch)
+        run(corpus, definition, tmp_path, connections, stages=("judge",), plans={"extract": StagePlan("other-model")},
+            make_switcher=lambda settings: switcher)
+        assert switcher.loads == [], "the extractor is not run, so its model is not loaded"
+
+    def test_the_first_model_comes_back_even_when_a_stage_is_interrupted(self, corpus, definition, tmp_path, model,
+                                                                         connections, llm_settings, monkeypatch):
+        switcher = FakeSwitcher(llm_settings, monkeypatch)
+
+        def interrupted(llm_settings, prompt, maybe_abort=None, **kwargs):
+            if "You are recording what each record says" in prompt:
+                raise KeyboardInterrupt
+            return model(llm_settings, prompt, maybe_abort, **kwargs)
+        monkeypatch.setattr(agent, "ask_record", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            run(corpus, definition, tmp_path, connections, plans={"extract": StagePlan("other-model")},
+                make_switcher=lambda settings: switcher)
+        assert switcher.loads == ["other-model", "test-model"]

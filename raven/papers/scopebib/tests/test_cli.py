@@ -41,7 +41,9 @@ class TestResolving:
         path = tmp_path / "out" / "run.toml"
         runfile.write_run_file(path, runfile.RunFile(runfile.Settings(maybe_bib=corpus, maybe_definition=definition,
                                                                       maybe_seed=7, maybe_control=10), {}))
-        plan = cli.resolve(parse("report", "--run-file", str(path), "--seed", "8", "--model", "judge=big"))
+        plan = cli.resolve(parse("report", "--run-file", str(path), "--seed", "8", "--model", "judge=big",
+                                 "--context-length", "131072"))
+        assert plan.run_file.settings.maybe_context_length == 131072
         assert plan.reports_dir == path.parent, "the run file's directory, so passing it back writes in place"
         assert (plan.run_file.settings.maybe_seed, plan.run_file.settings.maybe_control) == (8, 10)
         assert plan.run_file.stages["judge"].maybe_model == "big"

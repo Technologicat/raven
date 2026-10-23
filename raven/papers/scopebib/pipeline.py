@@ -40,6 +40,7 @@ from . import judge as scope_judge
 from . import records as scope_records
 from . import report as scope_report
 from . import review as scope_review
+from . import models as scope_models
 from . import runfile
 
 logger = logging.getLogger(__name__)
@@ -240,7 +241,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
         seed: int,
         replicate: int = 1,
         on_progress: Callable[[str, env], None] | None = None,
-        on_instruments: Callable[[dict[str, runfile.StagePlan]], None] | None = None) -> RunResult:
+        on_instruments: Callable[[dict[str, runfile.StagePlan]], None] | None = None,
+        make_switcher: Callable[[env], "scope_models.Switcher | None"] | None = None) -> RunResult:
     """Run `stages`, a subset of `raven.papers.scopebib.runfile.STAGES`, over `corpus`.
 
     `plans`: each stage's model and named instrument (`raven.papers.scopebib.runfile.StagePlan`).
@@ -252,7 +254,15 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
     `on_progress`: called with the stage and the sweep's progress `env` after each batch.
     `on_instruments`: called once each stage's model and instrument are known and before anything is asked,
                       with them as `RunResult.stages` will hold them; for writing the run file at once, so that
-                      a run that dies partway leaves its recipe behind.
+                      a run that dies partway leaves its recipe behind. Called again whenever a stage's
+                      instrument becomes known later, when its model is loaded.
+    `make_switcher`: given the connected settings, a `raven.papers.scopebib.models.Switcher` for loading each
+                     stage's model in turn, or `None` where the backend cannot switch. Without one, a stage
+                     wanting a model other than the loaded one is refused before any work. With one, every
+                     model wanted must be on the backend, each stage that has something to ask runs with its
+                     own, and the model loaded at the start is loaded again at the end.
+
+    A stage naming no model uses the one loaded when the run starts.
 
     Raises `PipelineError` before any work when a stage that has something to ask cannot ask it.
     """
@@ -292,28 +302,43 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             return dataclasses.replace(result, messages=missing)
 
     settings = connect()
-    loaded = settings.model_record.model_id
-    live = {stage: sweep.fingerprint(settings, stage_materials[stage]) for stage in runfile.STAGES}
+    initial = settings.model_record.model_id
+    switcher = make_switcher(settings) if make_switcher is not None else None
+    target = {stage: wanted_models[stage] or initial for stage in runfile.STAGES}
+    # A stage's fingerprint needs its model's record, so it is known now only for a stage on the model loaded;
+    # one switched to is fingerprinted when its model is loaded.
+    live = {stage: sweep.fingerprint(settings, stage_materials[stage]) for stage in runfile.STAGES
+            if target[stage] == initial}
+    behind = {stage: initial for stage in live}  # the model behind each fingerprint known
+
     problems = {}
+    if switcher is not None:
+        wanted_elsewhere = sorted({target[stage] for stage in stages} - {initial})
+        if wanted_elsewhere:
+            maybe_missing = sorted(set(wanted_elsewhere) - switcher.available())
+            if maybe_missing:
+                raise PipelineError(f"the backend has no model {', '.join(map(repr, maybe_missing))}, which "
+                                    f"{'a stage wants' if len(maybe_missing) == 1 else 'stages want'}; "
+                                    f"check the name with `lms ls`, or in LM Studio")
     for stage in runfile.STAGES:
-        if wanted_models[stage] not in (None, loaded):
-            problems[stage] = f"wants the model '{wanted_models[stage]}', and '{loaded}' is loaded"
-        elif named[stage] is not None and named[stage] != live[stage]:
+        if target[stage] != initial and switcher is None:
+            problems[stage] = f"wants the model '{target[stage]}', and '{initial}' is loaded"
+        elif stage in live and named[stage] is not None and named[stage] != live[stage]:
             problems[stage] = (f"its named instrument {named[stage]} is not the one the current definition and "
                                f"model make ({live[stage]}), so it is read-only")
-    # A stage whose instrument is not named, wanting a model that is not loaded, has a ledger nobody can find:
-    # its fingerprint needs that model's record. Refused where the stage is to run; otherwise its answers
-    # are simply absent from the reports, and the person is told why.
-    unfindable = [stage for stage in runfile.STAGES if named[stage] is None and stage in problems]
-    refused = [stage for stage in unfindable if stage in stages]
+    # A stage whose instrument is not named, on a model not loaded, has a ledger nobody can find until that
+    # model is: its fingerprint needs the model's record. Without a switcher that is a refusal where the stage
+    # is to run; otherwise, and for a stage not run, its answers are simply absent from the reports.
+    unfindable = [stage for stage in runfile.STAGES if named[stage] is None and stage not in live]
+    refused = [stage for stage in unfindable if stage in stages and stage in problems]
     if refused:
         reasons = "; ".join(f"{stage}, which {problems[stage]}" for stage in refused)
         raise PipelineError(f"cannot find the answers of {reasons}. Load that model, or name the stage's "
                             f"instrument with --instrument or a run file.")
-    fingerprints = {stage: named[stage] or (None if stage in unfindable else live[stage])
-                    for stage in runfile.STAGES}
-    skipped = [f"{stage}'s answers are not in the reports: it {problems[stage]}, and its instrument is not named"
-               for stage in unfindable]
+    fingerprints = {stage: named[stage] or live.get(stage) for stage in runfile.STAGES}
+    skipped = [f"{stage}'s answers are not in the reports: it wants the model '{target[stage]}', which this run "
+               f"did not load, and its instrument is not named"
+               for stage in unfindable if stage not in stages or switcher is None]
     state = state_under(fingerprints)
 
     blocked = [stage for stage in stages if stage in problems and has_work(state, stage)]
@@ -325,46 +350,80 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             message += f". The stages before it can run: --until {runnable[-1]}"
         raise PipelineError(message)
 
+    def plans_now() -> dict[str, runfile.StagePlan]:
+        return _stage_plans(fingerprints, target, ledger_dir, behind=behind)
+
     if on_instruments is not None:
-        on_instruments(_stage_plans(fingerprints, wanted_models, ledger_dir, loaded=loaded, live=live))
-    header = sweep.instrument_header(settings)
-    messages, asked = missing + skipped, set()
-    ledgers = _open_ledgers(ledger_dir, fingerprints)
+        on_instruments(plans_now())
+    messages = missing + skipped
+    current = initial
+
+    def use_model_of(stage: str) -> None:
+        """Load `stage`'s model where another is loaded, and learn the stage's instrument under it."""
+        nonlocal settings, current, state
+        if target[stage] == current:
+            return
+        settings = switcher.load(target[stage])
+        current = target[stage]
+        fingerprint = sweep.fingerprint(settings, stage_materials[stage])
+        if named[stage] is not None and named[stage] != fingerprint:
+            raise _Stopped(f"{stage}: its named instrument {named[stage]} is not the one the current definition "
+                           f"and model make ({fingerprint}), so it is read-only")
+        fingerprints[stage] = fingerprint
+        behind[stage] = current
+        state = state_under(fingerprints)
+        if on_instruments is not None:
+            on_instruments(plans_now())
 
     def sweep_over(stage: str, ask, records: list[scope_records.Record], ledger: sweep.Ledger, batch_size: int):
         callback = (lambda progress: on_progress(stage, progress)) if on_progress else None
         result = sweep.Sweep(settings, functools.partial(ask, definition=definition),
                              [(record.key, record) for record in records], ledger, batch_size=batch_size,
-                             header=header, on_item=callback).run()
-        asked.add(stage)
+                             header=sweep.instrument_header(settings), on_item=callback).run()
         if result.outcome is not sweep.completed:
             raise _Stopped(f"{stage} stopped: {result.message or result.outcome}")
         if result.failed:
             messages.append(f"{stage}: {result.failed} records failed and are asked again on the next run")
 
+    def ledgers() -> _Ledgers:
+        return _open_ledgers(ledger_dir, fingerprints)
+
     try:
-        if "judge" in stages and state.todo["titles"]:
-            sweep_over("judge", scope_judge.ask_titles, state.todo["titles"], ledgers.titles, TITLE_BATCH)
-            state = state_under(fingerprints)
-        if "judge" in stages and state.todo["abstracts"]:
-            sweep_over("judge", scope_judge.ask_abstracts, state.todo["abstracts"], ledgers.abstracts, ABSTRACT_BATCH)
-            state = state_under(fingerprints)
-        if not state.judge_settled and any(stage in stages for stage in ("review", "extract")):
-            messages.append("the reviewer and the extractor wait until the judge has answered every record")
-        if "review" in stages and state.todo["review"]:
-            # Shuffled, so that the control is not asked about in a block of its own.
-            todo = sorted(state.todo["review"], key=lambda record: record.key)
-            random.Random(seed).shuffle(todo)
-            sweep_over("review", scope_review.ask_reviews, todo, ledgers.review, REVIEW_BATCH)
-            state = state_under(fingerprints)
-        if "extract" in stages and state.todo["extract"]:
-            sweep_over("extract", scope_extract.ask_fields, state.todo["extract"], ledgers.extract, EXTRACT_BATCH)
-            state = state_under(fingerprints)
+        try:
+            if "judge" in stages and has_work(state, "judge"):
+                use_model_of("judge")
+                if state.todo["titles"]:
+                    sweep_over("judge", scope_judge.ask_titles, state.todo["titles"], ledgers().titles, TITLE_BATCH)
+                    state = state_under(fingerprints)
+                if state.todo["abstracts"]:
+                    sweep_over("judge", scope_judge.ask_abstracts, state.todo["abstracts"], ledgers().abstracts,
+                               ABSTRACT_BATCH)
+                    state = state_under(fingerprints)
+            if not state.judge_settled and any(stage in stages for stage in ("review", "extract")):
+                messages.append("the reviewer and the extractor wait until the judge has answered every record")
+            if "review" in stages and has_work(state, "review") and state.judge_settled:
+                use_model_of("review")
+                if state.todo["review"]:
+                    # Shuffled, so that the control is not asked about in a block of its own.
+                    todo = sorted(state.todo["review"], key=lambda record: record.key)
+                    random.Random(seed).shuffle(todo)
+                    sweep_over("review", scope_review.ask_reviews, todo, ledgers().review, REVIEW_BATCH)
+                    state = state_under(fingerprints)
+            if "extract" in stages and has_work(state, "extract") and state.judge_settled:
+                use_model_of("extract")
+                if state.todo["extract"]:
+                    sweep_over("extract", scope_extract.ask_fields, state.todo["extract"], ledgers().extract,
+                               EXTRACT_BATCH)
+                    state = state_under(fingerprints)
+        finally:
+            if current != initial:
+                logger.info(f"run: loading '{initial}' again, as at the start")
+                settings = switcher.load(initial)
+                current = initial
     except _Stopped as stopped:
         messages.append(str(stopped))
         state = state_under(fingerprints)
-    result = _finish(state, fingerprints, wanted_models, ledger_dir, stages, connected=True,
-                     loaded=loaded, asked=asked, live=live)
+    result = _finish(state, fingerprints, target, ledger_dir, stages, connected=True, behind=behind)
     return dataclasses.replace(result, messages=messages + result.messages)
 
 
@@ -372,29 +431,28 @@ class _Stopped(Exception):
     pass
 
 
-def _stage_plans(fingerprints: dict[str, str], wanted_models: dict[str, str | None], ledger_dir: pathlib.Path, *,
-                 loaded: str | None = None, asked: set[str] = frozenset(),
-                 live: dict[str, str] | None = None) -> dict[str, runfile.StagePlan]:
-    """Each stage's model and instrument as the run file should record them: the model is the loaded one where
-    the stage asked or its instrument is the current one, else the one its ledger names, else the one wanted."""
+def _stage_plans(fingerprints: dict[str, str | None], wanted_models: dict[str, str | None], ledger_dir: pathlib.Path,
+                 *, behind: dict[str, str] | None = None) -> dict[str, runfile.StagePlan]:
+    """Each stage's model and instrument as the run file should record them.
+
+    `behind`: the model behind each stage's fingerprint, where this run computed it with that model loaded.
+    Elsewhere the model is the one the stage's ledger names, or else the one wanted.
+    """
+    behind = behind or {}
     ledgers = _open_ledgers(ledger_dir, fingerprints)
     by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     plans = {}
     for stage in runfile.STAGES:
-        if stage in asked or (live is not None and live[stage] == fingerprints[stage]):
-            model = loaded
-        else:
-            model = _model_in_ledger(by_stage[stage]) or wanted_models[stage]
+        model = behind.get(stage) or _model_in_ledger(by_stage[stage]) or wanted_models[stage]
         plans[stage] = runfile.StagePlan(model, fingerprints[stage])
     return plans
 
 
-def _finish(state: State, fingerprints: dict[str, str], wanted_models: dict[str, str | None],
+def _finish(state: State, fingerprints: dict[str, str | None], wanted_models: dict[str, str | None],
             ledger_dir: pathlib.Path, stages: Sequence[str], *, connected: bool,
-            loaded: str | None = None, asked: set[str] = frozenset(),
-            live: dict[str, str] | None = None) -> RunResult:
+            behind: dict[str, str] | None = None) -> RunResult:
     """The result, with each stage's model and instrument as `_stage_plans` records them."""
-    plans = _stage_plans(fingerprints, wanted_models, ledger_dir, loaded=loaded, asked=asked, live=live)
+    plans = _stage_plans(fingerprints, wanted_models, ledger_dir, behind=behind)
     ledgers = _open_ledgers(ledger_dir, fingerprints)
     by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     models = {stage: _describe_model(by_stage[stage], plans[stage].maybe_model) for stage in runfile.STAGES}

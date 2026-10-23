@@ -551,7 +551,14 @@ and where every answer is already saved, no backend is asked anything. A pilot's
 
 **An instrument** is the eight hex digits in a ledger's file name: a fingerprint of everything that decides what an answer means — the questions as asked, and the model with its quantization. Every answer is filed under the instrument that made it, so answers from a different model or a changed question are never mixed with yours. Naming one in a run file, or with `--instrument STEP=FP`, reads that ledger; **a named instrument that is not the one the current definition and model make is read-only**, so nothing is asked under it. Without named instruments, the tool connects to the backend just to work them out.
 
-**Models.** `--model STEP=KEY` names the model a step should use. A step that wants a model other than the one loaded is refused before any work, naming what it wants; where the steps before it can run, it says so and offers `--until`. Each report names every model in full: its key, quantization, and anything declared about it.
+**Models.** `--model STEP=KEY` names the model a step should use, by its key in LM Studio (`lms ls` lists them); a step naming none uses the model loaded when the run starts.
+
+- **On LM Studio, `run` loads each step's model by itself.** Before a step that has something to ask, it unloads whatever is loaded and loads that step's model, and at the end it loads the starting model again. So a run naming several models has the backend to itself while it runs: anything else using the same LM Studio — a Librarian chat, another run — will find the model changing under it. Each switch is logged; nothing asks for confirmation, starting the run being the permission.
+- **Every model named must be on the backend**, which is checked before any work.
+- **Models load with the settings LM Studio has saved for each**, or with `--context-length N` for all of them. The context length is not part of the instrument, so changing it starts no fresh ledger.
+- **On another backend**, nothing is switched: a step that wants a model other than the one loaded is refused before any work, naming what it wants, and where the steps before it can run, it says so and offers `--until`.
+
+Each report names every model in full: its key, quantization, and anything declared about it.
 
 Titles are measured with spaCy's `en_core_web_sm`, the pipeline the thin-title rule was calibrated with, loaded locally whether or not Raven-server is running, so the measure is the same on any machine. `--server-nlp` uses the server's pipeline instead; the run file records which.
 

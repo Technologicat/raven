@@ -84,7 +84,7 @@ class TestWriting:
                                     maybe_definition=(tmp_path / "out" / "d.scope.toml").resolve(),
                                     require=("abstract",), min_chars=("abstract=200",), maybe_sample=50,
                                     maybe_pilot=50, maybe_seed=42, maybe_control=40, maybe_replicate=2,
-                                    maybe_format="ods", maybe_server_nlp=True),
+                                    maybe_format="ods", maybe_server_nlp=True, maybe_context_length=131072),
                            {"judge": StagePlan('a "quoted"\\model\tname\x01', "0970b39f"),
                             "review": StagePlan("b"), "extract": StagePlan()})
         path = tmp_path / "out" / "run.toml"
