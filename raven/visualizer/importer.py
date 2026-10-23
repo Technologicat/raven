@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 import atexit
 import collections
 import copy
+import hashlib
 import itertools
 import math
 import os
@@ -483,6 +484,29 @@ def _parse_input_files(*filenames):
                resolved_filenames=resolved_filenames)
 
 
+def _inputs_digest(texts: list[str]) -> str:
+    """A digest of the exact texts a cached stage computed over, in order."""
+    digest = hashlib.sha256()
+    for text in texts:
+        digest.update(text.encode("utf-8"))
+        digest.update(b"\0")  # so that ["ab", "c"] and ["a", "bc"] differ
+    return digest.hexdigest()
+
+def _cache_mismatch(maybe_cached_digest: str | None, cached_count: int, texts: list[str]) -> str | None:
+    """Why a per-file cache does not describe the records `texts` were made from, or `None` if it does.
+
+    Compared by `_inputs_digest` where the cache stores one. A cache written before the digest was stored
+    is compared by row count, which catches a record gained or lost though not one swapped for another.
+    """
+    # Needed beside the mtime check because a file can yield different records without changing: a parser
+    # repair recovers a record that used to be dropped, and a cache judged by mtime alone then holds one
+    # row fewer than the records it is paired with, which the 2D clusterer meets as an IndexError.
+    if maybe_cached_digest is not None:
+        return None if maybe_cached_digest == _inputs_digest(texts) else "cache file describes other records"
+    if cached_count != len(texts):
+        return f"cache file holds {cached_count} rows for {len(texts)} records"
+    return None
+
 def _get_highdim_semantic_vectors(input_data):
     """Compute (or read from disk cache) the semantic embedding vectors for the given dataset.
 
@@ -508,6 +532,11 @@ def _get_highdim_semantic_vectors(input_data):
 
         # TODO: clear memory between input files to avoid running out of RAM/VRAM when we have lots of files
 
+        # What to embed was arrived at by trying the alternatives: the title alone worked best with mpnet,
+        # early snowflake versions used the abstract alone, and the keywords are no good because not every
+        # entry has them. Title and abstract together is the best of both.
+        all_inputs = [_format_entry_for_analysis(entry) for entry in entries]
+
         # Check embeddings cache for this input file
         embeddings_cache_filename = embeddings_cache_filenames[filename]
         cache_state = "unknown"
@@ -518,10 +547,14 @@ def _get_highdim_semantic_vectors(input_data):
                     embeddings_cached_data = np.load(embeddings_cache_filename)
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
                 embedding_model_for_this_cache = embeddings_cached_data["embedding_model"]
-                if embedding_model_for_this_cache == visualizer_config.embedding_model:
-                    cache_state = "ok"
-                else:
+                maybe_digest = str(embeddings_cached_data["inputs_digest"]) if "inputs_digest" in embeddings_cached_data else None
+                maybe_mismatch = _cache_mismatch(maybe_digest, len(embeddings_cached_data["all_vectors"]), all_inputs)
+                if embedding_model_for_this_cache != visualizer_config.embedding_model:
                     cache_state = "cache file has different embedding model"
+                elif maybe_mismatch is not None:
+                    cache_state = maybe_mismatch
+                else:
+                    cache_state = "ok"
             else:
                 cache_state = "cache file out of date, original file changed"
         else:
@@ -539,10 +572,6 @@ def _get_highdim_semantic_vectors(input_data):
                                                 dtype=client_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
-                # What to embed was arrived at by trying the alternatives: the title alone worked best
-                # with mpnet, early snowflake versions used the abstract alone, and the keywords are no
-                # good because not every entry has them. Title and abstract together is the best of both.
-                all_inputs = [_format_entry_for_analysis(entry) for entry in entries]
                 all_vectors = embedder.encode(all_inputs)
                 # Round-trip to force truncation, if needed.
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
@@ -555,7 +584,8 @@ def _get_highdim_semantic_vectors(input_data):
 
             logger.info(f"        Caching embeddings for this dataset to '{embeddings_cache_filename}'...")
             with timer() as tim:
-                np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=visualizer_config.embedding_model)
+                np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=visualizer_config.embedding_model,
+                                    inputs_digest=_inputs_digest(all_inputs))
             logger.info(f"            Done in {tim.dt:0.6g}s.")
         all_vectors_by_filename[filename] = all_vectors
         progress.tick()
@@ -922,6 +952,8 @@ def _extract_keywords(input_data, max_vis_kw=6):
 
         _update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)
 
+        all_texts_for_nlp_for_this_file = [_format_entry_for_keyword_extraction(entry) for entry in entries]
+
         nlp_cache_filename = nlp_cache_filenames[filename]
         cache_state = "unknown"
         if os.path.exists(nlp_cache_filename):
@@ -931,10 +963,14 @@ def _extract_keywords(input_data, max_vis_kw=6):
                     with open(nlp_cache_filename, "rb") as nlp_cache_file:
                         nlp_cached_data = pickle.load(nlp_cache_file)
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
-                if nlp_cached_data["version"] == nlp_cache_version:
-                    cache_state = "ok"
-                else:
+                maybe_mismatch = _cache_mismatch(nlp_cached_data.get("inputs_digest"), len(nlp_cached_data["entry_keywords"]),
+                                                 all_texts_for_nlp_for_this_file)
+                if nlp_cached_data["version"] != nlp_cache_version:
                     cache_state = f"cache file has version {nlp_cached_data['version']}, expected {nlp_cache_version}"
+                elif maybe_mismatch is not None:
+                    cache_state = maybe_mismatch
+                else:
+                    cache_state = "ok"
             else:
                 cache_state = "cache file out of date, original file changed"
         else:
@@ -960,8 +996,6 @@ def _extract_keywords(input_data, max_vis_kw=6):
             logger.info("        Computing keyword set...")
             logger.info(f"            Running NLP pipeline for data from {filename}...")
             with timer() as tim:
-                all_texts_for_nlp_for_this_file = [_format_entry_for_keyword_extraction(entry) for entry in entries]
-
                 # The pipe-batched version processed about 25 entries per second on an RTX 3070 Ti mobile GPU.
                 # TODO: Can we minibatch the NLP pipelining to save VRAM when using the Transformers model?
                 # all_docs_for_this_file = [nlp.analyze(text) for text in all_texts_for_nlp_for_this_file]
@@ -1031,7 +1065,8 @@ def _extract_keywords(input_data, max_vis_kw=6):
                 nlp_cached_data = {"version": nlp_cache_version,
                                    "entry_keywords": entry_keywords_for_this_file,
                                    "entry_entities": entry_entities_for_this_file,
-                                   "all_keywords": all_keywords_for_this_file}
+                                   "all_keywords": all_keywords_for_this_file,
+                                   "inputs_digest": _inputs_digest(all_texts_for_nlp_for_this_file)}
                 with open(nlp_cache_filename, "wb") as nlp_cache_file:
                     pickle.dump(nlp_cached_data, nlp_cache_file)
             logger.info(f"            Done in {tim.dt:0.6g}s.")

@@ -957,6 +957,23 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
         assert "clusters_keyword_method" in saved_keys
 
 
+class TestCachesDescribeTheirRecords:
+    def test_a_cache_of_the_same_texts_matches(self):
+        texts = ["one", "two"]
+        assert importer._cache_mismatch(importer._inputs_digest(texts), 2, texts) is None
+
+    def test_a_cache_of_other_texts_does_not(self):
+        digest = importer._inputs_digest(["one", "two"])
+        assert importer._cache_mismatch(digest, 2, ["one", "three"]) is not None
+
+    def test_the_boundary_between_texts_is_part_of_the_digest(self):
+        assert importer._inputs_digest(["ab", "c"]) != importer._inputs_digest(["a", "bc"])
+
+    def test_a_cache_without_a_digest_is_judged_by_its_row_count(self):
+        assert importer._cache_mismatch(None, 2, ["one", "two"]) is None
+        assert importer._cache_mismatch(None, 2, ["one", "two", "three"]) is not None
+
+
 # ---------------------------------------------------------------------------
 # Clustering
 #
@@ -1161,6 +1178,21 @@ class TestTheStepsThatNeedAModel:
         assert np.allclose(first, second)
         assert not any("Computing embeddings" in record.message for record in caplog.records), \
             "the second pass recomputed the embeddings instead of reading its cache"
+
+    def test_a_record_gained_since_the_cache_was_written_is_embedded(self, initialized_api, two_entry_input_data, caplog):
+        """A file can yield more records without changing, when a parser repair recovers one. The cache is
+        then current by mtime and short by a row, and must be recomputed rather than handed back."""
+        from unpythonic.env import env
+        first = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+        entries.append(env(author="Gamma, Gil", bibtex_author="Gamma, Gil", year="2024",
+                           title="A record the parser used to refuse", abstract=""))
+        caplog.clear()
+        with caplog.at_level("INFO"):
+            second = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        assert first.shape[0] == 2
+        assert second.shape[0] == 3, "the cache was handed back for records it does not describe"
+        assert any("Computing embeddings" in record.message for record in caplog.records)
 
     def test_keyword_extraction_fills_in_the_three_fields_the_dataset_needs(self, initialized_api, two_entry_input_data):
         all_keywords = importer._extract_keywords(two_entry_input_data)
