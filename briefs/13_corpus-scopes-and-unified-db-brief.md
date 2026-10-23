@@ -89,7 +89,7 @@ by hand; and long-term memory needs the same separation.
     the dataset at a Python upgrade.
   - **A review's own grouping is a tag tree in this sense** (2026-10-23). The groupings published in the
     biology and geography teacher-education papers were the clusterer's output, checked and edited by
-    hand, in two levels: theme, then named items within it. Theme/item is parent/child tag. Three things
+    hand, in two levels: theme, then named items within it. Theme/item is parent/child tag. Four things
     follow, all wanted by the maintainer:
     - **Shown over the map**, in colour, with every record staying where the embedding puts it. A record
       the reviewer files under a theme whose region it is not in is visible as such. This is also the
