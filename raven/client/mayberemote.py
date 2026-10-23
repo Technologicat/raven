@@ -52,8 +52,8 @@ from ..common.video.upscaler import Upscaler as _LocalUpscaler
 
 class MaybeRemoteService:
     def __init__(self,
-                 allow_local: bool,
                  *,
+                 allow_local: bool,
                  allow_remote: bool = True):
         """(1/√2) |remote⟩ + (1/√2) |local⟩
 
@@ -143,11 +143,11 @@ class MaybeRemoteService:
 
 class Classifier(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
-                 *,
                  allow_remote: bool = True):
         """Text sentiment classification (distilBERT-family, 28-emotion by default).
 
@@ -164,7 +164,7 @@ class Classifier(MaybeRemoteService):
 
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, or a string `"float32"`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -204,10 +204,10 @@ class Classifier(MaybeRemoteService):
 
 class Dehyphenator(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: Optional[str],
                  device_string: Optional[str],
-                 *,
                  allow_remote: bool = True):
         """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
 
@@ -219,7 +219,7 @@ class Dehyphenator(MaybeRemoteService):
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
 
@@ -249,11 +249,11 @@ class Dehyphenator(MaybeRemoteService):
 
 class Embedder(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: str,
                  device_string: Optional[str],
                  dtype: Optional[Union[str, torch.dtype]],
-                 *,
                  allow_remote: bool = True):
         """Semantic embeddings (for e.g. vector storage).
 
@@ -269,7 +269,7 @@ class Embedder(MaybeRemoteService):
 
         `dtype`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -305,10 +305,10 @@ class Embedder(MaybeRemoteService):
 
 class NLP(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: Optional[str],
                  device_string: Optional[str],
-                 *,
                  allow_remote: bool = True):
         """spaCy NLP pipeline.
 
@@ -320,7 +320,7 @@ class NLP(MaybeRemoteService):
 
         `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
 
@@ -364,6 +364,7 @@ class NLP(MaybeRemoteService):
 
 class Translator(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  source_lang: str,
                  target_lang: str,
@@ -371,7 +372,6 @@ class Translator(MaybeRemoteService):
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
                  spacy_model_name: Optional[str] = None,
-                 *,
                  allow_remote: bool = True):
         """Machine translation between natural languages (Helsinki-NLP / OPUS-MT family).
 
@@ -397,7 +397,7 @@ class Translator(MaybeRemoteService):
                             `nlptools.load_spacy_pipeline`, so sharing the same model
                             with a `MaybeRemote.NLP` instance costs nothing extra.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.model_name = model_name
@@ -432,11 +432,11 @@ class Translator(MaybeRemoteService):
 
 class STT(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
-                 *,
                  allow_remote: bool = True):
         """Speech-to-text (Whisper).
 
@@ -456,7 +456,7 @@ class STT(MaybeRemoteService):
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`,
                  or a string like `"float32"`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.dtype = dtype
@@ -505,11 +505,11 @@ class STT(MaybeRemoteService):
 
 class TTS(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
                  lang_code: str = "a",
-                 *,
                  allow_remote: bool = True):
         """Text-to-speech (Kokoro).
 
@@ -529,7 +529,7 @@ class TTS(MaybeRemoteService):
                      `raven.common.audio.speech.tts.load_tts_pipeline` for the
                      full list.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.model_name = model_name
         self.device_string = device_string
         self.lang_code = lang_code
@@ -723,10 +723,10 @@ def _to_encoded(prep: Optional[Union[speech_datatypes.TTSResult, speech_datatype
 
 class Postprocessor(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
-                 *,
                  allow_remote: bool = True):
         """Image postprocessor — applies a filter chain (see `raven.common.video.postprocessor`).
 
@@ -745,7 +745,7 @@ class Postprocessor(MaybeRemoteService):
 
         `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.device_string = device_string
         self.dtype = dtype
 
@@ -787,10 +787,10 @@ class Postprocessor(MaybeRemoteService):
 
 class Upscaler(MaybeRemoteService):
     def __init__(self,
+                 *,
                  allow_local: bool,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None,
-                 *,
                  allow_remote: bool = True):
         """Image upscaler (Anime4K-PyTorch, plus bilinear / bicubic / Lanczos fast paths).
 
@@ -806,7 +806,7 @@ class Upscaler(MaybeRemoteService):
 
         `device_string`, `dtype`: Required if `allow_local=True`. Same semantics as `Postprocessor`.
         """
-        super().__init__(allow_local, allow_remote=allow_remote)
+        super().__init__(allow_local=allow_local, allow_remote=allow_remote)
         self.device_string = device_string
         self.dtype = dtype
 
