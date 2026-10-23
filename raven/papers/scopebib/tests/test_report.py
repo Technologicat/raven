@@ -1,5 +1,7 @@
 """Tests for `raven.papers.scopebib.report`: where each record ends up, and the files a run leaves."""
 
+import dataclasses
+
 import pytest
 
 from raven.common import tabular
@@ -293,3 +295,67 @@ class TestTrailingBlanks:
 
     def test_a_sheet_ending_in_a_keep_is_not_suspect(self):
         assert self.warning("", "", "", "keep") is None
+
+
+class TestPilotReport:
+    def write(self, run, definition, tmp_path, **kwargs):
+        measures = {record.key: scope_records.TitleMeasure(4, 4, record.key == "unsure") for record in run["records"]}
+        path = report.write_pilot_report(tmp_path / "pilot", records=run["records"], measures=measures,
+                                         definition=definition, final=run["final"], reviews=run["reviews"],
+                                         extractions=run["extractions"], provenance=["test"], seed=1, **kwargs)
+        return path, tabular.read_table(path)
+
+    def test_the_sections_come_in_reading_order(self, run, definition, tmp_path):
+        _, rows = self.write(run, definition, tmp_path)
+        sections = [row["section"] for row in rows]
+        assert sections == sorted(sections), "the sections are numbered in the order they are read"
+        by_section = {}
+        for row in rows:
+            by_section.setdefault(row["section"], []).append(row["key"])
+        assert sorted(by_section["1 drops"]) == ["dropped", "rescued", "unreviewed"]
+        assert by_section["2 sent to review"] == ["unsure"]
+        assert sorted(by_section["3 keeps, a sample"]) == ["city", "forest", "nowhere", "unextracted"]
+
+    def test_a_rescued_drop_shows_the_reviewers_case(self, run, definition, tmp_path):
+        _, rows = self.write(run, definition, tmp_path)
+        rescued = next(row for row in rows if row["key"] == "rescued")
+        assert (rescued["reviewer"], rescued["reviewer's case"]) == ("case found", "it counts ravens")
+
+    def test_a_keep_shows_its_fields_and_what_the_rules_did(self, run, definition, tmp_path):
+        _, rows = self.write(run, definition, tmp_path)
+        city = next(row for row in rows if row["key"] == "city")
+        assert (city["setting"], city["rules"], city["decided by"]) == ("city", "remove", "urban")
+
+    def test_no_title_only_records_is_said_rather_than_left_out(self, run, definition, tmp_path):
+        _, rows = self.write(run, definition, tmp_path)
+        (last,) = [row for row in rows if row["section"] == "4 title-only"]
+        assert last["key"] == "" and "none in this pilot" in last["why"]
+
+    def test_every_row_is_as_wide_as_the_header(self, run, definition, tmp_path):
+        # Read raw: `read_table` pads and cuts rows to the header, which would hide a row of the wrong width.
+        path, _ = self.write(run, definition, tmp_path)
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
+        assert {len(line.split("\t")) for line in lines} == {len(lines[0].split("\t"))}
+
+    def test_a_title_only_record_has_its_section(self, run, definition, tmp_path):
+        run["records"] = [dataclasses.replace(record, abstract="") if record.key == "forest" else record
+                          for record in run["records"]]
+        _, rows = self.write(run, definition, tmp_path)
+        assert [row["key"] for row in rows if row["section"] == "4 title-only"] == ["forest"]
+
+    def test_the_keeps_are_a_seeded_sample(self, run, definition, tmp_path, monkeypatch):
+        monkeypatch.setattr(report, "KEEP_SAMPLE", 2)
+        _, rows = self.write(run, definition, tmp_path)
+        shown = [row["key"] for row in rows if row["section"] == "3 keeps, a sample"]
+        _, again = self.write(run, definition, tmp_path)
+        assert len(shown) == 2 and shown == [row["key"] for row in again if row["section"] == "3 keeps, a sample"]
+
+    def test_the_bounds_head_it_against_the_calibration(self, run, definition, tmp_path):
+        path, _ = self.write(run, definition, tmp_path)
+        text = path.read_text(encoding="utf-8")
+        assert "flag 1 of 9 (11.1%) titles as too thin" in text and "0.7–4.9%" in text
+
+    def test_another_format_written_earlier_goes(self, run, definition, tmp_path):
+        self.write(run, definition, tmp_path, table_format="ods")
+        self.write(run, definition, tmp_path)
+        assert sorted(p.name for p in (tmp_path / "pilot").iterdir()) == ["PILOT.tsv"]

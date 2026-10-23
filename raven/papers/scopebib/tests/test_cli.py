@@ -6,7 +6,6 @@ import pytest
 
 from raven.common import tabular
 from raven.librarian import agent
-from raven.papers import bibtex
 from raven.papers.scopebib import cli, report, runfile
 from raven.papers.scopebib import records as scope_records
 from raven.papers.scopebib.tests.test_pipeline import DEFINITION, STOPWORDS, ScriptedModel, _NLP, bib
@@ -127,7 +126,7 @@ class TestARun:
         assert plan.reports_dir == pilot and plan.ledger_dir == tmp_path / "out" / "ledgers"
         cli.execute(plan, nlp=_NLP(), connect=connect)
         assert not (pilot / "pilot").exists()
-        assert len(bibtex.parse_file(pilot / report.KEPT_BIB, split_names=False).entries) <= 3
+        assert sorted(path.name for path in pilot.iterdir()) == [f"{report.PILOT_REPORT}.tsv", "run.toml"]
 
     def test_finish_from_a_marked_copy(self, files, tmp_path, model, connect, capsys):
         corpus, definition = files

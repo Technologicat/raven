@@ -491,6 +491,14 @@ the stages are separable and each is tested alone. The console script is the `cl
      - `--pilot [N]`, default 50, writes the ordinary reports into `pilot/` until the pilot report exists.
      - Replicate 1 adds nothing to the instrument material, so existing fingerprints hold; a replicate
        k > 1 adds `"replicate": k`.
+   - **The pilot report, built 2026-10-23** (`report.write_pilot_report`, `PILOT.<fmt>`), with three
+     choices of the agent's, not objected to:
+     - **A pilot directory holds `PILOT` and `run.toml` and nothing else**: the ordinary reports for a pilot's
+       fifty records would be a worklist nobody should mark, beside the one report meant to be read.
+     - **Section 1 holds every judge drop, rescued ones included, with the reviewer's case beside them**:
+       the section calibrates the tests, and a rescue is evidence about a test.
+     - **Section 3 shows up to `KEEP_SAMPLE` = 20 keeps**, drawn by the run's seed.
+     The calibration range the bounds are read against, 0.7–4.9%, is `records.CALIBRATED_FLAG_SHARE`.
    - **`compare RUN_A RUN_B`** (maintainer, 2026-10-23: without it `--replicate` is not very useful): two
      run files, each naming its instruments, so it never needs a backend. Over the records both runs
      answered, it reports per stage — the judge's verdict and each test, the reviewer's `belongs`, each

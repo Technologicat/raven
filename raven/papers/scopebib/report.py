@@ -35,10 +35,12 @@ __all__ = ["SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_A
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
            "SiftResult", "select", "write_reports",
-           "KEEP", "DROP", "FinishError", "finish"]
+           "KEEP", "DROP", "FinishError", "finish",
+           "PILOT_REPORT", "KEEP_SAMPLE", "title_bounds_note", "write_pilot_report"]
 
 import dataclasses
 import pathlib
+import random
 from collections.abc import Iterable, Sequence
 
 import bibtexparser
@@ -558,3 +560,110 @@ def finish(out_dir: str | pathlib.Path, *,
         if fmt != table_format:
             (out_dir / f"{HAND_AUDIT}.{fmt}").unlink(missing_ok=True)
     return written, warnings
+
+
+# --------------------------------------------------------------------------------
+# The pilot report
+
+#: The pilot's one report, in whichever table format: everything a calibration run hands a person to read.
+PILOT_REPORT = "PILOT"
+
+#: How many of the judge's keeps the pilot report shows with their fields, drawn by the run's seed.
+KEEP_SAMPLE = 20
+
+_SECTIONS = ("1 drops", "2 sent to review", "3 keeps, a sample", "4 title-only")
+
+
+def title_bounds_note(records: Sequence[scope_records.Record], measures: dict[str, scope_records.TitleMeasure]) -> str:
+    """How many titles the title bounds flag as too thin to judge from, against what they flagged in calibration."""
+    flagged = sum(1 for record in records if measures[record.key].uninformative)
+    low, high = scope_records.CALIBRATED_FLAG_SHARE
+    return (f"title bounds (at least {scope_records.MIN_CONTENT_WORDS} content words, density at least "
+            f"{scope_records.MIN_CONTENT_DENSITY:.2f}) flag {_share(flagged, len(records))} titles as too thin to "
+            f"judge from, against {100 * low:.1f}–{100 * high:.1f}% across the calibration corpora")
+
+
+def write_pilot_report(out_dir: str | pathlib.Path, *,
+                       records: Sequence[scope_records.Record],
+                       measures: dict[str, scope_records.TitleMeasure],
+                       definition: scope_definition.Definition,
+                       final: dict[str, dict],
+                       reviews: dict[str, dict],
+                       extractions: dict[str, dict],
+                       provenance: Sequence[str],
+                       seed: int,
+                       table_format: str = "tsv") -> pathlib.Path:
+    """Write the pilot report, `PILOT_REPORT`, into `out_dir`, and return its path.
+
+    One table, a `section` column first, in the order a person should read it — what a mistake costs:
+
+      1. **The judge's drops**, each with the test that fired, its reason, and the reviewer's case where it
+         made one. A false drop loses a record silently, so these are read first, all of them.
+      2. **The records the judge sent to review.** Mostly obvious drops means the tests are too timid;
+         mostly obvious keeps, too eager.
+      3. **A sample of the keeps**, `KEEP_SAMPLE` of them drawn by `seed`, with their fields and what the
+         rules did. Anything here that plainly should have gone is a test that is missing.
+      4. **The title-only records**, however they ended, being the inputs most likely to break a rubric. Where
+         there are none, one row says so rather than the section vanishing.
+
+    Within a section, rows are grouped by what decided them — the test, or the rule — then in reference-list
+    order. The table's notes head it with `title_bounds_note`.
+
+    `records`, `measures`: the pilot's records and their title measures.
+    `final`, `reviews`, `extractions`: as `write_reports` takes them.
+    """
+    if table_format not in tabular.FORMATS:
+        raise ValueError(f"write_pilot_report: unknown table format {table_format!r}; expected one of "
+                         f"{tabular.FORMATS}")
+    by_key = {record.key: record for record in records}
+    field_columns = [field.name for field in definition.fields]
+
+    def row(section: str, key: str) -> tuple:
+        record, answer = by_key[key], final.get(key)
+        maybe_review = reviews.get(key)
+        maybe_extraction = extractions.get(key)
+        decision = scope_rules.decide(maybe_extraction, definition) if maybe_extraction else None
+        decided_by = (", ".join(_tests_true(answer)) if answer and answer["verdict"] != "keep"
+                      else (decision.label or "") if decision else "")
+        return (section, key, decided_by,
+                answer["verdict"] if answer else "not judged", answer["confidence"] if answer else "",
+                answer["source"] if answer else "", answer["why"] if answer else "",
+                {True: "case found", False: "no case"}.get(maybe_review["belongs"], "") if maybe_review else "",
+                maybe_review["case"] if maybe_review else "",
+                decision.action if decision else "", decision.note if decision else "",
+                *(maybe_extraction["fields"].get(name, "") if maybe_extraction else "" for name in field_columns),
+                "yes" if measures[key].uninformative else "no",
+                *_record_cells(record))
+
+    def ordered(keys) -> list[str]:
+        return sorted(keys, key=lambda key: (row("", key)[2], *_reading_order(by_key[key])))
+
+    drops = [key for key, answer in final.items() if answer["verdict"] == "drop"]
+    sent = [key for key, answer in final.items() if answer["verdict"] == "review"]
+    keeps = sorted(key for key, answer in final.items() if answer["verdict"] == "keep")
+    sampled = random.Random(seed).sample(keeps, min(KEEP_SAMPLE, len(keeps)))
+    title_only = [record.key for record in records if not record.abstract]
+    rows = [row(_SECTIONS[0], key) for key in ordered(drops)]
+    rows += [row(_SECTIONS[1], key) for key in ordered(sent)]
+    rows += [row(_SECTIONS[2], key) for key in ordered(sampled)]
+    rows += [row(_SECTIONS[3], key) for key in ordered(title_only)]
+    if not title_only:
+        rows.append((_SECTIONS[3], "", "", "", "", "", "none in this pilot: every record has an abstract",
+                     *[""] * (5 + len(field_columns) + len(_RECORD_COLUMNS))))
+    out_dir = pathlib.Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{PILOT_REPORT}.{table_format}"
+    tabular.write_table(path,
+                        [*provenance,
+                         title_bounds_note(records, measures),
+                         f"{len(records)} records: {len(drops)} dropped by the judge, {len(sent)} sent to review, "
+                         f"{len(keeps)} kept, of which {len(sampled)} shown; {len(title_only)} title-only",
+                         "read the sections in order: a false drop costs most, as it loses a record silently"],
+                        ("section", "key", "decided by", "verdict", "confidence", "pass", "why",
+                         "reviewer", "reviewer's case", "rules", "rules' note", *field_columns, "thin title",
+                         *_RECORD_COLUMNS),
+                        rows)
+    for fmt in tabular.FORMATS:
+        if fmt != table_format:
+            (out_dir / f"{PILOT_REPORT}.{fmt}").unlink(missing_ok=True)
+    return path

@@ -12,7 +12,7 @@ abstract and venue as readable text, and a link.
 """
 
 __all__ = ["Record", "records_of", "load_records",
-           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL",
+           "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL", "CALIBRATED_FLAG_SHARE",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
            "looks_truncated", "describe_abstract"]
 
@@ -100,6 +100,10 @@ MIN_CONTENT_DENSITY = 0.40
 
 #: The spaCy pipeline the bounds above were calibrated with, for measuring titles locally.
 SPACY_MODEL = "en_core_web_sm"
+
+#: The share of titles the bounds flagged across the calibration corpora, lowest and highest: a corpus far
+#: outside it is a reason to read the flagged titles before trusting them.
+CALIBRATED_FLAG_SHARE = (0.007, 0.049)
 
 
 class _Pipeline(Protocol):

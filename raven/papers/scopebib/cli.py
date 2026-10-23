@@ -218,6 +218,10 @@ def execute(plan: Plan, *, nlp, connect, sheet: str | None = None, require_every
     result = pipeline.run(corpus, definition, stages=plan.stages, plans=plan.run_file.stages,
                           ledger_dir=plan.ledger_dir, connect=connect, control_size=settings.maybe_control,
                           seed=settings.maybe_seed, replicate=settings.maybe_replicate)
+    print(report.title_bounds_note(corpus.records, corpus.measures))
+    title_only = sum(1 for record in corpus.records if not record.abstract)
+    print(f"{title_only} title-only {'record' if title_only == 1 else 'records'}"  # plural
+          + (" in this sample" if settings.maybe_pilot or settings.maybe_sample else ""))
     for message in result.messages:
         print(f"note: {message}")
     if not result.connected:
@@ -233,15 +237,22 @@ def execute(plan: Plan, *, nlp, connect, sheet: str | None = None, require_every
         for warning in warnings:
             print(f"warning: {warning}")
     else:
-        written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
-                                       **common)
+        if settings.maybe_pilot is not None:
+            written = [report.write_pilot_report(plan.reports_dir, records=corpus.records, measures=corpus.measures,
+                                                 definition=definition, final=state.final, reviews=state.reviews,
+                                                 extractions=state.extractions, provenance=common["provenance"],
+                                                 seed=settings.maybe_seed, table_format=settings.maybe_format)]
+        else:
+            written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
+                                           **common)
         run_path = plan.reports_dir / "run.toml"
         maybe_archive = runfile.write_run_file(run_path, runfile.RunFile(settings, result.stages),
                                                comments=[f"raven-scopebib {__version__}"])
         written.append(run_path)
         if maybe_archive is not None:
             print(f"the hand-written {run_path.name} was kept as {maybe_archive.name}")
-        print(f"{report.CHECK_BY_HAND} is rewritten on every run: mark a copy saved under a name of your own")
+        if settings.maybe_pilot is None:
+            print(f"{report.CHECK_BY_HAND} is rewritten on every run: mark a copy saved under a name of your own")
     outcomes = report.outcomes(corpus.records, definition=definition, final=state.final, reviews=state.reviews,
                                extractions=state.extractions)
     counts = {action: sum(1 for outcome in outcomes.values() if outcome.action == action)
