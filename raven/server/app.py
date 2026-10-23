@@ -1569,12 +1569,16 @@ def _parse_websearch_request() -> tuple[str, str, int]:
     if "query" not in data or not isinstance(data["query"], str):
         abort(400, '"query" is required')
     query = data["query"]
+    if not query.strip():
+        abort(400, '"query" must not be empty')
 
     engine = data.get("engine", "duckduckgo")
     max_links = data.get("max_links", 10)
 
     if engine not in ("duckduckgo", "google"):
         abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
+    if not isinstance(max_links, int) or isinstance(max_links, bool) or max_links < 1:
+        abort(400, '"max_links", if provided, must be a positive integer')
 
     # The query is the user's question in their own words, so its length is logged and it is not.
     # Contrast `api_webfetch`, which does log its URL -- that is the request's identity rather than
