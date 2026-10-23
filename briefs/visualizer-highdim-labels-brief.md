@@ -84,7 +84,9 @@ that presentation deliberately, which is not a same-day decision).
    half of it.** *Done 2026-10-23 as `clusterlab.cohesion_floor`, which reproduces both rows. It
    exposed a gap in the rule as stated above: applied to every cluster, the floor always discards up to
    a tenth of the records (AOKK: 99% coverage to 90%), and applied to small clusters only, as the
-   prototype did, it needs a size to say what small is. Undecided.* `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
+   prototype did, it needs a size to say what small is. Decided 2026-10-23: look for a size-free rule
+   first, being simpler for the user, and fall back to a knob only if none works. On hydrogen the
+   all-clusters version drops whole clusters of hundreds, so it is not a candidate as it stands.* `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
    size-split floor (the 10th percentile over clusters of five or more). The membership-weighted floor,
    which is the one to ship, appears in the README only as a comparison table against the size-split one.
    So write the weighted floor new, and check it against that table before trusting it: it should
