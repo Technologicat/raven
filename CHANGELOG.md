@@ -66,7 +66,7 @@
 
 - **New tool: `raven-scopebib`, for setting aside the records of a literature search that are not about what it searched for.**
   - You write the tests in a definition file beside the `.bib`, one per way of being off topic; an LLM answers them for every record, reading the abstract wherever the title does not settle it.
-  - A record is removed only on positive evidence, and a second reader goes over every removal looking for a case that it belongs. Everything it was unsure about goes to one worklist for a person, `04-CHECK-BY-HAND`, and `raven-scopebib finish` applies the decisions marked there.
+  - A record is removed only on positive evidence, and a second pass goes over every removal looking for a case that it belongs. Everything it was unsure about goes to one worklist for a person, `04-CHECK-BY-HAND`, and `raven-scopebib finish` applies the decisions marked there.
   - For the records it keeps, it can also record what each one says — the level a study is set at, say — and remove what your rules over those answers rule out.
   - `run --pilot` tries it on 50 records first, with one report to read before committing to the corpus.
   - Every answer is saved, so an interrupted run resumes, and every run writes `run.toml`, which repeats it — with no LLM at all when every answer is saved. Each report names the model behind every step.

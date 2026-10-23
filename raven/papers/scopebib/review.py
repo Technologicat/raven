@@ -1,12 +1,12 @@
-"""The reviewer: a second reader over the judge's drops, asked the opposite question.
+"""The reviewer: a second pass over the judge's drops, asked the opposite question.
 
 Re-asking "was this verdict right?" invites agreement. This asks instead whether a credible case exists
 that the record belongs in scope, and a drop it makes a case for goes to a person rather than out
 (`apply_reviews`). Its answer is a case in a line, checkable against the record in seconds.
 
-**The reader is told nothing about where the records came from**: not that they were judged, nor dropped,
+**The reviewer is told nothing about where the records came from**: not that they were judged, nor dropped,
 nor by what. It sees a record and a question. Nor is it shown the definition's tests or hints, being a
-reader independent of the judge.
+pass independent of the judge's.
 
 **A reviewer that finds a case for everything is not discriminating**, it only looks thorough. So a
 control group of kept records can be mixed in, unlabelled (`draw_control`), and the case rate for the drops
