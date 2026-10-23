@@ -1,6 +1,8 @@
 """Tests for `raven.papers.scopebib.cli`: resolving a command line, and a run from start to `finish`."""
 
 import collections
+import json
+import re
 
 import pytest
 
@@ -140,3 +142,44 @@ class TestARun:
                            nlp=_NLP(), connect=connect, sheet=str(marked)) == 0
         assert (out / report.FINAL_BIB).exists()
         assert (out / f"{report.CHECK_BY_HAND}.tsv").exists(), "finish does not rewrite the reports"
+
+
+class FickleModel(ScriptedModel):
+    """The scripted model, which also calls the ravens at dawn not birds."""
+
+    def __call__(self, llm_settings, prompt, maybe_abort=None, **kwargs):
+        turn = super().__call__(llm_settings, prompt, maybe_abort, **kwargs)
+        if "Ravens at dawn" in prompt and "credible case" not in prompt and "recording what" not in prompt:
+            answers = json.loads(turn.reply)
+            for answer in answers:
+                if "not_birds" in answer and re.search(rf"(?m)^(--- item )?{answer['i']}(\. | ---\nTitle: )Ravens at dawn",
+                                                       prompt):
+                    answer["not_birds"] = True
+            turn.reply = json.dumps(answers)
+        return turn
+
+
+class TestCompare:
+    def test_a_replicate_against_the_first_run(self, files, tmp_path, model, connect, monkeypatch):
+        corpus, definition = files
+        first, second = tmp_path / "first", tmp_path / "second"
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(first),
+                                      "--control", "2")), nlp=_NLP(), connect=connect)
+        monkeypatch.setattr(agent, "ask_record", FickleModel())
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(second),
+                                      "--control", "2", "--replicate", "2", "--ledgers", str(first / "ledgers"))),
+                    nlp=_NLP(), connect=connect)
+        main, disagreements = cli.compare_runs(first / "run.toml", second / "run.toml", nlp=_NLP())
+        assert main == second / "compare-with-first.tsv"
+        verdict = next(row for row in tabular.read_table(main) if row["measure"] == "verdict")
+        assert verdict["records"] == "7" and float(verdict["agreement"]) == pytest.approx(6 / 7, abs=1e-3)  # written to three places
+        rows = tabular.read_table(disagreements)
+        assert {(row["key"], row["first run"], row["second run"]) for row in rows if row["measure"] == "verdict"} == \
+               {("r3", "keep", "drop")}
+
+    def test_a_run_file_without_its_instruments_is_refused(self, files, tmp_path):
+        corpus, definition = files
+        path = tmp_path / "run.toml"
+        runfile.write_run_file(path, runfile.RunFile(runfile.Settings(maybe_bib=corpus, maybe_definition=definition), {}))
+        with pytest.raises(cli.UsageError, match="no instrument named"):
+            cli.compare_runs(path, path, nlp=_NLP())

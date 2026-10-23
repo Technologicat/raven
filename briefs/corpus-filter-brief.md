@@ -499,6 +499,9 @@ the stages are separable and each is tested alone. The console script is the `cl
        the section calibrates the tests, and a rescue is evidence about a test.
      - **Section 3 shows up to `KEEP_SAMPLE` = 20 keeps**, drawn by the run's seed.
      The calibration range the bounds are read against, 0.7–4.9%, is `records.CALIBRATED_FLAG_SHARE`.
+   - **Step 7 built 2026-10-23**: `pipeline`, `cli` (`raven-scopebib`), the pilot report and `compare`, all five
+     commits. Replayed over the prototype's converted answers with no backend, `report` gives the library's
+     numbers, and `compare` of that replay with itself gives agreement and kappa of 1.0 on every measure.
    - **`compare RUN_A RUN_B`** (maintainer, 2026-10-23: without it `--replicate` is not very useful): two
      run files, each naming its instruments, so it never needs a backend. Over the records both runs
      answered, it reports per stage — the judge's verdict and each test, the reviewer's `belongs`, each

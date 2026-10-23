@@ -6,11 +6,11 @@
 
 Subcommands: `run` does every stage in order (`--until STAGE` stops after one); `judge`, `review` and
 `extract` run one stage; `report` writes the reports from what is saved; `finish` applies a person's decisions
-on a marked copy of the worklist. Every command but `finish` writes `run.toml` beside its reports, naming
+on a marked copy of the worklist; `compare` says how far two runs agree. Every command but `finish` writes `run.toml` beside its reports, naming
 everything the run used, so passing it back with `--run-file` repeats the run.
 """
 
-__all__ = ["COMMANDS", "DEFAULTS", "Plan", "UsageError", "resolve", "execute", "main"]
+__all__ = ["COMMANDS", "DEFAULTS", "Plan", "UsageError", "resolve", "execute", "compare_runs", "main"]
 
 import argparse
 import dataclasses
@@ -105,6 +105,17 @@ def _parser() -> argparse.ArgumentParser:
                         help="The BibTeX file the run filtered. Optional where --run-file names one.")
     finish.add_argument("--require-every-decision", dest="require_every_decision", action="store_true",
                         help="Refuse a blank decision rather than reading it as a drop.")
+    compare = commands.add_parser("compare", help="How far two runs agree: a replicate against the first, or one "
+                                                  "model against another.")
+    compare.add_argument("run_a", metavar="RUN_A", help="The first run's run.toml.")
+    compare.add_argument("run_b", metavar="RUN_B", help="The second run's run.toml. The tables go beside it.")
+    compare.add_argument("--format", default=None, choices=tabular.FORMATS,
+                         help="The tables' format (default: the second run's).")
+    compare.add_argument("--server-url", dest="server_url", default=None, metavar="URL",
+                         help="Raven-server, where the first run measured its titles there.")
+    compare.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
+    compare.add_argument("--log-level", default="INFO",
+                         choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"), help="How much to log.")
     return parser
 
 
@@ -274,6 +285,56 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     return 0
 
 
+def compare_runs(path_a: str | pathlib.Path, path_b: str | pathlib.Path, *, nlp, nlp_description: str = "",
+                 table_format: str | None = None) -> list[pathlib.Path]:
+    """Compare the runs whose run files are `path_a` and `path_b`, writing the tables beside `path_b`.
+
+    The records are the first run's — its input, sift and sample — and each run's answers are read under its
+    own definition and instruments, which must all be named, as they are in a run file a run wrote. Never
+    connects to a backend. Returns the paths written.
+    """
+    from . import compare, pipeline, runfile
+    from . import definition as scope_definition
+
+    runs = []
+    for path in (pathlib.Path(path_a).expanduser().resolve(), pathlib.Path(path_b).expanduser().resolve()):
+        loaded = runfile.load_run_file(path)
+        unnamed = [stage for stage, plan in loaded.stages.items() if not plan.maybe_instrument]
+        if unnamed:
+            raise UsageError(f"{path}: no instrument named for {', '.join(unnamed)}; compare a run file a run wrote")
+        if loaded.settings.maybe_definition is None or loaded.settings.maybe_bib is None:
+            raise UsageError(f"{path}: names no definition or no input")
+        runs.append((path, loaded))
+    (path_a, first), (path_b, second) = runs
+    settings = first.settings
+    corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require, min_chars=settings.min_chars,
+                                  maybe_sample=settings.maybe_pilot or settings.maybe_sample,
+                                  seed=settings.maybe_seed if settings.maybe_seed is not None else DEFAULTS["maybe_seed"])
+    states, definitions = [], []
+    for path, loaded in runs:
+        definition = scope_definition.load_definition(loaded.settings.maybe_definition)
+        seed = loaded.settings.maybe_seed if loaded.settings.maybe_seed is not None else DEFAULTS["maybe_seed"]
+        control = loaded.settings.maybe_control if loaded.settings.maybe_control is not None else DEFAULTS["maybe_control"]
+        state = pipeline.read_state(corpus, definition, ledger_dir=loaded.settings.maybe_ledgers or path.parent / "ledgers",
+                                    fingerprints={stage: plan.maybe_instrument for stage, plan in loaded.stages.items()},
+                                    control_size=control, seed=seed)
+        states.append({"final": state.final, "reviews": state.reviews, "extractions": state.extractions})
+        definitions.append(definition)
+    compared = compare.measures(states[0], states[1], definition_a=definitions[0], definition_b=definitions[1])
+    provenance = [f"raven-scopebib {__version__}, {datetime.datetime.now().isoformat(timespec='seconds')}",
+                  f"first run: {path_a}", f"second run: {path_b}",
+                  f"records: the first run's, from {settings.maybe_bib}"]
+    if nlp_description:
+        provenance.append(f"titles measured with {nlp_description}")
+    for label, loaded in (("first", first), ("second", second)):
+        for stage, plan in loaded.stages.items():
+            provenance.append(f"{label} run, {stage}: model {plan.maybe_model or 'not recorded'}, "
+                              f"instrument {plan.maybe_instrument}")
+    fmt = table_format or second.settings.maybe_format or DEFAULTS["maybe_format"]
+    return compare.write_comparison(path_b.parent / f"compare-with-{path_a.parent.name}.{fmt}", compared,
+                                    records=corpus.records, provenance=provenance)
+
+
 def _connector(backend_url: str | None):
     """A `connect` for `pipeline.run`: reach the backend, check that it serves a model, and say which."""
     def connect():
@@ -322,6 +383,18 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
 
     from . import definition as scope_definition
     from . import pipeline, report, runfile
+    if opts.command == "compare":
+        try:
+            first = runfile.load_run_file(pathlib.Path(opts.run_a).expanduser())
+            nlp, nlp_description = _nlp(on_server=bool(first.settings.maybe_server_nlp), server_url=opts.server_url)
+            written = compare_runs(opts.run_a, opts.run_b, nlp=nlp, nlp_description=nlp_description,
+                                   table_format=opts.format)
+        except (UsageError, runfile.RunFileError, scope_definition.DefinitionError) as exc:
+            print(f"raven-scopebib: {exc}", file=sys.stderr)
+            sys.exit(1)
+        for path in written:
+            print(f"wrote {path}")
+        sys.exit(0)
     try:
         plan = resolve(opts)
         nlp, nlp_description = _nlp(on_server=plan.run_file.settings.maybe_server_nlp, server_url=opts.server_url)
