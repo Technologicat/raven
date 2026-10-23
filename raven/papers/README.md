@@ -6,7 +6,7 @@
 
 # Raven's paper tools
 
-Eleven command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, and repairing what the databases hand you.
+Twelve command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, repairing what the databases hand you, and setting aside what is not about your topic.
 
 **This manual documents the rules the tools apply** — what counts as the same paper, when a record is dropped, what a merge keeps. For the pipeline itself, in the order you would run it, see [*Command-line tools*](../../README.md#command-line-tools) in the main README.
 
@@ -38,6 +38,16 @@ Eleven command-line tools for the part of a literature review that happens befor
 - [`raven-siftbib` — removing what a review cannot screen](#raven-siftbib--removing-what-a-review-cannot-screen)
     - [Naming the criterion](#naming-the-criterion)
     - [What comes out, and the record of it](#what-comes-out-and-the-record-of-it)
+- [`raven-scopebib` — telling which records are about what you searched for](#raven-scopebib--telling-which-records-are-about-what-you-searched-for)
+    - [How it works, step by step](#how-it-works-step-by-step)
+    - [Writing a definition file](#writing-a-definition-file)
+    - [Calibrating with a pilot](#calibrating-with-a-pilot)
+    - [What a run leaves](#what-a-run-leaves)
+    - [The reviewer's control](#the-reviewers-control)
+    - [Checking by hand, and `finish`](#checking-by-hand-and-finish)
+    - [The run file, and repeating a run](#the-run-file-and-repeating-a-run)
+    - [What starts a fresh ledger](#what-starts-a-fresh-ledger)
+    - [Replicates and `compare`](#replicates-and-compare)
 - [`raven-burstbib` — one file per record](#raven-burstbib--one-file-per-record)
 
 <!-- markdown-toc end -->
@@ -328,6 +338,238 @@ The audit has one row per removed record, naming the record, where it was publis
 - `--out-dir DIR` puts them elsewhere.
 - `--no-audit` declines the audit.
 - `-n` / `--dry-run` reports what would go and writes nothing. The input file is never modified either way.
+
+## `raven-scopebib` — telling which records are about what you searched for
+
+A search for a topic returns everything that *matches* it, and much of that is about something else: the phrase meant something different in another field, the work only mentions the topic in passing, or it is set somewhere your review does not cover. This finds those records with an LLM, removes the ones it is sure about, and hands you the ones it is not.
+
+```bash
+raven-scopebib run corpus.bib --pilot --require abstract --out-dir out    # a calibration run, 50 records
+raven-scopebib run corpus.bib --require abstract --out-dir out            # the whole corpus
+raven-scopebib finish out/04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
+```
+
+What counts as off topic is yours to say, in a [definition file](#writing-a-definition-file) beside the `.bib`. The tool supplies the method: how the questions are asked, when a record is read more closely, and what it takes to remove one.
+
+**It needs an LLM backend**, any OpenAI-compatible one, as Raven-librarian uses; `--backend-url` names it. A run whose answers are all saved needs none, so reports can be written again, and a finished run repeated, with no backend running.
+
+### How it works, step by step
+
+Six steps, of which four ask an LLM. The proportions below are **an illustration** on a round 1000 records, rounded from one real corpus; yours will differ, and the [pilot report](#calibrating-with-a-pilot) gives them for your own corpus before the whole run.
+
+```mermaid
+flowchart TD
+    BIB[".bib"] --> SIFT["sift<br/>(no LLM)<br/>drops records with nothing to screen"]
+    SIFT --> T["judge: titles<br/>(LLM, every record)"]
+    T -->|"settled from the title"| V{"verdict"}
+    T -->|"unsure, thin title,<br/>or a test true"| A["judge: abstracts<br/>(LLM, escalated only)"]
+    A --> V
+    V -->|"drop"| R["review<br/>(LLM, drops only)<br/>makes the case that each belongs"]
+    R -->|"no case"| OUT1["removed"]
+    R -->|"case found"| PERSON["to a person"]
+    V -->|"review"| PERSON
+    V -->|"keep"| X["extract<br/>(LLM, keeps only)<br/>what each record says"]
+    X --> RULES["rules<br/>(no LLM)"]
+    RULES -->|"remove"| OUT2["removed"]
+    RULES -->|"hold"| PERSON
+    RULES -->|"keep"| KEPT["kept"]
+```
+
+1. **Sift** (no LLM). Removes the records with nothing to screen, on the criteria you give it — `--require abstract`, `--min-chars abstract=200` — exactly as [`raven-siftbib`](#raven-siftbib--removing-what-a-review-cannot-screen) does. Without criteria, nothing is sifted. Leaves `00-sift-audit` and `00-sifted.bib`.
+2. **The judge, on titles** (LLM, every record). Asks each of your definition's tests about each record, from its title and where it was published. A test answered true means *positive evidence* that the record is off topic in that way; a record that says nothing keeps. With the answers comes one confidence for the record, high, medium or low, and a reason.
+3. **The judge, on abstracts** (LLM, the escalated records). A record is asked again with its abstract when the title pass was unsure (low confidence), when its title is too thin to judge from, or when any test came back true at all — a removal is never made from a title alone. *About 400 of the 1000.* A title is too thin when it has fewer than three content words, or when content words are under 40% of its words: "Rethinking the paradigm" names nothing, and neither does a long title padded with filler. An abstract that breaks off mid-sentence, a publisher's preview, lowers the answer's confidence to low, whatever the model said.
+
+   The verdict: a test true at high confidence, or at medium after reading the abstract, **drops** the record; any other true, or a test left unanswered, sends it **to review**; otherwise it is **kept**. *About 250 drops, 30 to review and 720 keeps.* Leaves `01-judge-audit`.
+4. **The reviewer** (LLM, the drops). A second reader, asked the opposite question: is there a credible case that this record belongs? It is told nothing about the judge, its tests or why the record is in front of it. A drop it makes a case for goes to a person rather than out. *It finds a case for a few of the 250.* It also reads a [control](#the-reviewers-control). Leaves `02-review-audit`.
+5. **The extractor** (LLM, the keeps). The judge keeps a record whenever no test is positively true, so a keep carries no reason of its own. The extractor records what each kept record says, field by field — the level a study is set at, say — with the record's own words for the answers that need them.
+6. **The rules** (no LLM). Your definition's rules over those fields: remove what the fields positively rule out, hold for a person what they make doubtful, keep the rest. *Of the 720 keeps, about 150 removed and 45 held.* Leaves `03-extract-audit`.
+
+**A person comes in once, at the end**, with `04-CHECK-BY-HAND`: the judge's sends to review, the reviewer's rescues and the rules' holds, *about 80 of the 1000*, each with why it is there. See [checking by hand](#checking-by-hand-and-finish).
+
+**Steps 1 and 6, and the reports, ask nothing**, so they are free to run again: a changed rule or a different table format costs seconds. The LLM steps keep every answer in a ledger, so an interrupted run resumes where it stopped, and only a change to what is asked starts them afresh (see [what starts a fresh ledger](#what-starts-a-fresh-ledger)).
+
+`run` does the steps in order; `run --until judge` stops after one, and `judge`, `review` and `extract` run one alone. `report` writes the reports from what is saved.
+
+### Writing a definition file
+
+One TOML file holds everything about *your* corpus. By default it is `<bib stem>.scope.toml` beside the `.bib`; `--definition FILE` names another. A complete one, for a search on AI agents in higher education:
+
+```toml
+scope = "studies on different aspects of the use of AI agents in higher education"
+
+hints = """
+"Learning assistant" names an AI tool, and is also the term in STEM education research for a human
+undergraduate who helps teach a course. "Training" and "learning" are also how machine learning describes
+what is done to a model; they count as education only when a person is learning.
+"""
+
+[[test]]
+name = "no_ai"
+asks = """true only if the work is positively about something with no artificial intelligence in it -
+human teaching staff, human tutors, or a non-AI technology. False when the work does not say."""
+
+[[test]]
+name = "wrong_level"
+asks = """true only if the work is positively set at a level other than higher education. False when
+the work does not say what level it is set at."""
+
+[[field]]
+name = "level"
+asks = "the educational level the work is set at"
+quote = ["higher_education", "school", "vocational"]
+[field.values]
+higher_education = "a university, college, polytechnic or their students and faculty - degree study"
+school = "primary or secondary schooling, K-12, pupils"
+vocational = "formal vocational or trade education leading to a qualification"
+not_applicable = "the work is not set in education at all"
+
+[[field]]
+name = "ai_role"
+asks = "what the AI does in this work, or 'none'"
+max_words = 8
+
+[[rule]]
+label = "school or vocational level, stated in the text"
+when = { level = ["school", "vocational"] }
+action = "remove"
+
+[[rule]]
+label = "not set in education"
+when = { level = ["not_applicable"] }
+action = "hold"
+```
+
+Its parts, top to bottom:
+
+- **`scope`**: what the search was for, in a phrase. The judge and the reviewer are both told it.
+- **`hints`** (optional): domain cautions for the judge that belong to no single test — a term that means something else in a neighbouring field, say.
+- **`frame`** (optional, rarely wanted): replaces the tool's own framing of the judge's task. That framing is the method — look for positive evidence of being off topic, silence keeps, a generic title is no evidence, use the venue — and it holds for any corpus.
+- **`[[test]]`**, one per way of being off topic. `name` is how reports refer to it, and `asks` is what the model is told it means. Write it as "true only if…", and say when the answer is false.
+- **`[[field]]`**, one per thing the extractor records about a kept record.
+  - **The keys under `[field.values]` are the answers**, and their strings say what each answer means, as the model is told. Above, `school` is an answer, and `"primary or secondary schooling, K-12, pupils"` is how the model knows when to give it. Every field also has the answer `not_stated`, added by the tool: the record does not say. Leave it out of the list.
+  - **`quote` names the answers that need evidence.** For those, the model must also give *the record's own words that show the answer* — for `school`, perhaps "pupils in two secondary schools" — and the tool checks that those words really are in the record's title, venue or abstract, ignoring case, spacing and quotation marks. The quote is not the answer's name, and not a fixed phrase you write here: it is whatever the record says. `quote = true` asks it of every answer; a list asks it of those named. Leave out an answer that asserts an absence, such as `not_applicable` — there is nothing in the record to quote for it.
+  - **A field with no `values` is free text**, cut to `max_words`, for reading only: no rule can act on it.
+- **`[[rule]]`**, applied to each kept record in order, the first that matches deciding. A rule matches when every field it names has one of the answers it lists — AND across fields, OR within a list. `action` is `"remove"` or `"hold"`, and `label` is what the reports show. A record no rule matches is kept. **A removal resting on a quoted answer whose words are not in the record becomes a hold**: the answer cannot be checked, so a person should look.
+
+A mistake in the file is reported with the file and the entry it is in, before anything is asked.
+
+### Calibrating with a pilot
+
+**Run a pilot before the whole corpus**, and read it: `run --pilot` asks every LLM step about a seeded sample of 50 records (`--pilot N` for another number), and writes one report, `PILOT`, into `pilot/` under the output directory. Its answers go into the same ledgers the full run reads, so the full run asks only the rest. After editing the definition, a pilot run again asks again.
+
+The report's sections are in the order a mistake costs:
+
+1. **The drops**, with the test that fired, its reason, and the reviewer's case where it made one. A false drop loses a record silently, so read all of them.
+2. **The records sent to review.** Mostly obvious drops means the tests are too timid; mostly obvious keeps, too eager.
+3. **A sample of the keeps**, with their fields and what the rules did. Anything here that plainly should have gone is a test that is missing.
+4. **The title-only records**, however they ended, these being the inputs most likely to break a test. Where there are none, it says so.
+
+Within a section, rows are grouped by the test or rule that decided them, so that one test's calls sit together, and then in reference-list order. The report opens with how many titles the thin-title rule flags in your corpus, beside the 0.7–4.9% it flagged across the corpora it was calibrated on; far outside that range, read the flagged titles before trusting the rule.
+
+### What a run leaves
+
+Named by step, so that listing the directory shows the pipeline in order. `<fmt>` is `tsv` by default; `--format xlsx` or `--format ods` writes spreadsheets.
+
+| File | What it is |
+|---|---|
+| `00-sift-audit.<fmt>` | what the sift removed, and on which criterion |
+| `00-sifted.bib` | what it kept: the judge's input |
+| `01-judge-audit.<fmt>` | every judged record: the verdict, each test, the judge's reason |
+| `02-review-audit.<fmt>` | the drops and the control, with the reviewer's case |
+| `03-extract-audit.<fmt>` | the judge's keeps: their fields, their quotes, the rule that acted |
+| `04-CHECK-BY-HAND.<fmt>` | every record sent to a person, with why, and a blank `decision` column |
+| `04-removed-audit.<fmt>` | every record removed, by which step and why, the sift's included |
+| `04-kept.bib` | the records that survived every step |
+| `05-hand-audit.<fmt>`, `05-final.bib` | written by `finish`: every decision a person made, and the final bibliography |
+| `run.toml` | the [run file](#the-run-file-and-repeating-a-run) |
+| `ledgers/` | every answer the LLM gave, with the model calls themselves |
+
+The `-audit` files are the record of what each step did, for checking and for a methods section; each opens with the tool's version, the input, the definition, and the model and instrument of each step. `04-CHECK-BY-HAND`, `04-kept.bib` and the 05 files are what you act on.
+
+**A record waiting on a step is in neither the removals nor `04-kept.bib`**: a drop the reviewer has not read, a keep not yet extracted. The counts each run prints say how many.
+
+**The tool owns these names and no others.** Writing the reports removes any file bearing one of them that it did not just write — a previous run's report in another format — and touches nothing else in the directory. **So save a marked copy of `04-CHECK-BY-HAND` under a name of your own**, such as `04-CHECK-BY-HAND-marked.xlsx`: the original is rewritten on every run.
+
+### The reviewer's control
+
+A reviewer that finds a case for everything would look thorough and tell you nothing. So alongside the drops it reads a **control**: records the judge kept, mixed in unlabelled, which it has no way to tell from the drops.
+
+- **How they are chosen:** drawn at random by `--seed`, at the drops' own mix of confidence, so that the control is as hard as what it is compared against.
+- **How many:** `--control N`, 40 by default.
+- **How to tell them apart:** only in `02-review-audit`, whose `group` column says `drop` or `control`. They appear nowhere else: the reviewer's answer about a control record changes nothing.
+
+**Read the comparison first.** The audit's header gives the share of drops the reviewer found a case for, and the share of the control. A case for most of the control and few of the drops means the reviewer discriminates; similar shares mean its cases say little.
+
+### Checking by hand, and `finish`
+
+Mark your copy of `04-CHECK-BY-HAND` in its `decision` column, then:
+
+```bash
+raven-scopebib finish 04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
+```
+
+which writes `05-final.bib` — the kept records and those you kept — and `05-hand-audit`, recording each decision, with a `note` column carried over if you added one.
+
+**Mark the keeps alone, or every row.**
+
+- **Keeps alone**: write `keep` in the rows to keep and leave the rest blank; a blank drops. Over hundreds of rows, one word to paste is quicker than choosing between two.
+- **Every row**: `keep` or `drop` in each. **A single `drop` anywhere selects this mode**, and a blank row is then one not yet decided, which refuses: decide those rows, or remove every `drop` so that a blank means drop again.
+
+Case does not matter. Anything other than `keep`, `drop` or blank is refused, naming its row, since a typo must not become a drop.
+
+**A blank tail warns, in the keeps-alone mode**, since a stretch you forgot drops silently. It warns when the blank rows at the end of the sheet are a longer run than any run of blanks before them, which is how marking that stopped partway looks — so with blank runs of 2, 5 and 3 before the last `keep`, a tail of 6 warns and one of 5 does not. A sheet with no `keep` at all warns that everything drops. If you meant it, the warning is normal.
+
+**`finish` refuses**, writing nothing:
+
+- with `--require-every-decision`, any blank row: every row must be marked;
+- a record sent to a person that is missing from the sheet — it is not this run's sheet, or rows were deleted;
+- a run with records still waiting on a step: finish the run first.
+
+**A row whose record the run no longer sends to a person is ignored**, with a warning: a re-run has settled it.
+
+**Writing the reports again removes the 05 files**, which would otherwise describe an older worklist; run `finish` again after.
+
+### The run file, and repeating a run
+
+Every run writes `run.toml` beside its reports: the input, the definition, the sift, the sample, the seed, the control, and for each LLM step the model and the *instrument* its answers are filed under. Passing it back repeats the run:
+
+```bash
+raven-scopebib run --run-file out/run.toml       # writes into out/ again
+```
+
+and where every answer is already saved, no backend is asked anything. A pilot's run file is in `pilot/`, and repeats the pilot.
+
+- **Options override the file**, one by one: `--run-file out/run.toml --seed 7`.
+- **Paths are relative to the file**, so a run directory moved together with its input still works, on another machine too.
+- **You can write one by hand**, to choose models: a `model` at the top serves every step, and `[judge]`, `[review]` and `[extract]` tables name one per step. If yours is the output directory's own `run.toml`, the run's record replaces it afterwards and yours is kept as `run_orig.toml`; one anywhere else is never touched.
+
+**An instrument** is the eight hex digits in a ledger's file name: a fingerprint of everything that decides what an answer means — the questions as asked, and the model with its quantization. Every answer is filed under the instrument that made it, so answers from a different model or a changed question are never mixed with yours. Naming one in a run file, or with `--instrument STEP=FP`, reads that ledger; **a named instrument that is not the one today's definition and model make is read-only**, so nothing is asked under it. Without named instruments, the tool connects to the backend just to work them out.
+
+**Models.** `--model STEP=KEY` names the model a step should use. A step that wants a model other than the one loaded is refused before any work, naming what it wants; where the steps before it can run, it says so and offers `--until`. Each report names every model in full: its key, quantization, and anything declared about it.
+
+Titles are measured with spaCy's `en_core_web_sm`, the pipeline the thin-title rule was calibrated with, loaded locally whether or not Raven-server is running, so the measure is the same on any machine. `--server-nlp` uses the server's pipeline instead; the run file records which.
+
+### What starts a fresh ledger
+
+**Anything that changes what is asked**: a test, a field, an answer or its description, the `scope`, `hints` or `frame`, a different model or quantization, or a new version of the tool's own prompts. The old answers stay in their ledger, under their own instrument, and the new one starts empty.
+
+**Nothing else does.** Rewrapping a paragraph or editing a comment in the definition changes neither the questions nor the instrument. Rules are applied when the reports are written, so changing one asks nothing again; neither does the sift, the table format, or how many control records are drawn, beyond asking about the ones newly drawn.
+
+### Replicates and `compare`
+
+An LLM's answer is one draw: the backend samples with a fresh random seed for every request, so asking again can answer differently. **How often it does** is the judge's test-retest reliability, a figure a methods section may want, and `--replicate` and `compare` measure it.
+
+```bash
+raven-scopebib run corpus.bib --sample 300 --out-dir rep1
+raven-scopebib run corpus.bib --sample 300 --out-dir rep2 --replicate 2 --ledgers rep1/ledgers
+raven-scopebib compare rep1/run.toml rep2/run.toml
+```
+
+- **`--replicate 2` asks every LLM step once more**, under an instrument of its own, so the second run's answers go into ledgers of their own and the first's are untouched. It costs one more pass, which is why it is meant with `--sample`: a few hundred records rather than the corpus. Its abstract pass follows its own title pass, so it escalates what *it* was unsure about.
+- **`--seed` is the tool's own**, and decides only which records a sample and a control draw. Replicates share it so that both draw the same records; it does not reach the backend.
+- **Each replicate runs in an output directory of its own**, since `run.toml` and the reports are per run. They may share a ledgers directory, as above, their instruments keeping them apart.
+
+`compare` reads two run files and writes, beside the second, `compare-with-<first run's directory>` and a list of the records the two disagreed on. It asks no backend. For each step — the judge's verdict, each test and its confidence, the reviewer's answer, each closed field — it gives the number of records both runs answered, the share on which they agree, and **Cohen's kappa**: the agreement beyond what chance would give, if each run gave each answer as often as it does. 1 is perfect agreement and 0 no better than chance; kappa is not defined where both runs gave a single answer throughout. See [Cohen's kappa](https://en.wikipedia.org/wiki/Cohen%27s_kappa) for more. Two different models compare the same way.
 
 ## `raven-burstbib` — one file per record
 

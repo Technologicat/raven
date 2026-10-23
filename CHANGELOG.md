@@ -44,6 +44,12 @@
   - `--no-llm` leaves out the stages that need one for this run, and tries no backend.
   - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.
 
+#### Raven-server
+
+- **Every module that loads a model says which**, at `GET /api/<module>/info`: the model's name, and its version where it reports one.
+  - For scripts, every `raven.client.mayberemote` service that holds a model carries the same in `model_info`, in either mode: the server's model in remote mode, which its configuration decides, rather than the one asked for.
+  - `allow_remote=False` keeps a service local whether or not the server is running, the counterpart of `allow_local=False`: for a result that must not depend on how the server is configured.
+
 #### Raven-deduplicate
 
 - **The audit can be an Excel or OpenDocument spreadsheet**, as well as TSV: give `--audit` a path ending in `.xlsx` or `.ods`, or use `--audit-format xlsx` or `ods` for the audit named after the output.
@@ -55,6 +61,17 @@
 - **The audits can be Excel or OpenDocument spreadsheets**, as well as TSV: `--audit-format xlsx` or `ods`.
   - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each removed paper and carries its full abstract**, so a removal can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
+
+#### Raven-scopebib
+
+- **New tool: `raven-scopebib`, for setting aside the records of a literature search that are not about what it searched for.**
+  - You write the tests in a definition file beside the `.bib`, one per way of being off topic; an LLM answers them for every record, reading the abstract wherever the title does not settle it.
+  - A record is removed only on positive evidence, and a second reader goes over every removal looking for a case that it belongs. Everything it was unsure about goes to one worklist for a person, `04-CHECK-BY-HAND`, and `raven-scopebib finish` applies the decisions marked there.
+  - For the records it keeps, it can also record what each one says — the level a study is set at, say — and remove what your rules over those answers rule out.
+  - `run --pilot` tries it on 50 records first, with one report to read before committing to the corpus.
+  - Every answer is saved, so an interrupted run resumes, and every run writes `run.toml`, which repeats it — with no LLM at all when every answer is saved. Each report names the model behind every step.
+  - `--replicate` and `raven-scopebib compare` measure how far two runs agree, with Cohen's kappa: the test-retest reliability of the LLM's answers, or one model against another.
+  - How to write a definition file, and the rest, is in [the paper tools' manual](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 
 #### Raven-web
 
@@ -106,6 +123,7 @@
 #### Constellation-wide
 
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
+- **For scripts: the `raven.client.mayberemote` services take their arguments by name only**, `allow_local=True` rather than a bare `True`. A script passing them positionally needs the names added.
 
 ### Fixed
 

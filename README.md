@@ -334,6 +334,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 - **`raven-fixbib`** repairs what a database export does to a `.bib`, before a parser refuses the damaged entries whole. See [its section](raven/papers/README.md#raven-fixbib--repairing-a-database-export).
 - **`raven-deduplicate`** merges the copies a multi-database search leaves behind, writing an audit of every merge. See [its section](raven/papers/README.md#raven-deduplicate--merging-a-multi-database-search).
 - **`raven-siftbib`** removes the records a review cannot screen, on criteria you name. See [its section](raven/papers/README.md#raven-siftbib--removing-what-a-review-cannot-screen).
+- **`raven-scopebib`** sets aside the records that are not about what the search was for: an LLM judge on tests you write, a second reader over its removals, and a worklist of everything it was unsure about. See [its section](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 - **`raven-burstbib`** splits a bibliography into one file per entry, which is what makes it usable as a document database. See [its section](raven/papers/README.md#raven-burstbib--one-file-per-record).
 - The three that get an export *into* BibTeX in the first place — **`raven-wos2bib`**, **`raven-csv2bib`** and **`raven-pdf2bib`** — are under [*Converting and repairing*](#converting-and-repairing) below.
 
