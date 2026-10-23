@@ -305,11 +305,12 @@ def _nlp(*, on_server: bool, server_url: str | None):
         api.initialize(raven_server_url=url, raven_api_key_file=client_config.raven_api_key_file)
     nlp = mayberemote.NLP(allow_local=True, allow_remote=on_server, model_name=scope_records.SPACY_MODEL,
                           device_string=client_config.devices["nlp"]["device_string"])
+    pipeline = f"{nlp.model_info['model']} {nlp.model_info['version']}"
     if not nlp.is_local():
-        return nlp, f"Raven-server's spaCy model, at {url}"
+        return nlp, f"{pipeline}, on Raven-server at {url}"
     if on_server:
-        return nlp, f"{scope_records.SPACY_MODEL}, locally: Raven-server at {url} does not measure"
-    return nlp, f"{scope_records.SPACY_MODEL}, locally"
+        return nlp, f"{pipeline}, locally: Raven-server at {url} does not measure"
+    return nlp, f"{pipeline}, locally"
 
 
 def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the logic, and are tested
