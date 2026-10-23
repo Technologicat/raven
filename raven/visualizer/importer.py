@@ -43,7 +43,7 @@ import torch
 
 from sklearn.cluster import HDBSCAN
 
-from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
+from bibtexparser.model import DuplicateBlockKeyBlock, DuplicateFieldKeyBlock, MiddlewareErrorBlock
 
 from ..client import config as client_config
 from ..client import mayberemote
@@ -334,7 +334,9 @@ def _report_unparseable_records(filename, library):
     braces inside an `Abstract` abort the parse of the whole record, title and all. Where those braces are
     stray literals - mathematics that reached the file through a PDF extractor, most often - escaping them
     recovers the record whole, and it is added to `library.entries` as though it had parsed. A record that
-    names a field twice is recovered the same way, by merging the repeats. What cannot be recovered is
+    names a field twice is recovered the same way, by merging the repeats; one whose author list BibTeX
+    cannot split, by rewriting the list; and one repeating an earlier record's key is read under a new key,
+    `key-2` and onward, since nothing in it is broken. What cannot be recovered is
     reported as before, pointing at the offending line, which is where a fix has to happen.
 
     Raven repairs its own reading of the file and never the file: a user's bibliography is theirs, and
@@ -343,8 +345,21 @@ def _report_unparseable_records(filename, library):
     if not library.failed_blocks:
         return
 
+    # A record repeating an earlier record's key is not broken, so it is read under a new key here rather
+    # than offered to the repairs below, which would report it as unparseable and blame braces.
+    for repeated_key, maybe_entry in bibtex.read_repeated_keys(library):
+        if maybe_entry is not None:
+            library.add(maybe_entry)
+            logger.warning(f"_parse_input_files: a record in {filename} repeats the key '{repeated_key}' of an earlier "
+                           f"one, and was read as '{maybe_entry.key}'. The file itself is unchanged.")
+        else:
+            logger.warning(f"_parse_input_files: a record in {filename} repeats the key '{repeated_key}' of an earlier "
+                           f"one, and does not read on its own either. It will be missing from the dataset.")
+
     recovered, lost = [], []
     for failed_block in library.failed_blocks:
+        if isinstance(failed_block, DuplicateBlockKeyBlock):
+            continue  # handled above
         entry = _recover_failed_block(failed_block)
         (recovered if entry is not None else lost).append((failed_block, entry))
 

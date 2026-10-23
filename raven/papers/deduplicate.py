@@ -96,7 +96,7 @@ import unicodedata
 
 from bibtexparser import Library
 from bibtexparser.middlewares import names
-from bibtexparser.model import DuplicateBlockKeyBlock, Entry, Field
+from bibtexparser.model import Entry, Field
 
 from .. import __version__
 
@@ -360,28 +360,16 @@ def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
     library = bibtex.parse_string(repaired, split_names=False)
     records = [_make_record(index, entry) for index, entry in enumerate(library.entries)]
 
-    # The parser refuses a second record under a key it has seen, while still reading it. Several files
-    # read as one corpus collide this way whenever two exports share a key scheme, and so does a file
-    # whose records were copied from a template. Without this the second record was neither read nor
-    # reported, the first one's key making `_still_missing` say it was there.
-    # Re-read from its text under the new key, rather than taken from the block's own `ignore_error_block`,
-    # which skipped the middleware: its field names are as the file wrote them, so `Title` never reads as
-    # `title`.
-    taken = {record.key for record in records}
+    # The parser refuses a second record under a key it has seen. Several files read as one corpus collide
+    # this way whenever two exports share a key scheme, and so does a file whose records were copied from a
+    # template. Without this the second record was neither read nor reported, the first one's key making
+    # `_still_missing` say it was there.
     unread_repeats = set()
-    for block in library.failed_blocks:
-        if not isinstance(block, DuplicateBlockKeyBlock):
+    for repeated_key, maybe_entry in bibtex.read_repeated_keys(library, split_names=False):
+        if maybe_entry is None:
+            unread_repeats.add(repeated_key)  # reported below; `_still_missing` would see the first one's key
             continue
-        n = 2
-        while f"{block.key}-{n}" in taken:
-            n += 1
-        new_key = f"{block.key}-{n}"
-        reread = bibtex.parse_string(block.raw.replace(block.key, new_key, 1), split_names=False)
-        if len(reread.entries) != 1 or reread.entries[0].key != new_key:
-            unread_repeats.add(block.key)  # reported below; `_still_missing` would see the first one's key
-            continue
-        taken.add(new_key)
-        records.append(_make_record(len(records), reread.entries[0], maybe_repeated_key=block.key))
+        records.append(_make_record(len(records), maybe_entry, maybe_repeated_key=repeated_key))
 
     return records, [report for report in unrecovered
                      if report.kind not in (fixbib.KIND_UNREADABLE, fixbib.KIND_NAMES)

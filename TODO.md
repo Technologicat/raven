@@ -113,8 +113,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Deployability: move user-configurable parts to `~/.raven/visualizer/` (consistent with `~/.raven/` already used by Librarian). Check Windows and macOS conventions.
 
-- **[Low]** Detect and report duplicate entry keys in BibTeX importer (to ease debugging of BibTeX databases).
-
 - **[Low]** For cluster-level keyword detection, de-duplicate words within each abstract before keyword extraction (avoids "keyword spam" from a single abstract dominating cluster keywords).
 
 

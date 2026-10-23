@@ -466,6 +466,31 @@ class TestRecordsBibtexparserRefused:
         messages = [record.message for record in caplog.records]
         assert any("twice2024" in message and "more than once" in message for message in messages), messages
 
+    def test_a_record_repeating_an_earlier_key_is_read_under_a_new_one(self, caplog):
+        # Nothing in such a record is broken, so it must not be offered to the brace repair, which used to
+        # report it as unparseable and blame braces.
+        second = GOOD_RECORD.replace("A paper that parses", "A different paper under the same key")
+        library = parse_bib(GOOD_RECORD + "\n" + second)
+        assert [entry.key for entry in library.entries] == ["fine2024"], \
+            "the second record parsed on its own, so this fixture cannot tell a recovery from a no-op"
+
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        assert [(entry.key, entry["title"]) for entry in library.entries] == [
+            ("fine2024", "A paper that parses"), ("fine2024-2", "A different paper under the same key")]
+        messages = [record.message for record in caplog.records]
+        assert any("repeats the key 'fine2024'" in message and "fine2024-2" in message for message in messages), messages
+        assert not any("braces" in message for message in messages), messages
+
+    def test_a_record_with_an_apa_author_list_is_recovered(self, caplog):
+        apa = GOOD_RECORD.replace("Gamma, Gil", "Gamma, G., Delta, D., & Epsilon, E.").replace("fine2024", "apa2024")
+        library = parse_bib(apa)
+        assert library.entries == [], "the APA record parsed on its own, so this fixture cannot tell a recovery from a no-op"
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        assert [" ".join(name.last) for name in library.entries[0]["author"]] == ["Gamma", "Delta", "Epsilon"]
+        assert any("author list" in record.message for record in caplog.records)
+
     def test_a_record_that_cannot_be_recovered_is_reported_rather_than_vanishing(self, caplog):
         # The asymmetry this removes: a record that parses but lacks `author`, `year` or `title` is skipped
         # further down with a warning naming it, while a record that never became an entry at all would

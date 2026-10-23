@@ -664,6 +664,9 @@ class TestHeaderKey:
         # Unlike `papers.burstbib.get_slug`, which sanitizes for use as a filename.
         assert header_key("@misc{a/b:c,") == "a/b:c"
 
+    def test_a_one_line_record_yields_its_key_and_not_its_fields(self):
+        assert header_key("@article{k, author={Doe, Jane}, year={2021}}") == "k"
+
     def test_a_line_that_is_not_a_header_yields_nothing(self):
         assert header_key("Title = {Something}") == ""
         assert header_key("") == ""

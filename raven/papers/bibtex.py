@@ -30,6 +30,7 @@ __all__ = ["parse_file", "parse_string", "write_string",
            "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
 
            "repair_record", "repair_duplicate_field_keys", "repair_name_lists", "repair_failed_block",
+           "read_repeated_keys",
            "decode_html_entities",
            "relocate_rights_notices",
 
@@ -42,7 +43,7 @@ import re
 from typing import NamedTuple
 
 import bibtexparser
-from bibtexparser.model import DuplicateFieldKeyBlock, Entry, Field, MiddlewareErrorBlock
+from bibtexparser.model import DuplicateBlockKeyBlock, DuplicateFieldKeyBlock, Entry, Field, MiddlewareErrorBlock
 from bibtexparser import Library
 
 from unpythonic import box, unbox
@@ -211,7 +212,7 @@ def header_key(headerline: str) -> str:
     variant sanitized for use as a filename.
     """
     start = headerline.find("{")
-    end = headerline.rfind(",")
+    end = headerline.find(",", start + 1)  # a key cannot contain a comma, so the first one ends it
     return headerline[start + 1:end] if -1 < start < end else ""
 
 # One `Key = ` at the start of a line, which is the shape every BibTeX writer in practice emits.
@@ -686,6 +687,37 @@ def repair_failed_block(failed_block) -> str | None:
     if isinstance(failed_block, MiddlewareErrorBlock):
         return repair_name_lists(failed_block.raw)
     return repair_record(failed_block.raw)
+
+
+def read_repeated_keys(library: Library, split_names: bool = True) -> list[tuple[str, Entry | None]]:
+    """Read the records `library` refused only for repeating an earlier record's key, each under a new one.
+
+    `library`: as `parse_string` or `parse_file` returned it. Not modified.
+    `split_names`: as the library was parsed, so that a record read here matches the others.
+
+    The new key is the old one with `-2` appended, or the next free number. Returns one
+    `(repeated_key, maybe_entry)` per such record, in input order, `maybe_entry` being `None` where the
+    record does not read even on its own.
+    """
+    # Read again from the block's text under the new key, rather than taken from the block's
+    # `ignore_error_block`, which skipped the middleware: its field names are as the file wrote them, so
+    # `Title` never reads as `title`.
+    taken = {entry.key for entry in library.entries}
+    out = []
+    for block in library.failed_blocks:
+        if not isinstance(block, DuplicateBlockKeyBlock):
+            continue
+        n = 2
+        while f"{block.key}-{n}" in taken:
+            n += 1
+        new_key = f"{block.key}-{n}"
+        reread = parse_string(block.raw.replace(block.key, new_key, 1), split_names=split_names)
+        if len(reread.entries) == 1 and reread.entries[0].key == new_key:
+            taken.add(new_key)
+            out.append((block.key, reread.entries[0]))
+        else:
+            out.append((block.key, None))
+    return out
 
 
 # An HTML character entity, together with whatever backslashes precede it. The backslash run is captured
