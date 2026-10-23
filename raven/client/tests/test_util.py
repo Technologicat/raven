@@ -84,8 +84,29 @@ class TestPostStreamedJob:
         def job(is_cancelled, report):
             raise ValueError("boom")
         url = job_server(job)
-        with pytest.raises(RuntimeError, match="ValueError: boom"):
+        with pytest.raises(util.JobFailed, match="ValueError: boom"):
             util.post_streamed_job(url, {}, timeout=TIMEOUT)
+
+    def test_a_refused_request_raises_server_refused(self):
+        app = Flask(__name__)
+        app.add_url_rule("/job", "job", lambda: ("Module 'webfetch' not running", 403), methods=["POST"])
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        server = create_server(app, host="127.0.0.1", port=port)
+        threading.Thread(target=server.run, daemon=True).start()
+        try:
+            with pytest.raises(util.ServerRefused, match="HTTP 403"):
+                util.post_streamed_job(f"http://127.0.0.1:{port}/job", {}, timeout=TIMEOUT)
+        finally:
+            server.close()
+
+    def test_both_failures_are_runtime_errors(self):
+        # Callers to whom a refusal and a failed job are the same event catch `RuntimeError`.
+        assert issubclass(util.ServerRefused, RuntimeError)
+        assert issubclass(util.JobFailed, RuntimeError)
+        assert not issubclass(util.ServerRefused, util.JobFailed)
+        assert not issubclass(util.JobFailed, util.ServerRefused)
 
     def test_an_abort_ends_the_call_and_the_job(self, job_server):
         seen = {}

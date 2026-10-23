@@ -33,6 +33,7 @@ from unpythonic import memoize, Singleton
 # at runtime and SDL reinstalls its handlers each time. See `raven.common.quitsignal` for the other half.
 import os
 os.environ["SDL_NO_SIGNAL_HANDLERS"] = "1"
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"  # pygame's import banner goes to stdout, where a CLI tool's output goes
 
 import pygame
 import pygame._sdl2.audio as sdl2_audio

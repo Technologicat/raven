@@ -3,6 +3,7 @@
 __all__ = ["api_config",  # configuration namespace
            "initialize_api",
            "require",
+           "ServerRefused", "JobFailed",
            "yell_on_error",
            "post_streamed_job"]
 
@@ -116,11 +117,21 @@ def _strip_html(html: str) -> str:
     except Exception:
         return html  # used for cleaning error messages; important to see the original text if HTML stripping fails
 
+class ServerRefused(RuntimeError):
+    """Raven-server refused a request: it answered with a status other than 200 OK.
+
+    For example, the module is not running, the API key is missing, or the request was malformed.
+    """
+
+class JobFailed(RuntimeError):
+    """A streamed job started on Raven-server, and failed there. See `post_streamed_job`."""
+
 def yell_on_error(response: requests.Response) -> None:
+    """Raise `ServerRefused` if `response` is not 200 OK, logging the server's error message."""
     if response.status_code != 200:
         logger.error(f"Raven-server returned error: {response.status_code} {response.reason}. Content of error response follows.")
         logger.error(_strip_html(response.text))
-        raise RuntimeError(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
+        raise ServerRefused(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
 
 def post_streamed_job(url: str,
                       input_data: dict,
@@ -142,9 +153,9 @@ def post_streamed_job(url: str,
     `on_progress`: Called with each progress line the job reports, such as `"Loading the page…"`, on the
                    thread that made this call.
 
-    Raises `RuntimeError` when the server refuses the request (a bad status), and when the job itself
-    failed (an `"error"` in the body) — the same exception for both, since to the caller they are the same
-    event.
+    Raises `ServerRefused` when the server refuses the request (a bad status), and `JobFailed` when the job
+    itself failed (an `"error"` in the body). Both are `RuntimeError`, so a caller to whom they are the same
+    event can catch that, and one that must tell them apart can.
     """
     if maybe_abort is not None and maybe_abort.aborted:
         raise netutil.Aborted("post_streamed_job: aborted before the request was sent")
@@ -197,5 +208,5 @@ def post_streamed_job(url: str,
         raise requests.ConnectionError("post_streamed_job: the response ended before the result")
     if "error" in output_data:
         logger.error(f"post_streamed_job: Raven-server reported a failure: {output_data['error']}")
-        raise RuntimeError(f"While calling Raven-server: {output_data['error']}")
+        raise JobFailed(f"While calling Raven-server: {output_data['error']}")
     return output_data["result"]
