@@ -44,6 +44,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "raven_server_available", "test_connection",
            "tts_server_available",
            "modules",
+           "avatar_info",
            "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
@@ -55,16 +56,16 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "avatar_trigger_animefx",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
-           "classify_labels", "classify",
+           "classify_info", "classify_labels", "classify",
            "embeddings_info",
            "embeddings_compute",
            "imagefx_process", "imagefx_process_file", "imagefx_process_array",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
            "natlang_info", "natlang_analyze",
-           "sanitize_dehyphenate",
+           "sanitize_info", "sanitize_dehyphenate",
            "stt_info",
            "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
-           "translate_translate",
+           "translate_info", "translate_translate",
            "websearch_search",
            "webfetch_fetch"]
 
@@ -183,6 +184,17 @@ def modules() -> list[str]:
 
 # --------------------------------------------------------------------------------
 # Avatar
+
+def avatar_info() -> dict[str, Any]:
+    """Get metadata about the THA3 posing engine loaded on the server: `{"model": ..., "repository": ...}`.
+
+    Clients use this to say which model served them, which the server's configuration decides.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/info", headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+    return response.json()
 
 def _load_file(filename):
     with open(filename, "rb") as file:
@@ -492,6 +504,17 @@ def avatar_get_available_filters() -> list[tuple[str, dict]]:
 # --------------------------------------------------------------------------------
 # Classify
 
+def classify_info() -> dict[str, Any]:
+    """Get metadata about the classification model loaded on the server: `{"model": ...}`.
+
+    Clients use this to say which model served them, which the server's configuration decides.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/classify/info", headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+    return response.json()
+
 def classify_labels() -> list[str]:
     """Get list of emotion names from server.
 
@@ -791,6 +814,17 @@ def natlang_analyze(text: str | list[str],
 # --------------------------------------------------------------------------------
 # Sanitize
 
+def sanitize_info() -> dict[str, Any]:
+    """Get metadata about the dehyphenation model loaded on the server: `{"model": ...}`.
+
+    Clients use this to say which model served them, which the server's configuration decides.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/sanitize/info", headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+    return response.json()
+
 def sanitize_dehyphenate(text: str | list[str]) -> str | list[str]:
     """Dehyphenate input text.
 
@@ -908,6 +942,17 @@ def stt_transcribe_array(audio_data: np.array,
 
 # --------------------------------------------------------------------------------
 # Translate
+
+def translate_info() -> dict[str, Any]:
+    """Get metadata about the translation models, keyed by target and source language, and the spaCy pipeline that splits text into sentences loaded on the server.
+
+    Clients use this to say which model served them, which the server's configuration decides.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/translate/info", headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+    return response.json()
 
 def translate_translate(text: str | list[str], source_lang: str, target_lang: str) -> str | list[str]:
     """Translate input text to another language.

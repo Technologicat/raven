@@ -1,6 +1,6 @@
 """Text cleanup module for Raven-server."""
 
-__all__ = ["init_module", "is_available", "dehyphenate"]
+__all__ = ["init_module", "is_available", "get_info", "dehyphenate"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -12,13 +12,16 @@ from colorama import Fore, Style
 from ...common import nlptools
 
 dehyphenator = None
+_model_name = None
 
 def init_module(model_name: str,
                 device_string: str) -> None:
     global dehyphenator
+    global _model_name
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}sanitize{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
         dehyphenator = nlptools.load_dehyphenator(model_name, device_string)
+        _model_name = model_name
     except Exception:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'sanitize'.{Style.RESET_ALL} See server log for details.")
         logger.exception("init_module: failed")
@@ -27,6 +30,16 @@ def init_module(model_name: str,
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (dehyphenator is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Current fields:
+        `model`: the Flair contextual embeddings model the dehyphenator loaded.
+    """
+    if dehyphenator is None:
+        raise RuntimeError("get_info: module not initialized (did `init_module` succeed?)")
+    return {"model": _model_name}
 
 def dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
     """Dehyphenate `text`.

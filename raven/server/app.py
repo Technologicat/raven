@@ -213,6 +213,28 @@ def get_modules():
 # ----------------------------------------
 # module: avatar
 
+@app.route("/api/avatar/info", methods=["GET"])
+def api_avatar_info():
+    """Return metadata about the THA3 posing engine the module loaded.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"model": "<THA3 variant>",
+         "repository": "<HF repository the THA3 models are installed from>"}
+
+    A client uses this to say which model served it, which the server's configuration decides.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+    logger.debug("api_avatar_info: capabilities requested")
+    try:
+        return jsonify(avatar.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_avatar_info: failed, reason: {type(exc)}: {exc}")
+
 @app.route("/api/avatar/load", methods=["POST"])
 def api_avatar_load():
     """Start a new avatar instance, and load the avatar sprite posted as a file in the request.
@@ -775,6 +797,27 @@ def api_avatar_get_available_filters():
 # ----------------------------------------
 # module: classify
 
+@app.route("/api/classify/info", methods=["GET"])
+def api_classify_info():
+    """Return metadata about the classification model the module loaded.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"model": "joeddav/distilbert-base-uncased-go-emotions-student"}
+
+    A client uses this to say which model served it, which the server's configuration decides.
+    """
+    if not classify.is_available():
+        abort(403, "Module 'classify' not running")
+    logger.debug("api_classify_info: capabilities requested")
+    try:
+        return jsonify(classify.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_classify_info: failed, reason: {type(exc)}: {exc}")
+
 @app.route("/api/classify", methods=["POST"])
 def api_classify():
     """Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
@@ -1163,6 +1206,27 @@ def api_natlang_info():
 # ----------------------------------------
 # module: sanitize
 
+@app.route("/api/sanitize/info", methods=["GET"])
+def api_sanitize_info():
+    """Return metadata about the dehyphenation model the module loaded.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"model": "multi"}
+
+    A client uses this to say which model served it, which the server's configuration decides.
+    """
+    if not sanitize.is_available():
+        abort(403, "Module 'sanitize' not running")
+    logger.debug("api_sanitize_info: capabilities requested")
+    try:
+        return jsonify(sanitize.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_sanitize_info: failed, reason: {type(exc)}: {exc}")
+
 @app.route("/api/sanitize/dehyphenate", methods=["POST"])
 def api_sanitize_dehyphenate():
     """Dehyphenate the text posted in the request, using a small, specialized AI model.
@@ -1331,6 +1395,28 @@ def api_stt_transcribe():
 
 # ----------------------------------------
 # module: translate
+
+@app.route("/api/translate/info", methods=["GET"])
+def api_translate_info():
+    """Return metadata about the translation models, and the spaCy pipeline that splits text into sentences the module loaded.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"models": {"<target_lang>": {"<source_lang>": "<HF repo id>", ...}, ...},
+         "spacy": {"model": "en_core_web_sm", "version": "3.8.0"}}
+
+    A client uses this to say which model served it, which the server's configuration decides.
+    """
+    if not translate.is_available():
+        abort(403, "Module 'translate' not running")
+    logger.debug("api_translate_info: capabilities requested")
+    try:
+        return jsonify(translate.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_translate_info: failed, reason: {type(exc)}: {exc}")
 
 @app.route("/api/translate", methods=["POST"])
 def api_translate():

@@ -1,6 +1,6 @@
 """Machine translation (text, between natural languages) for Raven-server."""
 
-__all__ = ["init_module", "is_available", "translate_text"]
+__all__ = ["init_module", "is_available", "get_info", "translate_text"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,6 +60,22 @@ def init_module(config_module_name: str,
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (server_config is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    The server can host a model per language pair, so the shape is keyed by target and source language,
+    as `translation_models` in the server config is::
+
+        {"models": {"<target_lang>": {"<source_lang>": "<HF repo id>", ...}, ...},
+         "spacy": {"model": "<spaCy pipeline>", "version": "<its version>"}}
+
+    `spacy` is the pipeline the module splits text into sentences with.
+    """
+    if server_config is None or nlp_pipe is None:
+        raise RuntimeError("get_info: module not initialized (did `init_module` succeed?)")
+    return {"models": {target: dict(sources) for target, sources in server_config.translation_models.items()},
+            "spacy": nlptools.pipeline_info(nlp_pipe)}
 
 def translate_text(text: Union[str, List[str]],
                    source_lang: str,

@@ -12,6 +12,7 @@ If you want to test your AI character and edit postprocessor settings in a GUI a
 
 __all__ = ["init_module",
            "is_available",
+           "get_info",
            "shutdown",
            "load",
            "reload",
@@ -163,6 +164,17 @@ def init_module(config_module_name: str, device: str, model: str) -> None:
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return _poser is not None
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Current fields:
+        `model`: the THA3 model variant loaded, one of the folder names inside "raven/vendor/tha3/models/".
+        `repository`: the HuggingFace repository the THA3 models are installed from.
+    """
+    if _poser is None:
+        raise RuntimeError("get_info: module not initialized (did `init_module` succeed?)")
+    return {"model": _model, "repository": _server_config.talkinghead_models}
 
 def shutdown() -> None:
     remaining_instances = list(_avatar_instances.keys())
