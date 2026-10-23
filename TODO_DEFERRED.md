@@ -66,7 +66,10 @@ cluster confuses the model, so a prompt that explicitly allows a cluster with mo
 should cut the overthinking as well as yield the flag. That makes **thinking length on the low-cohesion
 clusters** a second thing to measure besides keyword quality: shorter there, unchanged on the coherent
 ones, is the prediction. Read a few of the traces as well as counting them; `raven.librarian.agent`
-returns them with each turn.
+returns them with each turn. **Caveat, measured 2026-10-23**: thinking length also rises when the model
+chooses to walk the list entry by entry, which it did on two of six 60-entry runs on hydrogen
+(`investigations/highdim-clustering/README.md`, *How many entries describe a large cluster*), so it is not
+a clean confusion signal.
 
 **"Weak fit" on a record**, from its mean cosine to the other members of its cluster. Wanted for
 eyeballing a dataset in the Visualizer (maintainer, 2026-10-23). Reading biology's clusters at cut 18, the
@@ -75,6 +78,9 @@ records the maintainer doubted from their titles were their cluster's weakest me
 institute among biomimicry papers), and three were loose fits whose link only the abstract shows. So the
 marker points at records worth opening rather than at records that are wrong.
 
+- **The LLM notices misfits already**: walking a 60-entry sample, it named a glioma cell-culture paper in
+  hydrogen's biohydrogen cluster as misclustered, unprompted (2026-10-23). Asking the keyword prompt to
+  list such records would give a semantic second opinion beside the cosine, for the sampled entries.
 - **Relative within the cluster, not an absolute threshold**: the values ran 0.57–0.70 across clusters,
   so a fixed cut would mark whole clusters. The lowest member, or a margin below the cluster's own
   median, are the first two candidates; neither has been measured.

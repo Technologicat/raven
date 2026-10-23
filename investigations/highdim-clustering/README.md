@@ -496,6 +496,31 @@ edge. Off-topic for the corpus in both cases. The size threshold kept them as cl
 the background rule turns them into outliers. Which is right is a presentation question: a block of false
 positives is something a reviewer wants to select and exclude in one go.
 
+### How many entries describe a large cluster
+
+`sample_size_probe.py`, 2026-10-23, with Qwen 3.8 27B (Q4_K_XL): hydrogen's two largest clusters at cut 100
+(1864 and 1855 records), keyworded from 60 and from 200 entries spread from the center outwards, three runs
+each. The importer sends 60 (`max_prompt_entries`).
+
+| cluster | 60 vs 60 | 200 vs 200 | 60 vs 200 |
+|---|---|---|---|
+| photocatalysis | 0.81 | 0.46 | 0.63 |
+| biohydrogen | 0.50 | 0.81 | 0.44 |
+
+Mean Jaccard of keyword sets, case-folded. **The label's core is the same at both sizes** (photocatalytic
+hydrogen production, water splitting, heterojunction; biohydrogen production, dark fermentation), and runs
+at different sizes disagree no more than runs at the same size do. At 200 the last one or two keywords
+came out more concrete in three of six runs (TiO₂, graphitic carbon nitride, *Clostridium*, volatile fatty
+acids, where 60 gave *operating parameters*, *hydrogen yield*), which three runs cannot separate from
+chance. The cost of 200 is about 3.5 times the prefill: 42–50 s against 12–14 s on the first run of each.
+Later runs of the same prompt hit the backend's cache, so only the first is what an import pays.
+
+**The long thinking traces were the model walking the whole list.** The two longest (1555 and 2220 thinking
+tokens, against about 500) were both at 60 entries, where the model went through every entry one by one;
+at 200 it did not. On the way it named a misclustered record unprompted: a glioma cell-culture paper,
+there for "hydrogen ion", in the biohydrogen cluster. So thinking length measures whether the model chose
+to enumerate as much as whether it was confused, and the model notices misfits without being asked.
+
 ## Open, and deliberately not answered here
 
 - **The 32 GB constraint.** The development machine has 32 GB and must keep working. HDBSCAN with `metric="cosine"` and
@@ -543,6 +568,7 @@ positives is something a reviewer wants to select and exclude in one go.
 | `outlier_anatomy.py` | whether the unplaced records are apart from every cluster or merely between two, and whether a small cluster is a topic or a residue. Finding 9 and finding 10 |
 | `keyword_count_probe.py` | how many keywords the model gives when asked for N, and whether what it adds last is real. `--counts twelve fifteen` compares any pair. Settled the extraction count |
 | `canonicalize_and_remeasure.py` | how much of the high-IDF tail is spelling variants, by running the *shipped* canonicalization over keyword files already produced and re-measuring. Reuses `importer._parse_canonicalization_mapping`, so it measures what the importer does rather than a second implementation |
+| `sample_size_probe.py` | whether describing a large cluster by 60 of its entries, as the importer does, loses anything 200 would find. Saves every turn whole, traces included |
 | `cohesion_rules.py` | which small-cluster rule to ship: the cohesion floor with a size threshold, on every cluster, or against the corpus background |
 | `small_corpora.py` | how the tree's cut levels compare with a human grouping at both of its levels, and with the shipped 2D labels it was made from. Reads a Visualizer cluster export (matched by title) or a citation table (matched by surname and year) |
 | `judge_singletons.py` | of the keywords occurring in exactly one cluster, how many are real topics. Also holds `unify_case`, the deterministic case-folding that belongs in the importer's canonicalization as a pre-step. The weakest instrument here — one model grading another's output — but it caught the malformed reply without being told it existed |
