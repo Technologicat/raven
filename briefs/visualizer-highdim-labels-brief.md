@@ -26,6 +26,12 @@ Labels from high-D, and nothing else changes. Anything about how a cluster that 
 map should *look* goes on a list for after Monday rather than into this build (finding 8 says to decide
 that presentation deliberately, which is not a same-day decision).
 
+**A candidate to widen it, now that Monday no longer depends on this build** (maintainer, 2026-10-23):
+the cluster quality flags in `TODO_DEFERRED.md` (*Visualizer: quality flags*), since they make the new
+clusters easier to interpret in the Visualizer. Mostly importer-side numbers and a text label beside a
+cluster's name, so much simpler on the GUI side than brief 13 §1's tag layer. The *"[incoherent?]"* half
+carries the combined-prompt measurement with it.
+
 ## Open, in the order to settle them
 
 1. **150 records is outside everything measured, and both rules break there.** The smallest corpus in the

@@ -29,7 +29,7 @@ and why hygiene items rank higher than they used to.
 
 ## Visualizer: quality flags, "[offtopic?]" and "[incoherent?]" on a cluster, "weak fit" on a record
 
-*Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels landing · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
+*Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels; possibly built with them (see that brief's scope guard) · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
 
 Two warning labels beside a cluster's label in the GUI, from two kinds of evidence, sharing the GUI side.
 
