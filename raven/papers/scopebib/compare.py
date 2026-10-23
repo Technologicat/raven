@@ -105,7 +105,7 @@ def write_comparison(path: str | pathlib.Path, compared: Sequence[Measure], *,
              "agreement: the share of the records both runs answered on which they gave the same answer",
              "kappa: Cohen's kappa, agreement beyond what chance would give at the rates each run gives each "
              "answer; 1 is perfect, 0 no better than chance; not defined where both runs gave a single answer "
-             "throughout"]
+             "throughout. See https://en.wikipedia.org/wiki/Cohen%27s_kappa"]
     tabular.write_table(path, notes, ("stage", "measure", "records", "agreement", "kappa"),
                         [(m.stage, m.name, len(m.pairs), _number(m.agreement), _number(m.kappa)) for m in compared])
     disagreements = path.with_name(f"{path.stem}-disagreements{path.suffix}")
