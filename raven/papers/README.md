@@ -255,6 +255,14 @@ Requiring both signals is what keeps the rule quiet. Either alone would split re
 
 **An abstract has the publisher's rights notice removed before it is compared** — and only for the comparison. What gets written is the abstract as its database wrote it. Two copies of one abstract often differ *only* by that notice, so without stripping first, "keep the longest" would be choosing a record for the size of its copyright line.
 
+### Records sharing a key
+
+**Two exports that use the same key scheme collide**, and so do records copied from one template. A BibTeX parser keeps the first record under a key and refuses the rest, so they would be lost without a word.
+
+**Here a record repeating an earlier record's key is read under a new one** (`key-2`, then `key-3`) and matched like any other. The run names each repeated key, and says whether the two records were the same paper and merged, or different papers and both kept. In the second case, the new key is the one in the output.
+
+This makes `raven-deduplicate` the step to run before importing several BibTeX files into the Visualizer, whether or not their keys clash: the importer reads each file on its own and merges nothing.
+
 ### The audit
 
 **Written by default**, beside the deduplicated file as `<output>_audit.tsv`.

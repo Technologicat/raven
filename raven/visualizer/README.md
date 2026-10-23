@@ -213,6 +213,11 @@ that were the part worth reading.
   placeholder, which would put Raven's words into somebody's bibliography as though a database had said
   them.
 
+**A record repeating an earlier record's key is kept**, read under a new key (`key-2`), and the import log says so. Records sharing a key are often the same paper, though, and the importer does not merge anything.
+
+- **When combining BibTeX files that may hold the same papers, deduplicate them first** and import the result: `raven-deduplicate -o combined.bib first.bib second.bib`. Several files go to it at once, with nothing to concatenate. A paper present in both files is merged into one record, and two different papers that happened to share a key both stay, under distinct keys. See [`raven-deduplicate`](../papers/README.md#raven-deduplicate--merging-a-multi-database-search).
+- **This matters across files too**, where the importer sees no clash at all: each file is read on its own, so the same paper in two files is imported twice and shows twice on the map.
+
 **Keywords count nouns and proper nouns, and leave the verbs out.** A topic keyword is nearly always a noun,
 while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *propose* — describe what
 a paper *does*, are the same in every field, and crowd the head of the frequency list without saying

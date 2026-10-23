@@ -122,6 +122,7 @@
 
 - **The importer keeps a record whose authors are listed APA-style**, as `Surname, I., Surname, I., & Surname, I.`, or carry a stray comma before an `and`. In v0.2.10 such a record was left out of the dataset, with a warning blaming unbalanced braces. The list is read as `raven-fixbib` now rewrites it.
 - **The importer keeps a record that repeats an earlier record's key**, reading it under a new one (`key-2`) and saying so. In v0.2.10 it was left out of the dataset, with a warning blaming unbalanced braces.
+  - Combining BibTeX files that may hold the same papers, run them through `raven-deduplicate` first and import its output: `raven-deduplicate -o combined.bib first.bib second.bib`. The same paper under one key in both is then merged rather than shown twice, and different papers sharing a key are both kept, under distinct keys.
 - **An import no longer crashes when the file yields more or fewer records than when it was last imported**, as it does when a parser repair recovers records. The embedding and keyword caches were judged by the file's date alone, and the 2D clustering then failed with an `IndexError`. A cache that does not describe the records now is computed again.
 
 #### Raven-pdf2bib
