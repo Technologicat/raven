@@ -47,6 +47,17 @@ that presentation deliberately, which is not a same-day decision).
    duplicate keys, a placeholder `doi-numero` reused and a DOI-URL key appearing twice, which may also be a
    duplicate record. Try `raven-fixbib` first, then `raven-deduplicate`; anything they cannot repair is a
    case for them rather than for a hand edit.
+   **Cleaned 2026-10-23: `202506/health_education_deduped.bib`, 117 records**, every one readable by the
+   importer and every one with an abstract. That parse count was taken without splitting names; the
+   importer splits them, and read only 108. Seven records had their authors listed APA-style, now
+   repaired by `raven-fixbib` and on import. Five fixes by hand, in `health_education_clean.bib` (the
+   original is untouched):
+   - the unfilled template removed, kept as `202506/bibtex_template.bib`;
+   - the real record that shared its key renamed `cooke2011`;
+   - a missing closing brace after an abstract;
+   - a Scopus URL moved from the citekey into `url`;
+   - a half-converted author list, with the APA original pasted into the BibTeX one.
+   The duplicate DOI key was two identical copies.
    **Both have a human-checked grouping, which makes them yardsticks** (maintainer, 2026-10-22):
    - **Geography**: `202512/geography_clusters.txt` is the final human-checked result, which became a
      table in the geography paper.
