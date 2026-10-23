@@ -909,6 +909,19 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
         assert isinstance(fallback, importer.LLMBackendUnavailable)
         assert fallback.headline and fallback.advice
 
+    def test_a_disabled_llm_is_never_asked_and_the_run_continues(self, no_backend, monkeypatch):
+        # The third of the policies, against the same dead backend. Not trying it is the claim, so the probe
+        # is replaced by one that fails the test if called; the backend being dead is what makes the first
+        # two policies raise or fall back, and so what this one has to be seen to ignore.
+        from raven.librarian import llmclient
+        def must_not_be_called(url):
+            raise AssertionError("llm_disabled tried the backend")
+        monkeypatch.setattr(llmclient, "test_connection", must_not_be_called)
+        importer._setup_llm_backend(llm_policy=importer.llm_disabled)
+        assert importer.llm_settings is None
+        assert importer._effective_keyword_method() == "frequencies"
+        assert unbox(importer.llm_fallback_box) is None, "nothing was given up that was not declined"
+
     def test_a_run_that_gives_up_nothing_publishes_no_fallback(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
         monkeypatch.setattr(visualizer_config, "summarize", False)

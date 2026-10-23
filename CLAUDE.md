@@ -278,9 +278,10 @@ alternative was editing configuration and putting it back exactly afterwards, wh
 own — machine-local settings now live outside the repository, but they are still somebody's settings and a
 test has no business rewriting them.
 
-**`raven-importer`, the same pipeline from the command line, does not fall back**: when its configuration
-needs an LLM and none answers, it exits before the first expensive stage. To get an embedding cache
-without an LLM, use the GUI importer or a reachable backend.
+**`raven-importer`, the same pipeline from the command line, stops instead by default**: when its
+configuration needs an LLM and none answers, it exits before the first expensive stage. `--llm optional`
+makes it fall back as the GUI does, and `--no-llm` skips those stages without trying a backend — the one
+to use for getting an embedding cache, or a dataset, with no LLM involved.
 
 **Every console script that talks to Raven-server takes `--server-url`, and every one that talks to an LLM
 backend takes `--backend-url`** — same spelling everywhere, no exceptions to look up. `raven-minichat` and

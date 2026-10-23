@@ -10,7 +10,7 @@ module stays free of argparse and logging configuration so the GUI can host it s
 __all__ = ["MISSING_TITLE", "MISSING_AUTHOR", "MISSING_YEAR",
            "MISSING_FIELD_PLACEHOLDERS",
 
-           "llm_required", "llm_optional",  # what a run does when it asks for an LLM and does not get one
+           "llm_required", "llm_optional", "llm_disabled",  # what a run does with the LLM it asks for
            "LLMBackendUnavailable", "LLMBackedStage", "llm_backed_stages",
 
            "is_missing_field",
@@ -76,6 +76,7 @@ MISSING_FIELD_PLACEHOLDERS = frozenset({MISSING_TITLE, MISSING_AUTHOR, MISSING_Y
 # says why on its way out, where a GUI has a window, a user watching it, and a Stop button already wired.
 llm_required = sym("llm_required")  # no usable backend -> raise `LLMBackendUnavailable`
 llm_optional = sym("llm_optional")  # no usable backend -> run without the LLM-backed stages, and say so
+llm_disabled = sym("llm_disabled")  # never connect -> run without the LLM-backed stages, as asked
 
 class LLMBackendUnavailable(RuntimeError):
     """The LLM-backed stages were asked for, and no usable backend answered.
@@ -166,6 +167,9 @@ def _setup_llm_backend(backend_url: Optional[str] = None, *, llm_policy=llm_requ
                   run finishes on what it can do without one, and publish the diagnosis to
                   `llm_fallback_box` for a frontend to show.
 
+                  `llm_disabled`: skip every LLM-backed stage without trying a backend at all. Nothing is
+                  published to `llm_fallback_box`, since nothing was given up that was not declined.
+
     Raises `LLMBackendUnavailable` under `llm_required` when the backend cannot be reached, or answers
     without a model loaded.
     """
@@ -190,6 +194,10 @@ def _setup_llm_backend(backend_url: Optional[str] = None, *, llm_policy=llm_requ
 
     stages = llm_backed_stages()
     if not stages:
+        return
+    if llm_policy is llm_disabled:
+        logger.info(f"_setup_llm_backend: LLM disabled for this run. Going without: "
+                    f"{', '.join(f'{stage.name} ({stage.without})' for stage in stages)}.")
         return
 
     def unavailable(headline: str, advice: str, url: str) -> None:
@@ -1712,7 +1720,8 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
 
     `llm_policy`: what to do when such a stage is configured and no usable backend answers.
                   `llm_required` (the default) stops the run; `llm_optional` finishes it without those
-                  stages. See `_setup_llm_backend`, whose parameter this is.
+                  stages; `llm_disabled` runs without them and never tries a backend. See
+                  `_setup_llm_backend`, whose parameter this is.
 
     No return value.
 

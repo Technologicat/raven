@@ -189,6 +189,8 @@ raven-importer mydata.pickle file1.bib file2.bib ...
 
 Status messages are printed into the terminal window.
 
+When the configuration asks for LLM cluster keywords or summaries and no LLM backend answers, `raven-importer` stops before it starts, where the GUI importer goes ahead without them. `--llm optional` makes it go ahead too, with frequency keywords and no summaries, and say so at the end; `--no-llm` leaves those stages out for this run without trying a backend.
+
 **:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven.visualizer.config`](config.py). :exclamation:**
 
 ## What the importer does to your records

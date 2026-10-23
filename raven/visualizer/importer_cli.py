@@ -36,6 +36,15 @@ def main() -> None:
                         help='LLM backend to talk to, overriding the configured one; e.g. http://localhost:1234. '
                              'Used only when this configuration has a stage that needs an LLM — cluster keywords '
                              'set to "llm", or summaries enabled — and ignored otherwise.')
+    llm_group = parser.add_mutually_exclusive_group()
+    llm_group.add_argument('--llm', choices=['required', 'optional'], default='required',
+                           help='what to do when the configuration has a stage that needs an LLM and no '
+                                'backend answers: "required" (the default) stops before the import starts; '
+                                '"optional" imports without those stages, with frequency keywords and no '
+                                'summaries, and says so at the end.')
+    llm_group.add_argument('--no-llm', dest='llm', action='store_const', const='off',
+                           help='import without the stages that need an LLM, this run only, and do not '
+                                'try a backend at all.')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
@@ -75,8 +84,11 @@ def main() -> None:
 
     try:
         with timer() as tim:
+            llm_policy = {"required": importer.llm_required,
+                          "optional": importer.llm_optional,
+                          "off": importer.llm_disabled}[opts.llm]
             importer.import_bibtex(None, opts.output_filename, *opts.input_filenames,
-                                   llm_backend_url=opts.backend_url)
+                                   llm_backend_url=opts.backend_url, llm_policy=llm_policy)
     except importer.LLMBackendUnavailable as exc:
         # A batch tool stops rather than starting. The check runs before any of the expensive stages, so
         # nothing is lost by stopping here, and the alternative — finishing with frequency keywords where
@@ -100,6 +112,10 @@ def main() -> None:
         sys.exit(1)
     else:
         logger.info(f"All done in {tim.dt:0.6g}s total.")
+        maybe_fallback = importer.llm_fallback_box.get()
+        if maybe_fallback is not None:
+            without = ", ".join(stage.without for stage in importer.llm_backed_stages())
+            print(f"Imported without the LLM, {without}: {maybe_fallback.headline}")
 
 
 if __name__ == "__main__":

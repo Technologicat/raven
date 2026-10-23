@@ -38,6 +38,12 @@
   - Unset, the limit is the model's context length. The README's *Configuration* says how to set it.
   - For scripts, `agent.TurnRecord.truncated` says the same, `agent.ask_until` does not accept such a reply however its text reads, and `agent.turn` takes a `max_tokens` of its own.
 
+#### Raven-visualizer
+
+- **`raven-importer` can import without the LLM**, as the GUI importer already could.
+  - `--no-llm` leaves out the stages that need one for this run, and tries no backend.
+  - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.
+
 #### Raven-deduplicate
 
 - **The audit can be an Excel or OpenDocument spreadsheet**, as well as TSV: give `--audit` a path ending in `.xlsx` or `.ods`, or use `--audit-format xlsx` or `ods` for the audit named after the output.
