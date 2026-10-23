@@ -39,6 +39,7 @@
     - [Natural language translation](#natural-language-translation)
     - [Speech synthesizer (TTS)](#speech-synthesizer-tts)
     - [Web search](#web-search)
+    - [Web fetch](#web-fetch)
 - [Web API endpoints](#web-api-endpoints)
     - [General](#general-1)
         - [GET "/"](#get-)
@@ -96,7 +97,7 @@
     - [Web search](#web-search-1)
         - [POST "/api/websearch"](#post-apiwebsearch)
         - [POST "/api/websearch2"](#post-apiwebsearch2)
-    - [Web fetch](#web-fetch)
+    - [Web fetch](#web-fetch-1)
         - [POST "/api/webfetch"](#post-apiwebfetch)
 <!-- markdown-toc end -->
 
@@ -415,9 +416,7 @@ Similarly, `jf_alpha` yields a Japanese accent.
 
 # Python bindings (easy client API)
 
-*Last updated for v0.2.3.*
-
-*This API documentation is maintained on a best-effort basis, but sometimes, recent changes may be missing. For the ground truth, see below.*
+*Every function `raven.client.api` and `raven.client.tts` export is listed here: `scripts/check_server_docs.py` checks that, in CI. For what each one does in detail, see below.*
 
 For integration with Python-based apps, we provide *Python bindings*, i.e. an easy-to-use API that abstracts away the fact that you're interfacing with a server. With the Python bindings, you can call the web API endpoints on the server by calling regular Python functions - your code does not need to care about JSON or HTTP.
 
@@ -434,10 +433,16 @@ Full list of Python API functions follows.
 ## General
 
 - `initialize`: **Must be called first.**
-  - This loads the client configuration, and starts the audio service so that TTS can work.
+  - This sets the server URL and API key the other functions use, and creates the client's background task manager.
+  - It does not start audio. Audio playback and capture are local to the client, and an app that needs them (TTS playback, speech recording) also calls `raven.common.audio.initialize(...)`.
   - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
+- `require`: Raise `RuntimeError` if `initialize` has not been called yet.
+- `test_connection`: Test the connection to *Raven-server*.
 - `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
 - `tts_server_available`: Same, but also check if the `"tts"` module is loaded.
+- `modules`: Return the list of modules loaded on the running *Raven-server*.
+
+Each module that loads a model also has an `..._info` function — `avatar_info`, `classify_info`, `embeddings_info`, `natlang_info`, `sanitize_info`, `stt_info`, `translate_info`, `tts_info` — returning which model the server loaded for it, and its version where the model reports one. A client uses these to say which model served it.
 
 ## Raven-avatar client
 
@@ -447,6 +452,7 @@ AI-animated anime avatar for your LLM.
 - `avatar_reload`: Reload a character into the specified avatar session; useful e.g. if the image file has changed on disk, or if you want to switch to another character.
   - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
 - `avatar_unload`: End an avatar session.
+- `avatar_heartbeat`: Tell the server this client still holds the given sessions. Returns those of them the server does not have.
 - `avatar_load_emotion_templates`: Load a set of avatar emotion templates, from a Python dictionary.
   - Format of the dictionary is:
       ```
@@ -482,7 +488,9 @@ AI-animated anime avatar for your LLM.
 - `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx). Sets the full override state at once.
 - `avatar_modify_overrides`: Manually selectively control specific morphs (including cel blends, except animefx). Modifies the override state, facilitating fine-grained control of different morphs or cel blends across the client application.
   - Used by the lipsync driver to control the character's mouth based on timestamped phoneme data.
-  - Used by the Raven-librarian GUI to indicate LLM tool access with the "data eyes" effect.
+- `avatar_start_data_eyes`: Switch on the scifi "data eyes" cel effect, e.g. as an LLM tool access indicator. It switches on instantly.
+- `avatar_stop_data_eyes`: Begin fading out the "data eyes" effect. The fade duration is the animator setting `data_eyes_fadeout_duration`, and the fade waits until the effect has been on for `data_eyes_min_duration`.
+- `avatar_trigger_animefx`: Play an anime-style effect from the start, whatever the current emotion; its name is one of those in the `animefx` animator setting.
 - `avatar_result_feed`: Receive the video feed of the avatar, as a `multipart/x-mixed-replace` stream of images.
   - Image format and desired framerate are set in the animator settings.
   - The server will try hard to keep the desired framerate.
@@ -535,10 +543,10 @@ API:
       - `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
         - Calling this resets the emotion autoreset countdown for that avatar instance.
       - `start_data_eyes`: Enter the "data eyes" state.
-        - The animation switches on instantly. While in data eyes state, further calls no-op.
-      - `stop_data_eyes`: Exit the "data eyes" state.
-        - The animation fades out. The fade duration is the server-side animator setting `data_eyes_fadeout_duration`.
-        - If a fadeout is already in progress, this call is a no-op (does not restart the fade).
+        - The animation switches on instantly. Calls nest: every `start_data_eyes` must be matched by a `stop_data_eyes`, and the effect ends when the last one is stopped, not the first. So independent parts of an app can each light it without knowing about each other.
+      - `stop_data_eyes`: Leave the "data eyes" state, once every `start_data_eyes` has been matched.
+        - The animation fades out. The fade duration is the server-side animator setting `data_eyes_fadeout_duration`, and the fade waits until the effect has been on for `data_eyes_min_duration`.
+        - An unmatched stop is harmless.
       - `send_text_to_tts`: Send text into the TTS queue.
     - Not specific to an avatar instance:
       - `stop_tts`: Clear the TTS queue and stop the TTS.
@@ -604,11 +612,15 @@ For recording audio from your mic, see [`raven.common.audio.recorder`](../common
 The TTS subsystem is a client-server architecture, with some features implemented on the client side. Particularly, the lipsync driver and all audio playback are in the client. The role of the server is to generate the actual TTS audio, the word-level timestamps, and the word-level phonemes.
 
 - `tts_list_voices`: Get a list of all voice names supported by the TTS.
+- `tts_warmup`: Warm up the TTS before you need it for the first time, so that the first sentence spoken does not wait for it.
 - `tts_prepare`: Advanced mode: precompute TTS audio and optionally phonemes. The precomputed data can then be handed to `tts_speak` or `tts_speak_lipsynced`.
+- `tts_prepare_cached`: `tts_prepare`, memoized: the same text and voice again costs nothing.
+- `tts_prepare_decoded_cached`: The same, returning the audio decoded to float samples rather than encoded.
 - `tts_speak`: Speak text using the TTS. No lipsync.
 - `tts_speak_lipsynced`: Speak text using the TTS. Lipsync the specified avatar session to the speech audio.
-- `tts_stop`: Stop speaking. Useful for canceling while speech in progress. (Will in any case stop automatically when the speech audio ends.) No-op if not speaking.
-- `tts_speaking`: Query whether the TTS is speaking, for use cases where you actually need the status.
+- `play_encoded_with_avatar_lipsync`: Play encoded speech audio with lipsync on an avatar session, synchronously. The low-level piece under `tts_speak_lipsynced`.
+
+To stop speaking, or to ask whether speech is playing, use the audio player directly: `raven.common.audio.player.instance.stop()` and `.is_playing()`. Audio playback is always local to the client, so this works the same whether the speech was synthesized on the server or locally.
 
 ## Web search
 
@@ -616,12 +628,14 @@ The TTS subsystem is a client-server architecture, with some features implemente
   - As a new feature over what *SillyTavern-Extras* did, you'll now get the results in a structured format that preserves the information of which link belongs to which search result.
   - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please [open an issue](https://github.com/Technologicat/raven/issues).
 
+## Web fetch
+
+- `webfetch_fetch`: Retrieve a web page's main content as clean text or Markdown, via *Raven-server*.
+
 
 # Web API endpoints
 
-*Last updated for v0.2.3.*
-
-*This web API endpoint documentation is maintained on a best-effort basis, but sometimes, recent changes may be missing. The ground truth are the docstrings, and ultimately the actual implementation, both of which can be found in [`raven.server.app`](../server/app.py).*
+*Every endpoint the server serves has a section here: `scripts/check_server_docs.py` checks that, in CI. What it cannot check is the prose, so where a section and the code disagree, the endpoint's docstring in [`raven.server.app`](../server/app.py) is the authority, and the implementation beneath it.*
 
 For usage examples, look at the Python bindings of the web API in [`raven.client.api`](../client/api.py) and [`raven.client.tts`](../client/tts.py). These should be straightforward to port to other programming environments if needed. Porting the bindings specifically to JavaScript, for web app clients, is tracked in [#2](https://github.com/Technologicat/raven/issues/2).
 

@@ -49,6 +49,7 @@ jobs:
           python scripts/check_lint_canary.py
           python scripts/check_module_maps.py
           python scripts/check_option_lists.py
+          python scripts/check_server_docs.py
           python scripts/check_todo_structure.py
           python scripts/check_usage_paths.py
 
