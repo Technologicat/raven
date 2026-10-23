@@ -68,7 +68,8 @@ class StagePlan:
 class Settings:
     """The run's settings, each `None` where the file does not say. What each means is the command line's.
 
-    `maybe_bib`, `maybe_definition`: the input and the definition file, as absolute paths.
+    `maybe_bib`, `maybe_definition`, `maybe_ledgers`: the input, the definition file, and the directory
+                                                    holding the ledgers, as absolute paths.
     `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them: field names, and `FIELD=N`.
     `maybe_sample`, `maybe_pilot`: how many records a sampled or a pilot run draws.
     `maybe_seed`: the seed of every draw, the sample's and the control's.
@@ -78,6 +79,7 @@ class Settings:
     """
     maybe_bib: pathlib.Path | None = None
     maybe_definition: pathlib.Path | None = None
+    maybe_ledgers: pathlib.Path | None = None
     require: tuple[str, ...] = ()
     min_chars: tuple[str, ...] = ()
     maybe_sample: int | None = None
@@ -96,7 +98,7 @@ class RunFile:
 
 
 # The `[run]` table's keys: the `Settings` field each fills, and its smallest value where it is a count.
-_PATHS = {"bib": "maybe_bib", "definition": "maybe_definition"}
+_PATHS = {"bib": "maybe_bib", "definition": "maybe_definition", "ledgers": "maybe_ledgers"}
 _LISTS = {"require": "require", "min_chars": "min_chars"}
 _INTS = {"sample": ("maybe_sample", 1), "pilot": ("maybe_pilot", 1), "seed": ("maybe_seed", None),
          "control": ("maybe_control", 0), "replicate": ("maybe_replicate", 1)}
@@ -231,12 +233,19 @@ def _toml_string(value: str) -> str:
 
 
 def _relative(target: pathlib.Path, base: pathlib.Path) -> str:
-    """`target` relative to `base`, with forward slashes, so that the file reads the same on any system;
-    absolute where no relative path exists, as across drives on Windows."""
+    """`target` relative to `base`, with forward slashes, so that the file reads the same on any system.
+
+    Absolute where the two share nothing below the filesystem's root, or are on different drives: moving
+    them together is then not a thing anyone does, and a path climbing to the root says less than the
+    absolute one.
+    """
     try:
-        return pathlib.Path(os.path.relpath(target, base)).as_posix()
-    except ValueError:
+        shared = pathlib.Path(os.path.commonpath([target, base]))
+    except ValueError:  # different drives, on Windows
         return target.as_posix()
+    if shared == pathlib.Path(shared.anchor):
+        return target.as_posix()
+    return pathlib.Path(os.path.relpath(target, base)).as_posix()
 
 
 def _archive_name(path: pathlib.Path) -> pathlib.Path:

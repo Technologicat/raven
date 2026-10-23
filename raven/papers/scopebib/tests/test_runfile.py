@@ -1,5 +1,7 @@
 """Tests for `raven.papers.scopebib.runfile`: which model and instrument each stage asks with."""
 
+import pathlib
+
 import pytest
 
 from raven.papers.scopebib import runfile
@@ -97,6 +99,14 @@ class TestWriting:
         runfile.write_run_file(old / "out" / "run.toml", RunFile(Settings(maybe_bib=old / "corpus.bib"), {}))
         old.rename(new)
         assert runfile.load_run_file(new / "out" / "run.toml").settings.maybe_bib == (new / "corpus.bib").resolve()
+
+    def test_a_path_sharing_only_the_root_is_written_whole(self, tmp_path):
+        path = tmp_path / "run.toml"
+        elsewhere = pathlib.Path(tmp_path.anchor) / "corpus.bib"
+        runfile.write_run_file(path, RunFile(Settings(maybe_bib=elsewhere, maybe_definition=tmp_path / "d.toml"), {}))
+        text = path.read_text(encoding="utf-8")
+        assert f'bib = "{elsewhere.as_posix()}"' in text
+        assert 'definition = "d.toml"' in text, "the control: a path sharing a directory stays relative"
 
     def test_every_stage_is_written_in_full_rather_than_by_default(self, tmp_path):
         path = tmp_path / "run.toml"
