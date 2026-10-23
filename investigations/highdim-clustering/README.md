@@ -470,6 +470,32 @@ cluster of its own.
   only, which needs a size to say what small is. The floor itself reproduces the 0.516 and 0.510 above
   (`clusterlab.cohesion_floor`).
 
+### Looking for a size-free cohesion rule
+
+`cohesion_rules.py`, 2026-10-23, at cut 100 (18 on the two small corpora). Coverage under three rules:
+
+| corpus | p10 on clusters under 5 | p10 on every cluster | cohesion above the corpus background |
+|---|---|---|---|
+| arXiv AI | 97.2% | 91.0% | 95.7% |
+| AOKK | 99.7% | 90.4% | 94.7% |
+| ECCOMAS | 99.6% | 90.0% | 99.6% |
+| hydrogen, savedrecs 1–3 | 99.9% | 90.7% | 98.1% |
+| *banichuk* | 88.9% | 85.1% | 94.0% |
+| biology | 99.4% | 92.5% | 92.5% |
+| geography | 98.5% | 89.4% | 89.4% |
+
+The background is the mean pairwise cosine of the corpus: a cluster passes when its members are more
+alike than two records picked at random, which needs no size and no percentile. On the crowded corpora
+it sits close to the p10 floor and drops about as much.
+
+**What both size-free rules drop is large clusters looser than the background, and they are a kind of
+group of their own.** arXiv AI's 28 (cohesion 0.37) is a junk drawer of records an AI corpus should not
+hold: wormholes, the Oort cloud, category theory. Hydrogen's 226 (0.43) is the search's false positives:
+hydrogen *peroxide* production in biology at its core, hydrogen sulfide and hydrogen cyanamide at its
+edge. Off-topic for the corpus in both cases. The size threshold kept them as clusters for being large;
+the background rule turns them into outliers. Which is right is a presentation question: a block of false
+positives is something a reviewer wants to select and exclude in one go.
+
 ## Open, and deliberately not answered here
 
 - **The 32 GB constraint.** The development machine has 32 GB and must keep working. HDBSCAN with `metric="cosine"` and
@@ -517,6 +543,7 @@ cluster of its own.
 | `outlier_anatomy.py` | whether the unplaced records are apart from every cluster or merely between two, and whether a small cluster is a topic or a residue. Finding 9 and finding 10 |
 | `keyword_count_probe.py` | how many keywords the model gives when asked for N, and whether what it adds last is real. `--counts twelve fifteen` compares any pair. Settled the extraction count |
 | `canonicalize_and_remeasure.py` | how much of the high-IDF tail is spelling variants, by running the *shipped* canonicalization over keyword files already produced and re-measuring. Reuses `importer._parse_canonicalization_mapping`, so it measures what the importer does rather than a second implementation |
+| `cohesion_rules.py` | which small-cluster rule to ship: the cohesion floor with a size threshold, on every cluster, or against the corpus background |
 | `small_corpora.py` | how the tree's cut levels compare with a human grouping at both of its levels, and with the shipped 2D labels it was made from. Reads a Visualizer cluster export (matched by title) or a citation table (matched by surname and year) |
 | `judge_singletons.py` | of the keywords occurring in exactly one cluster, how many are real topics. Also holds `unify_case`, the deterministic case-folding that belongs in the importer's canonicalization as a pre-step. The weakest instrument here — one model grading another's output — but it caught the malformed reply without being told it existed |
 
