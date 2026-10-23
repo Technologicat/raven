@@ -439,6 +439,37 @@ support:
 - **Expect fewer clusters and more outliers than the current map shows**, and decide deliberately how to
   present that. Finding 8.
 
+## Small corpora: the cut at 100 does not transfer
+
+Measured 2026-10-23 on two education corpora of 161 and 128 records (biology and geography teacher
+education), each with a human-checked grouping published in a paper: two levels, six or seven clusters
+of 10–45 records, each split into named items. `small_corpora.py` sweeps the cut and scores it against
+that grouping. Agreement is the adjusted Rand index at the top level, a predicted outlier counting as a
+cluster of its own.
+
+| | biology | geography |
+|---|---|---|
+| shipped 2D labels the human grouping was made from | 0.84 | 0.85 |
+| shipped 2D pipeline, re-imported today | 0.65 | 0.47 |
+| high-D agglomerative, best cut (18–20 and 7–11) | 0.32 | 0.27 |
+| coverage at cut 100, cohesion floor applied | 56% | 30.5% |
+
+- **The cut at 100 fails outright below a few hundred records.** At 1.5 or fewer records per cut most
+  clusters are singletons, and the cohesion floor then calibrates against clusters of two or three.
+- **No cut reaches the human grouping**, and at the human's own count of six it is not the linkage:
+  average, complete and Ward linkage and k-means, raw or centered, all land between 0.00 and 0.36 on
+  biology. On geography the high-D tree gets nearer the *items* (0.40 at a cut of 40, against 0.57 for
+  the 2D labels) than the clusters.
+- **The yardstick is not independent of the method being replaced.** Both groupings were made by
+  checking and editing the 2D clusterer's output (the maintainer, 2026-10-23), so the 2D rows are
+  inflated by construction. A low high-D score means either a worse grouping at this size or merely a
+  different one that would also have been accepted, and only reading the clusters tells those apart.
+- **The membership-weighted cohesion floor, applied to every cluster, always discards up to a tenth of
+  the records**: the clusters holding the least cohesive tenth sit below their own 10th percentile by
+  construction. AOKK at cut 100 goes from 99% coverage to 90%. Finding 10 applied it to small clusters
+  only, which needs a size to say what small is. The floor itself reproduces the 0.516 and 0.510 above
+  (`clusterlab.cohesion_floor`).
+
 ## Open, and deliberately not answered here
 
 - **The 32 GB constraint.** The development machine has 32 GB and must keep working. HDBSCAN with `metric="cosine"` and
@@ -486,6 +517,7 @@ support:
 | `outlier_anatomy.py` | whether the unplaced records are apart from every cluster or merely between two, and whether a small cluster is a topic or a residue. Finding 9 and finding 10 |
 | `keyword_count_probe.py` | how many keywords the model gives when asked for N, and whether what it adds last is real. `--counts twelve fifteen` compares any pair. Settled the extraction count |
 | `canonicalize_and_remeasure.py` | how much of the high-IDF tail is spelling variants, by running the *shipped* canonicalization over keyword files already produced and re-measuring. Reuses `importer._parse_canonicalization_mapping`, so it measures what the importer does rather than a second implementation |
+| `small_corpora.py` | how the tree's cut levels compare with a human grouping at both of its levels, and with the shipped 2D labels it was made from. Reads a Visualizer cluster export (matched by title) or a citation table (matched by surname and year) |
 | `judge_singletons.py` | of the keywords occurring in exactly one cluster, how many are real topics. Also holds `unify_case`, the deterministic case-folding that belongs in the importer's canonicalization as a pre-step. The weakest instrument here — one model grading another's output — but it caught the malformed reply without being told it existed |
 
 ## Data

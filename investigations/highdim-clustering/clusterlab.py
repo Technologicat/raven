@@ -154,3 +154,58 @@ def mean_nearest_cluster_similarity(vectors, labels):
     gram = centers @ centers.T
     np.fill_diagonal(gram, -np.inf)
     return float(np.mean(gram.max(axis=1)))
+
+
+def cohesion(vectors, members):
+    """Mean pairwise cosine similarity among the rows `members` of `vectors`, self-pairs excluded.
+
+    `vectors` must be L2-normalized. `members`: index array of at least two rows; a singleton has no
+    pairs, which is why the floor of two in `filter_by_cohesion` is structural.
+
+    Returns `float`.
+    """
+    block = vectors[members] @ vectors[members].T
+    return float(block[~np.eye(len(members), dtype=bool)].mean())
+
+
+def cohesion_floor(vectors, raw_labels, percentile=10):
+    """The cohesion a cluster must reach to count as a topic rather than a residue.
+
+    The `percentile` of every cluster's cohesion, weighted by membership: each cluster of two or more
+    contributes its cohesion once per member, so the result is the cohesion of the cluster that the
+    `percentile`-th clustered record sits in. Large clusters dominate the weight, which is what lets this
+    stand in for "the corpus's established clusters" without a size threshold deciding which those are.
+
+    `vectors`: L2-normalized, as given to `cohesion`. `raw_labels`: a cut of the tree, every record
+    labelled, no outlier marker.
+
+    Returns `float`, or `nan` when no cluster has two members.
+    """
+    raw_labels = np.asarray(raw_labels)
+    values = []
+    for cid in np.unique(raw_labels):
+        members = np.flatnonzero(raw_labels == cid)
+        if len(members) >= 2:
+            values.append(np.full(len(members), cohesion(vectors, members)))
+    if not values:
+        return float("nan")
+    return float(np.percentile(np.concatenate(values), percentile))
+
+
+def filter_by_cohesion(vectors, raw_labels, percentile=10):
+    """Mark as outliers (-1) the singletons and every cluster less coherent than `cohesion_floor`.
+
+    Surviving clusters are renumbered 0, 1, ... in order of their raw ID.
+
+    Returns `(labels, floor)`.
+    """
+    raw_labels = np.asarray(raw_labels)
+    floor = cohesion_floor(vectors, raw_labels, percentile)
+    labels = np.full(len(raw_labels), -1)
+    next_id = 0
+    for cid in np.unique(raw_labels):
+        members = np.flatnonzero(raw_labels == cid)
+        if len(members) >= 2 and cohesion(vectors, members) >= floor:
+            labels[members] = next_id
+            next_id += 1
+    return labels, floor
