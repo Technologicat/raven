@@ -80,6 +80,10 @@ marker points at records worth opening rather than at records that are wrong.
   median, are the first two candidates; neither has been measured.
 - **Records come in loose pairs too**: #14's two weakest were the two papers on evaluating ESD
   activities, a second thread in a curriculum cluster.
+- **And an affordance to act on it** (maintainer, 2026-10-23): exclude the weak fits, and hand-mark
+  individual records in or out, persisted with the dataset. The marks are record tags in brief 13's sense
+  (`briefs/13_corpus-scopes-and-unified-db-brief.md` §1), and persisting them waits on the dataset format
+  leaving `.pickle`.
 
 Raised while settling the cohesion floor's size question, and while reading the biology clusters
 (2026-10-23).

@@ -81,6 +81,12 @@ by hand; and long-term memory needs the same separation.
   selections live in the same namespace as peers rather than in a separate concept.
   - Supersedes the tentative "scope key = the dataset's file path", which assumed a Visualizer dataset is one
     monolithic `.bib`.
+  - **A hand-marked in/out on a record is a tag in this sense** (2026-10-23): a reviewer excluding a record
+    from a cluster, or keeping one the importer marked as a weak fit, persisted with the dataset. Wanted by
+    the maintainer for eyeballing a dataset in the Visualizer; the GUI half and the weak-fit flag that
+    drives it are in `TODO_DEFERRED.md`, *Visualizer: quality flags*. Persisting it waits on the dataset
+    format leaving `.pickle` (`TODO.md`, *Data file format*), since a mark kept in a pickle is lost with
+    the dataset at a Python upgrade.
 - **[P] Hierarchical scopes: the fit belongs to the scope you opened; children are a filter or a highlight
   over it, never their own fit.** Open `arxiv_ai` and `2026_07_new_studies` is a colour on the parent map.
   Fit two scopes independently and you need Procrustes to compare them — a problem you can decline to create.
