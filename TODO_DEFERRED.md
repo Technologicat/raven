@@ -84,8 +84,15 @@ marker points at records worth opening rather than at records that are wrong.
   individual records in or out, persisted with the dataset. The marks are record tags in brief 13's sense
   (`briefs/13_corpus-scopes-and-unified-db-brief.md` §1), and persisting them waits on the dataset format
   leaving `.pickle`.
-  - **This wants a UX design, not just a mark** (maintainer, 2026-10-23): a record marked out of its
-    cluster is then lost to the review, which is the opposite of what a reviewer doing it intends.
+  - **This wants a UX design, not just a mark** (maintainer, 2026-10-23), because "out" means two things.
+    A record that is noise, like arXiv AI's junk drawer, should be dropped, and a mark does that. A record
+    that belongs to another theme should be moved, and a mark loses it from the review instead.
+  - **An idea for the second case, not yet a decision**: what the reviewer moves is the record's place in
+    the review, not on the map. The review's themes as tags (brief 13 §1), shown in colour over the map,
+    with the record staying where the embedding puts it. The published biology and geography groupings
+    are exactly such a layer: the clusterer's output, checked and edited by hand. A record tagged with a
+    theme whose region it is not in is then visible as such, which is information in itself (biology's
+    cluster #1, where four papers about SDGs were grouped by teaching method).
   - **Declined: moving a record to the cluster the user thinks it belongs in.** The map is a map, and a
     cluster is a region of it; reassigning by hand would be deciding that Switzerland belongs to Asia
     (maintainer, 2026-10-23). The record stays where the embedding puts it.
