@@ -27,7 +27,7 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
-## Visualizer: cluster quality flags, "[offtopic?]" and "[incoherent?]"
+## Visualizer: quality flags, "[offtopic?]" and "[incoherent?]" on a cluster, "weak fit" on a record
 
 *Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels landing · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
 
@@ -67,6 +67,19 @@ should cut the overthinking as well as yield the flag. That makes **thinking len
 clusters** a second thing to measure besides keyword quality: shorter there, unchanged on the coherent
 ones, is the prediction. Read a few of the traces as well as counting them; `raven.librarian.agent`
 returns them with each turn.
+
+**"Weak fit" on a record**, from its mean cosine to the other members of its cluster. Wanted for
+eyeballing a dataset in the Visualizer (maintainer, 2026-10-23). Reading biology's clusters at cut 18, the
+records the maintainer doubted from their titles were their cluster's weakest member by this measure in
+#5, #8 and #9, and the second weakest in #14. Of those four, one was misplaced (#5's bioenergy summer
+institute among biomimicry papers), and three were loose fits whose link only the abstract shows. So the
+marker points at records worth opening rather than at records that are wrong.
+
+- **Relative within the cluster, not an absolute threshold**: the values ran 0.57–0.70 across clusters,
+  so a fixed cut would mark whole clusters. The lowest member, or a margin below the cluster's own
+  median, are the first two candidates; neither has been measured.
+- **Records come in loose pairs too**: #14's two weakest were the two papers on evaluating ESD
+  activities, a second thread in a curriculum cluster.
 
 Raised while settling the cohesion floor's size question, and while reading the biology clusters
 (2026-10-23).
