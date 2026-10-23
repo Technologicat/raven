@@ -62,8 +62,18 @@ that presentation deliberately, which is not a same-day decision).
    nothing in the data picks a number. Do not choose a
    number against examples written for the purpose. Whatever rule comes out must give the same answer as cut-at-100 on the corpora where 100 was
    measured, or say why it should not.
+   **Measured 2026-10-23, and v1's rule does not hold at this size**: cut at 100 keeps 56% of biology
+   and 30.5% of geography, and no cut agrees with either human grouping better than ARI 0.32, against
+   0.84 for the 2D labels the groupings were made from. Since those groupings were derived from the 2D
+   clusterer, the low score does not yet say the high-D grouping is worse; the maintainer reads
+   biology's high-D clusters as a disqualification test. Tables in the investigation README, *Small
+   corpora*. **Fallback for Monday**: group health education with the shipped 2D pipeline, which is
+   what the other two papers used, and give high-D a small-corpus rule afterwards.
 2. **Port the cohesion rule from the prototype, not from this summary — and note the prototype has only
-   half of it.** `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
+   half of it.** *Done 2026-10-23 as `clusterlab.cohesion_floor`, which reproduces both rows. It
+   exposed a gap in the rule as stated above: applied to every cluster, the floor always discards up to
+   a tenth of the records (AOKK: 99% coverage to 90%), and applied to small clusters only, as the
+   prototype did, it needs a size to say what small is. Undecided.* `investigations/highdim-clustering/outlier_anatomy.py` computes cohesion and the
    size-split floor (the 10th percentile over clusters of five or more). The membership-weighted floor,
    which is the one to ship, appears in the README only as a comparison table against the size-split one.
    So write the weighted floor new, and check it against that table before trusting it: it should
