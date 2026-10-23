@@ -355,6 +355,8 @@ What counts as off topic is yours to say, in a [definition file](#writing-a-defi
 
 **Whether it needs one is worked out before any work starts**, from the answers already saved, and if it does, it connects at once. A backend that cannot be reached, has no model loaded, or has a model other than the one a step asks for, is reported at the start — so a long run that gets going can be left to it.
 
+**The backend is checked again after every batch.** One that goes away during the run, or has its model swapped, stops the run with a message saying so, rather than letting every remaining record fail. The reports are written from what was settled, and running again resumes where it stopped.
+
 ### How it works, step by step
 
 Six steps, of which four ask an LLM. The proportions below are **an illustration** on a round 1000 records, rounded from one real corpus; yours will differ, and the [pilot report](#calibrating-with-a-pilot) gives them for your own corpus before the whole run.
