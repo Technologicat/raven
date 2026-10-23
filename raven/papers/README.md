@@ -353,6 +353,8 @@ What counts as off topic is yours to say, in a [definition file](#writing-a-defi
 
 **It needs an LLM backend**, any OpenAI-compatible one, as Raven-librarian uses; `--backend-url` names it. A run whose answers are all saved needs none, so reports can be written again, and a finished run repeated, with no backend running.
 
+**Whether it needs one is worked out before any work starts**, from the answers already saved, and if it does, it connects at once. A backend that cannot be reached, has no model loaded, or has a model other than the one a step asks for, is reported at the start — so a long run that gets going can be left to it.
+
 ### How it works, step by step
 
 Six steps, of which four ask an LLM. The proportions below are **an illustration** on a round 1000 records, rounded from one real corpus; yours will differ, and the [pilot report](#calibrating-with-a-pilot) gives them for your own corpus before the whole run.

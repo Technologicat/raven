@@ -70,6 +70,7 @@
   - For the records it keeps, it can also record what each one says — the level a study is set at, say — and remove what your rules over those answers rule out.
   - `run --pilot` tries it on 50 records first, with one report to read before committing to the corpus.
   - Every answer is saved, so an interrupted run resumes, and every run writes `run.toml`, which repeats it — with no LLM at all when every answer is saved. Each report names the model behind every step.
+  - Before any work, a run works out whether it needs the LLM at all, and if it does, connects at once: a backend that cannot be reached, has no model loaded, or has the wrong one is reported at the start, not an hour in.
   - `--replicate` and `raven-scopebib compare` measure how far two runs agree, with Cohen's kappa: the test-retest reliability of the LLM's answers, or one model against another.
   - How to write a definition file, and the rest, is in [the paper tools' manual](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 
