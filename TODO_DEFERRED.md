@@ -27,9 +27,13 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
-## Visualizer: an "[offtopic?]" label on a cluster looser than the corpus background
+## Visualizer: cluster quality flags, "[offtopic?]" and "[incoherent?]"
 
 *Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels landing · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
+
+Two warning labels beside a cluster's label in the GUI, from two kinds of evidence, sharing the GUI side.
+
+**"[offtopic?]"**, from cohesion.
 
 A cluster whose cohesion (mean pairwise cosine among its members) is below the corpus's mean pairwise
 cosine has members less alike than two records picked at random. At cut 100, the large clusters of that
@@ -45,7 +49,21 @@ shows *"[offtopic?]"* beside the cluster's label.
 - **Same territory: view filters for outliers.** The Visualizer can select all outliers, but has no view
   filter for them; showing or hiding a flagged cluster is the same kind of control.
 
-Raised while settling the cohesion floor's size question (2026-10-23).
+**"[incoherent?]"**, from the LLM. Cohesion is about geometry, and it passed a cluster a reader calls
+mixed: in biology at cut 18, cluster #0 (8 records) holds sustainability and research gaps together, at a
+cohesion exactly on the floor (`investigations/highdim-clustering/small_corpora.py`'s dump). An LLM reading
+the titles can say what the number cannot. Two ways to ask, and the choice is a measurement:
+
+- **In the keyword-extraction prompt**: no extra calls, which matters on import time, but it changes a prompt
+  whose output was tuned, so keyword quality must be re-checked against the current prompt
+  (`keyword_count_probe.py` is the instrument for that).
+- **As a second call per cluster**, if the first costs too much keyword quality: about a hundred more calls
+  on a large corpus, batched like the keyword pass.
+
+Prefer the first if it holds up (maintainer, 2026-10-23).
+
+Raised while settling the cohesion floor's size question, and while reading the biology clusters
+(2026-10-23).
 
 ## Drop the held records the AOKK team's manual check rejected
 
