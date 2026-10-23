@@ -322,7 +322,8 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
                                     f"check the name with `lms ls`, or in LM Studio")
     for stage in runfile.STAGES:
         if target[stage] != initial and switcher is None:
-            problems[stage] = f"wants the model '{target[stage]}', and '{initial}' is loaded"
+            problems[stage] = (f"wants the model '{target[stage]}', and '{initial}' is loaded, which this backend "
+                               f"cannot change by itself; only LM Studio's can")
         elif stage in live and named[stage] is not None and named[stage] != live[stage]:
             problems[stage] = (f"its named instrument {named[stage]} is not the one the current definition and "
                                f"model make ({live[stage]}), so it is read-only")

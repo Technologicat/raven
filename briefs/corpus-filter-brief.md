@@ -588,7 +588,9 @@ the stages are separable and each is tested alone. The console script is the `cl
      extractions of the prototype's unknowns now belong to records sent to review, which accounts for the
      whole difference from step 5's 898/72/264.
 8. **`models`: switching models on LM Studio**, between stages, logged and never asking. **Built 2026-10-23**,
-   tested against a stand-in for LM Studio; the live check against the real backend is still to do. Decided
+   tested against a stand-in for LM Studio, and **checked live the same evening**: a five-record run with the
+   extractor on Qwen 3.6 35B-A3B loaded it in 15 s, at its saved 128K context, and loaded Qwen 3.8 27B again
+   at the end, at its saved 190K. Decided
    with it (maintainer): unload before load; models load with LM Studio's saved settings, or `--context-length`
    for all, which is not in the fingerprint; the starting model is loaded again at the end. The README's
    *Models* paragraph says, in so many words, that `run` loads and unloads models on the backend by itself

@@ -196,7 +196,7 @@ class TestRefusing:
 
     def test_a_stage_wanting_another_model_is_refused_and_the_earlier_ones_offered(self, corpus, definition,
                                                                                    tmp_path, model, connections):
-        with pytest.raises(pipeline.PipelineError, match="wants the model 'other'.*--until judge"):
+        with pytest.raises(pipeline.PipelineError, match="wants the model 'other'.*cannot change by itself.*--until judge"):
             run(corpus, definition, tmp_path, connections, plans={"review": StagePlan("other", "abcd1234")})
         assert not model.calls
 
