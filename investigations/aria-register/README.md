@@ -338,7 +338,8 @@ and 225 more in 51 minutes, none failing. Voice is the grade `clear`; the forms 
   Aria's card suppresses something a bare model does rested on replies v5 does not count.
 - **The neutral prompts drew no `clear` in any condition**, and one `borderline` under `card_on`.
 - **Self-description in 3 of 255, confrontational in 0, hard to call in 2; a quote not found in its reply in
-  2**, against 16 under `60d796b1`.
+  2**, against 16 under `60d796b1`. Few enough for these rates, but **a check-and-retry is wanted before this
+  is scaled up** (maintainer, 2026-10-23): ask again when a quote is not in its reply, perhaps saying which.
 - **Precision**: on the second blind sample, `clear` was right in 10 of its 14 calls, counting a hand-rated
   borderline as half. The judge's remaining error is at the grade boundary, where it is more generous than
   the hand ratings, so these counts lean high.
