@@ -598,6 +598,14 @@ the stages are separable and each is tested alone. The console script is the `cl
    `--require-every-decision`, which refuses any blank; a worklist record missing from the sheet, and a run
    with pending records, which refuse; a row whose record the run has since settled, which is ignored with
    a warning; and that rewriting the reports removes the 05 files, so `finish` runs again after.
+   **And it must explain replicates and `compare`** (maintainer, 2026-10-23): what a replicate is for
+   (test-retest reliability of an LLM judge); that `--replicate 2` asks once more, over the records not yet
+   answered under its own instrument, into ledgers of its own, leaving replicate 1's untouched, so it costs
+   one more pass — and is meant with `--sample`, a few hundred records rather than the corpus; that its
+   abstract pass follows its own title pass's escalations; that a replicate measures sampled decoding, the
+   backend drawing a random seed per request, so one run is one draw; that `--seed` is ours and decides
+   only which records a sample and a control draw, which is why replicates share it; that a replicate runs
+   in an output directory of its own; and how to read `compare`'s agreement and kappa.
    **And it must walk through the process, step by step** (maintainer, 2026-10-22): in which order the
    steps run, which call an LLM, what each does to the data, where a person comes in, which are free to
    re-run (rules and reports ask nothing), and what file each leaves. With illustrative proportions on a
