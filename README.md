@@ -309,7 +309,7 @@ Beside each tool's own options, several are spelled the same way everywhere. Not
   - On the GUI apps, `raven-server`, `raven-minichat`, `raven-importer`, and the bibliography tools that log — `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-deduplicate`, `raven-siftbib`.
 - **`--server-url URL`** points the tool at a *Raven-server* other than the configured one, and **`--backend-url URL`** at a different LLM backend. Each is logged against the configured value it replaced.
   - Handy for a one-off run against another machine without editing any settings.
-  - `--server-url`: *Raven-librarian*, *Raven-visualizer*, *Raven-avatar-settings-editor*, `raven-minichat`, `raven-importer`, `raven-indexer`, `raven-pdf2bib`, `raven-dehyphenate`. `--backend-url`: *Raven-librarian*, *Raven-visualizer*, `raven-minichat`, `raven-importer`, `raven-pdf2bib`, `raven-deduplicate`.
+  - `--server-url`: *Raven-librarian*, *Raven-visualizer*, *Raven-avatar-settings-editor*, `raven-minichat`, `raven-importer`, `raven-indexer`, `raven-pdf2bib`, `raven-dehyphenate`, `raven-web`. `--backend-url`: *Raven-librarian*, *Raven-visualizer*, `raven-minichat`, `raven-importer`, `raven-pdf2bib`, `raven-deduplicate`.
 - **`--repl [PORT]`** opens an in-process REPL inside a running app, off unless asked for. On every GUI app, `raven-minichat` and `raven-server`.
   - `python -m unpythonic.net.client localhost` connects, and the app's own namespace is in scope.
   - A bare `--repl` uses port 1337 with its control channel on 8128, which is what the client expects by default; `--repl PORT` uses PORT and PORT+1, reached with `python -m unpythonic.net.client localhost PORT PORT+1`.
@@ -340,6 +340,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 ### Datasets and odds and ends
 
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
+- **`raven-web`** runs *Raven-server*'s web search and page fetch from the command line: `raven-web search QUERY` lists the results, `raven-web fetch URL` prints a page's main content as Markdown. With `--json` it prints the server's result as it came, which makes it a web tool for any agent that can run a shell command. A server on another machine must be started with `--listen`.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 
 The other end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
@@ -517,6 +518,7 @@ raven-deduplicate                 →    python -m raven.papers.deduplicate
 raven-siftbib                     →    python -m raven.papers.siftbib
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
+raven-web                         →    python -m raven.tools.web
 raven-csv2bib                     →    python -m raven.papers.csv2bib
 raven-wos2bib                     →    python -m raven.papers.wos2bib
 raven-pdf2bib                     →    python -m raven.papers.pdf2bib_cli

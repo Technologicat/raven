@@ -56,6 +56,13 @@
   - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each removed paper and carries its full abstract**, so a removal can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
+#### Raven-web
+
+- **New tool: `raven-web`, Raven-server's web search and page fetch from the command line.**
+  - `raven-web search QUERY` prints numbered results with title, link and snippet. `raven-web fetch URL` prints a page's main content as Markdown, or as plain text with `--format text`.
+  - `--json` prints the server's result as it came, for scripts and agents. Progress goes to stderr, so stdout carries only the result.
+  - The exit status says what happened: 1 for no result, 3 for a server that could not be reached or refused the request.
+
 #### Constellation-wide
 
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
