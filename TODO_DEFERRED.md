@@ -84,6 +84,11 @@ marker points at records worth opening rather than at records that are wrong.
   individual records in or out, persisted with the dataset. The marks are record tags in brief 13's sense
   (`briefs/13_corpus-scopes-and-unified-db-brief.md` §1), and persisting them waits on the dataset format
   leaving `.pickle`.
+  - **This wants a UX design, not just a mark** (maintainer, 2026-10-23): a record marked out of its
+    cluster is then lost to the review, which is the opposite of what a reviewer doing it intends.
+  - **Declined: moving a record to the cluster the user thinks it belongs in.** The map is a map, and a
+    cluster is a region of it; reassigning by hand would be deciding that Switzerland belongs to Asia
+    (maintainer, 2026-10-23). The record stays where the embedding puts it.
 
 Raised while settling the cohesion floor's size question, and while reading the biology clusters
 (2026-10-23).
