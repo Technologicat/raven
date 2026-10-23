@@ -278,6 +278,10 @@ alternative was editing configuration and putting it back exactly afterwards, wh
 own — machine-local settings now live outside the repository, but they are still somebody's settings and a
 test has no business rewriting them.
 
+**`raven-importer`, the same pipeline from the command line, does not fall back**: when its configuration
+needs an LLM and none answers, it exits before the first expensive stage. To get an embedding cache
+without an LLM, use the GUI importer or a reachable backend.
+
 **Every console script that talks to Raven-server takes `--server-url`, and every one that talks to an LLM
 backend takes `--backend-url`** — same spelling everywhere, no exceptions to look up. `raven-minichat` and
 `raven-pdf2bib` took the backend as a positional `url` until 2026-08-20; it is a flag on both now.
