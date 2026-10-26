@@ -60,13 +60,17 @@ def pytest_collection_modifyitems(config, items) -> None:
         # end of the run, "not alive yet" is the only state that can be arranged, so every test that takes
         # it sorts to the very end. `sort` is stable, so nothing else moves.
         #
-        # This does not reach `test_filedrop`'s two `gui` tests, which take no context fixture: they create
+        # This does not reach the tests marked `owns_dpg_context`, which take no context fixture: they create
         # and destroy their own, that being what they are testing. They keep their place, ahead of the point
         # where the shared context comes up.
+        #
+        # Owning a context is declared rather than inferred from the absence of the fixture: a `gui` test can
+        # take no context fixture because it runs DearPyGui in a subprocess (`test_quitsignal`), and that one
+        # leaves this process's context alone.
         shares_context = [item for item in items
                           if "mapped_gui_context" in getattr(item, "fixturenames", ())]
         owns_context = [item for item in items
-                        if item.get_closest_marker("gui") is not None and item not in shares_context]
+                        if item.get_closest_marker("owns_dpg_context") is not None]
 
         # A DPG context appears not to survive being the second one in a process — whatever GLFW and ImGui
         # keep between `glfwInit` and `glfwTerminate` is process-global, and the mechanism has never been
@@ -79,11 +83,11 @@ def pytest_collection_modifyitems(config, items) -> None:
         # So they run in a process of their own, and are skipped only when something they would break is
         # present. Targeting the file directly still runs them, which is what the skip reason says.
         if owns_context and shares_context:
-            skip_owning = pytest.mark.skip(reason="creates and destroys DPG contexts, which no other context "
-                                                  "in the process survives; run it alone: "
-                                                  "pytest --run-gui raven/common/gui/tests/test_filedrop.py")
             for item in owns_context:
-                item.add_marker(skip_owning)
+                path = item.path.relative_to(config.rootpath)
+                item.add_marker(pytest.mark.skip(reason="creates and destroys DPG contexts, which no other "
+                                                        "context in the process survives; run it alone: "
+                                                        f"pytest --run-gui {path}"))
 
         # The shared context lives from first use to the end of the run, so it is brought up as late as
         # possible: every test that takes it sorts last. `sort` is stable, so nothing else moves.

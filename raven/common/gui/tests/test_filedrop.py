@@ -245,6 +245,7 @@ def test_availability_is_answerable_without_a_context():
 
 
 @pytest.mark.gui
+@pytest.mark.owns_dpg_context  # creates and destroys its own; see conftest.py
 def test_install_needs_show_viewport_and_succeeds_right_after_it():
     """Pins *when* DPG's window becomes reachable, which is what fixes where every app installs the handler.
 
@@ -276,6 +277,7 @@ def test_install_needs_show_viewport_and_succeeds_right_after_it():
 
 
 @pytest.mark.gui
+@pytest.mark.owns_dpg_context  # creates and destroys its own; see conftest.py
 def test_install_is_refused_in_a_fresh_context_after_an_earlier_one_was_shown():
     """The same refusal as above, but with a destroyed viewport behind it — where GLFW alone gets it wrong.
 
