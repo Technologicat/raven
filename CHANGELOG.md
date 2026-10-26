@@ -77,6 +77,15 @@
   - `--replicate` and `raven-scopebib compare` measure how far two runs agree, with Cohen's kappa: the test-retest reliability of the LLM's answers, or one model against another.
   - How to write a definition file, and the rest, is in [the paper tools' manual](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 
+#### Raven-checkrefs
+
+- **New tool: `raven-checkrefs`, for checking a bibliography against a reference list written from it** — a manuscript's references, an appendix table, a coauthor's working list. It changes nothing; it writes an audit of where the two disagree.
+  - Both ways: the records the document leaves out, and the entries in it with no record behind them.
+  - A record is matched by DOI, then by its title appearing whole in an entry. A title spelled differently in the two is *proposed* with a score and the runner-up's beside it, to confirm by hand; the margin between them is what to read it by.
+  - The document can be `.odt`, `.docx`, `.pdf`, `.txt` or `.md`, numbered or one entry per paragraph.
+  - A failed match often points at a bad field in the `.bib`, such as a placeholder title.
+  - See [the paper tools' manual](raven/papers/README.md#raven-checkrefs--does-the-document-still-match-the-corpus).
+
 #### Raven-web
 
 - **New tool: `raven-web`, Raven-server's web search and page fetch from the command line.**

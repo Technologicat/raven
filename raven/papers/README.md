@@ -6,7 +6,7 @@
 
 # Raven's paper tools
 
-Twelve command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, repairing what the databases hand you, and setting aside what is not about your topic.
+Thirteen command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, repairing what the databases hand you, and setting aside what is not about your topic. One more is for afterwards: checking that what you wrote still matches the corpus it came from.
 
 **This manual documents the rules the tools apply** — what counts as the same paper, when a record is dropped, what a merge keeps. For the pipeline itself, in the order you would run it, see [*Command-line tools*](../../README.md#command-line-tools) in the main README.
 
@@ -48,6 +48,9 @@ Twelve command-line tools for the part of a literature review that happens befor
     - [The run file, and repeating a run](#the-run-file-and-repeating-a-run)
     - [What starts a fresh ledger](#what-starts-a-fresh-ledger)
     - [Replicates and `compare`](#replicates-and-compare)
+- [`raven-checkrefs` — does the document still match the corpus?](#raven-checkrefs--does-the-document-still-match-the-corpus)
+    - [How a record is matched](#how-a-record-is-matched)
+    - [The audit](#the-audit-1)
 - [`raven-burstbib` — one file per record](#raven-burstbib--one-file-per-record)
 
 <!-- markdown-toc end -->
@@ -583,6 +586,50 @@ raven-scopebib compare rep1/run.toml rep2/run.toml
 - **Each replicate runs in an output directory of its own**, since `run.toml` and the reports are per run. They may share a ledgers directory, as above, their instruments keeping them apart.
 
 `compare` reads two run files and writes, beside the second, `compare-with-<first run's directory>` and a list of the records the two disagreed on. It asks no backend. For each step — the judge's verdict, each test and its confidence, the reviewer's answer, each closed field — it gives the number of records both runs answered, the share on which they agree, and **Cohen's kappa**: the agreement beyond what chance would give, if each run gave each answer as often as it does. 1 is perfect agreement and 0 no better than chance; kappa is not defined where both runs gave a single answer throughout. See [Cohen's kappa](https://en.wikipedia.org/wiki/Cohen%27s_kappa) for more. Two different models compare the same way.
+
+## `raven-checkrefs` — does the document still match the corpus?
+
+Every other tool here turns a `.bib` into a better one. This one changes nothing: it compares a corpus with something a person has written from it — a manuscript's reference list, an appendix table, a coauthor's working list — and says where the two no longer agree.
+
+```bash
+raven-checkrefs corpus.bib manuscript.odt        # corpus_checkrefs.xlsx beside the .bib
+raven-checkrefs corpus.bib references.pdf --no-audit
+```
+
+**What it is for.** A review has to show that the studies it analysed are the ones it cites, and curation by hand drifts: a record is dropped from the document and not from the corpus, or a title is corrected in one place only. The check runs both ways — records the document leaves out, and entries in the document with no record behind them.
+
+**A failed match is often a bad field.** A record whose title is a template placeholder, or whose `title` holds its keywords, matches nothing by title, so the check finds data faults in the `.bib` as a side effect.
+
+**The document** is anything [`docextract`](../common/docextract.py) reads: `.odt`, `.docx`, `.pdf`, `.txt`, `.md`. A numbered list (`1.`, `1)` or `[1]`) is split at its numbers, so an entry wrapped over several lines stays one, and a heading above the first number is ignored. Anything else is read as one entry per paragraph, so there a heading shows up as an entry with no record.
+
+Deterministic and offline: no model, no network.
+
+### How a record is matched
+
+Strongest evidence first:
+
+1. **DOI** — from the record's `doi` field, its `url`, or its key (a hand-written `.bib` often has the DOI as the key), against the first DOI in the entry.
+2. **Title** — the record's title appears whole in the entry, compared with case, accents and punctuation removed.
+3. **Proposed** — what is left is paired by how much of the record's title the entry contains, its *score*, from 0 to 1. A record is proposed only to the entry it scores best against in the whole document, and only if that entry is strictly ahead of every other. Each proposal shows the score of the runner-up beside its own.
+
+**Read a proposal by its margin over the runner-up, not by its score.** A title made of common words scores well against many entries, so a high score alone says little. A respelled title — *"Healthy children and a healthy planet"* against *"Healthy children, healthy planet"* — beats every other entry by a wide margin, and a coincidence does not.
+
+**Why no threshold.** An automatic match above some score would need a number, and the score that separates a respelling from an unrelated entry differs from one list to the next. With a handful of proposals you read them all; with thousands, the audit is sorted so that you go through them from the weakest up and stop where they become obvious.
+
+**A record whose best entry another record already took is not proposed elsewhere.** It is reported as missing from the document, since it is most likely a duplicate of that other record.
+
+### The audit
+
+One file, `<name>_checkrefs.xlsx` beside the `.bib`. `-o PATH` writes it elsewhere, with the format taken from the extension. `--format ods` or `tsv` changes the format. `--no-audit` prints the report only.
+
+One row per record and per unmatched entry, in the order to read them:
+
+1. The **proposals**, smallest margin first, each with an empty *decision* column to mark.
+2. The **records not in the document**.
+3. The **entries with no record**.
+4. The **matches**, in document order, so the whole correspondence is on file.
+
+The counts at the end of a run keep proposals apart from matches: a proposal is not a match until a person has said so.
 
 ## `raven-burstbib` — one file per record
 

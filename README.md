@@ -306,7 +306,7 @@ Beside each tool's own options, several are spelled the same way everywhere. Not
 
 - **`--log PATH`** mirrors everything the tool logs to a file as well as to the terminal (overwriting it each run), and **`--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}`** sets how much that is.
   - Worth knowing where to find, because several things Raven does report themselves *only* in the log: which records an import had to patch up, why a tokenizer was declined, which keyword replacements were applied. For a GUI app the launching terminal is often a window you are not looking at, which is what `--log` is for.
-  - On the GUI apps, `raven-server`, `raven-minichat`, `raven-importer`, and the bibliography tools that log — `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-deduplicate`, `raven-siftbib`.
+  - On the GUI apps, `raven-server`, `raven-minichat`, `raven-importer`, and the bibliography tools that log — `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-deduplicate`, `raven-siftbib`, `raven-checkrefs`.
 - **`--server-url URL`** points the tool at a *Raven-server* other than the configured one, and **`--backend-url URL`** at a different LLM backend. Each is logged against the configured value it replaced.
   - Handy for a one-off run against another machine without editing any settings.
   - `--server-url`: *Raven-librarian*, *Raven-visualizer*, *Raven-avatar-settings-editor*, `raven-minichat`, `raven-importer`, `raven-indexer`, `raven-pdf2bib`, `raven-dehyphenate`, `raven-web`. `--backend-url`: *Raven-librarian*, *Raven-visualizer*, `raven-minichat`, `raven-importer`, `raven-pdf2bib`, `raven-deduplicate`.
@@ -335,6 +335,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 - **`raven-deduplicate`** merges the copies a multi-database search leaves behind, writing an audit of every merge. See [its section](raven/papers/README.md#raven-deduplicate--merging-a-multi-database-search).
 - **`raven-siftbib`** removes the records a review cannot screen, on criteria you name. See [its section](raven/papers/README.md#raven-siftbib--removing-what-a-review-cannot-screen).
 - **`raven-scopebib`** sets aside the records that are not about what the search was for: an LLM judge on tests you write, a second pass over its removals, and a worklist of everything it was unsure about. See [its section](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
+- **`raven-checkrefs`** checks a corpus against a reference list written from it — a manuscript's, a coauthor's — and writes an audit of the records it leaves out and the entries with no record. See [its section](raven/papers/README.md#raven-checkrefs--does-the-document-still-match-the-corpus).
 - **`raven-burstbib`** splits a bibliography into one file per entry, which is what makes it usable as a document database. See [its section](raven/papers/README.md#raven-burstbib--one-file-per-record).
 - The three that get an export *into* BibTeX in the first place — **`raven-wos2bib`**, **`raven-csv2bib`** and **`raven-pdf2bib`** — are under [*Converting and repairing*](#converting-and-repairing) below.
 
@@ -517,6 +518,8 @@ raven-burstbib                    →    python -m raven.papers.burstbib
 raven-fixbib                      →    python -m raven.papers.fixbib
 raven-deduplicate                 →    python -m raven.papers.deduplicate
 raven-siftbib                     →    python -m raven.papers.siftbib
+raven-scopebib                    →    python -m raven.papers.scopebib.cli
+raven-checkrefs                   →    python -m raven.papers.checkrefs
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-web                         →    python -m raven.tools.web
