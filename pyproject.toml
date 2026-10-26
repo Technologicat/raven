@@ -72,7 +72,7 @@ dependencies = [
     "psutil>=7.2.2",  # vendored file_dialog
     "scikit-learn>=1.9.1",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
     "scipy>=1.17.1",  # visualizer: KDTree
-    "sentence_transformers>=6.1.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
+    "sentence_transformers>=6.2.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
     "spacy>=3.8.16",  # BibTeX importer: NLP analysis. Its language models are downloaded on first use (`nlptools.load_spacy_pipeline`), not declared here: PyPI refuses a direct URL dependency.
     "sseclient-py>=1.9.0",  # librarian: streaming transport for receiving data from LLM
     # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
@@ -85,15 +85,15 @@ dependencies = [
     "wordcloud>=1.9.6",  # visualizer
     "wosfile>=0.7.0",  # wos2bib
     "chromadb>=1.5.9",  # RAG semantic search
-    "bm25s>=0.3.11",  # RAG keyword search
+    "bm25s>=0.3.15",  # RAG keyword search
     "watchdog>=6.0.0",  # RAG document directory monitoring
-    "selenium>=4.49.0",  # server.websearch
+    "selenium>=4.51.0",  # server.websearch
     "colorama>=0.4.6",  # server (though we use it also through `mcpyrate` elsewhere)
-    "markdown>=3.10.3",  # server (for rendering readme/docs)
+    "markdown>=3.11.2",  # server (for rendering readme/docs)
     "flask>=3.1.3",  # server
     "flask-cors>=6.0.5",  # server
     "flask-compress>=1.25",  # server
-    "huggingface-hub>=1.33.0",  # server (AI models autodownloader)
+    "huggingface-hub>=2.3.0",  # server (AI models autodownloader)
     "waitress>=3.0.2",  # server
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
     "av>=18.1.0",  # TTS audio encoder (for network transport)
@@ -174,14 +174,14 @@ dev = [
     # `pip install` directly. `pytest-cov` is declared here anyway so a
     # local `pdm install` for development matches what CI exercises.
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.9",
+    "ruff>=0.17.2",
     # The Emacs integration tools, deliberately unbounded: none of them has any bearing on what Raven
     # does, so any version anyone happens to have is the right one.
     "flake8",
     "autopep8",
     "importmagic",
     "epc",
-    "jedi>=0.20.0",
+    "jedi>=0.20.1",
     # For local pre-release sanity checks: `python -m build --sdist`
     # exercises the same sdist path that CI runs on tag push.
     "build>=1.6.1",
