@@ -530,12 +530,11 @@ Three lists say what Raven depends on, and each answers a different question:
    its own invocation. Both groups exist because CI cannot run them: `ml` needs the multi-gigabyte model
    stack, `gui` needs a display and a window that takes focus. A local run that skips them covers no
    more than the matrix already did.
-   - **A full `pdm lock`, deliberately** — not the targeted `pdm lock --update-reuse` / `pdm update <pkgs>`
-     that the fleet rule prescribes for adding a dev dependency. The whole tree moves on every pass, small
-     and frequent, so a break arrives in a batch of about a week of upstream releases, and the old and new
-     locks' diff is the list to bisect. Keep a copy of the old lock before re-locking (it is gitignored, so
-     git has none). Decided 2026-10-26; the reasoning is in `TODO_DEFERRED.md` under "`pdm.lock` is
-     gitignored".
+   - **A full `pdm lock`, deliberately.** This loop is the upgrade pass in the fleet's "a lock moves for
+     one reason at a time" (the `project-setup` skill), so the whole tree moves here and nowhere else —
+     a dependency edit outside this loop relocks with `--update-reuse`. With Dependabot weekly, a break
+     arrives in a batch of about a week of upstream releases, and the old and new locks' diff is the list
+     to bisect. Keep a copy of the old lock before re-locking (it is gitignored, so git has none).
    - **`--run-gui` takes the keyboard**, so warn before starting it and run it *after* the main suite, as
      its own invocation.
    - **A `dearpygui` bump is not green without it.** The GUI group is where a toolkit change actually
