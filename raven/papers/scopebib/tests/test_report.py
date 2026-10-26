@@ -157,7 +157,15 @@ class TestFiles:
         rows = tabular.read_table(path)
         assert {(row["group"], row["key"]) for row in rows} == {("drop", "dropped"), ("drop", "rescued"),
                                                                  ("control", "forest")}
-        assert "a case for 1 of 2 (50.0%) drops, and for 1 of 1 (100.0%) control" in path.read_text(encoding="utf-8")
+        assert "a case for 1 of 2 (50.0%) drops (1 more not yet read), and for 1 of 1 (100.0%) control records\n" \
+            in path.read_text(encoding="utf-8")
+
+    def test_the_review_audit_says_how_many_it_has_not_read(self, run, definition, tmp_path):
+        # A replay under someone else's reviewer reads only the records that reviewer saw, so a share over
+        # what was read says nothing unless the rest are counted beside it.
+        write(run, definition, tmp_path / "out", control=["forest", "city", "nowhere"])
+        header = (tmp_path / "out" / f"{report.REVIEW_AUDIT}.tsv").read_text(encoding="utf-8")
+        assert "and for 1 of 1 (100.0%) control records (2 more not yet read)" in header
 
     def test_the_extract_audit_covers_only_the_judges_keeps(self, run, definition, tmp_path):
         write(run, definition, tmp_path / "out")

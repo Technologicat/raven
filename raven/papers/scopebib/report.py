@@ -316,11 +316,16 @@ def _judge_table(table, *, final: dict[str, dict], by_key: dict[str, scope_recor
 
 def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], control: Sequence[str],
                   by_key: dict[str, scope_records.Record]) -> None:
-    drops = [key for key, answer in final.items() if answer["verdict"] == "drop" and key in reviews]
-    controls = [key for key in control if key in reviews and key in final]
+    all_drops = [key for key, answer in final.items() if answer["verdict"] == "drop"]
+    all_controls = [key for key in control if key in final]
+    drops = [key for key in all_drops if key in reviews]
+    controls = [key for key in all_controls if key in reviews]
 
     def cases(keys: list[str]) -> int:
         return sum(1 for key in keys if reviews[key]["belongs"] is True)
+
+    def unread(n_all: int, n_read: int) -> str:
+        return f" ({n_all - n_read} more not yet read)" if n_all > n_read else ""
 
     rows = []
     for group, keys in (("drop", drops), ("control", controls)):
@@ -332,8 +337,10 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
                          answer["verdict"], answer["confidence"], ", ".join(_tests_true(answer)), answer["why"],
                          *_record_cells(by_key[key])))
     table(REVIEW_AUDIT,
-          [f"the reviewer found a case for {_share(cases(drops), len(drops))} drops, "
-           f"and for {_share(cases(controls), len(controls))} control records",
+          [f"the reviewer found a case for {_share(cases(drops), len(drops))} drops"
+           f"{unread(len(all_drops), len(drops))}, "
+           f"and for {_share(cases(controls), len(controls))} control records"
+           f"{unread(len(all_controls), len(controls))}",
            "read that comparison first: a reviewer that finds a case as often in the control as among the "
            "drops is not telling them apart",
            "the control is records the judge kept, drawn at the drops' mix of confidence and shown to the "
