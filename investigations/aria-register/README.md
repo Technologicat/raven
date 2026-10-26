@@ -302,8 +302,8 @@ without looking at. Against the maintainer's ratings, with judge `60d796b1` on t
 | no (15) | 3 | 4 | 8 | 8 voice, 7 not |
 
 - **The failure the rewrite targeted is mostly gone**: replies rated no that the judge calls clear voice
-  fell from 8 to 3. Counting a hand-rated borderline as half right, `clear` is right in 10 of its 14 calls,
-  against 12 of 21 before.
+  fell from 8 to 3. Of the calls the hand ratings decide (unsure left out), `clear` is right in 5 of 13
+  counting only a yes and 10 of 13 counting a borderline too, against 6 to 12 of 20 before.
 - **What is left is the grade boundary**: 5 of the 8 replies rated borderline come out `clear`. The judge
   is more generous than the hand ratings there, which is the next thing to work on, rather than voice
   against no voice.
@@ -340,9 +340,9 @@ and 225 more in 51 minutes, none failing. Voice is the grade `clear`; the forms 
 - **Self-description in 3 of 255, confrontational in 0, hard to call in 2; a quote not found in its reply in
   2**, against 16 under `60d796b1`. Few enough for these rates, but **a check-and-retry is wanted before this
   is scaled up** (maintainer, 2026-10-23): ask again when a quote is not in its reply, perhaps saying which.
-- **Precision**: on the second blind sample, `clear` was right in 10 of its 14 calls, counting a hand-rated
-  borderline as half. The judge's remaining error is at the grade boundary, where it is more generous than
-  the hand ratings, so these counts lean high.
+- **Precision**: on the second blind sample, `clear` was right in 5 to 10 of its 13 decided calls, the
+  bounds counting a yes alone and a borderline too. The judge's remaining error is at the grade boundary,
+  where it is more generous than the hand ratings, so these counts lean high.
 
 **What this says for step 2** is unchanged: the user card is the place to look, its directness-related
 paragraphs first.
@@ -364,15 +364,25 @@ sitting on few prompts and the sampler taking at most two per prompt: 14 v5 `cle
 | `borderline` (5) | | | | 2 | 3 |
 | `none` (4) | | | 1 | 2 | 1 |
 
-`clear` was right in about 7 of its 13 decided calls, counting a hand-rated borderline as half, against 10
-of 14 on the second sample. Most of its calls land on a hand-rated borderline, so v5 is generous at the
-boundary, as expected.
+**Precision is reported as a range, not a point**: counting a yes alone, and counting a borderline too.
+Those are the extremes any weighting of a borderline can produce, so the range shows what a weighted
+figure would hide — the same reason a multiobjective method resolves the Pareto front rather than a
+weighted sum (maintainer, 2026-10-26). Over the calls the hand ratings decide, unsure left out:
 
-**That drop is confounded with the rater**, and the maintainer said so in the ratings: the same prompts
-recur in every sample, and familiarity makes a reply read as less witty, biasing toward *no*. The
-thank-you replies show it: subtext like *"or when you've got something real to chew on"* was the pattern
-of a clear yes on the second sample and is mostly borderline here. **So this is the last sample these 255
-replies can give.** Another needs new prompts, or new setups around them.
+| v5 `clear`, right in | yes only | yes or borderline |
+|---|---:|---:|
+| second sample | 5 of 13 | 10 of 13 |
+| third sample | 3 to 4 of 13 | 11 of 13 |
+
+The *3 to 4* is R19, rated *"borderline or yes"*. Most of the calls land on a hand-rated borderline, so v5
+is generous at the boundary, as expected.
+
+**Between the samples the strict bound fell and the lenient one rose**, which is what a shift from yes to
+borderline looks like. The maintainer named a cause in the ratings: the same prompts recur in every sample,
+and familiarity makes a reply read as less witty, biasing toward *no*. The thank-you replies show it:
+subtext like *"or when you've got something real to chew on"* was the pattern of a clear yes on the second
+sample and is mostly borderline here. **So this is the last sample these 255 replies can give.** Another
+needs new prompts, or new setups around them.
 
 What the notes show, beyond the counts:
 
