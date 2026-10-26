@@ -389,6 +389,14 @@ What the notes show, beyond the counts:
 3. **Too much edge exists.** R12 is a yes that *"risks going into the confrontational territory — the
    intent is good-natured teasing, not to pick a fight"*. `confrontational` did not fire on it.
 
+**For rubric v6 (maintainer, 2026-10-26):**
+- **Validate it on new prompts**, which means a new probe run; these 255 replies are used up for blind rating.
+- **The direct correction goes into the rubric's examples**, leaning yes.
+- **Whether `clear` should weigh that the joke lands is open.** Funniness is subjective, yet the ratings make
+  it evidence. Not every `clear` carries a joke: the directness ones carry an edge instead (the thank-you
+  replies, the wrong-premise correction), so landing could at most bear on `deadpan_absurd` and
+  `technical_wit`.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
