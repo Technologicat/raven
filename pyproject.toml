@@ -63,7 +63,7 @@ dependencies = [
     # Both are small, and the alternative is trusting a backend's `prompt_tokens`, which we have measured
     # being wrong in both directions (`investigations/prompt-size-cache-relative/`).
     "gguf>=0.19.0",
-    "tokenizers>=0.23.2",  # already in the tree via sentence_transformers; declared because we import it.
+    "tokenizers>=0.23.3",  # already in the tree via sentence_transformers; declared because we import it.
     "mcpyrate>=4.3.0",  # we only use the colorizer utility for now
     "mistletoe>=1.6.0",  # vendored dpg-markdown
     "numpy>=2.4.6",
@@ -128,7 +128,7 @@ dependencies = [
     "tqdm>=4.70.1",  # server.stt, papers (arXiv download)
     "trafilatura>=2.3.1",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
     "youtube-transcript-api>=1.2.4",  # server.webfetch; transcript extraction for YouTube URLs
-    "pypdf>=6.21.1",  # raven.common.docextract: PDF text layer
+    "pypdf>=6.21.2",  # raven.common.docextract: PDF text layer
     # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs
     # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` needs at least 1.1 for
     # `iter_inner_content`, which walks a body's paragraphs and tables in document order — without it, table
@@ -137,7 +137,7 @@ dependencies = [
     "python-pptx>=1.0.2",  # .pptx
     "odfpy>=1.4.1",  # .odt, .odp; also writes and reads .ods for raven.common.tabular
     # Spreadsheet reports, `raven.common.tabular`: XlsxWriter writes .xlsx, openpyxl reads it back.
-    "XlsxWriter>=3.2.9",
+    "XlsxWriter>=3.3.0",
     "openpyxl>=3.1.5",
 ]
 
