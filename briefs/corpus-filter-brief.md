@@ -600,7 +600,23 @@ the stages are separable and each is tested alone. The console script is the `cl
    below, plus the main README's pipeline entry and the changelog. What is left of this step is **the
    acceptance run**: the finished tool over the prototype's corpus, the prototype's answers
    replayed, against `regenerate_reports.py`'s outputs. They should agree except where question 8's rule
-   differs from the prototype's, and every difference should be explained by it. No GPU. Then the README,
+   differs from the prototype's, and every difference should be explained by it. No GPU.
+   **Run 2026-10-26, and it passes.** `raven-scopebib report` over `regenerate_reports.py`'s
+   `01-deduped.bib`, `--require abstract`, the three converted instruments named, asked no backend:
+   - **The sift is identical** to the prototype's `02-sifted.bib`, keys and content alike (4314 records).
+     Start from the regenerated `01-deduped.bib`, not the `tekoalyagentti_tutkimus_deduped.bib` saved beside
+     the raw export: that one is from an earlier dedup, two records short and with `month = {apr}` braced.
+   - **Removed 1234, to a person 218, kept 866, pending 1996** — step 7's reconciliation, unchanged.
+   - **Every record the tool removes, the prototype removed too.** Of the prototype's 2966 filtered records,
+     866 are kept; 104 go to a person (unsure verdicts and the field rules' holds, which the prototype left
+     in its `.bib`); and **the 1996 pending are exactly the judge's high-confidence keeps.** The prototype
+     extracted only keeps resting on a hedge (`extract_fields.py` without `--all-keeps`), and the tool
+     extracts every keep, so those were never asked. Not an unfinished run: finishing them would be the
+     tool's own extraction over records the prototype never examined, a GPU run and a new measurement.
+   - **35 of the reviewer's 40 controls are pending.** The tool draws its control at seed 42 and the
+     prototype's was hand-stratified, so they overlap in 5. A control changes no verdict, but the report's
+     *"found a case for 3 of 5 (60.0%) control records"* does not say that 35 more were drawn and not read.
+   Then the README,
    the changelog and the console script's entry. ~S–M. **The README must say what starts a fresh ledger**
    and what does not (maintainer, 2026-10-22): rewrapping prose or editing a comment in the definition
    file changes neither the prompt nor the fingerprint, and a rule is applied when the reports are
