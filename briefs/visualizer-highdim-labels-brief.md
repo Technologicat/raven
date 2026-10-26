@@ -43,8 +43,8 @@ carries the combined-prompt measurement with it.
    records) and `202512/geography.bib` (135), every record with an abstract. Same family and size as
    Monday's, so they are the calibration set, ahead of subsampling the large corpora (which gives a sparse
    sample of a big field rather than a small field).
-   **Monday's corpus is the third of the family**, `202506/health_education.bib` (119 records, every one
-   with an abstract; maintainer, 2026-10-22 — it may have moved by Monday). **Keep it out of the
+   **Monday's corpus is the third of the family**, `202610/health_education.bib` (119 records, every one
+   with an abstract; maintainer, 2026-10-22; moved to `202610/` with its cleaned versions on 2026-10-26, the source `.docx` staying in `202506/`). **Keep it out of the
    calibration**: settle the rule on biology and geography, then apply it to health education as the
    held-out case, so that the first time it meets that corpus is the honest test.
    **It needs cleaning first** (maintainer: a raw file from someone new to BibTeX). Parsed on 2026-10-22,
@@ -53,7 +53,7 @@ carries the combined-prompt measurement with it.
    duplicate keys, a placeholder `doi-numero` reused and a DOI-URL key appearing twice, which may also be a
    duplicate record. Try `raven-fixbib` first, then `raven-deduplicate`; anything they cannot repair is a
    case for them rather than for a hand edit.
-   **Cleaned 2026-10-23: `202506/health_education_deduped.bib`, 117 records**, every one readable by the
+   **Cleaned 2026-10-23: `202610/health_education_deduped.bib`, 117 records**, every one readable by the
    importer and every one with an abstract. That parse count was taken without splitting names; the
    importer splits them, and read only 108. Seven records had their authors listed APA-style, now
    repaired by `raven-fixbib` and on import. Five fixes by hand, in `health_education_clean.bib` (the
