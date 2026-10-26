@@ -524,11 +524,18 @@ Three lists say what Raven depends on, and each answers a different question:
    upstream release that breaks us shows up as its own reviewable failure rather than as a mystery
    attached to somebody's unrelated commit.
 2. **Merge the ones that pass.** Green on the full matrix is the evidence.
-3. **Re-lock and run the suite locally** — `pdm lock && pdm install`, then `pytest`, with `raven-server`
-   and an LLM backend up so the server-dependent tests are not skipped. **Then `pytest --run-gui`**, as
+3. **Re-lock and run the suite locally** — `pdm lock && pdm install`, then `pytest --run-llm`, with
+   `raven-server` and an LLM backend up so the server- and LLM-dependent tests are not skipped (the `llm`
+   group is opt-in: without the flag it is skipped even with a backend up). **Then `pytest --run-gui`**, as
    its own invocation. Both groups exist because CI cannot run them: `ml` needs the multi-gigabyte model
    stack, `gui` needs a display and a window that takes focus. A local run that skips them covers no
    more than the matrix already did.
+   - **A full `pdm lock`, deliberately** — not the targeted `pdm lock --update-reuse` / `pdm update <pkgs>`
+     that the fleet rule prescribes for adding a dev dependency. The whole tree moves on every pass, small
+     and frequent, so a break arrives in a batch of about a week of upstream releases, and the old and new
+     locks' diff is the list to bisect. Keep a copy of the old lock before re-locking (it is gitignored, so
+     git has none). Decided 2026-10-26; the reasoning is in `TODO_DEFERRED.md` under "`pdm.lock` is
+     gitignored".
    - **`--run-gui` takes the keyboard**, so warn before starting it and run it *after* the main suite, as
      its own invocation.
    - **A `dearpygui` bump is not green without it.** The GUI group is where a toolkit change actually

@@ -5933,6 +5933,14 @@ Commit the lock if it resolves; if it doesn't, the outcome is a decided-and-writ
 `.gitignore` and in `project-setup`'s fleet classification, which is worth as much as the lock would have
 been.
 
+**Re-lock cadence, decided 2026-10-26 and unchanged by committing the lock:** every pass of the
+upgrade loop in `CLAUDE.md` ("Dependency versions: CI moves first…") does a full `pdm lock`, not a
+targeted `pdm update` of whatever Dependabot moved — small and frequent, so a break arrives in a batch of
+about a week of upstream releases rather than months of them. The local run that step needs is paid on
+every Dependabot batch anyway, so moving the whole tree there costs no extra rounds. A committed lock
+improves it: the lock's diff becomes both the review and the bisection list. While the lock stays
+ignored, the full re-lock is also what keeps the local run testing the tree a fresh clone resolves.
+
 **Do it in one session with "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`"** — same blocker, the lock/index
 interaction, asked from two directions. Dropping torchaudio simplifies both. **And do not let it become a
 large must-resolve item inside 0.2.10**: if the interaction turns out thorny, move it to `next` rather than
