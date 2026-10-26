@@ -351,6 +351,44 @@ paragraphs first.
 tighten `clear` in a rubric v6 and rerun it over all 255. Step 2 compares conditions under one judge, but
 the boundary's generosity need not be the same in every condition, and a level from it may be quoted.
 
+### The third blind sample (2026-10-26)
+
+`blind-sample-13.md`, aimed at both sides of v5's boundary: the sampler now fills the unmarked share from
+what the judge graded `borderline` before `none`. 23 replies rather than 30, the unrated `clear` replies
+sitting on few prompts and the sampler taking at most two per prompt: 14 v5 `clear`, all 5 v5 `borderline`,
+4 `none`. Rated by the maintainer, with free-form notes.
+
+| v5 grade | hand: yes | yes or borderline | borderline | unsure | no |
+|---|---:|---:|---:|---:|---:|
+| `clear` (14) | 3 | 1 | 7 | 1 | 2 |
+| `borderline` (5) | | | | 2 | 3 |
+| `none` (4) | | | 1 | 2 | 1 |
+
+`clear` was right in about 7 of its 13 decided calls, counting a hand-rated borderline as half, against 10
+of 14 on the second sample. Most of its calls land on a hand-rated borderline, so v5 is generous at the
+boundary, as expected.
+
+**That drop is confounded with the rater**, and the maintainer said so in the ratings: the same prompts
+recur in every sample, and familiarity makes a reply read as less witty, biasing toward *no*. The
+thank-you replies show it: subtext like *"or when you've got something real to chew on"* was the pattern
+of a clear yes on the second sample and is mostly borderline here. **So this is the last sample these 255
+replies can give.** Another needs new prompts, or new setups around them.
+
+What the notes show, beyond the counts:
+
+1. **The hand grade weighs whether the joke lands, and v5 does not.** Every creative reply (the unit for
+   meetings that run over) is credited `deadpan_absurd` by the judge for its shape, while the hand ratings
+   split shape from material: *"the shape matches, but the material isn't this comedian's best day"*,
+   *"points for trying"*. The one yes there (R04) is the one whose material is strong. The rubric records
+   `funny` and never scores it, by design, so on this prompt the judge and the hand are measuring
+   different things.
+2. **The direct correction is missed.** The wrong-premise replies (*"No. The GIL was not removed in 3.12.
+   That would have been a headline feature if it had been."*) hover between yes and borderline by hand, in
+   all three conditions. v5 graded them `borderline` or `none`. That is the miss on the other side of the
+   boundary, which the sample was aimed to find.
+3. **Too much edge exists.** R12 is a yes that *"risks going into the confrontational territory — the
+   intent is good-natured teasing, not to pick a fight"*. `confrontational` did not fire on it.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
@@ -366,6 +404,11 @@ apply:
   hierarchical — clarity decides that too. A Feynman approach to writing, in short.
 - **Worth being able to ask for on demand**: style as something a user can set, rather than only what the
   card happens to say.
+- **Questioning the request's assumptions is helpful** (2026-10-26, from the third blind sample): a closing
+  question that checks what the user is actually after — they ask for a helicopter, the problem is getting
+  somewhere fast. Several serious replies did this, at the right tone and length for a serious reply.
+- **The edge is good-natured teasing, never a fight** (same): a reply can carry the voice and still go too
+  far.
 - **What the current texts say about length**: nothing in Aria's card or the user card; the interaction
   block has "go straight to the point" and "prefer writing your raw thoughts rather than a structured
   report". Which line suppresses the emoji is not established, and it need not be the card at all: the

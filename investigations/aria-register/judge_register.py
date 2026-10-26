@@ -207,12 +207,12 @@ def _draw(rng: random.Random, pool: list[str], n: int) -> list[str]:
 
 
 def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, seed: int,
-                       out_dir: pathlib.Path, maybe_marks: dict[str, bool] | None = None) -> None:
+                       out_dir: pathlib.Path, maybe_marks: dict[str, str] | None = None) -> None:
     """Write `n` replies for rating by hand, with their key in a separate file.
 
-    `maybe_marks`: a judge's verdict per reply, to aim the sample with: `AIMED_SHARE` of it from what the
-                   judge marked, the rest from elicitor replies it did not, both split evenly across the
-                   conditions. `None` draws uniformly.
+    `maybe_marks`: a judge's grade per reply, to aim the sample with: `AIMED_SHARE` of it from what the
+                   judge graded `clear`, the rest from what it graded `borderline` and then from elicitor
+                   replies it graded `none`, both split evenly across the conditions. `None` draws uniformly.
     """
     # Never a reply already rated: the rubric takes its examples from rated replies, so a second sample has
     # to be fresh for it to test the rubric rather than recite it.
@@ -227,15 +227,21 @@ def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, 
         # Aimed where the judge is unsure of itself, which is in what it marked: precision is the number in
         # doubt. The unmarked share keeps recall in view, from the elicitors only, since an unmarked reply
         # to a neutral prompt is a near-certain no and tells nothing.
+        # The unmarked share takes the judge's `borderline` first, so that both sides of the grade boundary are
+        # rated: a `borderline` hiding a yes is the error a tightened `clear` would make worse.
         n_marked = round(n * AIMED_SHARE)
         chosen = []
-        for stratum_n, wanted in ((n_marked, True), (n - n_marked, False)):
+        for stratum_n, grades in ((n_marked, ("clear",)), (n - n_marked, ("borderline", "none"))):
             for i, condition in enumerate(CONDITIONS):
                 per_condition = stratum_n // len(CONDITIONS) + (i < stratum_n % len(CONDITIONS))
-                pool = [item_id for item_id in candidates
-                        if item_id.startswith(condition + "/") and maybe_marks.get(item_id) is wanted
-                        and (wanted or answers[item_id]["kind"] == "elicitor")]
-                chosen += _draw(rng, pool, per_condition)
+                for grade in grades:
+                    pool = [item_id for item_id in candidates
+                            if item_id.startswith(condition + "/") and maybe_marks.get(item_id) == grade
+                            and item_id not in chosen
+                            and (grade != "none" or answers[item_id]["kind"] == "elicitor")]
+                    drawn = _draw(rng, pool, per_condition)
+                    chosen += drawn
+                    per_condition -= len(drawn)
         rng.shuffle(chosen)
     key = {}
     lines = ["# Blind sample\n",
@@ -356,7 +362,7 @@ def main() -> int:
         if opts.aim:
             judged = sweep.Ledger(pathlib.Path(opts.aim).parent, pathlib.Path(opts.aim).stem.rsplit("-", 1)[0],
                                   pathlib.Path(opts.aim).stem.rsplit("-", 1)[1])
-            maybe_marks = {item_id: rating["voice"] for item_id, rating in judged.answers().items()}
+            maybe_marks = {item_id: rating["grade"] for item_id, rating in judged.answers().items()}
         write_blind_sample(answers, users, opts.blind, opts.seed, out_dir, maybe_marks)
         return 0
 
