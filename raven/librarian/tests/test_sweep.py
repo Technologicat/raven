@@ -97,6 +97,72 @@ class TestLedger:
         assert ledger.answers() == {"a": 1}  # a header is not an item
 
 
+class TestDigests:
+    def test_an_answer_counts_only_for_the_text_it_was_given_about(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes", maybe_digest=sweep.digest("old text"))
+        assert ledger.answers({"a": sweep.digest("old text")}) == {"a": "yes"}
+        assert ledger.answers({"a": sweep.digest("new text")}) == {}
+
+    def test_without_digests_nothing_is_checked(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes", maybe_digest=sweep.digest("old text"))
+        ledger.write_answer("b", "no")
+        assert ledger.answers() == {"a": "yes", "b": "no"}
+
+    def test_an_answer_with_no_digest_does_not_count_against_one(self, tmp_path):
+        # An answer written before digests existed says nothing about which text it was given about.
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes")
+        assert ledger.answers({"a": sweep.digest("text")}) == {}
+
+    def test_an_id_the_digests_do_not_name_is_not_checked(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes")
+        assert ledger.answers({"other": sweep.digest("text")}) == {"a": "yes"}
+
+    def test_stamping_makes_an_old_answer_current_for_the_text_it_saw(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes")
+        ledger.write_answer("b", "no", maybe_digest=sweep.digest("b now"))
+        assert ledger.stamp({"a": sweep.digest("a then"), "b": sweep.digest("b then"), "c": sweep.digest("c")}) == 1
+        assert ledger.answers({"a": sweep.digest("a then"), "b": sweep.digest("b now")}) == {"a": "yes", "b": "no"}
+        assert "a" not in ledger.answers({"a": sweep.digest("a since")}), "a stamp is for the text it names, not any"
+
+    def test_stamping_keeps_the_old_line(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", "yes")
+        ledger.stamp({"a": sweep.digest("a then")})
+        lines = [json.loads(line) for line in ledger.path.read_text().splitlines()]
+        assert [line.get("d") for line in lines] == [None, sweep.digest("a then")]
+
+    def test_a_sweep_asks_again_only_what_changed(self, llm_settings, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        sweep.Sweep(llm_settings, _echo, _items(3), ledger, digest=sweep.digest).run()
+        asked = []
+
+        def ask(llm_settings, batch, maybe_abort):
+            asked.extend(item_id for item_id, _ in batch)
+            return _echo(llm_settings, batch, maybe_abort)
+        changed = [("item0", "text 0"), ("item1", "text 1, corrected"), ("item2", "text 2")]
+        sweep.Sweep(llm_settings, ask, changed, ledger, digest=sweep.digest).run()
+        assert asked == ["item1"]
+        assert ledger.answers()["item1"] == "TEXT 1, CORRECTED"
+
+    def test_without_a_digest_a_changed_item_is_not_asked_again(self, llm_settings, tmp_path):
+        # The control for the test above: the same change, and only the digest tells the two runs apart.
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        sweep.Sweep(llm_settings, _echo, _items(3), ledger).run()
+        asked = []
+
+        def ask(llm_settings, batch, maybe_abort):
+            asked.extend(item_id for item_id, _ in batch)
+            return _echo(llm_settings, batch, maybe_abort)
+        changed = [("item0", "text 0"), ("item1", "text 1, corrected"), ("item2", "text 2")]
+        sweep.Sweep(llm_settings, ask, changed, ledger).run()
+        assert asked == []
+
+
 class TestSweep:
     def test_every_item_is_answered_and_its_trace_kept(self, llm_settings, tmp_path):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")

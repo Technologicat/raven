@@ -21,7 +21,7 @@ is a worked example.
     result = sweep.Sweep(llm_settings, ask_batch, items, ledger, batch_size=10).run()
 """
 
-__all__ = ["fingerprint", "instrument_header",
+__all__ = ["fingerprint", "instrument_header", "digest",
            "Ledger",
            "completed", "cancelled", "backend_unavailable", "model_changed",
            "Failure", "Sweep"]
@@ -33,7 +33,7 @@ import logging
 import pathlib
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from unpythonic import ETAEstimator, sym
@@ -85,6 +85,16 @@ def instrument_header(llm_settings: env, declared: str | None = None) -> dict:
             "not_reported": sorted(name for name, value in reported.items() if value is None),
             "declared": declared if declared is not None else "not stated"}
 
+def digest(text: str) -> str:
+    """A short hash of what the model was shown for one item, for `Ledger.answers` to tell a current answer
+    from one given about different text. Sixteen hex digits.
+
+    `text`: the item as the prompt renders it, and only that — what the model would see if the item were
+            asked again. A change anywhere else in a record, one the prompt does not show, is no reason to ask
+            again, and asking costs a model call.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
 # --------------------------------------------------------------------------------
 # The ledger
 
@@ -104,6 +114,9 @@ class Ledger:
     A line is `{"id", "v", "status": "ok", "answer"}` or `{"id", "v", "status": "failed", "error"}`, and a
     run's header is `{"header", "v", "started"}`. Only lines stamped with this ledger's fingerprint are
     read, which is what catches a file that has been renamed or had another appended to it.
+
+    An answer may also carry `"d"`, the `digest` of the item as it was asked. The fingerprint says the
+    question has not changed; the digest says the item has not either.
     """
 
     def __init__(self, directory: str | pathlib.Path, name: str, fingerprint: str):
@@ -123,9 +136,15 @@ class Ledger:
         self._append(self.path, {"header": header, "v": self.fingerprint,
                                  "started": datetime.datetime.now().isoformat(timespec="seconds")})
 
-    def write_answer(self, item_id: str, answer: Any) -> None:
-        """Record an answer. Anything JSON can hold."""
-        self._append(self.path, {"id": item_id, "v": self.fingerprint, "status": "ok", "answer": answer})
+    def write_answer(self, item_id: str, answer: Any, *, maybe_digest: str | None = None) -> None:
+        """Record an answer. Anything JSON can hold.
+
+        `maybe_digest`: the `digest` of the item as it was asked, or `None` to record none.
+        """
+        line = {"id": item_id, "v": self.fingerprint, "status": "ok", "answer": answer}
+        if maybe_digest is not None:
+            line["d"] = maybe_digest
+        self._append(self.path, line)
 
     def write_failure(self, item_id: str, error: str) -> None:
         """Record that an item was tried and failed, so a later run tries it again."""
@@ -161,9 +180,32 @@ class Ledger:
                     out[entry["id"]] = entry
         return out
 
-    def answers(self) -> dict[str, Any]:
-        """The answer for each item whose latest line is one, keyed by id."""
-        return {item_id: entry["answer"] for item_id, entry in self.latest().items() if entry["status"] == "ok"}
+    def answers(self, digests: Mapping[str, str] | None = None) -> dict[str, Any]:
+        """The answer for each item whose latest line is one, keyed by id.
+
+        `digests`: the items as they are now, as `digest` of each, by id. When given, an answer counts only
+                   if it was given about the same text: one with another digest, or with none, is left out,
+                   so the item reads as not yet answered and a run asks it again. An id absent from
+                   `digests` is not checked. `None` checks nothing.
+        """
+        return {item_id: entry["answer"] for item_id, entry in self.latest().items()
+                if entry["status"] == "ok"
+                and (digests is None or item_id not in digests or entry.get("d") == digests[item_id])}
+
+    def stamp(self, digests: Mapping[str, str]) -> int:
+        """Record, for answers carrying no digest, the digest of the item they were given about.
+
+        For a ledger written before answers carried one. Each `digests` entry must be the item *as it was
+        asked* — from the corpus the run read, not a later one — or this declares old answers current for
+        text they never saw. Appends, as everything here does; an answer that already has a digest, or an id
+        `digests` does not name, is left alone. Returns how many answers were stamped.
+        """
+        stamped = 0
+        for item_id, entry in self.latest().items():
+            if entry["status"] == "ok" and "d" not in entry and item_id in digests:
+                self.write_answer(item_id, entry["answer"], maybe_digest=digests[item_id])
+                stamped += 1
+        return stamped
 
     def headers(self) -> list[dict]:
         """The header of each run that wrote to this ledger, oldest first."""
@@ -206,6 +248,11 @@ class Sweep:
 
     `items`: `(id, item)` pairs, ids unique strings. Those the ledger already answers are skipped.
 
+    `digest`: `digest(item) -> str`, the item as its prompt renders it, passed through `sweep.digest`. When
+              given, each answer records it, and an answer given about other text — the item changed since,
+              or the answer predates digests — does not count, so the item is asked again. `None` records no
+              digests and skips every answered item, whatever it was asked about.
+
     `ledger`: a `Ledger`.
 
     `batch_size`: items per call. 1, the default, is one call per item.
@@ -229,7 +276,8 @@ class Sweep:
                  batch_size: int = 1,
                  header: dict | None = None,
                  on_item: Callable[[env], None] | None = None,
-                 log_interval: float = 10.0):
+                 log_interval: float = 10.0,
+                 digest: Callable[[Any], str] | None = None):
         if batch_size < 1:
             raise ValueError(f"Sweep: `batch_size` must be at least 1, got {batch_size}")
         self.llm_settings = llm_settings
@@ -240,6 +288,7 @@ class Sweep:
         self.header = header
         self.on_item = on_item
         self.log_interval = log_interval
+        self.digest = digest
         self._lock = threading.Lock()
         self._cancel_requested = False
         self._maybe_abort = None  # the handle of the call in flight
@@ -268,7 +317,9 @@ class Sweep:
         `message` (what to tell the operator, empty when completed), and `done`, `failed` and `total` for
         this run's items.
         """
-        answered = set(self.ledger.answers())
+        digests = ({item_id: self.digest(item) for item_id, item in self.items} if self.digest is not None
+                   else None)
+        answered = set(self.ledger.answers(digests))
         todo = [(item_id, item) for item_id, item in self.items if item_id not in answered]
         batches = [todo[i:i + self.batch_size] for i in range(0, len(todo), self.batch_size)]
         logger.info(f"Sweep.run: ledger '{self.ledger.path.name}': {len(answered)} items already answered, "
@@ -334,7 +385,8 @@ class Sweep:
                     elif isinstance(answers[item_id], Failure):
                         fail(item_id, answers[item_id].reason)
                     else:
-                        self.ledger.write_answer(item_id, answers[item_id])
+                        self.ledger.write_answer(item_id, answers[item_id],
+                                                 maybe_digest=digests[item_id] if digests is not None else None)
                         done += 1
                 if turns:
                     self.ledger.write_trace(ids, turns)
