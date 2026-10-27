@@ -56,6 +56,33 @@ split is a historical accident, and closing it is the main architectural work ah
 "load ten thousand studies into Visualizer" stops being an import and becomes a **view**: drop the files in a
 folder, and both the map and the conversation already see them.
 
+## What comes out: a review, for one problem
+
+What a session with Raven produces is a review of the literature for the problem in front of you. That is
+what a review paper offers too, but a review paper was written for the field as its author saw it, often
+years before you arrived with your question. So Raven competes with the review paper as a genre.
+
+**And the review it produces is only partly prose.** A literature has a shape — what it covers, how much
+there is on each topic, which topics sit near each other, where nothing has been done — and prose can give
+that shape only one item at a time: Smith did this, Jones extended it to that. By the end of the paragraph
+the shape is gone, the way the reader of a long German sentence has lost the thread by the time the verb
+arrives ([Mark Twain, *The Awful German Language*](https://en.wikipedia.org/wiki/The_Awful_German_Language),
+1880). It is a picture in two dimensions read out as a line.
+
+There is a ladder here. A recorded talk can only be played through. Its transcript is still a line, but it
+can be skimmed and searched. A map is the next rung: what it shows was never put into a line, so nothing is
+lost to the ordering.
+
+So the review has three parts, each carrying what it carries best:
+
+- **The map carries the structure**: the topics, their sizes, their neighbours, the gaps.
+- **Prose carries the argument**: why a cluster matters for your problem, what is settled and what is
+  contested, what nobody has tried. That is judgement, and a map cannot make it.
+- **The conversation answers the follow-up.** A static review answers the questions its author thought of.
+  Here you can open a cluster and ask the next one.
+
+The map is part of the review, not a step before it.
+
 ## The pipeline, and where it actually stands
 
 The pipeline has four stages. Their honest status:

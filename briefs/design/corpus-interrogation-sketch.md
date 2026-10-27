@@ -297,6 +297,20 @@ items in `TODO_DEFERRED.md` (the importer's input boundary; the AI driving the v
 Visualizer image support). The importer change is a *direction*, not a decision — it revisits what the
 importer's input is and deserves a brief of its own. The Visualizer-as-looking-surface corollary is a decision.
 
+## Material from outside: the corpus is a private working copy
+
+Some of what enters a corpus comes from services rather than from the researcher's own export. Since
+2026-10-27, `raven-fillbib` and `raven-scopebib --fill` complete truncated abstracts and fill missing ones
+from Crossref. **Those abstracts remain their publisher's or authors' copyright**: Crossref's own metadata is
+free to reuse, abstracts are the stated exception, and Crossref distributes them under its agreement with its
+members ([Crossref's metadata licensing](https://www.crossref.org/documentation/retrieve-metadata/)).
+
+That fits the use this whole track is built for. The corpus is a working copy, built on the researcher's
+machine and used there to screen and study the literature; what leaves the machine is the review that comes
+out of it, which cites its sources. Nobody publishes the filled `.bib`. The constraint to keep in view is
+the obvious one: a feature that would *redistribute* corpus text — sharing a corpus between labs, publishing
+a dataset built from one — would have to treat that text as someone else's.
+
 ## Getting material in from a phone
 
 Raised 2026-07-29 (Juha). Belongs in the design track rather than in a TODO item because the open part of it is
