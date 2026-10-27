@@ -577,6 +577,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - **The fields this sets up to compare across corpora**: AOKK (AI in higher education), the health-education corpus, hydrogen production (where super- and subscripts matter), and axially moving materials (`banichuk_references.bib`) as a sanity check from an older field.
   - Finding the DOI of a record with none, by title and authors, is out of v1 for a reason that still holds: a wrong match fills in a wrong abstract silently. If attempted, propose rather than apply, as `raven-checkrefs` proposes its near-miss titles.
 
+- **[Low]** `raven-pdf2bib`: give its ledger answers digests, so that a PDF replaced since it was answered is asked again (`raven.librarian.sweep.Sweep(digest=...)`, added 2026-10-27; `raven-scopebib` uses it per stage). Today an answer is keyed on the PDF's id alone, and a corrected file under the same name keeps its old metadata.
+  - **What to hash is the design question.** The text the model is shown is what `scopebib` hashes, but here that text is extracted inside the ask, so digesting it would mean extracting every PDF on every run. The file's bytes are cheap to hash and change whenever the text could, at the price of re-asking on a change that leaves the text alone (re-saved metadata, say).
+  - **Not the path**: answered PDFs are moved into sorted directories (`sort_pdf`), so a path-based digest would re-ask every one of them on the next run.
+  - Existing ledgers then need stamping once (`Ledger.stamp`), from the files as they were when answered, or every PDF is asked again.
+
 
 
 ---
