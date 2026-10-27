@@ -34,7 +34,7 @@ from __future__ import annotations
 __all__ = ["render_jats", "comparable",
 
            "FILLED", "REPAIRED", "DIFFERS", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
-           "LOOKUP_FAILED",
+           "LOOKUP_FAILED", "LOOKS_TRUNCATED",
            "AuditRow", "AUDIT_COLUMNS", "fill", "write_audit",
 
            "fetch_crossref",
@@ -271,6 +271,10 @@ NOT_IN_CROSSREF = "DOI not found in Crossref"
 NO_ABSTRACT_IN_CROSSREF = "Crossref has no abstract"
 LOOKUP_FAILED = "lookup failed"
 
+# Appended to the outcome of a record that kept an abstract ending in an ellipsis. The ellipsis itself is
+# at the far end of a long cell, where a spreadsheet puts it a screen or more out of view.
+LOOKS_TRUNCATED = "ours looks truncated"
+
 _CHANGED = (FILLED, REPAIRED)
 
 
@@ -346,8 +350,11 @@ def fill(library: bibtexparser.Library,
 
         if outcome in _CHANGED:
             entry.set_field(Field("abstract", theirs))
-        elif outcome != DIFFERS and not _needs_one(ours):
-            continue  # nothing found, and nothing visibly missing: not worth a reader's time
+        else:
+            if outcome != DIFFERS and not _needs_one(ours):
+                continue  # nothing found, and nothing visibly missing: not worth a reader's time
+            if _TRAILING_ELLIPSIS.search(ours):
+                outcome = f"{outcome}; {LOOKS_TRUNCATED}"
         audit.append(AuditRow(key=entry.key,
                               outcome=outcome,
                               title=bibtex.readable_text(bibtex.entry_field(entry, "title")),
@@ -468,12 +475,16 @@ def _report(total: int, audit: list[AuditRow]) -> None:
     """Print what the run did, one line per outcome."""
     print(f"{total} records")
     counts: dict[str, int] = {}
+    truncated: dict[str, int] = {}
     for row in audit:
-        outcome = LOOKUP_FAILED if row.outcome.startswith(LOOKUP_FAILED) else row.outcome
+        outcome = LOOKUP_FAILED if row.outcome.startswith(LOOKUP_FAILED) else row.outcome.split("; ")[0]
         counts[outcome] = counts.get(outcome, 0) + 1
+        if row.outcome.endswith(LOOKS_TRUNCATED):
+            truncated[outcome] = truncated.get(outcome, 0) + 1
     for outcome in (*_OUTCOME_ORDER, LOOKUP_FAILED):
         if counts.get(outcome):
-            print(f"  {counts[outcome]:>6}  {outcome}")
+            maybe_truncated = f" ({truncated[outcome]} of them {LOOKS_TRUNCATED})" if truncated.get(outcome) else ""
+            print(f"  {counts[outcome]:>6}  {outcome}{maybe_truncated}")
 
 
 def main() -> None:  # pragma: no cover

@@ -148,6 +148,11 @@ class TestFill:
         other = "This study investigates something else entirely, with a different opening sentence."
         filled, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=TEASER)), {self.DOI: other})
         assert abstract_of(filled, "a") == TEASER
+        assert audit[0].outcome == f"{fillbib.DIFFERS}; {fillbib.LOOKS_TRUNCATED}"
+
+    def test_a_different_whole_text_is_not_called_truncated(self):
+        other = "This study investigates something else entirely, with a different opening sentence."
+        _, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=WHOLE)), {self.DOI: other})
         assert audit[0].outcome == fillbib.DIFFERS
 
     def test_a_whole_abstract_is_left_alone_and_not_listed(self):
@@ -174,9 +179,9 @@ class TestFill:
                       record("broken", doi="10.1234/broken"))
         _, audit = fillbib.fill(bib, {"10.1234/empty": None}, failed={"10.1234/broken": "ConnectionError: x"})
         assert {row.key: row.outcome for row in audit} == {
-            "nodoi": fillbib.NO_DOI,
+            "nodoi": f"{fillbib.NO_DOI}; {fillbib.LOOKS_TRUNCATED}",
             "absent": fillbib.NOT_IN_CROSSREF,
-            "empty": fillbib.NO_ABSTRACT_IN_CROSSREF,
+            "empty": f"{fillbib.NO_ABSTRACT_IN_CROSSREF}; {fillbib.LOOKS_TRUNCATED}",
             "broken": f"{fillbib.LOOKUP_FAILED}: ConnectionError: x"}
 
     def test_a_whole_abstract_that_could_not_be_looked_up_is_not_listed(self):
