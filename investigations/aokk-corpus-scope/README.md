@@ -727,6 +727,34 @@ order while the judge is still being calibrated**, and right once it is not:
 So the sift is a step in the pipeline and *not* a step in the calibration, and the two pilots deliberately
 run against the unsifted corpus.
 
+## The converted ledgers, stamped with digests (2026-10-27)
+
+From 2026-10-27 every `raven-scopebib` answer records a digest of its record as that stage's prompt shows
+it, and a run asks again any record whose text has changed since. The ledgers `convert_to_scopebib.py`
+wrote predate that, so a run would have read them as answering nothing. They were stamped once, from the
+corpus the answers were given about:
+
+```bash
+raven-scopebib stamp 00_stuff/rawdata/AOKK/scopebib-2026-10-26/prototype/02-sifted.bib \
+    --ledgers 00_stuff/rawdata/AOKK/scopebib-2026-10-26/ledgers
+```
+
+Stamped: 4314 title answers, 1876 abstract answers, 1377 reviews and 1234 extractions; a second run
+stamped none. The stamp declares each answer to be about the record's text in that file, so the file
+had to be the corpus as the answers saw it. Which corpus that was is not recorded — the prototype judged
+in September, the conversion came later — but it does not matter here: the August deduplicated file and
+the regenerated `02-sifted.bib` render all 4314 answered records identically in every stage, checked
+record by record.
+
+**What the stamp buys** is the next run after `raven-fillbib` (`investigations/bib-abstract-fill/`). A
+trial on a copy of the ledgers, against the filled corpus: no title answer goes stale, since filling
+changes no titles; 209 abstract answers, 82 reviews and 317 extractions are asked again; and the 175
+records the fill gave an abstract are new to every stage, the sift having removed them before. Unstamped,
+every answer would have been asked again.
+
+The command stays in `raven-scopebib` for any other ledger written before digests, but no released Raven
+can write one, so the manual does not describe it.
+
 ## Files
 
 | File | What it is |
