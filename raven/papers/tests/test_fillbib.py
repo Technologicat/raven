@@ -130,6 +130,23 @@ class TestComparable:
         assert fillbib.comparable(theirs).startswith(fillbib.comparable(ours))
 
 
+class TestWordsShared:
+    def test_a_teaser_is_wholly_in_the_abstract_it_starts(self):
+        assert fillbib.words_shared(TEASER, WHOLE) == 1.0
+
+    def test_a_small_edit_costs_little(self):
+        edited = WHOLE.replace("three courses", "3 courses")
+        assert 0.95 < fillbib.words_shared(edited, WHOLE) < 1.0
+
+    def test_a_different_text_shares_little(self):
+        other = "Ce travail examine un autre sujet entièrement, avec une ouverture différente."
+        assert fillbib.words_shared(other, WHOLE) < 0.1
+
+    def test_order_counts(self):
+        backwards = " ".join(reversed(WHOLE.split()))
+        assert fillbib.words_shared(backwards, WHOLE) < 0.5
+
+
 class TestFill:
     DOI = "10.1234/abc.5678"
 
@@ -142,13 +159,21 @@ class TestFill:
         filled, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=TEASER)), {self.DOI: WHOLE})
         assert abstract_of(filled, "a") == WHOLE
         assert audit[0].outcome == fillbib.REPAIRED
-        assert audit[0].before.endswith("...") and audit[0].after == WHOLE
+        assert audit[0].before.endswith("...") and audit[0].crossref == WHOLE
+        assert audit[0].maybe_shared == 1.0
 
     def test_a_different_text_is_kept_and_listed(self):
         other = "This study investigates something else entirely, with a different opening sentence."
         filled, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=TEASER)), {self.DOI: other})
         assert abstract_of(filled, "a") == TEASER
         assert audit[0].outcome == f"{fillbib.DIFFERS}; {fillbib.LOOKS_TRUNCATED}"
+
+    def test_a_kept_record_shows_crossrefs_text_and_how_much_they_share(self):
+        edited = WHOLE.replace("three courses", "3 courses")
+        _, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=edited)), {self.DOI: WHOLE})
+        assert audit[0].outcome == fillbib.DIFFERS
+        assert audit[0].crossref == WHOLE
+        assert 0.95 < audit[0].maybe_shared < 1.0
 
     def test_a_different_whole_text_is_not_called_truncated(self):
         other = "This study investigates something else entirely, with a different opening sentence."

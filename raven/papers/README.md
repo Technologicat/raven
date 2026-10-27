@@ -355,7 +355,7 @@ So the filled bibliography is a working copy, for screening and studying the lit
 
 Two files, named from the input: `<name>_filled.bib` and `<name>_fill_audit.xlsx`. `--audit-format ods` or `tsv` writes the audit as OpenDocument or tab-separated text instead.
 
-The audit has one row per record that was filled or repaired, kept its own abstract because Crossref's differs, or visibly lacks an abstract that could not be found. Each row carries the outcome, a link to the paper, and the abstract before and after. Where the record kept an abstract ending in `...`, the outcome says `ours looks truncated`, so those can be found without scrolling to the end of a long cell.
+The audit has one row per record that was filled or repaired, kept its own abstract because Crossref's differs, or visibly lacks an abstract that could not be found. Each row carries the outcome, a link to the paper, the record's abstract as it was, and Crossref's. Where there are both, a column gives the percentage of the record's words that appear in Crossref's text in the same order: near 100 for the same text written slightly differently, which is nothing to act on, and low for a different version or another language. Sort by it to see the differences that matter first. Where the record kept an abstract ending in `...`, the outcome says `ours looks truncated`, so those can be found without scrolling to the end of a long cell.
 
 - `--cache FILE` keeps Crossref's answers in a JSONL file, and a rerun asks only for the DOIs it does not hold. Crossref asks its users to cache.
 - `-o SUFFIX` / `--audit-suffix SUFFIX` rename the two outputs, and `--out-dir DIR` puts them elsewhere.

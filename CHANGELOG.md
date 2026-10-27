@@ -62,6 +62,7 @@
   - An abstract is replaced only where the record's own is the beginning of Crossref's, so a teaser cut off by a database export is completed, and a different version of the text is left alone and listed for you to look at.
   - Written in LaTeX: italics, bold, super- and subscripts, and a structured abstract's section headings, one paragraph per section. A plain language summary is left out.
   - The audit names every record it changed and every one it could not help, with the reason — `no DOI, cannot retrieve` among them.
+  - Beside each record's abstract the audit shows Crossref's, and how much of the record's text is in it, so the differences that matter sort to the top.
   - The abstracts remain their publisher's or authors' copyright: the filled file is for your own screening, not for publishing.
 
 #### Raven-siftbib

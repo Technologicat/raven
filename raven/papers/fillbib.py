@@ -35,7 +35,7 @@ __all__ = ["render_jats", "comparable",
 
            "FILLED", "REPAIRED", "DIFFERS", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
            "LOOKUP_FAILED", "LOOKS_TRUNCATED",
-           "AuditRow", "AUDIT_COLUMNS", "fill", "write_audit",
+           "AuditRow", "AUDIT_COLUMNS", "words_shared", "fill", "write_audit",
 
            "fetch_crossref",
 
@@ -44,6 +44,7 @@ __all__ = ["render_jats", "comparable",
 import argparse
 import copy
 import dataclasses
+import difflib
 import html
 import json
 import logging
@@ -282,19 +283,47 @@ _CHANGED = (FILLED, REPAIRED)
 class AuditRow:
     """One record the run changed, or could not help.
 
-    `before` and `after` are the abstract as it was and as it is now, in readable form; equal where the
-    record was left alone. `link` is where to read the paper (see `raven.papers.utils.paper_url`).
+    `before` is the record's abstract as it was and `crossref` the one Crossref has, both in readable form;
+    the record now carries `crossref` where the outcome is a fill or a repair, and `before` otherwise.
+    `maybe_shared` is `words_shared` of the two, or `None` where there are not two to compare. `link` is where
+    to read the paper (see `raven.papers.utils.paper_url`).
     """
     key: str
     outcome: str
     title: str
     venue: str
     link: str = ""
+    maybe_shared: float | None = None
     before: str = ""
-    after: str = ""
+    crossref: str = ""
 
 
-AUDIT_COLUMNS = ("key", "outcome", "title", "venue", "link", "abstract before", "abstract after")
+AUDIT_COLUMNS = ("key", "outcome", "% of ours in Crossref's", "title", "venue", "link",
+                 "abstract before", "Crossref's abstract")
+
+
+def _words(text: str) -> list[str]:
+    """`text` as the words `comparable` would keep, in order."""
+    match = _APPENDED_TEXT.search(text)
+    if match:
+        text = text[:match.start()]
+    text = textutil.strip_boilerplate(_TAG.sub(" ", common_utils.unicodize_basic_markup(text)))
+    return re.findall(r"\w+", text.casefold())
+
+
+def words_shared(ours: str, theirs: str) -> float:
+    """The share of the words of `ours` that appear in `theirs`, in the same order: 1.0 when `ours` is all in
+    there, near 0.0 when the two are different texts.
+
+    Measured against `ours` rather than against both, so that a short teaser that is the start of a long
+    abstract scores high: the question is whether our text is in Crossref's, not whether the two are equally
+    long. Compared as `comparable` compares, on words rather than letters.
+    """
+    ours_words, theirs_words = _words(ours), _words(theirs)
+    if not ours_words:
+        return 0.0
+    matcher = difflib.SequenceMatcher(None, ours_words, theirs_words, autojunk=False)
+    return sum(block.size for block in matcher.get_matching_blocks()) / len(ours_words)
 
 
 def _needs_one(abstract: str) -> bool:
@@ -361,8 +390,9 @@ def fill(library: bibtexparser.Library,
                               venue=bibtex.entry_venue(entry),
                               link=papers_utils.paper_url(bibtex.entry_field(entry, "doi"),
                                                           bibtex.entry_field(entry, "url")),
+                              maybe_shared=words_shared(ours, theirs) if (ours.strip() and theirs) else None,
                               before=bibtex.readable_text(ours),
-                              after=bibtex.readable_text(bibtex.entry_field(entry, "abstract"))))
+                              crossref=bibtex.readable_text(theirs or "")))
     return filled, audit
 
 
@@ -376,7 +406,9 @@ def write_audit(path: pathlib.Path, audit: list[AuditRow], sources: list[str]) -
                          "its publisher or authors",
                          f"records listed: {len(audit)}"],
                         AUDIT_COLUMNS,
-                        [(row.key, row.outcome, row.title, row.venue, row.link, row.before, row.after)
+                        [(row.key, row.outcome,
+                          "" if row.maybe_shared is None else round(100 * row.maybe_shared),
+                          row.title, row.venue, row.link, row.before, row.crossref)
                          for row in audit])
 
 
