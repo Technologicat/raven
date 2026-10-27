@@ -1,18 +1,19 @@
-"""HTTP wrapper for the arXiv API.
+"""HTTP wrapper for the scholarly metadata APIs: arXiv and Crossref.
 
-The arXiv API TOU asks callers to identify themselves with a descriptive
-`User-Agent` header, and the service occasionally returns HTTP 429 ("Too
-Many Requests") even when the caller is within the published 3 s rate
-limit — typically when a request misses the Varnish/Fastly cache and the
-origin is briefly busy. `arxiv_get` papers over both: it attaches an
-identifying `User-Agent` and retries on 429 with backoff, honoring the
-`Retry-After` header when present.
+Both ask callers to identify themselves with a descriptive `User-Agent`
+carrying a contact address — arXiv in its API terms of use, Crossref as the
+way into its "polite" pool — and both answer HTTP 429 ("Too Many Requests")
+when pressed. arXiv does so even within its published 3 s rate limit,
+typically when a request misses the Varnish/Fastly cache and the origin is
+briefly busy. `polite_get` papers over both: it attaches an identifying
+`User-Agent` and retries on 429 with backoff, honoring the `Retry-After`
+header when present.
 """
 
 from __future__ import annotations
 
 __all__ = [
-    "arxiv_get",
+    "polite_get",
 ]
 
 import logging
@@ -26,12 +27,12 @@ from . import config as papers_config
 logger = logging.getLogger(__name__)
 
 
-def arxiv_get(url: str,
-              params: Optional[dict[str, Any]] = None,
-              timeout: float = 30,
-              max_attempts: int = 3,
-              base_backoff: float = 3.0) -> requests.Response:
-    """GET `url`, with arXiv-identifying `User-Agent` and retry-with-backoff.
+def polite_get(url: str,
+               params: Optional[dict[str, Any]] = None,
+               timeout: float = 30,
+               max_attempts: int = 3,
+               base_backoff: float = 3.0) -> requests.Response:
+    """GET `url`, with an identifying `User-Agent` and retry-with-backoff.
 
     Retried, up to `max_attempts` total attempts:
 
@@ -63,7 +64,7 @@ def arxiv_get(url: str,
                 raise
             wait_s = base_backoff * (2 ** attempt)
             logger.warning(
-                f"arxiv_get: {type(exc).__name__} from {url} "
+                f"polite_get: {type(exc).__name__} from {url} "
                 f"(attempt {attempt + 1}/{max_attempts}); retrying in {wait_s:.1f} s: {exc}"
             )
             time.sleep(wait_s)
@@ -82,7 +83,7 @@ def arxiv_get(url: str,
         else:
             wait_s = base_backoff * (2 ** attempt)
         logger.warning(
-            f"arxiv_get: HTTP 429 from {url} "
+            f"polite_get: HTTP 429 from {url} "
             f"(attempt {attempt + 1}/{max_attempts}); retrying in {wait_s:.1f} s"
         )
         time.sleep(wait_s)

@@ -100,7 +100,7 @@ def search(query: str, max_results: int | None = None) -> list[dict]:
         }
 
         rate_limiter.wait()
-        resp = httpfetch.arxiv_get(papers_config.arxiv_api_url, params=params, timeout=30)
+        resp = httpfetch.polite_get(papers_config.arxiv_api_url, params=params, timeout=30)
         resp.raise_for_status()
 
         feed = feedparser.parse(resp.text)

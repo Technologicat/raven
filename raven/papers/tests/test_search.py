@@ -159,9 +159,9 @@ class TestSearchFunction:
     """Exercise ``search()`` against a canned ``requests.get``."""
 
     def _patch(self, pages, rate_limiter=None):
-        """Context manager: patch ``httpfetch.arxiv_get`` to return *pages* sequentially.
+        """Context manager: patch ``httpfetch.polite_get`` to return *pages* sequentially.
 
-        Each call to ``arxiv_get`` pops the next item from *pages*.  Also
+        Each call to ``polite_get`` pops the next item from *pages*.  Also
         bypasses the arXiv rate limit by default so tests stay fast.
         """
         if rate_limiter is None:
@@ -235,7 +235,7 @@ class _FakeHttpfetch:
         self._response_fn = response_fn
         self._get_fn = get_fn
 
-    def arxiv_get(self, url, params, timeout):
+    def polite_get(self, url, params, timeout):
         if self._get_fn is not None:
             return self._get_fn(url, params, timeout)
         return self._response_fn()

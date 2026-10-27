@@ -37,7 +37,7 @@ why: *"The `id_list` parameter should be used rather than `search_query=id:xxx` 
 versions."* Version handling is the whole reason this module exists in preference to the `arxiv2bib`
 package, so a switch made to route around an outage would quietly cost the feature it is built on. Observed
 on 2026-08-06: `id_list` requests hung while `search_query` answered in under a second, from the same
-machine, minutes apart — an arXiv-side transient, not an argument about the API. `httpfetch.arxiv_get`
+machine, minutes apart — an arXiv-side transient, not an argument about the API. `httpfetch.polite_get`
 already retries with backoff; a stubborn outage is a reason to wait, not to change endpoints.
 """
 
@@ -118,9 +118,9 @@ def fetch_metadata(identifiers: list[str], batch_size: int = papers_config.arxiv
     for start in range(0, len(identifiers), batch_size):
         batch = identifiers[start:start + batch_size]
         rate_limiter.wait()
-        response = httpfetch.arxiv_get(papers_config.arxiv_api_url,
-                                       params={"id_list": ",".join(batch), "max_results": len(batch)},
-                                       timeout=30)
+        response = httpfetch.polite_get(papers_config.arxiv_api_url,
+                                        params={"id_list": ",".join(batch), "max_results": len(batch)},
+                                        timeout=30)
         response.raise_for_status()
         feed = feedparser.parse(response.text)
 

@@ -262,7 +262,7 @@ def get_paper_metadata(arxiv_id: str,
                        title_length_limit: int = 128) -> Dict[str, str]:
     """Fetch and parse metadata from arXiv API, including PDF link."""
     api_url = f"{papers_config.arxiv_api_url}?id_list={arxiv_id}"
-    response = httpfetch.arxiv_get(api_url)
+    response = httpfetch.polite_get(api_url)
     response.raise_for_status()
     return parse_metadata_response(response.content, arxiv_id, title_length_limit)
 
@@ -349,8 +349,8 @@ def get_papers_metadata(arxiv_ids: List[str],
         # had already downloaded hundreds of papers. The batch's identifiers are simply absent from the
         # result, which the caller already reports paper by paper.
         try:
-            response = httpfetch.arxiv_get(papers_config.arxiv_api_url,
-                                           params={"id_list": ",".join(batch), "max_results": len(batch)})
+            response = httpfetch.polite_get(papers_config.arxiv_api_url,
+                                            params={"id_list": ",".join(batch), "max_results": len(batch)})
             response.raise_for_status()
         except Exception as exc:  # noqa: BLE001 -- one bad batch must not abort the run
             print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} "
@@ -475,7 +475,7 @@ def download_papers(arxiv_ids: List[str],
                             print(f"  {metadata['citation']}")
                             print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}{resolved_id_str}: downloading PDF")
                             rate_limiter.wait()
-                            pdf_response = httpfetch.arxiv_get(pdf_url)
+                            pdf_response = httpfetch.polite_get(pdf_url)
                             pdf_response.raise_for_status()
                             with open(save_path, "wb") as f:
                                 f.write(pdf_response.content)

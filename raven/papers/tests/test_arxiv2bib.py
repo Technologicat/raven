@@ -116,7 +116,7 @@ class _FakeHttpfetch:
         self._next_response = next_response
         self.calls: list[dict] = []
 
-    def arxiv_get(self, url, params=None, timeout=None):
+    def polite_get(self, url, params=None, timeout=None):
         self.calls.append(params or {})
         return self._next_response()
 
