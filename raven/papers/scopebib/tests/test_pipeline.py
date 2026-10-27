@@ -404,6 +404,19 @@ class TestSwitching:
         assert recorded[0]["extract"].maybe_instrument is None, "not known until its model is loaded"
         assert recorded[-1]["extract"].maybe_instrument == result.stages["extract"].maybe_instrument
 
+    def test_stages_sharing_a_model_switched_to_each_learn_their_instrument(
+            self, corpus, definition, tmp_path, model, connections, llm_settings, monkeypatch):
+        # The judge's switch loads the model the review and the extractor want too, so neither switches again:
+        # each must still learn its own instrument under it, or it asks into a ledger nobody can find.
+        switcher = FakeSwitcher(llm_settings, monkeypatch)
+        plans = {stage: StagePlan("other-model") for stage in runfile.STAGES}
+        result = run(corpus, definition, tmp_path, connections, plans=plans, make_switcher=lambda settings: switcher)
+        assert switcher.loads == ["other-model", "test-model"], "loaded once, for all three, then put back"
+        assert model.calls["review"] > 0 and model.calls["extract"] > 0
+        instruments = [result.stages[stage].maybe_instrument for stage in runfile.STAGES]
+        assert None not in instruments and len(set(instruments)) == 3
+        assert not list((tmp_path / "ledgers").glob("*-None*.jsonl"))
+
     def test_a_model_the_backend_lacks_is_refused_before_any_work(self, corpus, definition, tmp_path, model,
                                                                   connections, llm_settings, monkeypatch):
         switcher = FakeSwitcher(llm_settings, monkeypatch)

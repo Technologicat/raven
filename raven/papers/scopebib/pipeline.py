@@ -396,10 +396,13 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
     def use_model_of(stage: str) -> None:
         """Load `stage`'s model where another is loaded, and learn the stage's instrument under it."""
         nonlocal settings, current, state
-        if target[stage] == current:
-            return
-        settings = switcher.load(target[stage])
-        current = target[stage]
+        if target[stage] != current:
+            settings = switcher.load(target[stage])
+            current = target[stage]
+        elif behind.get(stage) == current:
+            return  # the instrument is already known under this model
+        # Learned here too when the model is already loaded, which happens when an earlier stage switched to
+        # the same one: the stage's fingerprint was unknown at the start, its model not being loaded then.
         fingerprint = sweep.fingerprint(settings, stage_materials[stage])
         if named[stage] is not None and named[stage] != fingerprint:
             raise _Stopped(f"{stage}: its named instrument {named[stage]} is not the one the current definition "
@@ -412,6 +415,9 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
 
     def sweep_over(stage: str, ask, records: list[scope_records.Record], ledger: sweep.Ledger, batch_size: int,
                    digest):
+        if not ledger.fingerprint:
+            raise RuntimeError(f"run: {stage}: no instrument known for its ledger, so its answers would go "
+                               f"where no run could find them")
         callback = (lambda progress: on_progress(stage, progress)) if on_progress else None
         result = sweep.Sweep(settings, functools.partial(ask, definition=definition),
                              [(record.key, record) for record in records], ledger, batch_size=batch_size,
