@@ -62,7 +62,7 @@ def get_info() -> dict:
     for role, model_name in server_config.embedding_models.items():
         embedder = embedders[role]
         models[role] = {"model": model_name,
-                        "dimension": embedder.get_sentence_embedding_dimension()}
+                        "dimension": embedder.get_embedding_dimension()}
     return {"models": models}
 
 def embed_sentences(text: Union[str, List[str]], model: str = "default") -> Union[List[float], List[List[float]]]:
