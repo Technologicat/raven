@@ -56,7 +56,7 @@ measured on a different corpus in August.
 
 **Controls: the comparison is trustworthy.** Of the 150, 61 have a Crossref abstract. 32 were equal as
 written and 8 more on letters only. Of the 20 "different", 17 differ only by a **copyright line our copy
-carries at the end** (`© 2025 by the authors.`, which Scopus appends); with it stripped they are equal. The
+carries at the end** (`© 2025 by the authors.`); with it stripped they are equal. The
 last 3 are genuine version differences — one word changed (`considered a` / `considered as a`), a LaTeX
 `\textless` against a literal `<`, and one whose opening sentence was rewritten. The prefix rule refuses all
 three, which is the behaviour wanted: a different version goes to a person, not into the record.
