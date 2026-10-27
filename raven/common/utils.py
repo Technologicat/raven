@@ -531,6 +531,14 @@ _latex_ligatures = {
     r"\i": "ı", r"\j": "ȷ",
 }
 
+# LaTeX text-style commands → the HTML tag `unicodize_basic_markup` handles the same thing as.
+_latex_text_styles = {
+    "textbf": "b",
+    "textit": "i", "emph": "i", "textsl": "i",
+    "underline": "u",
+    "textsuperscript": "sup", "textsubscript": "sub",
+}
+
 def _apply_latex_accent(match_obj):
     """Replace a `\\X{c}` or `\\Xc` LaTeX accent match with `c + combining-mark`."""
     accent, letter = match_obj.group(1), match_obj.group(2)
@@ -568,12 +576,28 @@ def _substitute_chars(mapping, html_tag_name, match_obj):
         sio.write(mapping.get(c, c))  # if `c` in `mapping`, use that, else use `c` itself.
     return sio.getvalue()
 
+def _markdown_emphasis(delimiter, match_obj):
+    """Replacer for `re.sub`: wrap an HTML emphasis match's text in a Markdown `delimiter`.
+
+    Whitespace just inside the tags moves outside the delimiters, since Markdown does not read
+    `** bold **` as emphasis. An emphasis holding nothing but whitespace keeps the whitespace only.
+    """
+    text = match_obj.group(2)
+    content = text.strip()
+    if not content:
+        return text
+    leading = text[:len(text) - len(text.lstrip())]
+    trailing = text[len(text.rstrip()):]
+    return f"{leading}{delimiter}{content}{delimiter}{trailing}"
+
 def unicodize_basic_markup(s):
     """Convert simple HTML/LaTeX markup into Unicode, as far as reasonably possible.
 
     Apply `normalize_unicode` (which see), and then convert
     applicable parts of HTML and LaTeX (e.g. superscripts, subscripts)
     to their Unicode equivalents.
+
+    Bold and italic, in either dialect, become Markdown (`**bold**`, `*italic*`).
     """
     s = normalize_unicode(s)
 
@@ -602,6 +626,13 @@ def unicodize_basic_markup(s):
     # Only the letter-named accents: for `\"a` and friends the command name is punctuation, which
     # self-terminates, so a space there would be a literal space rather than a separator.
     s = re.sub(r"""\\([cvuHkr])\s+(\w)""", _apply_latex_accent, s)
+
+    # LaTeX text-style commands, rewritten as the HTML tags they correspond to, so that the HTML passes
+    # below handle both dialects alike. Must run before brace stripping, which would otherwise leave the
+    # command name glued to its argument (`\textit{in vitro}` → `\textitin vitro`). The argument may hold
+    # one level of grouping braces (`\textit{{AutoPBL}}`); those go with the brace-stripping pass.
+    for command, tag in _latex_text_styles.items():
+        s = re.sub(r"\\" + command + r"\{((?:[^{}]|\{[^{}]*\})*)\}", rf"<{tag}>\1</{tag}>", s)
 
     # Strip BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, and nested
     # forms like `{{AutoPBL}}`). `bibtexparser` is a pure parser: it hands us the raw
@@ -639,10 +670,10 @@ def unicodize_basic_markup(s):
     s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
     s = re.sub(r"<sup>(.*?)</sup>", substitute_sup, s, flags=re.IGNORECASE)
 
-    # Prettify some HTML for better plaintext readability
-    s = re.sub(r"<b>(.*?)</b>", r"*\1*", s, flags=re.IGNORECASE)  # bold
-    s = re.sub(r"<i>(.*?)</i>", r"/\1/", s, flags=re.IGNORECASE)  # italic
-    s = re.sub(r"<u>(.*?)</u>", r"_\1_", s, flags=re.IGNORECASE)  # underline
+    # Emphasis becomes Markdown. Underline has no Markdown form, so it keeps its text and loses the tags.
+    s = re.sub(r"<(b|strong)>(.*?)</\1>", functools.partial(_markdown_emphasis, "**"), s, flags=re.IGNORECASE)
+    s = re.sub(r"<(i|em)>(.*?)</\1>", functools.partial(_markdown_emphasis, "*"), s, flags=re.IGNORECASE)
+    s = re.sub(r"<u>(.*?)</u>", r"\1", s, flags=re.IGNORECASE)
 
     # Then the entities for `<`, `>` and `&`, after the tag passes, so that `&lt;b&gt;` written as entities
     # stays text rather than becoming markup they would act on. One pass, so a source's `&amp;lt;` comes

@@ -459,14 +459,32 @@ class TestUnicodizeBasicMarkup:
     def test_html_entity_ouml(self):
         assert utils.unicodize_basic_markup("&Ouml;") == "Ö"
 
-    def test_html_bold(self):
-        assert utils.unicodize_basic_markup("<b>bold</b>") == "*bold*"
+    def test_html_bold_becomes_markdown(self):
+        assert utils.unicodize_basic_markup("<b>bold</b>") == "**bold**"
+        assert utils.unicodize_basic_markup("<strong>bold</strong>") == "**bold**"
 
-    def test_html_italic(self):
-        assert utils.unicodize_basic_markup("<i>italic</i>") == "/italic/"
+    def test_html_italic_becomes_markdown(self):
+        assert utils.unicodize_basic_markup("<i>italic</i>") == "*italic*"
+        assert utils.unicodize_basic_markup("<em>italic</em>") == "*italic*"
 
-    def test_html_underline(self):
-        assert utils.unicodize_basic_markup("<u>underline</u>") == "_underline_"
+    def test_html_underline_keeps_its_text(self):
+        # Markdown has no underline.
+        assert utils.unicodize_basic_markup("<u>underline</u>") == "underline"
+
+    def test_whitespace_inside_emphasis_moves_outside(self):
+        # `** Methods **` is not emphasis to a Markdown reader.
+        assert utils.unicodize_basic_markup("a<b> Methods </b>b") == "a **Methods** b"
+        assert utils.unicodize_basic_markup("a<i> </i>b") == "a b"
+
+    def test_latex_emphasis_becomes_markdown(self):
+        assert utils.unicodize_basic_markup(r"the \textit{in vitro} case") == "the *in vitro* case"
+        assert utils.unicodize_basic_markup(r"\emph{very} \textbf{bold}") == "*very* **bold**"
+
+    def test_latex_emphasis_around_a_case_protected_group(self):
+        assert utils.unicodize_basic_markup(r"\textit{{AutoPBL}} rules") == "*AutoPBL* rules"
+
+    def test_latex_super_and_subscripts(self):
+        assert utils.unicodize_basic_markup(r"CO\textsubscript{2} at 10\textsuperscript{3} K") == "CO₂ at 10³ K"
 
     def test_lt_gt_entities_last(self):
         # &lt; and &gt; should be replaced after HTML tags are processed
