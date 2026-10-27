@@ -799,6 +799,32 @@ takes the whole new path on the real backend — fill from the cache, sift, and 
 own instruments — before a night is spent on it. Its reports go to `pilot/` under the output directory, and
 its answers go to the same ledgers, so they count toward the full run.
 
+**The pilots, run 2026-10-27 with each model** (same 50 records, seed 42; reports in
+`00_stuff/rawdata/AOKK/scopebib-2026-10-27-qwen3.6/pilot/` and `…-qwen3.8/pilot/`, with `compare`'s tables
+in the latter). Each took about a quarter of an hour, startup included. `raven-scopebib compare`, 3.6
+against 3.8:
+
+| stage | measure | records | agreement | kappa |
+|---|---|---|---|---|
+| judge | verdict | 50 | 0.96 | 0.905 |
+| judge | not_education | 50 | 0.96 | 0.891 |
+| judge | no_ai, wrong_level | 50 | 1.0 | 1.0 |
+| judge | confidence | 50 | 0.68 | 0.36 |
+| review | belongs | 29 | 0.862 | 0.696 |
+| extract | population | 34 | 0.853 | 0.78 |
+| extract | level | 34 | 0.971 | 0.954 |
+| extract | human_learning | 34 | 0.912 | 0.463 |
+
+The two verdict disagreements are both 3.8 dropping as not about education what 3.6 keeps (young adults'
+mental-health chatbots; a comparison of ChatGPT's factuality). All 16 confidence disagreements go one way,
+3.6 medium where 3.8 says high, which changes how much escalates to the abstract pass and to a person.
+Each model broke one batch's JSON (a stray quote; two strings for one value), which is what
+`agent.parse_json_reply`'s item salvage was added for the same evening.
+
+The pilots also found that a stage on a model an earlier stage had switched to never learned its
+instrument, and wrote to `review-None.jsonl` and `extract-None.jsonl`; fixed the same evening, the files
+kept in `ledgers/discarded-2026-10-27/`.
+
 ## Files
 
 | File | What it is |
