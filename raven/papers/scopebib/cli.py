@@ -120,6 +120,16 @@ def _parser() -> argparse.ArgumentParser:
     compare.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
     compare.add_argument("--log-level", default="INFO",
                          choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"), help="How much to log.")
+    stamp = commands.add_parser("stamp", help="Mark the answers of ledgers written before answers carried a "
+                                              "digest of their record, so that a run asks again only the "
+                                              "records edited since.")
+    stamp.add_argument("bib", metavar="corpus.bib",
+                       help="The corpus as the run that wrote the ledgers read it, sifted or not. Not a later "
+                            "version: its text is what each answer is declared to be about.")
+    stamp.add_argument("--ledgers", required=True, metavar="DIR", help="The ledger directory.")
+    stamp.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
+    stamp.add_argument("--log-level", default="INFO",
+                       choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"), help="How much to log.")
     return parser
 
 
@@ -412,6 +422,17 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
             sys.exit(1)
         for path in written:
             print(f"wrote {path}")
+        sys.exit(0)
+    if opts.command == "stamp":
+        from .. import bibtex
+        from . import records as scope_records
+        records = scope_records.records_of(bibtex.parse_file(pathlib.Path(opts.bib).expanduser(), split_names=False))
+        stamped = pipeline.stamp_ledgers(records, pathlib.Path(opts.ledgers).expanduser())
+        if not stamped:
+            print(f"raven-scopebib: no ledgers in {opts.ledgers}", file=sys.stderr)
+            sys.exit(1)
+        for name, count in stamped.items():
+            print(f"{name}: {count} {'answer' if count == 1 else 'answers'} stamped")  # plural
         sys.exit(0)
     try:
         plan = resolve(opts)

@@ -19,7 +19,8 @@ stage whose instrument is not named needs a connection even to find its ledger.
 
 __all__ = ["TITLE_BATCH", "ABSTRACT_BATCH", "REVIEW_BATCH", "EXTRACT_BATCH", "PILOT_SIZE",
            "PipelineError", "Corpus", "load_corpus", "materials",
-           "State", "read_state", "RunResult", "run"]
+           "State", "read_state", "RunResult", "run",
+           "stamp_ledgers"]
 
 import dataclasses
 import functools
@@ -27,6 +28,7 @@ import json
 import logging
 import pathlib
 import random
+import re
 from collections.abc import Callable, Container, Sequence
 
 from unpythonic.env import env
@@ -181,8 +183,14 @@ def read_state(corpus: Corpus, definition: scope_definition.Definition, *,
             "review": None, "extract": None}
     final = scope_judge.final_answers(records, titles=ledgers.titles, abstracts=ledgers.abstracts, measures=measures)
     in_corpus = {record.key for record in records}
-    reviews = {key: answer for key, answer in ledgers.review.answers().items() if key in in_corpus}
-    extractions = {key: answer for key, answer in ledgers.extract.answers().items() if key in in_corpus}
+    # Read as the records are now: an answer about text that has been edited since is not one, and the
+    # record is asked again.
+    reviews = {key: answer for key, answer in
+               ledgers.review.answers({record.key: scope_review.digest(record) for record in records}).items()
+               if key in in_corpus}
+    extractions = {key: answer for key, answer in
+                   ledgers.extract.answers({record.key: scope_extract.digest(record) for record in records}).items()
+                   if key in in_corpus}
     control = []
     if not todo["titles"] and not todo["abstracts"]:
         control = scope_review.draw_control(final, size=control_size, seed=seed)
@@ -376,11 +384,13 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
         if on_instruments is not None:
             on_instruments(plans_now())
 
-    def sweep_over(stage: str, ask, records: list[scope_records.Record], ledger: sweep.Ledger, batch_size: int):
+    def sweep_over(stage: str, ask, records: list[scope_records.Record], ledger: sweep.Ledger, batch_size: int,
+                   digest):
         callback = (lambda progress: on_progress(stage, progress)) if on_progress else None
         result = sweep.Sweep(settings, functools.partial(ask, definition=definition),
                              [(record.key, record) for record in records], ledger, batch_size=batch_size,
-                             header=sweep.instrument_header(settings), on_item=callback).run()
+                             header=sweep.instrument_header(settings), on_item=callback,
+                             digest=digest).run()
         if result.outcome is not sweep.completed:
             raise _Stopped(f"{stage} stopped: {result.message or result.outcome}")
         if result.failed:
@@ -394,11 +404,12 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
             if "judge" in stages and has_work(state, "judge"):
                 use_model_of("judge")
                 if state.todo["titles"]:
-                    sweep_over("judge", scope_judge.ask_titles, state.todo["titles"], ledgers().titles, TITLE_BATCH)
+                    sweep_over("judge", scope_judge.ask_titles, state.todo["titles"], ledgers().titles, TITLE_BATCH,
+                               scope_judge.title_digest)
                     state = state_under(fingerprints)
                 if state.todo["abstracts"]:
                     sweep_over("judge", scope_judge.ask_abstracts, state.todo["abstracts"], ledgers().abstracts,
-                               ABSTRACT_BATCH)
+                               ABSTRACT_BATCH, scope_judge.abstract_digest)
                     state = state_under(fingerprints)
             if not state.judge_settled and any(stage in stages for stage in ("review", "extract")):
                 messages.append("the reviewer and the extractor wait until the judge has answered every record")
@@ -408,13 +419,14 @@ def run(corpus: Corpus, definition: scope_definition.Definition, *,
                     # Shuffled, so that the control is not asked about in a block of its own.
                     todo = sorted(state.todo["review"], key=lambda record: record.key)
                     random.Random(seed).shuffle(todo)
-                    sweep_over("review", scope_review.ask_reviews, todo, ledgers().review, REVIEW_BATCH)
+                    sweep_over("review", scope_review.ask_reviews, todo, ledgers().review, REVIEW_BATCH,
+                               scope_review.digest)
                     state = state_under(fingerprints)
             if "extract" in stages and has_work(state, "extract") and state.judge_settled:
                 use_model_of("extract")
                 if state.todo["extract"]:
                     sweep_over("extract", scope_extract.ask_fields, state.todo["extract"], ledgers().extract,
-                               EXTRACT_BATCH)
+                               EXTRACT_BATCH, scope_extract.digest)
                     state = state_under(fingerprints)
         finally:
             if current != initial:
@@ -458,3 +470,31 @@ def _finish(state: State, fingerprints: dict[str, str | None], wanted_models: di
     by_stage = {"judge": ledgers.titles, "review": ledgers.review, "extract": ledgers.extract}
     models = {stage: _describe_model(by_stage[stage], plans[stage].maybe_model) for stage in runfile.STAGES}
     return RunResult(state, plans, models, [], connected)
+
+
+# Each stage's ledger file is `{name}-{fingerprint}.jsonl`, a replicate's under a fingerprint of its own.
+_LEDGER_FILE = re.compile(r"^(judge-titles|judge-abstracts|review|extract)-([0-9a-f]{8})\.jsonl$")
+_DIGESTS = {"judge-titles": scope_judge.title_digest, "judge-abstracts": scope_judge.abstract_digest,
+            "review": scope_review.digest, "extract": scope_extract.digest}
+
+
+def stamp_ledgers(records: Sequence[scope_records.Record], ledger_dir: str | pathlib.Path) -> dict[str, int]:
+    """Give the answers in every ledger under `ledger_dir` the digest of the record they were given about,
+    where they have none (`raven.librarian.sweep.Ledger.stamp`).
+
+    For ledgers written before answers carried digests, which a run would otherwise read as answering nothing
+    and ask again whole. `records` must be the corpus **as the run that wrote them saw it** — a later one
+    would declare old answers current for text they were never given — and a record it does not hold is
+    left alone. Returns how many answers were stamped, by ledger file name.
+    """
+    directory = pathlib.Path(ledger_dir)
+    out = {}
+    for path in sorted(directory.glob("*.jsonl")):
+        match = _LEDGER_FILE.match(path.name)
+        if not match:
+            continue  # a traces file, or something else
+        name, fingerprint = match.groups()
+        digest = _DIGESTS[name]
+        out[path.name] = sweep.Ledger(directory, name, fingerprint).stamp({record.key: digest(record)
+                                                                           for record in records})
+    return out

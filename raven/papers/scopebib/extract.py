@@ -12,7 +12,7 @@ A `raven.librarian.sweep`, batched, with one ledger (`ledger`) named for the ins
 (`instrument_material`): the definition's fields and this module's prompt.
 """
 
-__all__ = ["ABSTRACT_CHARS", "QUOTE_MARKS", "instrument_material", "ledger", "ask_fields", "normalize"]
+__all__ = ["ABSTRACT_CHARS", "QUOTE_MARKS", "instrument_material", "ledger", "item", "digest", "ask_fields", "normalize"]
 
 import json
 import logging
@@ -85,6 +85,18 @@ def ledger(directory: str | pathlib.Path, fingerprint: str) -> sweep.Ledger:
     return sweep.Ledger(directory, "extract", fingerprint)
 
 
+def item(i: int, record: scope_records.Record) -> str:
+    """Record `record` as the extractor shows it, numbered `i` in its batch."""
+    venue = f"Published in: {record.venue}\n" if record.venue else ""
+    abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
+    return f"--- record {i} ---\nTitle: {record.title}\n{venue}Abstract: {abstract}\n"
+
+
+def digest(record: scope_records.Record) -> str:
+    """The `raven.librarian.sweep.digest` of `record` as the extractor shows it, whatever its place in a batch."""
+    return sweep.digest(item(0, record))
+
+
 def ask_fields(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
                maybe_abort: netutil.Abort | None = None, *,
                definition: scope_definition.Definition) -> tuple[dict, list[agent.TurnRecord]]:
@@ -94,10 +106,6 @@ def ask_fields(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
     `raven.librarian.sweep.Sweep`. An answer whose number does not resolve is dropped rather than guessed at,
     and a reply cut off at the token cap fails the whole batch, to be asked again.
     """
-    def item(i: int, record: scope_records.Record) -> str:
-        venue = f"Published in: {record.venue}\n" if record.venue else ""
-        abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
-        return f"--- record {i} ---\nTitle: {record.title}\n{venue}Abstract: {abstract}\n"
     prompt = _INSTRUCTIONS.format(scope=definition.scope, field_lines=_field_lines(definition),
                                   items="\n".join(item(i, record) for i, (_, record) in enumerate(batch)))
     turn = agent.ask_record(llm_settings, prompt, maybe_abort=maybe_abort)

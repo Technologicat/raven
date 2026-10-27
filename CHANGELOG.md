@@ -78,6 +78,7 @@
   - A record is removed only on positive evidence, and a second pass goes over every removal looking for a case that it belongs. Everything it was unsure about goes to one worklist for a person, `04-CHECK-BY-HAND`, and `raven-scopebib finish` applies the decisions marked there.
   - For the records it keeps, it can also record what each one says — the level a study is set at, say — and remove what your rules over those answers rule out.
   - `run --pilot` tries it on 50 records first, with one report to read before committing to the corpus.
+  - Answers are saved as they arrive, so a run that stops resumes where it was. A record edited since it was answered — an abstract completed by `raven-fillbib`, a title corrected by hand — is asked again, and only it.
   - Every answer is saved, so an interrupted run resumes, and every run writes `run.toml`, which repeats it — with no LLM at all when every answer is saved. Each report names the model behind every step.
   - Before any work, a run works out whether it needs the LLM at all, and if it does, connects at once: a backend that cannot be reached, has no model loaded, or has the wrong one is reported at the start, not an hour in.
   - A backend that goes away during the run, or swaps its model, stops it with a message saying why; the reports cover what was settled, and passing the stopped run's `run.toml` back with `--run-file` resumes it, without retyping any of the original options, which by then are stored in the run file.

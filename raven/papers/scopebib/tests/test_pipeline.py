@@ -48,30 +48,35 @@ class _Turn:
 
 
 class ScriptedModel:
-    """Answers each pass by what its prompt asks, and counts the calls by pass."""
+    """Answers each pass by what its prompt asks, and counts the calls by pass, and the titles each saw."""
 
     def __init__(self, *, skip_titles=()):
         self.calls = collections.Counter()
+        self.seen = collections.defaultdict(list)
         self.skip_titles = set(skip_titles)
 
     def __call__(self, llm_settings, prompt, maybe_abort=None, **kwargs):
         if "You are recording what each record says" in prompt:
             self.calls["extract"] += 1
             titles = re.findall(r"--- record (\d+) ---\nTitle: (.*)", prompt)
+            self.seen["extract"].extend(title for _, title in titles)
             answers = [{"i": int(i), "setting": "city" if "city" in title else "forest",
                         "setting_quote": "the city" if "city" in title else ""} for i, title in titles]
         elif "credible case" in prompt:
             self.calls["review"] += 1
             titles = re.findall(r"--- record (\d+) ---\nTitle: (.*)", prompt)
+            self.seen["review"].extend(title for _, title in titles)
             answers = [{"i": int(i), "belongs": False, "case": "nothing to point at"} for i, _ in titles]
         elif "--- item" in prompt:
             self.calls["abstracts"] += 1
             titles = re.findall(r"--- item (\d+) ---\nTitle: (.*)", prompt)
+            self.seen["abstracts"].extend(title for _, title in titles)
             answers = [{"i": int(i), "not_birds": "Crow" in title, "confidence": "high", "why": "w",
                         "truncated": False} for i, title in titles]
         else:
             self.calls["titles"] += 1
             titles = re.findall(r"^(\d+)\. (.*)$", prompt, re.MULTILINE)
+            self.seen["titles"].extend(title for _, title in titles)
             answers = [{"i": int(i), "not_birds": "Crow" in title, "confidence": "high", "why": "w"}
                        for i, title in titles if title not in self.skip_titles]
         return _Turn(json.dumps(answers))
@@ -144,6 +149,58 @@ class TestARun:
         asked = sum(model.calls.values())
         run(corpus, definition, tmp_path, connections)
         assert sum(model.calls.values()) == asked
+
+    def test_a_record_edited_between_runs_is_asked_again_and_only_by_the_passes_that_show_it(
+            self, corpus, definition, tmp_path, model, connections):
+        run(corpus, definition, tmp_path, connections)
+        edited = dict(TITLES, c1="Crows at the landfill")  # a title edited: every pass shows the title
+        library = bibtex.parse_file(bib(tmp_path / "edited.bib", edited), split_names=False)
+        records = [scope_records.Record(**{**record.__dict__, "abstract": "About ravens, at length."})
+                   if record.key == "r3" else record  # an abstract edited: only the extractor shows it to a keep
+                   for record in scope_records.records_of(library)]
+        model.seen.clear()
+        run(pipeline.Corpus(library, records, None, corpus.measures), definition, tmp_path, connections)
+        assert model.seen["titles"] == ["Crows at the landfill"]
+        assert model.seen["review"] == ["Crows at the landfill"], "a drop is reviewed"
+        assert model.seen["extract"] == ["Ravens at dawn"]
+
+    @staticmethod
+    def _forget_digests(ledger_dir):
+        """Make the ledgers look written before answers carried a digest."""
+        for path in ledger_dir.glob("*.jsonl"):
+            lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            path.write_text("".join(json.dumps({k: v for k, v in line.items() if k != "d"}) + "\n" for line in lines),
+                            encoding="utf-8")
+
+    def test_old_ledgers_stamped_from_their_corpus_ask_nothing_again(self, corpus, definition, tmp_path, model,
+                                                                     connections):
+        run(corpus, definition, tmp_path, connections)
+        self._forget_digests(tmp_path / "ledgers")
+        stamped = pipeline.stamp_ledgers(corpus.records, tmp_path / "ledgers")
+        assert sum(stamped.values()) > 0 and all(not name.endswith("-traces.jsonl") for name in stamped)
+        asked = sum(model.calls.values())
+        run(corpus, definition, tmp_path, connections)
+        assert sum(model.calls.values()) == asked
+
+    def test_old_ledgers_unstamped_are_asked_again(self, corpus, definition, tmp_path, model, connections):
+        # The control for the test above: without the stamp, the same ledgers answer nothing.
+        run(corpus, definition, tmp_path, connections)
+        self._forget_digests(tmp_path / "ledgers")
+        model.seen.clear()
+        run(corpus, definition, tmp_path, connections)
+        assert sorted(model.seen["titles"]) == sorted(TITLES.values())
+
+    def test_a_record_edited_after_the_stamped_run_is_still_asked_again(self, corpus, definition, tmp_path, model,
+                                                                        connections):
+        run(corpus, definition, tmp_path, connections)
+        self._forget_digests(tmp_path / "ledgers")
+        pipeline.stamp_ledgers(corpus.records, tmp_path / "ledgers")
+        edited = dict(TITLES, c1="Crows at the landfill")
+        library = bibtex.parse_file(bib(tmp_path / "edited.bib", edited), split_names=False)
+        model.seen.clear()
+        run(pipeline.Corpus(library, scope_records.records_of(library), None, corpus.measures), definition, tmp_path,
+            connections)
+        assert model.seen["titles"] == ["Crows at the landfill"]
 
     def test_until_stops_after_the_stage_named(self, corpus, definition, tmp_path, model, connections):
         result = run(corpus, definition, tmp_path, connections, stages=("judge",))

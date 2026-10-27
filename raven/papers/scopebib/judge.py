@@ -18,6 +18,7 @@ passes share one fingerprint and keep one ledger each (`ledgers`).
 
 __all__ = ["FRAME", "ABSTRACT_CHARS", "CONFIDENCES",
            "rubric", "instrument_material", "ledgers",
+           "title_item", "abstract_item", "title_digest", "abstract_digest",
            "ask_titles", "ask_abstracts",
            "normalize", "temper_for_truncation", "verdict_of", "needs_escalation",
            "todo_titles", "todo_abstracts", "final_answers"]
@@ -149,6 +150,31 @@ def ledgers(directory: str | pathlib.Path, fingerprint: str) -> tuple[sweep.Ledg
 
 
 # --------------------------------------------------------------------------------
+# What the model is shown of a record
+
+def title_item(i: int, record: scope_records.Record) -> str:
+    """Record `record` as the title pass shows it, numbered `i` in its batch."""
+    return f"{i}. {record.title}" + (f"\n   [published in: {record.venue}]" if record.venue else "")
+
+
+def abstract_item(i: int, record: scope_records.Record) -> str:
+    """Record `record` as the abstract pass shows it, numbered `i` in its batch."""
+    marked = " (TRUNCATED)" if scope_records.looks_truncated(record.abstract) else ""
+    venue = f"Published in: {record.venue}\n" if record.venue else ""
+    abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
+    return f"--- item {i} ---\nTitle: {record.title}\n{venue}Abstract{marked}: {abstract}\n"
+
+
+def title_digest(record: scope_records.Record) -> str:
+    """The `raven.librarian.sweep.digest` of `record` as the title pass shows it, whatever its place in a batch."""
+    return sweep.digest(title_item(0, record))
+
+
+def abstract_digest(record: scope_records.Record) -> str:
+    """The `raven.librarian.sweep.digest` of `record` as the abstract pass shows it."""
+    return sweep.digest(abstract_item(0, record))
+
+# --------------------------------------------------------------------------------
 # Asking
 
 def _ask(llm_settings: env, prompt: str, *, batch: list[tuple[str, scope_records.Record]],
@@ -189,8 +215,7 @@ def ask_titles(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
     With `definition` bound — `functools.partial(ask_titles, definition=...)` — the `ask_batch` of a
     `raven.librarian.sweep.Sweep`.
     """
-    items = "\n".join(f"{i}. {record.title}" + (f"\n   [published in: {record.venue}]" if record.venue else "")
-                      for i, (_, record) in enumerate(batch))
+    items = "\n".join(title_item(i, record) for i, (_, record) in enumerate(batch))
     prompt = _TITLES.format(rubric=rubric(definition), test_lines=_test_lines(definition), items=items)
     return _ask(llm_settings, prompt, batch=batch, definition=definition, source="title", maybe_abort=maybe_abort)
 
@@ -200,12 +225,7 @@ def ask_abstracts(llm_settings: env, batch: list[tuple[str, scope_records.Record
                   definition: scope_definition.Definition) -> tuple[dict, list[agent.TurnRecord]]:
     """The abstract pass over one batch of `(key, record)`, as `ask_titles`. Each answer is tempered for a
     truncated abstract (`temper_for_truncation`)."""
-    def item(i: int, record: scope_records.Record) -> str:
-        marked = " (TRUNCATED)" if scope_records.looks_truncated(record.abstract) else ""
-        venue = f"Published in: {record.venue}\n" if record.venue else ""
-        abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
-        return f"--- item {i} ---\nTitle: {record.title}\n{venue}Abstract{marked}: {abstract}\n"
-    items = "\n".join(item(i, record) for i, (_, record) in enumerate(batch))
+    items = "\n".join(abstract_item(i, record) for i, (_, record) in enumerate(batch))
     prompt = _ABSTRACTS.format(rubric=rubric(definition), test_lines=_test_lines(definition), items=items)
     answers, turns = _ask(llm_settings, prompt, batch=batch, definition=definition, source="abstract",
                           maybe_abort=maybe_abort)
@@ -283,16 +303,34 @@ def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
 # --------------------------------------------------------------------------------
 # What is left, and what is settled
 
+def _digests(records: list[scope_records.Record], digest) -> dict[str, str]:
+    return {record.key: digest(record) for record in records}
+
+
+def _answers(records: list[scope_records.Record], *, titles: sweep.Ledger,
+             abstracts: sweep.Ledger) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Each pass's answers about `records` as they read now."""
+    return (titles.answers(_digests(records, title_digest)),
+            abstracts.answers(_digests(records, abstract_digest)))
+
+
 def todo_titles(records: Iterable[scope_records.Record], *, titles: sweep.Ledger) -> list[scope_records.Record]:
-    """The records the title pass has not answered."""
-    answered = titles.answers()
+    """The records the title pass has not answered, as they read now.
+
+    An answer counts only if it was written with `title_digest` of the record as it reads now, so a sweep over
+    `titles` passes `digest=title_digest`, and the abstract pass's `abstract_digest`; one written without is
+    asked again. The same holds for `todo_abstracts` and `final_answers`.
+    """
+    records = list(records)
+    answered = titles.answers(_digests(records, title_digest))
     return [record for record in records if record.key not in answered]
 
 
 def todo_abstracts(records: Iterable[scope_records.Record], *, titles: sweep.Ledger, abstracts: sweep.Ledger,
                    measures: dict[str, scope_records.TitleMeasure]) -> list[scope_records.Record]:
-    """The records whose title answer escalates and that the abstract pass has not answered."""
-    by_title, by_abstract = titles.answers(), abstracts.answers()
+    """The records whose title answer escalates and that the abstract pass has not answered, as they read now."""
+    records = list(records)
+    by_title, by_abstract = _answers(records, titles=titles, abstracts=abstracts)
     return [record for record in records
             if record.key in by_title and record.key not in by_abstract
             and needs_escalation(by_title[record.key], measures[record.key])]
@@ -304,9 +342,10 @@ def final_answers(records: Iterable[scope_records.Record], *, titles: sweep.Ledg
 
     The abstract pass's where the record escalated and it has answered; the title pass's where the record
     did not escalate. A record still waiting on either pass is absent, so a partial run reports only what
-    it has settled.
+    it has settled. An answer given about a record's text as it read before an edit is not settled.
     """
-    by_title, by_abstract = titles.answers(), abstracts.answers()
+    records = list(records)
+    by_title, by_abstract = _answers(records, titles=titles, abstracts=abstracts)
     out = {}
     for record in records:
         if record.key not in by_title:

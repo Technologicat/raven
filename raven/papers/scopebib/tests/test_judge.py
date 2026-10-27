@@ -202,14 +202,15 @@ class TestThePasses:
         script(monkeypatch, [titles_reply, abstracts_reply])
         titles, abstracts = judge.ledgers(tmp_path, "test0000")
 
-        def run(ask, todo, ledger):
+        def run(ask, todo, ledger, digest):
             return sweep.Sweep(llm_settings, functools.partial(ask, definition=definition),
-                               [(r.key, r) for r in todo], ledger, batch_size=10).run()
+                               [(r.key, r) for r in todo], ledger, batch_size=10, digest=digest).run()
 
-        assert run(judge.ask_titles, judge.todo_titles(recs, titles=titles), titles).outcome is sweep.completed
+        assert run(judge.ask_titles, judge.todo_titles(recs, titles=titles), titles,
+                   judge.title_digest).outcome is sweep.completed
         escalated = judge.todo_abstracts(recs, titles=titles, abstracts=abstracts, measures=measures)
         assert [r.key for r in escalated] == ["drop_me", "thin", "teaser"], "every true, a thin title, low confidence"
-        assert run(judge.ask_abstracts, escalated, abstracts).outcome is sweep.completed
+        assert run(judge.ask_abstracts, escalated, abstracts, judge.abstract_digest).outcome is sweep.completed
 
         final = judge.final_answers(recs, titles=titles, abstracts=abstracts, measures=measures)
         assert {key: a["verdict"] for key, a in final.items()} == {
@@ -221,9 +222,9 @@ class TestThePasses:
 
     def test_a_record_waiting_on_the_abstract_pass_is_not_yet_settled(self, tmp_path):
         titles, abstracts = judge.ledgers(tmp_path, "test0000")
-        titles.write_answer("a", answer(not_birds=True))
-        titles.write_answer("b", answer())
         recs = [record("a"), record("b")]
+        titles.write_answer("a", answer(not_birds=True), maybe_digest=judge.title_digest(recs[0]))
+        titles.write_answer("b", answer(), maybe_digest=judge.title_digest(recs[1]))
         final = judge.final_answers(recs, titles=titles, abstracts=abstracts, measures={"a": INFORMATIVE, "b": INFORMATIVE})
         assert set(final) == {"b"}
         assert types.SimpleNamespace(**final["b"]).verdict == "keep"

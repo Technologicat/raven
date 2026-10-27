@@ -623,6 +623,16 @@ Titles are measured with spaCy's `en_core_web_sm`, the pipeline the thin-title r
 
 **Nothing else does.** Rewrapping a paragraph or editing a comment in the definition changes neither the questions nor the instrument. Rules are applied when the reports are written, so changing one asks nothing again; neither does the sift, the table format, or how many control records are drawn, beyond asking about the ones newly drawn.
 
+**A record whose text has changed is asked again, and only it.** Each answer records what the model was shown of its record, so a record edited since — a truncated abstract completed by [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref), a title corrected by hand — is asked again by every step that shows it the changed text, in the same ledger. A step that never shows the changed part is not asked again: the title pass does not see an abstract.
+
+**Ledgers written before this existed have no record of what each answer was shown**, and a run would ask them all again. Stamp them from the corpus the run that wrote them read:
+
+```bash
+raven-scopebib stamp old-corpus.bib --ledgers out/ledgers
+```
+
+That declares each answer to be about that record's text in `old-corpus.bib`, so it has to be the corpus as it was then: a later version would declare answers current for text they were never given. After stamping, a run asks again only what has changed since.
+
 ### Replicates and `compare`
 
 An LLM's answer is one draw: the backend samples with a fresh random seed for every request, so asking again can answer differently. **How often it does** is the judge's test-retest reliability, a figure a methods section may want, and `--replicate` and `compare` measure it.
