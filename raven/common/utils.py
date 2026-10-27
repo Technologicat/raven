@@ -634,6 +634,13 @@ def unicodize_basic_markup(s):
     for command, tag in _latex_text_styles.items():
         s = re.sub(r"\\" + command + r"\{((?:[^{}]|\{[^{}]*\})*)\}", rf"<{tag}>\1</{tag}>", s)
 
+    # LaTeX's text-mode angle brackets, written as the entities so that the tag passes below cannot take
+    # `\textless b\textgreater` for markup; the last entity pass turns them into the characters. Before
+    # brace stripping, which would lose the difference between `\textless{} x`, whose space is text, and
+    # `\textless x`, whose space only ends the command's name and goes with it.
+    s = re.sub(r"\\textless(\{\}|(?![a-zA-Z]) ?)", "&lt;", s)
+    s = re.sub(r"\\textgreater(\{\}|(?![a-zA-Z]) ?)", "&gt;", s)
+
     # Strip BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, and nested
     # forms like `{{AutoPBL}}`). `bibtexparser` is a pure parser: it hands us the raw
     # field value with the grouping braces still in. biblatex/bibtex would strip these

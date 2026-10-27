@@ -484,6 +484,12 @@ class TestUnicodizeBasicMarkup:
     def test_latex_emphasis_around_a_case_protected_group(self):
         assert utils.unicodize_basic_markup(r"\textit{{AutoPBL}} rules") == "*AutoPBL* rules"
 
+    def test_latex_angle_brackets(self):
+        assert utils.unicodize_basic_markup(r"p \textless .001, d \textgreater{} 0.5") == "p <.001, d > 0.5"
+
+    def test_latex_angle_brackets_do_not_make_markup(self):
+        assert utils.unicodize_basic_markup(r"\textless b\textgreater x") == "<b>x"
+
     def test_latex_super_and_subscripts(self):
         assert utils.unicodize_basic_markup(r"CO\textsubscript{2} at 10\textsuperscript{3} K") == "CO₂ at 10³ K"
 
