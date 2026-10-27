@@ -825,6 +825,26 @@ The pilots also found that a stage on a model an earlier stage had switched to n
 instrument, and wrote to `review-None.jsonl` and `extract-None.jsonl`; fixed the same evening, the files
 kept in `ledgers/discarded-2026-10-27/`.
 
+**Planned (agreed 2026-10-28): measure whether each model's title-pass confidence means what it says.**
+The pilots' confidence gap does not decide the full run's model, because the rules only tell *low* from the
+rest: escalation to the abstract pass fires on low (or a thin title, or any test true), and every drop is
+decided on the abstract, where medium and high both drop. So the 16 disagreements, all 3.6 medium against
+3.8 high, change no verdict; the medium/high split reaches only the reviewer's control draw. What would
+matter is whether a model says *low* when its title verdict is going to be wrong — that is what stops a
+wrong keep from passing on a title alone. Measured in two parts, the second checking the first:
+
+1. **The abstract-informed verdict as reference.** A few hundred records the title pass did not escalate,
+   put through the abstract pass anyway, by both models; for each model and each title confidence, how
+   often the abstract overturns the title verdict. A calibrated model is overturned less at high than at
+   medium, and its low catches most of the overturns. A probe script rather than a tool change, since the
+   tool never asks the abstract pass about a record it did not escalate. One abstract pass per model over
+   the sample. Weakness: the reference is the same models with more text, not ground truth.
+2. **People, on a stratified blind subset of that sample**, rated in or out of scope without seeing which
+   model said what, oversampling the cells where the models disagree; on the order of 40–60 records.
+   This is ground truth for part 1's reference, after which part 1 alone can be trusted on the next corpus
+   or model. **First, ask the AOKK team (meeting the week of 2026-11-02) whether they screened any records by
+   hand**: those are labels already made.
+
 ## Files
 
 | File | What it is |
