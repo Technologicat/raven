@@ -1,0 +1,3 @@
+# Crossref responses for a private corpus's DOIs: the list of DOIs is the corpus's shape, so it stays
+# local like the corpus under `00_stuff/`. Regenerate with the `probe_crossref.py` command in README.md.
+*.jsonl
