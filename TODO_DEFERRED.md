@@ -27,6 +27,23 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## The Markdown renderer has no sub- or superscript
+
+*Cluster: markdown-renderer · Cost: ? · Gate: the renderer overhaul, after the MCP client (2026-10-09) · Filed: 2026-10-27*
+
+`raven/vendor/DearPyGui_Markdown/parser.py` maps inline HTML tags to text attributes in `handle_starttag`,
+and has cases for `b`/`strong`, `i`/`em`, `u`, `s`/`del` and the rest, but none for `sub` or `sup`, so a
+`<sub>` passed through by mistletoe shows as the raw tag. Sub- and superscripts matter for chemistry and
+mathematics in abstracts (H₂O, ¹³C, x²).
+
+Until then the import pipeline writes them as Unicode characters where every character of the script has
+one, and in LaTeX's notation otherwise (`M_{age}`), which reads acceptably as plain text; see
+`raven.common.utils.unicodize_basic_markup`. With the renderer able to draw them, the fallback could become
+`<sub>`/`<sup>` instead. Drawing one needs a smaller face and a baseline offset, which is why the cost is
+not obviously small.
+
+Raised during the `raven-fillbib` work (2026-10-27).
+
 ## Visualizer: quality flags, "[offtopic?]" and "[incoherent?]" on a cluster, "weak fit" on a record
 
 *Cluster: visualizer-highdim-labels · Cost: S importer, ? GUI · Gate: the high-D labels; possibly built with them (see that brief's scope guard) · Filed: 2026-10-23 · See also: `investigations/highdim-clustering/README.md`, *Looking for a size-free cohesion rule**
