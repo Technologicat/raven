@@ -112,14 +112,6 @@ class TestTitleMeasures:
 
 
 class TestAbstracts:
-    @pytest.mark.parametrize("abstract", ["Given this ...", "with an increased …", "It goes on... \n"])
-    def test_an_ellipsis_at_the_end_is_a_teaser(self, abstract):
-        assert records.looks_truncated(abstract)
-
-    @pytest.mark.parametrize("abstract", ["", "As one author put it, ... and so we did.", "Complete."])
-    def test_anything_else_is_not(self, abstract):
-        assert not records.looks_truncated(abstract)
-
     def test_describe_abstract(self):
         def describe(abstract):
             return records.describe_abstract(records.Record("k", "t", abstract, "", ""))

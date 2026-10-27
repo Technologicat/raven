@@ -5,7 +5,7 @@
     measured from the title, by counting its content words (`title_measures`), and a thin title sends its
     record to a second look whatever the judge said.
   - **Is the abstract complete?** A publisher's preview that breaks off mid-sentence is weaker evidence than
-    a whole abstract (`looks_truncated`).
+    a whole abstract (`raven.papers.utils.looks_truncated`).
 
 The record itself (`Record`, `load_records`) carries what the stages show a model and a reader: title,
 abstract and venue as readable text, and a link.
@@ -14,7 +14,7 @@ abstract and venue as readable text, and a link.
 __all__ = ["Record", "records_of", "load_records",
            "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL", "CALIBRATED_FLAG_SHARE",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
-           "looks_truncated", "describe_abstract"]
+           "describe_abstract"]
 
 import dataclasses
 import functools
@@ -179,24 +179,8 @@ def title_measures(records: Iterable[Record], nlp: _Pipeline, *,
 # --------------------------------------------------------------------------------
 # Is the abstract complete?
 
-def looks_truncated(abstract: str) -> bool:
-    """Whether an abstract visibly breaks off: an ellipsis at the very end, as a publisher's teaser has.
-
-    It cannot see a publisher who truncates silently, and no text-level rule can.
-    """
-    # Keyed on an ellipsis *at the end*, which is the only place one settles anything. Mid-text an ellipsis
-    # is ordinary rhetoric — an elided quotation, a trailing "and so on" — so its presence there says
-    # nothing about whether the text is complete.
-    #
-    # Length is deliberately not part of it: some abstracts are simply short, and measured on the
-    # prototype's corpus the bound never fired on its own. And "ends without terminal punctuation" was
-    # tried as a signal for silent truncation and rejected: it selects complete records ending in a URL, a
-    # DOI or a keyword list. That gap is the judge's to report.
-    return bool(abstract) and bool(re.search(r"(\.\.\.|…)\s*$", abstract.strip()))
-
-
 def describe_abstract(record: Record) -> str:
     """What kind of evidence the record's abstract is: `"none"`, `"teaser"` or `"full"`."""
     if not record.abstract:
         return "none"
-    return "teaser" if looks_truncated(record.abstract) else "full"
+    return "teaser" if papers_utils.looks_truncated(record.abstract) else "full"

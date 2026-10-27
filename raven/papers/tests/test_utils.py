@@ -7,6 +7,7 @@ from bibtexparser import Library
 import pytest
 
 from raven.papers.utils import bibtex_escape, bibtex_unescape, normalize_doi, paper_url
+from raven.papers.utils import looks_truncated, without_trailing_ellipsis
 
 
 class TestBibtexEscape:
@@ -167,3 +168,17 @@ class TestPaperUrl:
     @pytest.mark.parametrize("doi, url", [(None, None), ("", ""), ("n/a", "not a link"), (None, "ftp://x/y")])
     def test_with_neither_the_link_is_empty(self, doi, url):
         assert paper_url(doi, url) == ""
+
+
+class TestLooksTruncated:
+    @pytest.mark.parametrize("abstract", ["Given this ...", "with an increased …", "It goes on... \n"])
+    def test_an_ellipsis_at_the_end_is_a_teaser(self, abstract):
+        assert looks_truncated(abstract)
+
+    @pytest.mark.parametrize("abstract", ["", "As one author put it, ... and so we did.", "Complete."])
+    def test_anything_else_is_not(self, abstract):
+        assert not looks_truncated(abstract)
+
+    def test_the_ellipsis_and_its_whitespace_are_what_is_stripped(self):
+        assert without_trailing_ellipsis("It goes on ... \n") == "It goes on"
+        assert without_trailing_ellipsis("As one put it, ... and so on.") == "As one put it, ... and so on."

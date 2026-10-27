@@ -228,7 +228,6 @@ def render_jats(jats: str) -> str:
 # --------------------------------------------------------------------------------
 # Comparing two copies of an abstract
 
-_TRAILING_ELLIPSIS = re.compile(r"\s*(\.\.\.|…)\s*$")
 
 # Below this many letters and digits, a matching prefix says too little to identify the text it begins:
 # a stray "[No abstract available]" or a lone heading would match any abstract opening with those words.
@@ -252,7 +251,7 @@ def comparable(text: str) -> str:
     match = _APPENDED_TEXT.search(text)
     if match:
         text = text[:match.start()]
-    text = _TRAILING_ELLIPSIS.sub("", text)
+    text = papers_utils.without_trailing_ellipsis(text)
     text = common_utils.unicodize_basic_markup(text)
     text = _TAG.sub(" ", text)
     text = textutil.strip_boilerplate(text)
@@ -332,7 +331,7 @@ def _needs_one(abstract: str) -> bool:
     Used only to decide which records *without a lookup* are worth listing in the audit. A record that was
     looked up is judged by the prefix rule instead, which needs no guess about what a cut-off looks like.
     """
-    return not abstract.strip() or bool(_TRAILING_ELLIPSIS.search(abstract))
+    return not abstract.strip() or papers_utils.looks_truncated(abstract)
 
 
 def fill(library: bibtexparser.Library,
@@ -382,7 +381,7 @@ def fill(library: bibtexparser.Library,
         else:
             if outcome != DIFFERS and not _needs_one(ours):
                 continue  # nothing found, and nothing visibly missing: not worth a reader's time
-            if _TRAILING_ELLIPSIS.search(ours):
+            if papers_utils.looks_truncated(ours):
                 outcome = f"{outcome}; {LOOKS_TRUNCATED}"
         audit.append(AuditRow(key=entry.key,
                               outcome=outcome,

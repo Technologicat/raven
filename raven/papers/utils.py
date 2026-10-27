@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 __all__ = ["deduplicate_arxiv_ids", "bibtex_escape", "bibtex_unescape",
-           "normalize_doi", "paper_url"]
+           "normalize_doi", "paper_url",
+           "looks_truncated", "without_trailing_ellipsis"]
 
 import re
 
@@ -121,3 +122,27 @@ def paper_url(maybe_doi: str | None, maybe_url: str | None) -> str:
     if url.lower().startswith(("http://", "https://")):
         return url
     return ""
+
+
+_TRAILING_ELLIPSIS = re.compile(r"\s*(\.\.\.|…)\s*$")
+
+
+def looks_truncated(abstract: str) -> bool:
+    """Whether an abstract visibly breaks off: an ellipsis at the very end, as a publisher's teaser has.
+
+    It cannot see a publisher who truncates silently, and no text-level rule can.
+    """
+    # Keyed on an ellipsis *at the end*, which is the only place one settles anything. Mid-text an ellipsis
+    # is ordinary rhetoric — an elided quotation, a trailing "and so on" — so its presence there says
+    # nothing about whether the text is complete.
+    #
+    # Length is deliberately not part of it: some abstracts are simply short, and measured on the
+    # prototype's corpus the bound never fired on its own. And "ends without terminal punctuation" was
+    # tried as a signal for silent truncation and rejected: it selects complete records ending in a URL, a
+    # DOI or a keyword list.
+    return bool(_TRAILING_ELLIPSIS.search(abstract))
+
+
+def without_trailing_ellipsis(text: str) -> str:
+    """`text` without the ellipsis `looks_truncated` looks for, and the whitespace around it."""
+    return _TRAILING_ELLIPSIS.sub("", text)

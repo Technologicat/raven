@@ -32,6 +32,7 @@ from unpythonic.env import env
 
 from ...common import netutil
 from ...librarian import agent, sweep
+from .. import utils as papers_utils
 from . import definition as scope_definition
 from . import records as scope_records
 
@@ -159,7 +160,7 @@ def title_item(i: int, record: scope_records.Record) -> str:
 
 def abstract_item(i: int, record: scope_records.Record) -> str:
     """Record `record` as the abstract pass shows it, numbered `i` in its batch."""
-    marked = " (TRUNCATED)" if scope_records.looks_truncated(record.abstract) else ""
+    marked = " (TRUNCATED)" if papers_utils.looks_truncated(record.abstract) else ""
     venue = f"Published in: {record.venue}\n" if record.venue else ""
     abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
     return f"--- item {i} ---\nTitle: {record.title}\n{venue}Abstract{marked}: {abstract}\n"
@@ -259,12 +260,12 @@ def temper_for_truncation(answer: dict, record: scope_records.Record) -> dict:
     """An answer resting on a publisher's teaser, at low confidence whatever the model said.
 
     By `verdict_of`, that sends any test answered true to review rather than out. Either signal suffices:
-    the abstract visibly ends in an ellipsis (`scope_records.looks_truncated`), or the model said it stops.
+    the abstract visibly ends in an ellipsis (`raven.papers.utils.looks_truncated`), or the model said it stops.
     """
     # Decided here rather than left to the model, which reads the TRUNCATED marker and concludes from the
     # absence anyway: the prototype measured a high-confidence drop of a record whose 511-character preview
     # never reached the method the drop was about.
-    if not (scope_records.looks_truncated(record.abstract) or answer.get("truncated")):
+    if not (papers_utils.looks_truncated(record.abstract) or answer.get("truncated")):
         return answer
     return {**answer, "confidence": "low", "why": f"abstract is a truncated preview: {answer['why']}"}
 
