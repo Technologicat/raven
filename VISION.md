@@ -131,7 +131,8 @@ Local does not mean that nothing ever touches the network. Raven downloads its A
 first time each is needed, and runs them on your machine from then on. Beyond that, the network is reached
 only by features that exist to reach it, each a tool you run or a switch you can turn off: the arXiv tools,
 the chat's web search and page fetching behind its *Internet* toggle (on by default), and filling abstracts
-from Crossref (off unless asked for). Your own LLM backend and Raven-server are wherever you put them.
+from Crossref (off unless asked for). The [README's privacy section](README.md#privacy) says what each one
+sends, and to whom. Your own LLM backend and Raven-server are wherever you put them.
 
 Open source belongs to the same argument. Everything in Raven is open source. A claim about what a tool sends
 where is an assertion in a closed product and a checkable fact in an open one, so openness is what makes the

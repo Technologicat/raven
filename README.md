@@ -112,7 +112,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
     - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
   - Tool-calling (a.k.a. tool use). The AI is given five tools: `websearch` and `webfetch` for the live web, `search_documents` and `fetch_document` for your document database, and `list_consulted_documents` to see what this conversation has already read.
-    - Web access is gated by a client-side domain allowlist, separately from the network-level checks *Raven-server* enforces.
+    - Web access can be limited to the sites you list, with a client-side domain allowlist (`webfetch_allowlist`, off by default), on top of the network-level checks *Raven-server* always enforces.
     - A configurable ceiling limits how many rounds of tool calls one reply may take. It is a backstop against a runaway agent loop, not a normal limit.
   - Message attachments. Attach images (on a vision model) and documents (on any model) to your message; a long web page the AI fetches becomes an attachment too, so one fetch cannot bury the conversation it was meant to inform.
     - Documents are read as text, so a text-only model can use them.
@@ -890,6 +890,19 @@ When the client and the server are on different machines, install the same versi
 When Raven is installed, like any Python software, it pulls the Python packages it depends on from [PyPI](https://pypi.org/), using standard Python software installation methods. See the [PyPI privacy notice](https://policies.python.org/pypi.org/Privacy-Notice/).
 
 AI models are downloaded from HuggingFace and self-hosted locally. HuggingFace may collect data (e.g. download statistics) when a model is installed; this is beyond our control. See the [HuggingFace privacy policy](https://huggingface.co/privacy).
+
+**Some features exist to reach the network**, and this is what each one sends, and to whom:
+
+- **The arXiv tools** (`raven-arxiv-search`, `raven-arxiv2bib`, `raven-arxiv-download`) send your search query, or the arXiv identifiers you give them, to [arXiv's API](https://info.arxiv.org/help/api/index.html), and download the PDFs you ask for from arxiv.org.
+- ***Raven-librarian*'s *Internet* toggle**, on by default, gives the AI two tools. Both run on *Raven-server*, which is where the requests come from.
+  - `websearch` sends the AI's search queries to DuckDuckGo, or to Google if `websearch_engine` in `raven.librarian.config` says so.
+  - `webfetch` downloads the web pages the AI decides to read. Any public address, unless you set `webfetch_allowlist` in the same file to the sites it may visit.
+  - Turn the toggle off, and the AI is not offered either tool.
+- **Filling abstracts from Crossref** (`raven-fillbib`, and `raven-scopebib --fill`) sends every DOI in your bibliography to [Crossref](https://www.crossref.org/). That list says what your review is about. `raven-scopebib` does this only when asked.
+
+The arXiv and Crossref requests carry a `User-Agent` naming Raven and a contact address, as both services ask; see `raven.papers.config` to change it.
+
+Apart from these, Raven reaches the network to fetch the AI models it runs: from HuggingFace, as above, and spaCy's language models through spaCy's own downloader, each the first time it is needed. By default a model load also asks HuggingFace whether a newer version exists; [*Raven-server* can start without that](raven/server/README.md#starting-without-contacting-huggingface-optional).
 
 We run the [Chroma](https://www.trychroma.com/) local search engine backend in its *telemetry off* mode.
 
