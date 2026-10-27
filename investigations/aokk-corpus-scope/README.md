@@ -755,6 +755,44 @@ every answer would have been asked again.
 The command stays in `raven-scopebib` for any other ledger written before digests, but no released Raven
 can write one, so the manual does not describe it.
 
+### The run queued next (2026-10-27): a decision first
+
+Waiting on the LLM backend, and on a choice. **The converted ledgers are read-only to the tool, for every
+stage**: their instruments are the prototype's, and the definition and model of today make others (checked
+2026-10-27: judge `c6ffa8eb`, review `26e2b783`, extract `c24e43c4`, against the converted `0970b39f`,
+`8a01b1e4`, `14036139`). So nothing new can be answered into them — not the 1996 keeps never extracted,
+and not what the fill changes. The stamping above is what lets `report` and `compare` read them against
+the current text; it does not let a run add to them.
+
+What is outstanding, from a dry `report` with `--fill` and the converted instruments named (never
+connecting; the ledgers byte-identical afterwards): 175 records new to the corpus (the fill gave them an
+abstract) and 209 abstracts whose text changed, for the judge; 35 drops never reviewed; 1996 keeps never
+extracted.
+
+The options:
+
+1. **A full run under the tool's own instruments, with `--fill`.** Every stage over the whole corpus; no
+   new code; one instrument throughout, the converted ledgers becoming the prototype's side of a
+   `compare`. The most GPU time.
+2. **Without the fill, extract all 3092 keeps** under the tool's own extractor — the plan of 2026-10-26 —
+   and fill in a later full run. No new code; the corpus reported is the unfilled one.
+3. **Converted answers where the text is unchanged, the tool's instruments for the rest.** The least GPU
+   time, but it needs reading one instrument while writing another, which does not exist, and the reports
+   would mix two instruments.
+
+Option 1, as a command, for when it is chosen:
+
+```bash
+raven-scopebib run 00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_deduped.bib \
+    --definition investigations/aokk-corpus-scope/aokk.scope.toml \
+    --ledgers 00_stuff/rawdata/AOKK/scopebib-2026-10-26/ledgers \
+    --require abstract --fill \
+    --out-dir 00_stuff/rawdata/AOKK/scopebib-2026-10-27
+```
+
+The Crossref answers are already in the ledger directory (a copy of
+`investigations/bib-abstract-fill/aokk_fillbib_cache.jsonl`), so Crossref is not asked.
+
 ## Files
 
 | File | What it is |
