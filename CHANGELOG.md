@@ -56,6 +56,14 @@
   - The lines saying which tool and which input go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each merged paper and carries its full abstract**, so a merge can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
 
+#### Raven-fillbib
+
+- **New tool: fill missing and truncated abstracts from Crossref**, by DOI. `raven-fillbib corpus.bib` writes `corpus_filled.bib` and an audit.
+  - An abstract is replaced only where the record's own is the beginning of Crossref's, so a teaser cut off by a database export is completed, and a different version of the text is left alone and listed for you to look at.
+  - Written in LaTeX: italics, bold, super- and subscripts, and a structured abstract's section headings, one paragraph per section. A plain language summary is left out.
+  - The audit names every record it changed and every one it could not help, with the reason — `no DOI, cannot retrieve` among them.
+  - The abstracts remain their publisher's or authors' copyright: the filled file is for your own screening, not for publishing.
+
 #### Raven-siftbib
 
 - **The audits are Excel spreadsheets by default**, which open as they are in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV.

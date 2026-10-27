@@ -35,6 +35,11 @@ Thirteen command-line tools for the part of a literature review that happens bef
     - [The audit](#the-audit)
     - [`--judge`: asking an LLM about the near misses](#--judge-asking-an-llm-about-the-near-misses)
     - [Why it errs toward leaving duplicates](#why-it-errs-toward-leaving-duplicates)
+- [`raven-fillbib` — filling in abstracts from Crossref](#raven-fillbib--filling-in-abstracts-from-crossref)
+    - [When an abstract is replaced](#when-an-abstract-is-replaced)
+    - [What it cannot fill](#what-it-cannot-fill)
+    - [Copyright](#copyright)
+    - [What comes out](#what-comes-out)
 - [`raven-siftbib` — removing what a review cannot screen](#raven-siftbib--removing-what-a-review-cannot-screen)
     - [Naming the criterion](#naming-the-criterion)
     - [What comes out, and the record of it](#what-comes-out-and-the-record-of-it)
@@ -310,6 +315,53 @@ Off by default, since it needs a backend. It asks about near-miss titles that no
 A missed merge leaves a visible duplicate that a reviewer can act on. A false merge deletes a paper from the review, and nothing downstream can notice.
 
 That asymmetry decides the edge cases. Two records carrying the same genre label as their title — `Editorial`, `Book Review` — are merged only if they agree about the author and the year. Two authorless records carrying a serial's recurring section heading are not merged when their DOIs disagree.
+
+## `raven-fillbib` — filling in abstracts from Crossref
+
+Not every record arrives with the abstract its publisher wrote. Some have none, and some have a teaser cut at a fixed length by the database or its export, a couple of hundred characters ending in `...`. Where a record has a DOI, the whole abstract can often be had from [Crossref](https://www.crossref.org/), which serves what the publisher deposited.
+
+```bash
+raven-fillbib corpus.bib                                  # corpus_filled.bib + corpus_fill_audit.xlsx
+raven-fillbib --cache crossref.jsonl corpus.bib           # keep Crossref's answers for a rerun
+raven-fillbib -n corpus.bib                               # report only
+```
+
+Run it after `raven-deduplicate` and before `raven-siftbib`, so that what the sift judges is the corpus after filling.
+
+### When an abstract is replaced
+
+**Only when the record's abstract is the beginning of Crossref's.** The two are compared on their letters and digits alone, so that markup, punctuation and spacing do not make one text look like two. A trailing `...`, an `Abstract:` label, a copyright line at the end and a plain language summary are disregarded too, being things one export adds and another does not.
+
+That one rule does two jobs. It finds the truncated abstracts without guessing what a cut-off one looks like, and it checks that what replaces each one is the same text continued. Where Crossref's abstract is a different text — an earlier version, a rewritten opening — the record keeps its own, and the audit lists it for you to look at.
+
+A record with no abstract at all takes Crossref's.
+
+**The new abstract is written in LaTeX**, BibTeX's own markup: italics, bold, and super- and subscripts, including those inside formulas, so that H₂ and x² survive. A structured abstract keeps its section headings, in bold, with each section a paragraph of its own. A plain language summary, which some publishers deposit beside the abstract, is left out.
+
+### What it cannot fill
+
+- **A record with no DOI.** Finding its DOI would mean matching it by title and authors, which can pick the wrong paper, and a wrong abstract filled in silently is worse than a missing one. Not attempted.
+- **What the publisher never deposited.** Crossref has what publishers give it, and that varies by publisher from nearly every abstract to none at all, so how much a run can fill depends on who published the corpus.
+
+Every record the run could not help, and that visibly lacks a whole abstract, is in the audit with the reason: `no DOI, cannot retrieve`, `DOI not found in Crossref`, `Crossref has no abstract`, or a failed lookup.
+
+### Copyright
+
+**The abstracts Crossref serves are their publisher's or authors' copyright.** Crossref's own metadata is free to reuse without restriction, and abstracts are the exception: Crossref distributes them under its agreement with its members, and they keep the license under which they were published. ([Crossref's statement](https://www.crossref.org/documentation/retrieve-metadata/), under its licensing summary.)
+
+So the filled bibliography is a working copy, for screening and studying the literature on your own machine. Do not publish it.
+
+### What comes out
+
+Two files, named from the input: `<name>_filled.bib` and `<name>_fill_audit.xlsx`. `--audit-format ods` or `tsv` writes the audit as OpenDocument or tab-separated text instead.
+
+The audit has one row per record that was filled or repaired, kept its own abstract because Crossref's differs, or visibly lacks an abstract that could not be found. Each row carries the outcome, a link to the paper, and the abstract before and after.
+
+- `--cache FILE` keeps Crossref's answers in a JSONL file, and a rerun asks only for the DOIs it does not hold. Crossref asks its users to cache.
+- `-o SUFFIX` / `--audit-suffix SUFFIX` rename the two outputs, and `--out-dir DIR` puts them elsewhere.
+- `-n` / `--dry-run` looks up and reports, and writes nothing. The input file is never modified either way.
+
+Lookups go to Crossref's public API, fifty DOIs to a request, about one request a second, identifying Raven and a contact address as Crossref asks.
 
 ## `raven-siftbib` — removing what a review cannot screen
 

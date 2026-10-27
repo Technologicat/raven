@@ -79,3 +79,31 @@ Tags seen across the 1431 responses, by count:
 No `jats:sub` at all here — subscripts appeared only inside MathML (`mml:msub`). An education corpus says
 little about how often chemistry and maths markup turns up; a hydrogen-production corpus would be the one to
 measure that on.
+
+## `raven-fillbib` v1 on the same corpus (2026-10-27)
+
+```bash
+raven-fillbib --cache investigations/bib-abstract-fill/aokk_fillbib_cache.jsonl --out-dir <scratch> \
+    00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_deduped.bib
+```
+
+96 batched requests of 50 DOIs, about four minutes, no failures; the rerun from the cache asked nothing.
+
+| outcome | records |
+|---|---|
+| filled: had no abstract | 175 |
+| repaired: ours was the start of Crossref's | 411 |
+| kept ours: Crossref's is a different text | 147 |
+| Crossref has no abstract (and ours missing or ending in `...`) | 679 |
+| no DOI (and ours missing or ending in `...`) | 4 |
+
+Two further shapes of ProQuest export turned up once every record was compared, rather than the probe's
+three groups: an `Alternate abstract:` with a translation appended after a complete abstract, and a
+`Graphical abstract` heading after a teaser, the same pattern as the plain language summaries. Both are now
+cut before comparing; that took "different text" from 194 to 147.
+
+Of the 147, **29 are teasers with a second text appended and no heading at the join** — the abstract cut at
+about 210 characters running straight into the plain language summary's opening. No marker to cut at, so
+the prefix rule refuses them; their "before" ends in `...` in the audit. The other 118 are complete
+abstracts whose wording differs from Crossref's in small ways (`five` against `5`, `2\times 2` against
+`2×2`, a changed word, a different language), where nothing is missing.

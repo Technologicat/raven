@@ -237,6 +237,7 @@ raven-arxiv-search = "raven.papers.search:main"
 raven-burstbib = "raven.papers.burstbib:main"
 raven-fixbib = "raven.papers.fixbib:main"
 raven-deduplicate = "raven.papers.deduplicate:main"  # merge the duplicates a multi-database search leaves
+raven-fillbib = "raven.papers.fillbib:main"  # fill missing and truncated abstracts from Crossref, by DOI
 raven-siftbib = "raven.papers.siftbib:main"  # remove the records a review cannot screen, and account for them
 raven-scopebib = "raven.papers.scopebib.cli:main"  # tell which records are about what the search was for
 raven-checkrefs = "raven.papers.checkrefs:main"  # check a bibliography against a reference list written from it

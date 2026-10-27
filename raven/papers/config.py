@@ -53,6 +53,22 @@ http_user_agent = (f"raven-papers/{__version__} "
                    f"(+https://github.com/Technologicat/raven; mailto:juha.jeronen@jamk.fi)")
 
 # --------------------------------------------------------------------------------
+# Crossref (`raven-fillbib`)
+
+crossref_api_url = "https://api.crossref.org/works"
+
+# DOIs per request. Crossref answers a `filter=doi:…,doi:…` naming many records in one response, so a
+# corpus costs ceil(N / 50) requests rather than N. Kept at a size whose URL stays a few kilobytes, for
+# the same reason as `arxiv_id_batch_size`.
+crossref_doi_batch_size = 50
+
+# Seconds between requests. The `mailto` in `http_user_agent` puts us in Crossref's "polite" pool, and
+# list queries there reported a limit of three requests per rate-limit interval when measured (2026-10-27;
+# the server states its current limit and interval in the `x-rate-limit-*` headers). Single-record lookups
+# reported ten per one-second interval, so one list query a second is well inside either.
+crossref_request_delay = 1.0
+
+# --------------------------------------------------------------------------------
 # Deciding that two records are the same paper
 
 # DOI registrants that host copies rather than publish versions of record: the preprint servers, and the
