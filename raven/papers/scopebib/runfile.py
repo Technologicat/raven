@@ -71,6 +71,7 @@ class Settings:
     `maybe_bib`, `maybe_definition`, `maybe_ledgers`: the input, the definition file, and the directory
                                                     holding the ledgers, as absolute paths.
     `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them: field names, and `FIELD=N`.
+    `maybe_fill`: fill missing and truncated abstracts from Crossref before the sift, as `raven-fillbib` does.
     `maybe_sample`, `maybe_pilot`: how many records a sampled or a pilot run draws.
     `maybe_seed`: the seed of every draw, the sample's and the control's.
     `maybe_control`: how many kept records the reviewer reads as its control.
@@ -86,6 +87,7 @@ class Settings:
     maybe_ledgers: pathlib.Path | None = None
     require: tuple[str, ...] = ()
     min_chars: tuple[str, ...] = ()
+    maybe_fill: bool | None = None
     maybe_sample: int | None = None
     maybe_pilot: int | None = None
     maybe_seed: int | None = None
@@ -186,17 +188,17 @@ def _load_settings(table: dict, path: pathlib.Path) -> Settings:
                 floor = f" of at least {least}" if least is not None else ""
                 raise RunFileError(f"{where}: expected a whole number{floor}, got {value!r}")
             fields[name] = value
-        elif key == "server_nlp":
+        elif key in ("server_nlp", "fill"):
             if not isinstance(value, bool):
                 raise RunFileError(f"{where}: expected true or false, got {value!r}")
-            fields["maybe_server_nlp"] = value
+            fields[f"maybe_{key}"] = value
         elif key == "format":
             if value not in tabular.FORMATS:
                 raise RunFileError(f"{where}: expected one of {', '.join(tabular.FORMATS)}, got {value!r}")
             fields["maybe_format"] = value
         else:
             raise RunFileError(f"{path}: [run]: unknown key {key!r}; expected one of "
-                               f"{', '.join([*_PATHS, *_LISTS, *_INTS, 'format', 'server_nlp'])}")
+                               f"{', '.join([*_PATHS, *_LISTS, 'fill', *_INTS, 'format', 'server_nlp'])}")
     return Settings(**fields)
 
 
@@ -291,6 +293,8 @@ def write_run_file(path: str | pathlib.Path, run_file: RunFile, *,
     for key, name in _LISTS.items():
         if values := getattr(settings, name):
             run_lines.append(f"{key} = [{', '.join(_toml_string(value) for value in values)}]")
+    if settings.maybe_fill is not None:
+        run_lines.append(f"fill = {'true' if settings.maybe_fill else 'false'}")
     for key, (name, _) in _INTS.items():
         if (value := getattr(settings, name)) is not None:
             run_lines.append(f"{key} = {value}")

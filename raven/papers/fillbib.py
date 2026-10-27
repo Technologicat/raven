@@ -35,7 +35,7 @@ __all__ = ["render_jats", "comparable",
 
            "FILLED", "REPAIRED", "DIFFERS", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
            "LOOKUP_FAILED", "LOOKS_TRUNCATED",
-           "AuditRow", "AUDIT_COLUMNS", "words_shared", "fill", "write_audit",
+           "AuditRow", "AUDIT_COLUMNS", "words_shared", "fill", "audit_rows", "write_audit",
 
            "fetch_crossref",
 
@@ -395,6 +395,14 @@ def fill(library: bibtexparser.Library,
     return filled, audit
 
 
+def audit_rows(audit: list[AuditRow]) -> list[tuple]:
+    """`audit` as table rows, in the order of `AUDIT_COLUMNS`."""
+    return [(row.key, row.outcome,
+             "" if row.maybe_shared is None else round(100 * row.maybe_shared),
+             row.title, row.venue, row.link, row.before, row.crossref)
+            for row in audit]
+
+
 def write_audit(path: pathlib.Path, audit: list[AuditRow], sources: list[str]) -> None:
     """Write the audit to `path`, as TSV, `.xlsx` or `.ods` by its extension, with lines naming the tool
     version and inputs: comment lines above the header in a TSV, a *Notes* sheet in a spreadsheet."""
@@ -405,10 +413,7 @@ def write_audit(path: pathlib.Path, audit: list[AuditRow], sources: list[str]) -
                          "its publisher or authors",
                          f"records listed: {len(audit)}"],
                         AUDIT_COLUMNS,
-                        [(row.key, row.outcome,
-                          "" if row.maybe_shared is None else round(100 * row.maybe_shared),
-                          row.title, row.venue, row.link, row.before, row.crossref)
-                         for row in audit])
+                        audit_rows(audit))
 
 
 # --------------------------------------------------------------------------------

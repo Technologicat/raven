@@ -11,6 +11,7 @@ whose fields have not been extracted — so a partial run removes and keeps only
 **The files** (`write_reports`) are named by stage, so that listing the directory shows the pipeline in
 order:
 
+    00-fill-audit.<fmt>      the abstracts filled from Crossref, and the records it could not help
     00-sift-audit.<fmt>      what the sift removed, and on which criterion
     00-sifted.bib            what it kept: the judge's input
     01-judge-audit.<fmt>     every judged record: the verdict, the tests, the judge's reason
@@ -30,7 +31,7 @@ of these exact names that it did not write this time — a previous run's report
 stage that did not run. A copy saved under any other name is left alone.
 """
 
-__all__ = ["SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
+__all__ = ["FILL_AUDIT", "SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
            "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
@@ -48,6 +49,7 @@ from bibtexparser.model import Entry
 
 from ...common import tabular
 from .. import bibtex
+from .. import fillbib
 from .. import siftbib
 from . import definition as scope_definition
 from . import extract as scope_extract
@@ -56,6 +58,7 @@ from . import review as scope_review
 from . import rules as scope_rules
 
 # The stems of the tables, written in whichever of `tabular.FORMATS` the caller asks for, and the two `.bib`s.
+FILL_AUDIT = "00-fill-audit"
 SIFT_AUDIT = "00-sift-audit"
 SIFTED_BIB = "00-sifted.bib"
 JUDGE_AUDIT = "01-judge-audit"
@@ -67,7 +70,7 @@ KEPT_BIB = "04-kept.bib"
 HAND_AUDIT = "05-hand-audit"
 FINAL_BIB = "05-final.bib"
 
-_TABLES = (SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
+_TABLES = (FILL_AUDIT, SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
 
 #: Every file name `write_reports` can write, and so every name it may remove as stale.
 OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [SIFTED_BIB, KEPT_BIB, FINAL_BIB])
@@ -231,7 +234,8 @@ def write_reports(out_dir: str | pathlib.Path, *,
                   extractions: dict[str, dict],
                   provenance: Sequence[str],
                   table_format: str = "tsv",
-                  maybe_sift: SiftResult | None = None) -> list[pathlib.Path]:
+                  maybe_sift: SiftResult | None = None,
+                  maybe_fill: list[fillbib.AuditRow] | None = None) -> list[pathlib.Path]:
     """Write a run's reports into `out_dir`, remove the stale ones, and return the paths written.
 
     `library`: the parsed `.bib` the judge read, after the sift; the kept `.bib` is cut from it.
@@ -242,6 +246,7 @@ def write_reports(out_dir: str | pathlib.Path, *,
                   and instrument of each stage.
     `table_format`: one of `raven.common.tabular.FORMATS`.
     `maybe_sift`: what stage 0 removed, or `None` where no sift ran.
+    `maybe_fill`: the audit of stage 0's fill (`raven.papers.fillbib.fill`), or `None` where none ran.
 
     A stage that has answered nothing writes no table.
     """
@@ -257,6 +262,13 @@ def write_reports(out_dir: str | pathlib.Path, *,
         path = out_dir / f"{stem}.{table_format}"
         tabular.write_table(path, [*provenance, *comments], columns, rows)
         written.append(path)
+
+    if maybe_fill is not None:
+        table(FILL_AUDIT,
+              ["abstracts from: Crossref (api.crossref.org); copyright of each abstract rests with its publisher "
+               "or authors",
+               f"records listed: {len(maybe_fill)}"],
+              fillbib.AUDIT_COLUMNS, fillbib.audit_rows(maybe_fill))
 
     if maybe_sift is not None:
         sift = maybe_sift

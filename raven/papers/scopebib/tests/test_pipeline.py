@@ -7,7 +7,7 @@ import re
 import pytest
 
 from raven.librarian import agent
-from raven.papers import bibtex
+from raven.papers import bibtex, fillbib
 from raven.papers.scopebib import definition as scope_definition
 from raven.papers.scopebib import pipeline, runfile
 from raven.papers.scopebib import records as scope_records
@@ -315,6 +315,42 @@ class TestLoadingTheCorpus:
         assert "r1" not in {record.key for record in corpus.records}
         assert [record.key for record in corpus.maybe_sift.dropped] == ["r1"]
         assert set(corpus.measures) == {record.key for record in corpus.records}
+
+    @staticmethod
+    def _bib_with_dois(path):
+        path.write_text("@article{bare,\n  title = {Ravens unexplained},\n  doi = {10.1234/bare}\n}\n\n"
+                        "@article{whole,\n  title = {Ravens explained},\n  doi = {10.1234/whole},\n"
+                        "  abstract = {We explain ravens.}\n}\n", encoding="utf-8")
+        return path
+
+    def test_the_fill_runs_before_the_sift(self, tmp_path, monkeypatch):
+        asked = []
+
+        def fetch(dois, *, maybe_cache_path=None, **kwargs):
+            asked.append((list(dois), maybe_cache_path))
+            return {"10.1234/bare": "Ravens are explained at last.", "10.1234/whole": "We explain ravens."}, {}
+        monkeypatch.setattr(fillbib, "fetch_crossref", fetch)
+        path = self._bib_with_dois(tmp_path / "in.bib")
+        corpus = pipeline.load_corpus(path, nlp=_NLP(), require=["abstract"], stopwords=STOPWORDS, fill=True,
+                                      maybe_crossref_cache=tmp_path / "crossref.jsonl")
+        assert {record.key: record.abstract for record in corpus.records}["bare"] == "Ravens are explained at last."
+        assert [(row.key, row.outcome) for row in corpus.maybe_fill] == [("bare", fillbib.FILLED)]
+        assert corpus.maybe_sift.dropped == [], "filled first, the bare record has an abstract when the sift asks"
+        assert asked == [(["10.1234/bare", "10.1234/whole"], tmp_path / "crossref.jsonl")]
+
+    def test_without_fill_crossref_is_not_asked(self, tmp_path, monkeypatch):
+        # The control for the test above: the same corpus, and the bare record goes to the sift.
+        monkeypatch.setattr(fillbib, "fetch_crossref", lambda *args, **kwargs: pytest.fail("Crossref was asked"))
+        corpus = pipeline.load_corpus(self._bib_with_dois(tmp_path / "in.bib"), nlp=_NLP(), require=["abstract"],
+                                      stopwords=STOPWORDS)
+        assert corpus.maybe_fill is None
+        assert [record.key for record in corpus.maybe_sift.dropped] == ["bare"]
+
+    def test_a_failed_lookup_stops_the_run_and_names_the_doi(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(fillbib, "fetch_crossref",
+                            lambda dois, **kwargs: ({"10.1234/whole": None}, {"10.1234/bare": "ConnectionError: x"}))
+        with pytest.raises(pipeline.PipelineError, match=r"1 DOI \(10\.1234/bare\).*ConnectionError"):
+            pipeline.load_corpus(self._bib_with_dois(tmp_path / "in.bib"), nlp=_NLP(), stopwords=STOPWORDS, fill=True)
 
     def test_no_criteria_no_sift(self, tmp_path):
         assert pipeline.load_corpus(bib(tmp_path / "in.bib"), nlp=_NLP(), stopwords=STOPWORDS).maybe_sift is None

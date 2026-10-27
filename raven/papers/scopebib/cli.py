@@ -30,7 +30,10 @@ COMMANDS = {"run": ("judge", "review", "extract"), "judge": ("judge",), "review"
 
 #: What a setting is when neither the command line nor the run file says.
 DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_format": "xlsx",
-            "maybe_server_nlp": False}
+            "maybe_server_nlp": False, "maybe_fill": False}
+
+#: Crossref's answers, for `--fill`, in the ledger directory beside the model's.
+CROSSREF_CACHE = "crossref.jsonl"
 
 _PILOT_SIZE = 50  # as `pipeline.PILOT_SIZE`, which is not imported here, the parser coming before the heavy imports
 
@@ -51,6 +54,10 @@ def _parser() -> argparse.ArgumentParser:
                         help="Sift first: keep only records carrying FIELD, as raven-siftbib does. Repeatable.")
     common.add_argument("--min-chars", dest="min_chars", action="append", default=None, metavar="FIELD=N",
                         help="Sift first: keep only records whose FIELD runs to N characters. Repeatable.")
+    common.add_argument("--fill", dest="fill", action=argparse.BooleanOptionalAction, default=None,
+                        help="Before the sift, fill missing and truncated abstracts from Crossref, as raven-fillbib "
+                             "does. Sends every DOI in the corpus to Crossref. Its answers are kept in the "
+                             "ledger directory, so a run after the first asks it nothing.")
     sample = common.add_mutually_exclusive_group()
     sample.add_argument("--sample", type=int, default=None, metavar="N",
                         help="Work on a seeded random sample of N records.")
@@ -165,7 +172,7 @@ def resolve(opts: argparse.Namespace) -> Plan:
     given = {"maybe_bib": path(getattr(opts, "bib", None)), "maybe_definition": path(opts.definition),
              "maybe_ledgers": path(opts.ledgers),
              "require": tuple(opts.require) if opts.require else None,
-             "min_chars": tuple(opts.min_chars) if opts.min_chars else None,
+             "min_chars": tuple(opts.min_chars) if opts.min_chars else None, "maybe_fill": opts.fill,
              "maybe_sample": opts.sample, "maybe_pilot": opts.pilot, "maybe_seed": opts.seed,
              "maybe_control": opts.control, "maybe_replicate": opts.replicate, "maybe_format": opts.format,
              "maybe_server_nlp": opts.server_nlp, "maybe_context_length": opts.context_length}
@@ -218,6 +225,9 @@ def _provenance(plan: Plan, models: dict[str, str], stages: dict, nlp_descriptio
     settings = plan.run_file.settings
     lines = [f"raven-scopebib {__version__}, {datetime.datetime.now().isoformat(timespec='seconds')}",
              f"input: {settings.maybe_bib}", f"definition: {settings.maybe_definition}"]
+    if settings.maybe_fill:
+        lines.append("abstracts filled from Crossref before the sift; copyright of each rests with its publisher "
+                     "or authors")
     criteria = list(settings.require) + list(settings.min_chars)
     if criteria:
         lines.append(f"sifted on: {', '.join(criteria)}")
@@ -244,6 +254,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                takes it.
     `sheet`, `require_every_decision`: for `finish`.
     """
+    from .. import fillbib
     from . import definition as scope_definition
     from . import models as scope_models
     from . import pipeline, report, runfile
@@ -251,8 +262,12 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     settings = plan.run_file.settings
     definition = scope_definition.load_definition(settings.maybe_definition)
     corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require,
-                                  min_chars=settings.min_chars,
+                                  min_chars=settings.min_chars, fill=settings.maybe_fill,
+                                  maybe_crossref_cache=plan.ledger_dir / CROSSREF_CACHE,
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample, seed=settings.maybe_seed)
+    if corpus.maybe_fill is not None:
+        changed = sum(1 for row in corpus.maybe_fill if row.outcome in (fillbib.FILLED, fillbib.REPAIRED))
+        print(f"abstracts filled or completed from Crossref: {changed}")
     print(f"{len(corpus.records)} records"
           + (f", after the sift removed {len(corpus.maybe_sift.dropped)}" if corpus.maybe_sift else ""))
     run_path = plan.reports_dir / "run.toml"
@@ -297,6 +312,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                                  seed=settings.maybe_seed, table_format=settings.maybe_format)]
         else:
             written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
+                                           maybe_fill=corpus.maybe_fill,
                                            **common)
         write_run_file(result.stages)
         written.append(run_path)
@@ -336,6 +352,8 @@ def compare_runs(path_a: str | pathlib.Path, path_b: str | pathlib.Path, *, nlp,
     (path_a, first), (path_b, second) = runs
     settings = first.settings
     corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require, min_chars=settings.min_chars,
+                                  fill=bool(settings.maybe_fill),
+                                  maybe_crossref_cache=(settings.maybe_ledgers or path_a.parent / "ledgers") / CROSSREF_CACHE,
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample,
                                   seed=settings.maybe_seed if settings.maybe_seed is not None else DEFAULTS["maybe_seed"])
     states, definitions = [], []

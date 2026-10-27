@@ -414,11 +414,13 @@ What counts as off topic is yours to say, in a [definition file](#writing-a-defi
 
 ### How it works, step by step
 
-Six steps, of which four ask an LLM. The proportions below are **an illustration** on a round 1000 records, rounded from one real corpus; yours will differ, and the [pilot report](#calibrating-with-a-pilot) gives them for your own corpus before the whole run.
+Six steps, of which four ask an LLM, and an optional fill before them. The proportions below are **an illustration** on a round 1000 records, rounded from one real corpus; yours will differ, and the [pilot report](#calibrating-with-a-pilot) gives them for your own corpus before the whole run.
 
 ```mermaid
 flowchart TD
-    BIB[".bib"] --> SIFT["sift<br/>(no LLM)<br/>drops records with nothing to screen"]
+    BIB[".bib"] -.->|"with --fill"| FILL["fill<br/>(no LLM, asks Crossref)<br/>completes abstracts"]
+    FILL -.-> SIFT
+    BIB --> SIFT["sift<br/>(no LLM)<br/>drops records with nothing to screen"]
     SIFT --> T["judge: titles<br/>(LLM, every record)"]
     T -->|"settled from the title"| V{"verdict"}
     T -->|"unsure, thin title,<br/>or a test true"| A["judge: abstracts<br/>(LLM, escalated only)"]
@@ -433,6 +435,10 @@ flowchart TD
     RULES -->|"hold"| PERSON
     RULES -->|"keep"| KEPT["kept"]
 ```
+
+0. **Fill** (no LLM; only with `--fill`). Fills missing abstracts and completes truncated ones from Crossref, by DOI, exactly as [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref) does, so that the sift and every step after it read the whole text. Leaves `00-fill-audit`. Crossref's answers are kept in the ledger directory, so only the first run asks it. A lookup that fails stops the run before the judge and names the DOI, rather than letting a record be judged on its teaser after an earlier run judged its whole abstract.
+
+   **`--fill` is the one step that leaves your machine: it sends every DOI in the corpus to Crossref**, which is a list of what your review is about. Everything else `raven-scopebib` asks goes to your own LLM backend. The abstracts it brings back remain their publisher's or authors' copyright ([the details](#copyright)).
 
 1. **Sift** (no LLM). Removes the records with nothing to screen, on the criteria you give it — `--require abstract`, `--min-chars abstract=200` — exactly as [`raven-siftbib`](#raven-siftbib--removing-what-a-review-cannot-screen) does. Without criteria, nothing is sifted. Leaves `00-sift-audit` and `00-sifted.bib`.
 2. **The judge, on titles** (LLM, every record). Asks each of your definition's tests about each record, from its title and where it was published. A test answered true means *positive evidence* that the record is off topic in that way; a record that says nothing keeps. With the answers comes one confidence for the record, high, medium or low, and a reason.

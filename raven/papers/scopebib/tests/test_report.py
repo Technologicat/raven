@@ -6,7 +6,7 @@ import pytest
 
 from raven.common import tabular
 from raven.papers import bibtex
-from raven.papers import siftbib
+from raven.papers import fillbib, siftbib
 from raven.papers.scopebib import definition as scope_definition
 from raven.papers.scopebib import judge, report
 from raven.papers.scopebib import records as scope_records
@@ -150,6 +150,17 @@ class TestFiles:
         assert {f"{report.SIFT_AUDIT}.tsv", report.SIFTED_BIB} <= written
         removed = tabular.read_table(tmp_path / "out" / f"{report.REMOVED_AUDIT}.tsv")
         assert removed[0]["key"] == "bare" and removed[0]["removed by"] == "sift"
+
+    def test_the_fill_has_an_audit_of_its_own(self, run, definition, tmp_path):
+        fill = [fillbib.AuditRow(key="teaser", outcome=fillbib.REPAIRED, title="Teaser", venue="", maybe_shared=1.0,
+                                 before="It begins ...", crossref="It begins, and goes on.")]
+        written = {path.name for path in write(run, definition, tmp_path / "out", maybe_fill=fill)}
+        assert f"{report.FILL_AUDIT}.tsv" in written
+        rows = tabular.read_table(tmp_path / "out" / f"{report.FILL_AUDIT}.tsv")
+        assert [(row["key"], row["outcome"]) for row in rows] == [("teaser", fillbib.REPAIRED)]
+
+    def test_no_fill_no_fill_audit(self, run, definition, tmp_path):
+        assert f"{report.FILL_AUDIT}.tsv" not in {path.name for path in write(run, definition, tmp_path / "out")}
 
     def test_the_review_audit_labels_the_control_and_compares_the_rates(self, run, definition, tmp_path):
         write(run, definition, tmp_path / "out")

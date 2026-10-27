@@ -35,6 +35,13 @@ class TestResolving:
         assert (settings.maybe_seed, settings.maybe_control, settings.maybe_replicate, settings.maybe_format) == \
                (42, 40, 1, "xlsx")
         assert settings.maybe_ledgers == tmp_path / "out" / "ledgers", "recorded, so a run file can name it"
+        assert settings.maybe_fill is False, "filling asks Crossref, so it is asked for rather than assumed"
+
+    def test_fill_is_asked_for_on_the_command_line(self, files, tmp_path):
+        corpus, definition = files
+        plan = cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir",
+                                 str(tmp_path / "out"), "--fill"))
+        assert plan.run_file.settings.maybe_fill is True
 
     def test_a_run_file_supplies_the_rest_and_the_command_line_wins(self, files, tmp_path):
         corpus, definition = files

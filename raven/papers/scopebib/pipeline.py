@@ -35,7 +35,9 @@ from unpythonic.env import env
 
 from ...librarian import sweep
 from .. import bibtex
+from .. import fillbib
 from .. import siftbib
+from .. import utils as papers_utils
 from . import definition as scope_definition
 from . import extract as scope_extract
 from . import judge as scope_judge
@@ -70,11 +72,13 @@ class Corpus:
     `records`: its records, in file order.
     `maybe_sift`: what the sift removed, or `None` where none ran.
     `measures`: each title's measure, by key (`raven.papers.scopebib.records.title_measures`).
+    `maybe_fill`: the fill's audit (`raven.papers.fillbib.fill`), or `None` where none ran.
     """
     library: object
     records: list[scope_records.Record]
     maybe_sift: scope_report.SiftResult | None
     measures: dict[str, scope_records.TitleMeasure]
+    maybe_fill: list[fillbib.AuditRow] | None = None
 
 
 def load_corpus(bib_path: str | pathlib.Path, *,
@@ -83,16 +87,37 @@ def load_corpus(bib_path: str | pathlib.Path, *,
                 min_chars: Sequence[str] = (),
                 maybe_sample: int | None = None,
                 seed: int = 42,
-                stopwords: Container[str] | None = None) -> Corpus:
-    """Read the `.bib` at `bib_path`, sift it, draw a sample, and measure the titles.
+                stopwords: Container[str] | None = None,
+                fill: bool = False,
+                maybe_crossref_cache: str | pathlib.Path | None = None) -> Corpus:
+    """Read the `.bib` at `bib_path`, fill its abstracts, sift it, draw a sample, and measure the titles.
 
     `nlp`, `stopwords`: as `raven.papers.scopebib.records.title_measures` takes them.
+    `fill`: fill missing and truncated abstracts from Crossref first, as `raven-fillbib` does. This sends
+            every DOI in the corpus to Crossref.
+    `maybe_crossref_cache`: where to keep Crossref's answers, so that a run after the first asks nothing
+                            (`raven.papers.fillbib.fetch_crossref`); `None` for no cache.
+
+    Raises `PipelineError` where a lookup failed: a record left unfilled would read differently from the run
+    before, and every stage that shows it would ask about it again, on the worse text.
     `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them; with neither, no sift runs.
     `maybe_sample`: draw this many records, after the sift; `None` for all of them.
     `seed`: which records the sample draws. The draw is over the keys in sorted order, so reordering the
                 file does not change it.
     """
     library = bibtex.parse_file(pathlib.Path(bib_path), split_names=False)
+    maybe_fill = None
+    if fill:
+        dois = [doi for doi in (papers_utils.normalize_doi(bibtex.entry_field(entry, "doi"))
+                                for entry in library.entries) if doi]
+        abstracts, failed = fillbib.fetch_crossref(
+            dois, maybe_cache_path=pathlib.Path(maybe_crossref_cache) if maybe_crossref_cache else None)
+        if failed:
+            shown = ", ".join(sorted(failed)[:5]) + (f", and {len(failed) - 5} more" if len(failed) > 5 else "")
+            raise PipelineError(f"filling abstracts: Crossref could not be asked about {len(failed)} "
+                                f"{'DOI' if len(failed) == 1 else 'DOIs'} ({shown}); run again when it answers. "  # plural
+                                f"First failure: {next(iter(failed.values()))}")
+        library, maybe_fill = fillbib.fill(library, abstracts)
     maybe_sift = None
     criteria = [siftbib.require_field(field) for field in require] + [siftbib.parse_min_chars(spec)
                                                                       for spec in min_chars]
@@ -103,7 +128,8 @@ def load_corpus(bib_path: str | pathlib.Path, *,
         keys = sorted(entry.key for entry in library.entries)
         library = scope_report.select(library, set(random.Random(seed).sample(keys, min(maybe_sample, len(keys)))))
     records = scope_records.records_of(library)
-    return Corpus(library, records, maybe_sift, scope_records.title_measures(records, nlp, stopwords=stopwords))
+    return Corpus(library, records, maybe_sift, scope_records.title_measures(records, nlp, stopwords=stopwords),
+                  maybe_fill)
 
 
 def materials(definition: scope_definition.Definition, *, replicate: int = 1) -> dict[str, str]:
