@@ -755,9 +755,10 @@ every answer would have been asked again.
 The command stays in `raven-scopebib` for any other ledger written before digests, but no released Raven
 can write one, so the manual does not describe it.
 
-### The run queued next (2026-10-27): a decision first
+### The run queued next (2026-10-27): a full run with `--fill`
 
-Waiting on the LLM backend, and on a choice. **The converted ledgers are read-only to the tool, for every
+**Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
+backend, behind the runs already queued. **The converted ledgers are read-only to the tool, for every
 stage**: their instruments are the prototype's, and the definition and model of today make others (checked
 2026-10-27: judge `c6ffa8eb`, review `26e2b783`, extract `c24e43c4`, against the converted `0970b39f`,
 `8a01b1e4`, `14036139`). So nothing new can be answered into them — not the 1996 keeps never extracted,
@@ -780,7 +781,7 @@ The options:
    time, but it needs reading one instrument while writing another, which does not exist, and the reports
    would mix two instruments.
 
-Option 1, as a command, for when it is chosen:
+Option 1, the one chosen, as a command:
 
 ```bash
 raven-scopebib run 00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_deduped.bib \
