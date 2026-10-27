@@ -758,7 +758,26 @@ can write one, so the manual does not describe it.
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
-backend, behind the runs already queued. **The converted ledgers are read-only to the tool, for every
+backend, behind the runs already queued.
+
+**The queue, in order (agreed 2026-10-28):**
+
+1. `probe_title_confidence.py` once per model, 300 records each (the plan below, part 1):
+
+   ```bash
+   for model in qwen3.6-35b-a3b qwen3.8-27b@q4_k_xl; do
+       python investigations/aokk-corpus-scope/probe_title_confidence.py \
+           00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_deduped.bib \
+           --definition investigations/aokk-corpus-scope/aokk.scope.toml \
+           --ledgers 00_stuff/rawdata/AOKK/scopebib-2026-10-26/ledgers \
+           --require abstract --fill --sample 300 --model "$model" \
+           --out "00_stuff/rawdata/AOKK/confidence-probe/${model%%@*}.tsv"
+   done
+   ```
+
+2. Choose the full run's model from the pilots' comparison and the probe.
+3. The full run, below, with `--model judge=M --model review=M --model extract=M` for the chosen `M`; its
+   pilot's answers and its probe's title answers count toward it. **The converted ledgers are read-only to the tool, for every
 stage**: their instruments are the prototype's, and the definition and model of today make others (checked
 2026-10-27: judge `c6ffa8eb`, review `26e2b783`, extract `c24e43c4`, against the converted `0970b39f`,
 `8a01b1e4`, `14036139`). So nothing new can be answered into them — not the 1996 keeps never extracted,
