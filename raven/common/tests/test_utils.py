@@ -467,9 +467,10 @@ class TestUnicodizeBasicMarkup:
         assert utils.unicodize_basic_markup("<i>italic</i>") == "*italic*"
         assert utils.unicodize_basic_markup("<em>italic</em>") == "*italic*"
 
-    def test_html_underline_keeps_its_text(self):
-        # Markdown has no underline.
-        assert utils.unicodize_basic_markup("<u>underline</u>") == "underline"
+    def test_underline_stays_inline_html(self):
+        # Markdown has no underline syntax (`_x_` is italic); CommonMark passes raw `<u>` through.
+        assert utils.unicodize_basic_markup("<u>underline</u>") == "<u>underline</u>"
+        assert utils.unicodize_basic_markup(r"\underline{underline}") == "<u>underline</u>"
 
     def test_whitespace_inside_emphasis_moves_outside(self):
         # `** Methods **` is not emphasis to a Markdown reader.

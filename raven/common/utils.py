@@ -670,10 +670,10 @@ def unicodize_basic_markup(s):
     s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
     s = re.sub(r"<sup>(.*?)</sup>", substitute_sup, s, flags=re.IGNORECASE)
 
-    # Emphasis becomes Markdown. Underline has no Markdown form, so it keeps its text and loses the tags.
+    # Emphasis becomes Markdown. Underline has no Markdown syntax of its own (`_x_` is italic), so `<u>` stays,
+    # as the raw inline HTML that CommonMark passes through.
     s = re.sub(r"<(b|strong)>(.*?)</\1>", functools.partial(_markdown_emphasis, "**"), s, flags=re.IGNORECASE)
     s = re.sub(r"<(i|em)>(.*?)</\1>", functools.partial(_markdown_emphasis, "*"), s, flags=re.IGNORECASE)
-    s = re.sub(r"<u>(.*?)</u>", r"\1", s, flags=re.IGNORECASE)
 
     # Then the entities for `<`, `>` and `&`, after the tag passes, so that `&lt;b&gt;` written as entities
     # stays text rather than becoming markup they would act on. One pass, so a source's `&amp;lt;` comes
