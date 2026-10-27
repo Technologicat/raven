@@ -827,6 +827,42 @@ class TestParseJsonReply:
         assert agent.parse_json_reply('[{"i": 99, "verdict": "banana"}]') == [{"i": 99, "verdict": "banana"}]
 
 
+class TestSalvagingABrokenArray:
+    """One malformed item in a batch's array, as two models wrote them on 2026-10-27, costs only itself."""
+
+    def test_a_stray_quote_in_one_item(self, caplog):
+        reply = '[{"i":7,"belongs":false,"case":"x"},{"i":8","belongs":true,"case":"y"},{"i":9,"belongs":true,"case":"z"}]'
+        with caplog.at_level(logging.WARNING, logger="raven.librarian.agent"):
+            assert agent.parse_json_reply(reply) == [{"i": 7, "belongs": False, "case": "x"},
+                                                     {"i": 9, "belongs": True, "case": "z"}]
+        assert "kept 2 items" in caplog.text and "dropped 1" in caplog.text
+
+    def test_two_strings_where_one_value_should_be(self):
+        reply = ('[\n  {"i": "0", "level": "higher_education", "level_quote": "in a university setting"},\n'
+                 '  {"i": "9", "level": "mixed", "level_quote": "school contexts" and "an HCI module", "x": 1}\n]')
+        assert agent.parse_json_reply(reply) == [{"i": "0", "level": "higher_education",
+                                                  "level_quote": "in a university setting"}]
+
+    def test_an_object_nested_in_an_item_is_not_an_item(self):
+        reply = '[{"i": 0, "tests": {"a": true}}, {"i": 1, "tests": {"a": tru}}]'
+        assert agent.parse_json_reply(reply) == [{"i": 0, "tests": {"a": True}}]
+
+    def test_a_missing_comma_still_says_the_array_came_back_short(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="raven.librarian.agent"):
+            assert agent.parse_json_reply('[{"i": 0} {"i": 1}]') == [{"i": 0}]
+        assert "did not parse whole" in caplog.text
+
+    def test_with_no_item_to_keep_it_is_still_an_error(self):
+        with pytest.raises(ValueError, match="no JSON found"):
+            agent.parse_json_reply('[{"i": 0, "a": nope}]')
+
+    def test_a_whole_array_takes_no_salvage(self, caplog):
+        # The control for the tests above: the warning they assert on is not something every parse logs.
+        with caplog.at_level(logging.WARNING, logger="raven.librarian.agent"):
+            assert agent.parse_json_reply('[{"i": 0}, {"i": 1}]') == [{"i": 0}, {"i": 1}]
+        assert "did not parse whole" not in caplog.text
+
+
 class TestTheSurfaceIsDeclared:
     """A scripting surface that is only nominally public breaks its callers silently.
 

@@ -740,6 +740,44 @@ def ask_until(llm_settings: env, prompt: str,
     return records, False
 
 
+# Where an array's item can start: right after the array opens, or after the comma ending the item before.
+# An object after a colon is a value nested in an item, never an item of its own.
+_ITEM_START = re.compile(r"[\[,]\s*\{")
+
+
+def _salvage_items(text: str) -> list[dict] | None:
+    """The objects of a JSON array that decode one at a time, or `None` where none does or no array is there.
+
+    For an array that does not parse as a whole. Each item is decoded from where it starts to where it
+    ends, so a malformed item costs only itself.
+    """
+    start = text.find("[")
+    if start == -1:
+        return None
+    decoder = json.JSONDecoder()
+    items, broken = [], []
+    position = start
+    while (match := _ITEM_START.search(text, position)) is not None:
+        brace = match.end() - 1
+        try:
+            item, end = decoder.raw_decode(text, brace)
+        except json.JSONDecodeError:
+            broken.append(text[brace:brace + 200])
+            position = match.end()
+            continue
+        if isinstance(item, dict):
+            items.append(item)
+        position = end
+    if not items:
+        return None
+    # Always said, being the only sign that a batch came back short: an item with no comma before it is not
+    # even seen as an item, so `broken` cannot count every loss.
+    dropped = f"; dropped {len(broken)} that do not, the first: {broken[0]!r}" if broken else ""
+    logger.warning(f"parse_json_reply: the array did not parse whole; kept {len(items)} "
+                   f"{'item' if len(items) == 1 else 'items'} that parse on their own{dropped}")  # plural
+    return items
+
+
 def parse_json_reply(text: str):
     """The JSON in a model reply, tolerating code fences and stray prose around it.
 
@@ -749,6 +787,10 @@ def parse_json_reply(text: str):
     Raises `ValueError` if there is no JSON in `text` at all. A reply that is merely *wrong* — the right
     shape carrying nonsense, or an array one item short of what was asked for — parses fine and is the
     caller's problem; see `turn`'s notes on index-keyed batches for why that is the better division.
+
+    An array of objects that does not parse as a whole, because one item in it is malformed, comes back as
+    the items that parse on their own, with a warning: so it reads as an array some items short, and
+    only the malformed ones are lost.
     """
     # Three fallbacks rather than one `json.loads`, because "and nothing else" in a prompt is a request
     # rather than a guarantee: models fence their JSON, introduce it, and apologize after it, and any of
@@ -769,6 +811,12 @@ def parse_json_reply(text: str):
                 return json.loads(text[start:end + 1])
             except json.JSONDecodeError:
                 continue
+    # One malformed item breaks every parse above, and with it the answers to every other item in a batch.
+    # Decoding the items one at a time keeps those; a broken item is dropped, never repaired, so nothing
+    # here guesses what a model meant.
+    maybe_items = _salvage_items(text)
+    if maybe_items is not None:
+        return maybe_items
     # Both ends, because they fail differently and the tail is the one nobody thinks to keep: a model
     # that has fallen into a repetition loop looks perfectly ordinary at the start and gives itself away
     # only where it stopped. Logged rather than raised, so the exception message stays short enough to
