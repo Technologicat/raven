@@ -794,6 +794,11 @@ raven-scopebib run 00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_ded
 The Crossref answers are already in the ledger directory (a copy of
 `investigations/bib-abstract-fill/aokk_fillbib_cache.jsonl`), so Crossref is not asked.
 
+**First, a pilot** (decided 2026-10-27): the same command with `--pilot` added, which draws 50 records and
+takes the whole new path on the real backend — fill from the cache, sift, and every stage under the tool's
+own instruments — before a night is spent on it. Its reports go to `pilot/` under the output directory, and
+its answers go to the same ledgers, so they count toward the full run.
+
 ## Files
 
 | File | What it is |
