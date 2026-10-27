@@ -127,9 +127,15 @@ attention than it saves has failed on its own terms however good its retrieval w
 leave the building — internal company reports, unpublished results, patent work. A cloud tool is simply
 disqualified for that class of data.
 
-Open source belongs to the same argument. Everything in Raven is open source. A claim that a tool sends
-nothing anywhere is an assertion in a closed product and a checkable fact in an open one, so openness is what
-makes the privacy commitment credible to the people it is meant to serve. Beyond that, spreading what
+Local does not mean that nothing ever touches the network. Raven downloads its AI models from HuggingFace the
+first time each is needed, and runs them on your machine from then on. Beyond that, the network is reached
+only by features that exist to reach it, each a tool you run or a switch you can turn off: the arXiv tools,
+the chat's web search and page fetching behind its *Internet* toggle (on by default), and filling abstracts
+from Crossref (off unless asked for). Your own LLM backend and Raven-server are wherever you put them.
+
+Open source belongs to the same argument. Everything in Raven is open source. A claim about what a tool sends
+where is an assertion in a closed product and a checkable fact in an open one, so openness is what makes the
+privacy commitment credible to the people it is meant to serve. Beyond that, spreading what
 works is one of the functions of research, and open source is what publication looks like for software — the
 fuller version of that argument is at the end of this document.
 
