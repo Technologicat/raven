@@ -195,10 +195,13 @@ class Ledger:
     def stamp(self, digests: Mapping[str, str]) -> int:
         """Record, for answers carrying no digest, the digest of the item they were given about.
 
-        For a ledger written before answers carried one. Each `digests` entry must be the item *as it was
-        asked* — from the corpus the run read, not a later one — or this declares old answers current for
-        text they never saw. Appends, as everything here does; an answer that already has a digest, or an id
-        `digests` does not name, is left alone. Returns how many answers were stamped.
+        Not normally needed: a `Sweep` given `digest` writes one with every answer. This is a one-time
+        migration, for a ledger written before answers carried them, or by a sweep given none.
+
+        Each `digests` entry must be the item *as it was asked* — from the corpus the run read, not a later
+        one — or this declares old answers current for text they never saw. Appends, as everything here does;
+        an answer that already has a digest, or an id `digests` does not name, is left alone. Returns how
+        many answers were stamped.
         """
         stamped = 0
         for item_id, entry in self.latest().items():
