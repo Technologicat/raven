@@ -446,8 +446,9 @@ class TestUnicodizeBasicMarkup:
         assert utils.unicodize_basic_markup("Smith&#8217;s and Jones&#x2019;s") == "Smith’s and Jones’s"
 
     def test_an_entity_inside_a_subscript_is_decoded_before_the_subscript_pass(self):
-        # Otherwise the pass maps the entity's letters one by one, and `&alpha;` comes out as `&ₐₗₚₕₐ;`.
-        assert utils.unicodize_basic_markup("H<sub>&alpha;</sub>") == "Hα"
+        # Otherwise the pass sees the entity's letters rather than one α, and writes `H_{&alpha;}`.
+        # Unicode has no subscript α, so the decoded one is written in LaTeX's notation.
+        assert utils.unicodize_basic_markup("H<sub>&alpha;</sub>") == "H_α"
 
     def test_an_entity_naming_nothing_is_left_alone(self):
         assert utils.unicodize_basic_markup("a &foo; b") == "a &foo; b"
@@ -489,6 +490,18 @@ class TestUnicodizeBasicMarkup:
 
     def test_latex_angle_brackets_do_not_make_markup(self):
         assert utils.unicodize_basic_markup(r"\textless b\textgreater x") == "<b>x"
+
+    def test_a_script_converts_only_when_every_character_can(self):
+        # Unicode has no subscript g, and a half-converted "Mₐgₑ" reads worse than none.
+        assert utils.unicodize_basic_markup("M<sub>age</sub> = 12.9") == "M_{age} = 12.9"
+        assert utils.unicodize_basic_markup("x<sup>n+1</sup>") == "xⁿ⁺¹"
+
+    def test_a_single_unconvertible_character_takes_no_braces(self):
+        assert utils.unicodize_basic_markup("x<sub>q</sub>") == "x_q"
+
+    def test_latex_scripts_keep_their_braces_through_brace_stripping(self):
+        # What the Visualizer's importer meets in a `.bib` written by `raven-fillbib`.
+        assert utils.unicodize_basic_markup(r"M\textsubscript{age} and T\textsubscript{{eff}}") == "M_{age} and T_{eff}"
 
     def test_latex_super_and_subscripts(self):
         assert utils.unicodize_basic_markup(r"CO\textsubscript{2} at 10\textsuperscript{3} K") == "CO₂ at 10³ K"

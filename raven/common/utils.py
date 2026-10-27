@@ -20,7 +20,6 @@ import atexit
 import contextlib
 import functools
 import gc
-import io
 import os
 import pathlib
 import re
@@ -547,34 +546,29 @@ def _apply_latex_accent(match_obj):
         return match_obj.group(0)
     return letter + combining
 
-def _substitute_chars(mapping, html_tag_name, match_obj):
-    """Substitute characters in a regex match. Low-level function, used by `unicodize_basic_markup`.
+def _substitute_chars(mapping, html_tag_name, marker, match_obj):
+    """Replacer for `re.sub`: an HTML sub- or superscript as Unicode characters, where it can be.
 
-    This can be used as a replacer in `re.sub`, e.g. for replacing HTML with Unicode
-    in chemical formulas ("CO₂", "NOₓ") and math (e.g. "x²").
+    For chemical formulas ("CO₂", "NOₓ") and math ("x²"). Converted only when every character has a Unicode
+    form in `mapping`; Unicode's sub- and superscripts are a partial alphabet, and a half-converted script
+    ("Mₐgₑ") reads worse than none. Otherwise written in LaTeX's notation, which a researcher or a model reads
+    without help: `marker` and the character for one character (`x_q`), `marker` and a braced group for more
+    (`M_{age}`).
 
-    `mapping`: e.g. `regular_to_subscript`; see `config.py`.
-    `html_tag_name`: str or None. Name of HTML tag to strip (e.g. "sub").
-                     If `None`, omit HTML processing.
+    `mapping`: `stringmaps.regular_to_subscript` or `stringmaps.regular_to_superscript`.
+    `html_tag_name`: the tag the match is wrapped in, e.g. "sub", to strip.
+    `marker`: "_" for a subscript, "^" for a superscript.
     `match_obj`: provided by `re.sub`.
 
     Example::
 
-        substitute_sub = functools.partial(_substitute_chars, config.regular_to_subscript, "sub")
+        substitute_sub = functools.partial(_substitute_chars, stringmaps.regular_to_subscript, "sub", "_")
         text = re.sub(r"<sub>(.*?)</sub>", substitute_sub, text, flags=re.IGNORECASE)
     """
-    s = match_obj.group()
-
-    # Strip HTML tag: "<sub>123</sub>" -> "123"
-    if html_tag_name is not None:
-        tag_start = f"<{html_tag_name}>"
-        tag_end = f"</{html_tag_name}>"
-        s = s[len(tag_start):-len(tag_end)]
-
-    sio = io.StringIO()
-    for c in s:
-        sio.write(mapping.get(c, c))  # if `c` in `mapping`, use that, else use `c` itself.
-    return sio.getvalue()
+    s = match_obj.group()[len(f"<{html_tag_name}>"):-len(f"</{html_tag_name}>")]
+    if all(c in mapping for c in s):
+        return "".join(mapping[c] for c in s)
+    return f"{marker}{s}" if len(s) == 1 else f"{marker}{{{s}}}"
 
 def _markdown_emphasis(delimiter, match_obj):
     """Replacer for `re.sub`: wrap an HTML emphasis match's text in a Markdown `delimiter`.
@@ -672,8 +666,8 @@ def unicodize_basic_markup(s):
     s = entities.decode(s, fold_spaces=True, spare="<>&")
 
     # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")
-    substitute_sub = functools.partial(_substitute_chars, stringmaps.regular_to_subscript, "sub")
-    substitute_sup = functools.partial(_substitute_chars, stringmaps.regular_to_superscript, "sup")
+    substitute_sub = functools.partial(_substitute_chars, stringmaps.regular_to_subscript, "sub", "_")
+    substitute_sup = functools.partial(_substitute_chars, stringmaps.regular_to_superscript, "sup", "^")
     s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
     s = re.sub(r"<sup>(.*?)</sup>", substitute_sup, s, flags=re.IGNORECASE)
 
