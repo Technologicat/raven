@@ -896,7 +896,7 @@ AI models are downloaded from HuggingFace and self-hosted locally. HuggingFace m
 - **The arXiv tools** (`raven-arxiv-search`, `raven-arxiv2bib`, `raven-arxiv-download`) send your search query, or the arXiv identifiers you give them, to [arXiv's API](https://info.arxiv.org/help/api/index.html), and download the PDFs you ask for from arxiv.org.
 - ***Raven-librarian*'s *Internet* toggle**, on by default, gives the AI two tools. Both run on *Raven-server*, which is where the requests come from.
   - `websearch` sends the AI's search queries to DuckDuckGo, or to Google if `websearch_engine` in `raven.librarian.config` says so.
-  - `webfetch` downloads the web pages the AI decides to read. Any public address, unless you set `webfetch_allowlist` in the same file to the sites it may visit.
+  - `webfetch` downloads the web pages the AI decides to read. Any public address by default, unless you set `webfetch_allowlist` in the same file to the sites it may visit. What a page says goes into the AI's context, instructions included; read [*Raven-librarian*'s security warning](raven/librarian/README.md#security-warning) before relying on the open default.
   - Turn the toggle off, and the AI is not offered either tool.
 - **Filling abstracts from Crossref** (`raven-fillbib`, and `raven-scopebib --fill`) sends every DOI in your bibliography to [Crossref](https://www.crossref.org/). That list says what your review is about. `raven-scopebib` does this only when asked.
 
