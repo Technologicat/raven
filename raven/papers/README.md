@@ -328,7 +328,7 @@ raven-fillbib -n corpus.bib                               # report only
 raven-fillbib --keep-appended corpus.bib                  # leave appended plain language summaries in
 ```
 
-Run it after `raven-deduplicate` and before `raven-siftbib`, so that what the sift judges is the corpus after filling.
+Run it after `raven-deduplicate` and before `raven-siftbib`, so that what the sift judges is the corpus after filling. `raven-scopebib --fill` does the same as its first step, so a corpus going on to `raven-scopebib` need not be filled separately.
 
 ### When an abstract is replaced
 
@@ -438,6 +438,7 @@ A search for a topic returns everything that *matches* it, and much of that is a
 ```bash
 raven-scopebib run corpus.bib --pilot --require abstract --out-dir out    # a calibration run, 50 records
 raven-scopebib run corpus.bib --require abstract --out-dir out            # the whole corpus
+raven-scopebib run corpus.bib --fill --require abstract --out-dir out     # ...its abstracts completed from Crossref first
 raven-scopebib finish out/04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
 ```
 
@@ -574,6 +575,7 @@ Named by step, so that listing the directory shows the pipeline in order. `<fmt>
 
 | File | What it is |
 |---|---|
+| `00-fill-audit.<fmt>` | with `--fill`: every abstract the fill changed, and every record it could not help, as [`raven-fillbib`'s audit](#what-comes-out) |
 | `00-sift-audit.<fmt>` | what the sift removed, and on which criterion |
 | `00-sifted.bib` | what it kept: the judge's input |
 | `01-judge-audit.<fmt>` | every judged record: the verdict, each test, the judge's reason |
