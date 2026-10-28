@@ -7,7 +7,7 @@ __all__ = ["absolutize_filename", "canonical_path",
            "make_blank_index_array", "bail", "gc_suspended",
            "notify",
            "format_bibtex_author", "format_bibtex_authors",
-           "normalize_whitespace", "normalize_unicode",
+           "normalize_whitespace", "normalize_unicode", "strip_diacritics",
            "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "make_search_matcher",
            "search_fragment_to_highlight_regex_fragment", "compile_search_highlight_regexes", "has_search_highlight",
@@ -497,6 +497,15 @@ def normalize_unicode(s: str) -> str:  # SillyTavern-extras/server.py
     """
     # https://stackoverflow.com/questions/16467479/normalizing-unicode
     return unicodedata.normalize("NFKC", s)
+
+def strip_diacritics(s: str) -> str:
+    """`s` with its diacritics removed, and compatibility forms flattened: `"Sá"` -> `"Sa"`, `"ﬁ"` -> `"fi"`.
+
+    For comparing and sorting, where `"Sá"` should sit next to `"Sa"`; not for display.
+    """
+    # NFKD splits an accented letter into base + combining mark, so dropping the marks leaves the base.
+    # Compatibility decomposition also flattens ligatures and full-width forms.
+    return "".join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
 
 # LaTeX accent commands → Unicode combining diacritic.
 # Applied to the following base letter; NFC at the end composes the result into

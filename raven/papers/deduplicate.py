@@ -92,7 +92,6 @@ import logging
 import pathlib
 import re
 import sys
-import unicodedata
 
 from bibtexparser import Library
 from bibtexparser.middlewares import names
@@ -150,11 +149,9 @@ def normalize_title(maybe_raw: str | None) -> str | None:
     text = str(maybe_raw)
     text = _TAG_PATTERN.sub(" ", text)
     text = _ENTITY_PATTERN.sub(_resolve_entity, text)
-    # NFKD splits an accented letter into base + combining mark, so dropping the marks leaves the base:
-    # `Ä` and `A` agree, as do `é` and the TeX `\'{e}` once the backslash and braces go. Compatibility
-    # decomposition also flattens the ligatures and full-width forms that PDF-derived records carry.
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    # `Ä` and `A` agree, as do `é` and the TeX `\'{e}` once the backslash and braces go, and the ligatures
+    # and full-width forms that PDF-derived records carry are flattened.
+    text = common_utils.strip_diacritics(text)
     text = re.sub(r"[^a-z0-9]+", "", text.lower())
     return text or None
 

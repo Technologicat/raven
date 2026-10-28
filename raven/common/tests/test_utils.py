@@ -390,6 +390,21 @@ class TestNormalizeUnicode:
         assert utils.normalize_unicode("\ufb01") == "fi"
 
 
+class TestStripDiacritics:
+    def test_accents_go_and_the_base_letters_stay(self):
+        assert utils.strip_diacritics("S\u00e1 Garc\u00eda-Taibo P\u00e9rez \u00c4") == "Sa Garcia-Taibo Perez A"
+
+    def test_a_decomposed_accent_goes_too(self):
+        assert utils.strip_diacritics("e\u0301") == "e"  # "e" + COMBINING ACUTE ACCENT
+
+    def test_compatibility_forms_are_flattened(self):
+        assert utils.strip_diacritics("\ufb01\uff21") == "fiA"  # fi ligature, fullwidth A
+
+    def test_letters_that_are_not_an_accented_base_are_kept(self):
+        # No decomposition exists for these, so they are not "diacritics" to strip.
+        assert utils.strip_diacritics("Bra\u00dfler \u00d8vreb\u00f8") == "Bra\u00dfler \u00d8vreb\u00f8"
+
+
 class TestUnicodizeBasicMarkup:
     def test_html_subscript(self):
         assert utils.unicodize_basic_markup("CO<sub>2</sub>") == "CO₂"
