@@ -27,6 +27,23 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Dehyphenate a word broken mid-line, where the line break was already lost
+
+*Cluster: dehyphenation · Cost: M · Gate: none · Filed: 2026-10-28*
+
+An abstract from a database export can carry `consid-erations` and `oppor-tunities` in running text: the
+hyphen from a typeset line break survived and the break itself did not. `nlptools.dehyphenate` never sees
+these, because the `dehyphen` package it calls only considers a hyphen that ends a line (the last word of
+each line, `dehyphen/dehyphen.py`).
+
+A pass for them would find in-line `word-word` candidates and ask the same Flair scorer whether the joined
+form reads better than the hyphenated one. Getting that to work reliably is the hard part: real compounds
+(`self-efficacy`, `e-learning`, `well-being`, `long-term`) must survive, so the decision cannot be tuned
+against a handful of examples. Gather the candidates from every corpus on hand and check them by hand,
+rather than calibrating on hand-made examples.
+
+Seen in a SCOPUS export during the health-education clustering pass (2026-10-28).
+
 ## Stratified samples for `raven-scopebib` replicates
 
 *Cluster: scopebib · Cost: M · Gate: a full run whose verdicts can define the strata · Filed: 2026-10-28*
