@@ -452,6 +452,10 @@ checked against a blind sample:
 **Next: a blind sample of these replies**, aimed at both sides of v6's line, rated by the maintainer — the
 check these grades have not had, and the measure of what leaving landing out of the grade costs.
 
+Written 2026-10-28: `blind-sample-17.md` (30 replies, `--seed 17 --aim register-judged-f3b3c874.jsonl`; key
+in `blind-key-17.json`, both local). Once rated, `judge_register.py register-prompts2-7e8dd60a.jsonl
+--blind-check blind-sample-17.md` compares v6 with the ratings.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
