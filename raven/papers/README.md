@@ -323,7 +323,7 @@ Not every record arrives with the abstract its publisher wrote. Some have none, 
 
 ```bash
 raven-fillbib corpus.bib                                  # corpus_filled.bib + corpus_fill_audit.xlsx
-raven-fillbib --cache crossref.jsonl corpus.bib           # keep Crossref's answers for a rerun
+raven-fillbib --no-cache corpus.bib                       # ask Crossref everything afresh
 raven-fillbib -n corpus.bib                               # report only
 raven-fillbib --keep-appended corpus.bib                  # leave appended plain language summaries in
 ```
@@ -388,13 +388,13 @@ So the filled bibliography is a working copy, for screening and studying the lit
 
 ### What comes out
 
-Two files, named from the input: `<name>_filled.bib` and `<name>_fill_audit.xlsx`. `--audit-format ods` or `tsv` writes the audit as OpenDocument or tab-separated text instead.
+Two files, named from the input: `<name>_filled.bib` and `<name>_fill_audit.xlsx`. Beside them, `<name>.crossref.jsonl` keeps Crossref's answers, so a rerun asks only for the DOIs it does not hold — Crossref asks its users to cache. `--audit-format ods` or `tsv` writes the audit as OpenDocument or tab-separated text instead.
 
 The audit has one row per record that was filled or repaired, kept its own abstract because Crossref's differs, or visibly lacks an abstract that could not be found. Each row carries the outcome, a link to the paper, the record's abstract as it was, and Crossref's. Where there are both, a column gives the percentage of the record's words that appear in Crossref's text in the same order: near 100 for the same text written slightly differently, which is nothing to act on, and low for a different version or another language. Sort by it to see the differences that matter first. Where the record kept an abstract ending in `...`, the outcome says `ours looks truncated`, so those can be found without scrolling to the end of a long cell.
 
-- `--cache FILE` keeps Crossref's answers in a JSONL file, and a rerun asks only for the DOIs it does not hold. Crossref asks its users to cache.
+- `--cache FILE` keeps Crossref's answers in another file, one several corpora can share. `--no-cache` keeps none; delete the cache to have Crossref asked afresh.
 - `-o SUFFIX` / `--audit-suffix SUFFIX` rename the two outputs, and `--out-dir DIR` puts them elsewhere.
-- `-n` / `--dry-run` looks up and reports, and writes nothing. The input file is never modified either way.
+- `-n` / `--dry-run` looks up and reports, and writes nothing but the cache, so that the real run after it asks Crossref nothing new. The input file is never modified either way.
 
 Lookups go to Crossref's public API, fifty DOIs to a request, about one request a second, identifying Raven and a contact address as Crossref asks.
 

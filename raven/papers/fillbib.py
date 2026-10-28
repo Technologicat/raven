@@ -587,12 +587,15 @@ def main() -> None:  # pragma: no cover
                         help="Format of the audit files: Excel, OpenDocument or TSV.")
     parser.add_argument("--out-dir", dest="out_dir", default=None, type=str, metavar="DIR",
                         help="Write the filled bibliographies and their audits here, instead of beside each input file. Created if it does not exist.")
-    parser.add_argument("--cache", dest="cache", default=None, type=str, metavar="FILE",
-                        help="Keep Crossref's answers in this JSONL file, and ask only for DOIs it does not hold. Crossref asks its users to cache.")
+    cache = parser.add_mutually_exclusive_group()
+    cache.add_argument("--cache", dest="cache", default=None, type=str, metavar="FILE",
+                       help="Keep Crossref's answers in this JSONL file, and ask only for DOIs it does not hold. Crossref asks its users to cache. Default: <bib stem>.crossref.jsonl beside the output.")
+    cache.add_argument("--no-cache", dest="no_cache", action="store_true", default=False,
+                       help="Keep no cache: ask Crossref about every DOI, every run.")
     parser.add_argument("--keep-appended", dest="keep_appended", action="store_true", default=False,
                         help="Where a record keeps its own abstract, keep a second text appended to it — a plain language summary, a graphical abstract, an alternate abstract. By default it is removed, and the audit lists the record.")
     parser.add_argument("-n", "--dry-run", dest="dry_run", action="store_true", default=False,
-                        help="Look up and report what would change, and write nothing.")
+                        help="Look up and report what would change, and write nothing but the cache.")
     parser.add_argument("--log", metavar="PATH", default=None,
                         help="Write the log here instead of to stderr.")
     parser.add_argument("--log-level", default="INFO",
@@ -608,7 +611,7 @@ def main() -> None:  # pragma: no cover
     # `bibtexparser` logs a warning per record it cannot read. Those are `raven-fixbib`'s business.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
 
-    maybe_cache_path = pathlib.Path(opts.cache).expanduser().resolve() if opts.cache else None
+    maybe_given_cache = pathlib.Path(opts.cache).expanduser().resolve() if opts.cache else None
     for filename in opts.filenames:
         path = pathlib.Path(filename).expanduser().resolve()
         try:
@@ -616,6 +619,12 @@ def main() -> None:  # pragma: no cover
         except OSError as exc:
             print(f"{path}: cannot read ({type(exc).__name__}: {exc})", file=sys.stderr)
             continue
+        directory = pathlib.Path(opts.out_dir).expanduser().resolve() if opts.out_dir else path.parent
+        if opts.no_cache:
+            maybe_cache_path = None
+        else:
+            maybe_cache_path = maybe_given_cache or directory / f"{path.stem}.crossref.jsonl"
+            maybe_cache_path.parent.mkdir(parents=True, exist_ok=True)
 
         dois = [doi for doi in (papers_utils.normalize_doi(bibtex.entry_field(entry, "doi"))
                                 for entry in library.entries) if doi]
@@ -626,7 +635,6 @@ def main() -> None:  # pragma: no cover
 
         if opts.dry_run:
             continue
-        directory = pathlib.Path(opts.out_dir).expanduser().resolve() if opts.out_dir else path.parent
         directory.mkdir(parents=True, exist_ok=True)
         out_path = directory / f"{path.stem}{opts.output_suffix}{path.suffix}"
         out_path.write_text(bibtex.write_string(filled), encoding="utf-8")

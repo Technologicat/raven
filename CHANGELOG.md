@@ -63,6 +63,7 @@
   - Written in LaTeX: italics, bold, super- and subscripts, and a structured abstract's section headings, one paragraph per section. A plain language summary is left out.
   - A second text that a database export appended to an abstract the record keeps — a plain language summary, a graphical abstract, an alternate abstract — is removed, so what comes out is the abstract alone. The audit lists each such record. `--keep-appended` leaves them in.
   - The audit names every record it changed and every one it could not help, with the reason — `no DOI, cannot retrieve` among them.
+  - Crossref's answers are kept beside the output, in `<name>.crossref.jsonl`, so a rerun asks only about DOIs it has not seen. `--cache FILE` puts them elsewhere, and `--no-cache` keeps none.
   - Beside each record's abstract the audit shows Crossref's, and how much of the record's text is in it, so the differences that matter sort to the top.
   - The abstracts remain their publisher's or authors' copyright: the filled file is for your own screening, not for publishing.
 
