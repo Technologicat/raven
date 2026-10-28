@@ -5,7 +5,8 @@ corpus — the scope question the search asked, the judge's tests, the extractor
 those fields — while the tool supplies everything that is not:
 
     scope = "studies on different aspects of the use of AI agents in higher education"
-    hints = "Domain cautions for the judge, beyond what each test says. Optional."
+    scope_notes = "What belongs and what does not, at length. Optional; every stage reads it."
+    hints = "Domain cautions for the judge, beyond what each test says. Optional; the judge's alone."
     frame = "Replaces the tool's own framing of the judge's task. Optional, and rarely wanted."
 
     [[test]]               # one per way of being off topic; true means positive evidence of it
@@ -41,6 +42,7 @@ nor the instrument's fingerprint (`judge_material`, `extract_material`).
 __all__ = ["NOT_STATED", "ACTIONS",
            "Test", "Field", "Rule", "Definition",
            "DefinitionError", "load_definition",
+           "SCOPE_NOTES_HEADING", "with_scope_notes", "scope_notes_material",
            "judge_material", "extract_material"]
 
 import dataclasses
@@ -89,9 +91,11 @@ class Rule:
 
 @dataclasses.dataclass(frozen=True)
 class Definition:
-    """A loaded definition file. `frame` is `None` unless the file replaces the tool's own."""
+    """A loaded definition file. `scope_notes` and `hints` are `""` when the file has none; `frame` is `None`
+    unless the file replaces the tool's own."""
     path: pathlib.Path
     scope: str
+    scope_notes: str
     hints: str
     frame: str | None
     tests: tuple[Test, ...]
@@ -103,7 +107,7 @@ class DefinitionError(ValueError):
     """The definition file cannot be used. The message names the file and the entry."""
 
 
-_TOP_KEYS = {"scope", "hints", "frame", "test", "field", "rule"}
+_TOP_KEYS = {"scope", "scope_notes", "hints", "frame", "test", "field", "rule"}
 _TEST_KEYS = {"name", "asks"}
 _FIELD_KEYS = {"name", "asks", "values", "quote", "max_words"}
 _RULE_KEYS = {"label", "when", "action"}
@@ -166,6 +170,7 @@ def load_definition(path: str | pathlib.Path) -> Definition:
 
     check_keys("the top level", raw, _TOP_KEYS, {"scope", "test"})
     scope = text("scope", raw["scope"])
+    scope_notes = text("scope_notes", raw["scope_notes"]) if "scope_notes" in raw else ""
     hints = text("hints", raw["hints"]) if "hints" in raw else ""
     frame = text("frame", raw["frame"]) if "frame" in raw else None
 
@@ -246,28 +251,52 @@ def load_definition(path: str | pathlib.Path) -> Definition:
             matched[field_name] = frozenset(wanted)
         rules.append(Rule(text(f"{where}, label", entry["label"]), matched, entry["action"]))
 
-    return Definition(path=path, scope=scope, hints=hints, frame=frame,
+    return Definition(path=path, scope=scope, scope_notes=scope_notes, hints=hints, frame=frame,
                       tests=tuple(tests), fields=tuple(fields), rules=tuple(rules))
 
 
+#: What precedes the scope notes in every stage's prompt.
+SCOPE_NOTES_HEADING = "What this covers, and what it does not:"
+
+
+def with_scope_notes(prompt: str, definition: Definition) -> str:
+    """`prompt` with the definition's scope notes inserted after its first paragraph, which names the scope.
+
+    Unchanged when the definition has none. Every stage that is told the scope places its notes this way.
+    """
+    if not definition.scope_notes:
+        return prompt
+    head, sep, rest = prompt.partition("\n\n")
+    return f"{head}\n\n{SCOPE_NOTES_HEADING}\n{definition.scope_notes}" + (f"\n\n{rest}" if sep else "")
+
+
+def scope_notes_material(definition: Definition) -> dict:
+    """The scope notes' part of a stage's instrument material: `{}` when there are none."""
+    # Absent rather than an empty value, so that a definition without notes keeps the fingerprints it had
+    # before the key existed, and with them the answers saved under those fingerprints.
+    return {"scope_notes": [SCOPE_NOTES_HEADING, definition.scope_notes]} if definition.scope_notes else {}
+
+
 def judge_material(definition: Definition) -> str:
-    """The definition's half of the judge's instrument: the scope, the hints, the frame and the tests.
+    """The definition's half of the judge's instrument: the scope, its notes, the hints, the frame and the tests.
 
     The judge adds its own prompt to it. Normalized, so a change to a comment or to how the prose is
     wrapped leaves it as it was, and any change to what the judge is asked does not.
     """
     return json.dumps({"scope": definition.scope, "hints": definition.hints, "frame": definition.frame,
-                       "tests": [[test.name, test.asks] for test in definition.tests]},
+                       "tests": [[test.name, test.asks] for test in definition.tests]}
+                      | scope_notes_material(definition),
                       ensure_ascii=False, sort_keys=True)
 
 
 def extract_material(definition: Definition) -> str:
-    """The definition's half of the extractor's instrument: the scope and the fields.
+    """The definition's half of the extractor's instrument: the scope, its notes and the fields.
 
     The rules are not in it: they act on the answers when the reports are written, so changing one asks
     nothing again.
     """
     return json.dumps({"scope": definition.scope,
                        "fields": [[field.name, field.asks, field.values, sorted(field.quote), field.max_words]
-                                  for field in definition.fields]},
+                                  for field in definition.fields]}
+                      | scope_notes_material(definition),
                       ensure_ascii=False, sort_keys=True)

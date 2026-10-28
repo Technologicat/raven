@@ -554,9 +554,10 @@ action = "hold"
 
 Its parts, top to bottom:
 
-- **`scope`**: what the search was for, in a phrase. The judge and the reviewer are both told it.
-  - **State every exclusion here as well as in its test.** The reviewer is shown the scope and nothing else from the file — no tests, no hints — and it argues for each removal as best the scope allows. A test that removes training of health professionals, under a scope of "sustainability in health education", sends those removals back to you, because medical education *is* health education in the plain sense of the words. "…in health education as taught in schools and universities, not the training of health professionals" lets the removals stand.
-- **`hints`** (optional): domain cautions for the judge that belong to no single test — a term that means something else in a neighbouring field, say.
+- **`scope`**: what the search was for, in a phrase. The judge, the reviewer and the extractor are all told it.
+- **`scope_notes`** (optional): what belongs and what does not, at whatever length it takes — what a term means in this review, which neighbouring topics are out. Every LLM step is told it, beside the scope.
+  - **State every exclusion here as well as in its test.** The reviewer is shown the scope and these notes and nothing else from the file — no tests, no hints — and it argues for each removal as best they allow. A test that removes training of health professionals, under a scope of "sustainability in health education" and nothing more, sends those removals back to you, because medical education *is* health education in the plain sense of the words. Say in the notes that the training of health professionals is out.
+- **`hints`** (optional): domain cautions for the judge that belong to no single test — a term that means something else in a neighbouring field, say, or how much a venue tells. The judge's alone: what belongs goes in `scope_notes`, and this is how to read the evidence.
 - **`frame`** (optional, rarely wanted): replaces the tool's own framing of the judge's task. That framing is the method — look for positive evidence of being off topic, silence keeps, a generic title is no evidence, use the venue — and it holds for any corpus.
 - **`[[test]]`**, one per way of being off topic. `name` is how reports refer to it, and `asks` is what the model is told it means. Write it as "true only if…", and say when the answer is false.
 - **`[[field]]`**, one per thing the extractor records about a kept record.

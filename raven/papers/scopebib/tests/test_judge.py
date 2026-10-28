@@ -83,6 +83,12 @@ class TestThePrompt:
         text = judge.rubric(own)
         assert text.startswith("Judge these birds.") and "literature search" not in text
 
+    def test_the_scope_notes_follow_the_scope_and_precede_the_tests(self, definition):
+        import dataclasses
+        text = judge.rubric(dataclasses.replace(definition, scope_notes="Crows are out."))
+        assert text.index("a literature search for: studies of ravens.") < text.index("Crows are out.") < text.index("The tests:")
+        assert scope_definition.SCOPE_NOTES_HEADING not in judge.rubric(definition)
+
     def test_no_hints_no_section(self, definition):
         import dataclasses
         assert "About this search" not in judge.rubric(dataclasses.replace(definition, hints=""))

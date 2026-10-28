@@ -102,6 +102,38 @@ class TestTheInstrument:
         assert self.materials(tmp_path, changed) == self.materials(tmp_path, FULL)
 
 
+class TestScopeNotes:
+    NOTES = 'scope_notes = """\nCorvus corax only.\n\nCrows are out.\n"""\n'
+
+    def test_they_are_read_and_absent_is_empty(self, tmp_path):
+        assert d.load_definition(write(tmp_path, MINIMAL)).scope_notes == ""
+        definition = d.load_definition(write(tmp_path, self.NOTES + MINIMAL))
+        assert definition.scope_notes == "Corvus corax only.\n\nCrows are out."
+
+    def test_they_go_after_the_first_paragraph(self, tmp_path):
+        definition = d.load_definition(write(tmp_path, self.NOTES + MINIMAL))
+        placed = d.with_scope_notes("Search for: ravens.\n\nAnswer each.\n\nItems.", definition)
+        assert placed == ("Search for: ravens.\n\n" + d.SCOPE_NOTES_HEADING + "\nCorvus corax only.\n\nCrows are out."
+                          "\n\nAnswer each.\n\nItems.")
+        assert d.with_scope_notes("One paragraph.", definition).startswith("One paragraph.\n\n" + d.SCOPE_NOTES_HEADING)
+
+    def test_without_them_a_prompt_is_untouched(self, tmp_path):
+        definition = d.load_definition(write(tmp_path, MINIMAL))
+        assert d.with_scope_notes("Search for: ravens.\n\nAnswer.", definition) == "Search for: ravens.\n\nAnswer."
+
+    def test_without_them_the_material_does_not_mention_them(self, tmp_path):
+        # So a definition written before the key existed keeps its fingerprints, and its saved answers.
+        definition = d.load_definition(write(tmp_path, FULL))
+        assert d.scope_notes_material(definition) == {}
+        assert "scope_notes" not in d.judge_material(definition) and "scope_notes" not in d.extract_material(definition)
+
+    def test_with_them_both_halves_change(self, tmp_path):
+        plain = d.load_definition(write(tmp_path, FULL))
+        noted = d.load_definition(write(tmp_path, self.NOTES + FULL, name="noted.scope.toml"))
+        assert d.judge_material(noted) != d.judge_material(plain)
+        assert d.extract_material(noted) != d.extract_material(plain)
+
+
 class TestErrors:
     """Every error names the file and the entry, so it can be fixed without reading this code."""
 

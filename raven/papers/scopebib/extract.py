@@ -108,6 +108,7 @@ def ask_fields(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
     """
     prompt = _INSTRUCTIONS.format(scope=definition.scope, field_lines=_field_lines(definition),
                                   items="\n".join(item(i, record) for i, (_, record) in enumerate(batch)))
+    prompt = scope_definition.with_scope_notes(prompt, definition)
     turn = agent.ask_record(llm_settings, prompt, maybe_abort=maybe_abort)
     if turn.truncated:
         reason = "the reply was cut off at the token cap; its traces hold what there was"

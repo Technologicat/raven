@@ -123,13 +123,13 @@ CONFIDENCES = ("high", "medium", "low")
 
 
 def rubric(definition: scope_definition.Definition) -> str:
-    """The judge's instructions for `definition`: the frame, the tests, and the hints."""
+    """The judge's instructions for `definition`: the frame, the scope notes, the tests, and the hints."""
     frame = definition.frame if definition.frame is not None else FRAME.format(scope=definition.scope)
     tests = "\n".join(f'  "{test.name}"  {test.asks}' for test in definition.tests)
     parts = [frame, f"The tests:\n{tests}"]
     if definition.hints:
         parts.append(f"About this search in particular:\n{definition.hints}")
-    return "\n\n".join(parts)
+    return scope_definition.with_scope_notes("\n\n".join(parts), definition)
 
 
 def _test_lines(definition: scope_definition.Definition) -> str:

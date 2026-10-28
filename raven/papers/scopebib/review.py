@@ -6,7 +6,8 @@ that the record belongs in scope, and a drop it makes a case for goes to a perso
 
 **The reviewer is told nothing about where the records came from**: not that they were judged, nor dropped,
 nor by what. It sees a record and a question. Nor is it shown the definition's tests or hints, being a
-pass independent of the judge's.
+pass independent of the judge's. It is shown the scope and the scope notes: what belongs is the user's to say,
+and a reviewer arguing against that says nothing about the judge.
 
 **A reviewer that finds a case for everything is not discriminating**, it only looks thorough. So a
 control group of kept records can be mixed in, unlabelled (`draw_control`), and the case rate for the drops
@@ -61,8 +62,9 @@ markdown fences.
 
 
 def instrument_material(definition: scope_definition.Definition) -> str:
-    """Everything that decides what a review means: the scope and this module's prompt."""
-    return json.dumps({"scope": definition.scope, "instructions": _INSTRUCTIONS, "abstract_chars": ABSTRACT_CHARS},
+    """Everything that decides what a review means: the scope, its notes and this module's prompt."""
+    return json.dumps({"scope": definition.scope, "instructions": _INSTRUCTIONS, "abstract_chars": ABSTRACT_CHARS}
+                      | scope_definition.scope_notes_material(definition),
                       ensure_ascii=False, sort_keys=True)
 
 
@@ -95,6 +97,7 @@ def ask_reviews(llm_settings: env, batch: list[tuple[str, scope_records.Record]]
     """
     prompt = _INSTRUCTIONS.format(scope=definition.scope,
                                   items="\n".join(item(i, record) for i, (_, record) in enumerate(batch)))
+    prompt = scope_definition.with_scope_notes(prompt, definition)
     turn = agent.ask_record(llm_settings, prompt, maybe_abort=maybe_abort)
     if turn.truncated:
         reason = "the reply was cut off at the token cap; its traces hold what there was"

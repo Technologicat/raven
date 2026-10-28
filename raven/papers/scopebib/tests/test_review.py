@@ -42,6 +42,18 @@ class TestAsking:
         for word in ("drop", "judge", "verdict", "not_birds", "a hint"):
             assert word not in text, f"the reviewer must not learn about the judging: {word!r}"
 
+    def test_the_reviewer_is_told_the_scope_notes_and_still_not_the_hints(self, definition, monkeypatch, tmp_path):
+        path = tmp_path / "noted.scope.toml"
+        path.write_text('scope = "studies of ravens"\nscope_notes = "Crows are out."\nhints = "a hint"\n\n'
+                        '[[test]]\nname = "not_birds"\nasks = "true if positively not about birds"\n', encoding="utf-8")
+        noted = scope_definition.load_definition(path)
+        prompts = script(monkeypatch, "[]", "[]")
+        review.ask_reviews(None, [("k", RECORD)], definition=noted)
+        review.ask_reviews(None, [("k", RECORD)], definition=definition)
+        assert "Crows are out." in prompts[0] and "a hint" not in prompts[0]
+        assert scope_definition.SCOPE_NOTES_HEADING not in prompts[1], "no notes, no heading"
+        assert review.instrument_material(noted) != review.instrument_material(definition)
+
     def test_answers_are_read_by_number(self, definition, monkeypatch):
         script(monkeypatch, json.dumps([{"i": 0, "belongs": True, "case": " Counts  ravens. "},
                                         {"i": 3, "belongs": False, "case": "no such record"}]))

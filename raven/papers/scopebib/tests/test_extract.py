@@ -134,6 +134,18 @@ class TestAsking:
         assert "at most 3 words" in prompts[0]
         assert "Published in: Corvid Quarterly" in prompts[0]
 
+    def test_the_prompt_carries_the_scope_notes(self, definition, monkeypatch):
+        import dataclasses
+        prompts = []
+
+        def ask_record(llm_settings, prompt, maybe_abort=None, **kw):
+            prompts.append(prompt)
+            return type("T", (), {"reply": "[]", "truncated": False})()
+        monkeypatch.setattr(agent, "ask_record", ask_record)
+        extract.ask_fields(None, [("k", RECORD)], definition=dataclasses.replace(definition, scope_notes="Crows are out."))
+        extract.ask_fields(None, [("k", RECORD)], definition=definition)
+        assert "Crows are out." in prompts[0] and scope_definition.SCOPE_NOTES_HEADING not in prompts[1]
+
     def test_answers_are_read_by_number_and_a_cut_off_reply_fails_the_batch(self, definition, monkeypatch):
         replies = [json.dumps([{"i": 0, "setting": "city", "setting_quote": "city", "observed": "yes", "method": "x"},
                                {"i": 5, "setting": "forest"}]), None]
