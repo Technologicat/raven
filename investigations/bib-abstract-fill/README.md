@@ -102,8 +102,18 @@ three groups: an `Alternate abstract:` with a translation appended after a compl
 `Graphical abstract` heading after a teaser, the same pattern as the plain language summaries. Both are now
 cut before comparing; that took "different text" from 194 to 147.
 
-Of the 147, **29 are teasers with a second text appended and no heading at the join** — the abstract cut at
-about 210 characters running straight into the plain language summary's opening. No marker to cut at, so
-the prefix rule refuses them; their "before" ends in `...` in the audit. The other 118 are complete
-abstracts whose wording differs from Crossref's in small ways (`five` against `5`, `2\times 2` against
-`2×2`, a changed word, a different language), where nothing is missing.
+Of the 147, 29 were first read as teasers with a second text appended and no heading at the join. **That
+was wrong (2026-10-28): the heading is there, glued to the next word** — `...Plain language
+summaryThis study explores…` — and v1's regex ended in `\b`, which cannot match between two letters. 30
+records have that shape: the 29, and one more the v1 audit had not flagged as ending in `...`. Once a heading counted
+only where a heading can stand (after a sentence end or at a line start, and followed by a colon, a line
+break or a capital letter), all 30 were repaired, each with 100% of its words in Crossref's text in
+order, and no other record's outcome changed:
+
+| outcome | v1 | v1.1 |
+|---|---|---|
+| repaired: ours was the start of Crossref's | 411 | 441 |
+| kept ours: Crossref's is a different text | 147 | 117 |
+
+The 117 left are complete abstracts whose wording differs from Crossref's in small ways (`five` against
+`5`, `2\times 2` against `2×2`, a changed word, a different language), where nothing is missing.

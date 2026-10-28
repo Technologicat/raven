@@ -234,9 +234,32 @@ def render_jats(jats: str) -> str:
 _MIN_PREFIX_CHARS = 40
 
 # The headings under which a database export appends a second text to the abstract. ProQuest's field can
-# hold the abstract, then one of these, then the start of the second text, each part cut short.
-_APPENDED_TEXT = re.compile(r"\b(plain[\s-]+language\s+summary|graphical\s+abstract|alternate\s+abstract)\b",
-                            re.IGNORECASE)
+# hold the abstract, then one of these, then the start of the second text, each part cut short:
+# `…a promising approach ...Plain language summaryThis study explores…`. The same words also occur in
+# prose about plain language summaries, so a heading must stand where a heading can: at the start of the
+# text or of a line, or after a sentence end — the teaser's `...` included, and any closing brackets and
+# quotes after it, in every spelling an export uses, since nothing has normalized them at this point.
+# What must follow it is checked by `_starts_appended_text`.
+_APPENDED_TEXT = re.compile(r"""(?imx)
+    (?: ^ | [.!?…] [)\]"'’”»]* )  # `…` …, `’` ’, `”` ”, `»` »
+    \s*
+    (?P<heading> plain[\s-]+language\s+summary | graphical\s+abstract | alternate\s+abstract )
+""")
+
+
+def _starts_appended_text(text: str, end: int) -> bool:
+    """Whether a heading ending at `end` in `text` is followed as a heading is: by a colon, a line break,
+    the end of the text, or a capital letter — glued on, as the exports have it, or after spaces."""
+    rest = text[end:].lstrip(" \t")
+    return not rest or rest[0] in ":\n" or rest[0].isupper()
+
+
+def _without_appended_text(text: str) -> str:
+    """`text` up to the heading of a second text appended to it, or all of `text` where there is none."""
+    for match in _APPENDED_TEXT.finditer(text):
+        if _starts_appended_text(text, match.end("heading")):
+            return text[:match.start("heading")]
+    return text
 
 
 def comparable(text: str) -> str:
@@ -248,9 +271,7 @@ def comparable(text: str) -> str:
     is reduced to text. What is left is the abstract's wording and nothing else, so that two exports of one
     text compare equal however each one punctuated, spaced, marked up, labelled or extended it.
     """
-    match = _APPENDED_TEXT.search(text)
-    if match:
-        text = text[:match.start()]
+    text = _without_appended_text(text)
     text = papers_utils.without_trailing_ellipsis(text)
     text = common_utils.unicodize_basic_markup(text)
     text = _TAG.sub(" ", text)
@@ -303,9 +324,7 @@ AUDIT_COLUMNS = ("key", "outcome", "% of ours in Crossref's", "title", "venue", 
 
 def _words(text: str) -> list[str]:
     """`text` as the words `comparable` would keep, in order."""
-    match = _APPENDED_TEXT.search(text)
-    if match:
-        text = text[:match.start()]
+    text = _without_appended_text(text)
     text = textutil.strip_boilerplate(_TAG.sub(" ", common_utils.unicodize_basic_markup(text)))
     return re.findall(r"\w+", text.casefold())
 

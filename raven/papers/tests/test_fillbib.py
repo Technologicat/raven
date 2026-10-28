@@ -113,9 +113,38 @@ class TestComparable:
     def test_everything_from_an_appended_texts_heading_on_is_ignored(self, heading):
         assert fillbib.comparable(f"Abstract part.{heading} Other part") == fillbib.comparable("Abstract part.")
 
+    @pytest.mark.parametrize("joined", [
+        "Abstract part ...Plain language summaryOther part",       # glued on, as the exports have it
+        "Abstract part ...Plain Language Summary Other part",
+        "Abstract part.]Alternate abstract:Otra parte",
+        "Abstract part.” Graphical abstract: Other part",      # `”` ”
+        "Abstract part\nPlain language summary\nOther part",       # at the start of a line
+    ])
+    def test_a_heading_is_recognized_where_an_export_puts_one(self, joined):
+        assert fillbib.comparable(joined) == fillbib.comparable("Abstract part")
+
+    @pytest.mark.parametrize("prose", [
+        "We asked whether a plain language summary helps readers. It did.",   # not after a sentence end
+        "Readers liked it. Plain language summary writing is a skill.",       # lowercase after it
+        "Readers liked it. Graphical abstracts are common in chemistry.",     # a longer word
+        "Readers liked it. Plain language summaries vary.",
+    ])
+    def test_the_same_words_in_prose_are_not_cut(self, prose):
+        assert fillbib.comparable(prose) == _without_cut(prose)
+
+    def test_a_teaser_mentioning_a_heading_in_prose_is_repaired(self):
+        # Cut at the mention, the teaser and the whole abstract compare equal, and the teaser is kept as whole.
+        theirs = ("We asked whether a plain language summary helps readers of a review, and found that it "
+                  "does in two of the three settings we tried.")
+        ours = theirs[:70] + " ..."
+        filled, audit = fillbib.fill(library(record("a", doi="10.1234/x", abstract=ours)), {"10.1234/x": theirs})
+        assert [row.outcome for row in audit] == [fillbib.REPAIRED]
+        assert abstract_of(filled, "a") == theirs
+
     def test_a_teaser_with_an_appended_text_is_repaired(self):
-        # The shape a database export leaves: the abstract cut short, a heading, the second text cut short.
-        ours = WHOLE[:100] + " Graphical abstract Students at three universities were ..."
+        # The shape a database export leaves: the abstract cut short, a heading glued on, the second text
+        # cut short.
+        ours = WHOLE[:100] + " ...Graphical abstractStudents at three universities were ..."
         assert not fillbib.comparable(WHOLE).startswith(_without_cut(ours)), \
             "without the cut ours is no prefix, or this fixture cannot show the cut matters"
         filled, audit = fillbib.fill(library(record("a", doi="10.1234/x", abstract=ours)), {"10.1234/x": WHOLE})
