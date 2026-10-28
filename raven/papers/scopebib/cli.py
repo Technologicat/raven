@@ -10,13 +10,14 @@ on a marked copy of the worklist; `compare` says how far two runs agree. Every c
 everything the run used, so passing it back with `--run-file` repeats the run.
 """
 
-__all__ = ["COMMANDS", "DEFAULTS", "Plan", "UsageError", "resolve", "execute", "compare_runs", "main"]
+__all__ = ["COMMANDS", "DEFAULTS", "DEFINITION_SNAPSHOT", "Plan", "UsageError", "resolve", "execute", "compare_runs", "main"]
 
 import argparse
 import dataclasses
 import datetime
 import logging
 import pathlib
+import shutil
 import sys
 
 from ... import __version__
@@ -35,6 +36,9 @@ DEFAULTS = {"maybe_seed": 42, "maybe_control": 40, "maybe_replicate": 1, "maybe_
 
 #: Crossref's answers, for `--fill`, in the ledger directory beside the model's.
 CROSSREF_CACHE = "crossref.jsonl"
+
+#: The definition a run used, copied beside its reports, which is what its `run.toml` names.
+DEFINITION_SNAPSHOT = "definition.scope.toml"
 
 _PILOT_SIZE = 50  # as `pipeline.PILOT_SIZE`, which is not imported here, the parser coming before the heavy imports
 
@@ -252,6 +256,22 @@ def _provenance(plan: Plan, models: dict[str, str], stages: dict, nlp_descriptio
     return lines
 
 
+def _snapshot_definition(source: str | pathlib.Path, reports_dir: pathlib.Path) -> pathlib.Path:
+    """`source` copied into `reports_dir` as `DEFINITION_SNAPSHOT`, and the copy's path.
+
+    A run repeated from its own `run.toml` names the copy already, and the copy is then left as it is.
+    """
+    # The run file names the definition by path, and a definition is edited between runs while it is being
+    # calibrated; without a copy of its own, an earlier run would be repeated, or its reports rewritten,
+    # under the later wording and rules.
+    source = pathlib.Path(source)
+    target = reports_dir / DEFINITION_SNAPSHOT
+    if source.resolve() != target.resolve():
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    return target
+
+
 def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str | None = None,
             require_every_decision: bool = False) -> int:
     """Carry out `plan`. Returns the exit status.
@@ -267,6 +287,9 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     from . import pipeline, report, runfile
 
     settings = plan.run_file.settings
+    if plan.command != "finish":  # `finish` records no run, so it has no recipe to keep a copy for
+        settings = dataclasses.replace(settings, maybe_definition=_snapshot_definition(settings.maybe_definition,
+                                                                                       plan.reports_dir))
     definition = scope_definition.load_definition(settings.maybe_definition)
     corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require,
                                   min_chars=settings.min_chars, fill=settings.maybe_fill,

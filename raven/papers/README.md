@@ -649,7 +649,7 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 
 ### The run file, and repeating a run
 
-Every run writes `run.toml` beside its reports: the input, the definition, the sift, the sample, the seed, the control, and for each LLM step the model and the *instrument* its answers are filed under. Passing it back repeats the run:
+Every run writes `run.toml` beside its reports: the input, the definition (a copy of it, see below), the sift, the sample, the seed, the control, and for each LLM step the model and the *instrument* its answers are filed under. Passing it back repeats the run:
 
 ```bash
 raven-scopebib run --run-file out/run.toml       # writes into out/ again
@@ -661,6 +661,7 @@ and where every answer is already saved, no backend is asked anything. A pilot's
 
 - **Options override the file**, one by one: `--run-file out/run.toml --seed 7`.
 - **Paths are relative to the file**, so a run directory moved together with its input still works, on another machine too.
+- **The definition is copied beside it**, as `definition.scope.toml`, and that copy is what the run file names. So editing your definition for the next run — which is what calibrating one is — leaves the runs before it as they were: passed back, a run file repeats its own run, with its own wording and rules.
 - **You can write one by hand**, to choose models: a `model` at the top serves every step, and `[judge]`, `[review]` and `[extract]` tables name one per step. If yours is the output directory's own `run.toml`, the run's record replaces it afterwards and yours is kept as `run_orig.toml`; one anywhere else is never touched.
 
 **An instrument** is the eight hex digits in a ledger's file name: a fingerprint of everything that decides what an answer means — the questions as asked, and the model with its quantization. Every answer is filed under the instrument that made it, so answers from a different model or a changed question are never mixed with yours. Naming one in a run file, or with `--instrument STEP=FP`, reads that ledger; **a named instrument that is not the one the current definition and model make is read-only**, so nothing is asked under it. Without named instruments, the tool connects to the backend just to work them out.

@@ -134,6 +134,32 @@ class TestARun:
         assert (out / report.KEPT_BIB).read_text(encoding="utf-8") == kept_before
         assert "no backend was needed" in capsys.readouterr().out
 
+    def test_a_run_keeps_a_copy_of_its_definition_and_its_recipe_names_the_copy(self, files, tmp_path, model,
+                                                                                 connect):
+        corpus, definition = files
+        out = tmp_path / "out"
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
+                                      "--control", "2")), nlp=_NLP(), connect=connect)
+        copy = out / cli.DEFINITION_SNAPSHOT
+        assert copy.read_text(encoding="utf-8") == definition.read_text(encoding="utf-8")
+        assert runfile.load_run_file(out / "run.toml").settings.maybe_definition == copy
+
+        def removed_by_rules():
+            return [row["key"] for row in tabular.read_table(out / f"{report.REMOVED_AUDIT}.xlsx")
+                    if row["removed by"] == "rules"]
+        before = removed_by_rules()
+        assert before, "the rule removed nothing, so this fixture cannot show which version of it applied"
+
+        # Editing the definition afterwards, as calibrating one does: the rules are not in any fingerprint, so
+        # only the copy keeps the recorded run's reports what they were.
+        original = definition.read_text(encoding="utf-8")
+        definition.write_text(original.replace('action = "remove"', 'action = "hold"'), encoding="utf-8")
+        assert definition.read_text(encoding="utf-8") != original, "this fixture edits nothing"
+        assert cli.execute(cli.resolve(parse("run", "--run-file", str(out / "run.toml"))), nlp=_NLP(),
+                           connect=connect) == 0
+        assert removed_by_rules() == before
+        assert copy.read_text(encoding="utf-8") == original
+
     def test_a_pilots_recipe_reruns_the_pilot_in_place(self, files, tmp_path, model, connect):
         corpus, definition = files
         cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir",
@@ -144,7 +170,8 @@ class TestARun:
         assert plan.reports_dir == pilot and plan.ledger_dir == tmp_path / "out" / "ledgers"
         cli.execute(plan, nlp=_NLP(), connect=connect)
         assert not (pilot / "pilot").exists()
-        assert sorted(path.name for path in pilot.iterdir()) == [f"{report.PILOT_REPORT}.xlsx", "run.toml"]
+        assert sorted(path.name for path in pilot.iterdir()) == sorted([f"{report.PILOT_REPORT}.xlsx", "run.toml",
+                                                                         cli.DEFINITION_SNAPSHOT])
 
     def test_finish_from_a_marked_copy(self, files, tmp_path, model, connect, capsys):
         corpus, definition = files
