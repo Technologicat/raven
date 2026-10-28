@@ -12,11 +12,13 @@ stops at the data layer. It does not own DPG widgets.
 
 Public API:
 
-  - `get_entries_for_selection(data_idxs, *, sort_field, max_n)` — gather items
-    by cluster, sorted alphabetically within each cluster. Returns
+  - `get_entries_for_selection(data_idxs, *, sort_key, max_n)` — gather items
+    by cluster, sorted within each cluster (`reference_order` by default). Returns
     `(entries_by_cluster, format_cluster_annotation)` where the formatter is a
     closure that yields `(cluster_title, cluster_keywords, cluster_content,
     more)` for a given cluster ID.
+  - `reference_order(entry)` — the sort key of a reference list: authors (or
+    the title, when there are none), then year, then title.
   - `order_cluster_ids(cluster_ids)` — sort ascending with the misc group
     (cluster `-1`) moved to the end.
 
@@ -25,20 +27,45 @@ Cross-module state read via `app_state`:
   `file_content.vis_keywords_by_cluster`).
 """
 
-__all__ = ["get_entries_for_selection",
+__all__ = ["reference_order", "get_entries_for_selection",
            "order_cluster_ids"]
 
 import collections
 import math
 
+from ..common import utils as common_utils
+
 from .app_state import app_state
 
 
-def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None, dataset=None):
+def reference_order(entry) -> tuple:
+    """The sort key of a reference list for an entry of `sorted_entries`: authors, then year, then title.
+
+    A record with no authors sorts by its title in their place, as a reference list puts it, and by its
+    abstract where it has no title either. Within each criterion a blank sorts after every non-blank value,
+    so an undated work follows the dated ones by the same authors. Ties fall to the title, then the
+    abstract, and last to `data_idx`, so the order is fully determined however much of a record is blank.
+
+    Ignores case, diacritics and surrounding whitespace, so `Sá` sorts before `Sipos`. A field the entry
+    lacks counts as blank.
+    """
+    def text(field):
+        return common_utils.strip_diacritics(str(getattr(entry, field, ""))).strip().casefold()
+
+    def blank_last(value):
+        return (value == "", value)
+
+    author, year, title, abstract = text("author"), text("year"), text("title"), text("abstract")
+    sort_as = author or title or abstract
+    return (blank_last(sort_as), blank_last(year), blank_last(title), blank_last(abstract),
+            getattr(entry, "data_idx", 0))
+
+
+def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None, dataset=None):
     """Gather item data for visualization, sorting by cluster.
 
     `data_idxs`: `list`, the selection of items to include in the report. Item indices into `sorted_xxx`.
-    `sort_field`: `str`, the field to sort by within each cluster. The name of one of the attributes of an entry in `sorted_entries`.
+    `sort_key`: the order within each cluster, as a key function on an entry of `sorted_entries`.
     `max_n`: `int`, how many entries can be displayed reasonably. Default `None` means no limit.
     `dataset`: the dataset to read entries from. Defaults to the live `app_state.dataset`. Background workers pass an
                explicitly captured snapshot, so that a concurrent `open_file` swap can't make `data_idxs` (computed
@@ -54,9 +81,9 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None, data
         entry = dataset.sorted_entries[data_idx]
         entries_by_cluster[entry.cluster_id].append((data_idx, entry))
 
-    # Alphabetize by `sort_field` (e.g. `title`) within each cluster, much faster to glance at.
+    # Order within each cluster: by default, as a reference list is ordered.
     for entries_in_this_cluster in entries_by_cluster.values():
-        entries_in_this_cluster.sort(key=lambda e: getattr(e[1], sort_field).strip().lower())  # e: `(data_idx, entry)`
+        entries_in_this_cluster.sort(key=lambda e: sort_key(e[1]))  # e: `(data_idx, entry)`
 
     # If `max_n` is enabled, determine how many entries we can display from each cluster to approximately match the total count.
     # But display at least one entry from each cluster.

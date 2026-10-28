@@ -20,7 +20,7 @@ plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space q
 importer_gui.py   (~550)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
-entry_renderer.py (~110)  — per-entry rendering shared by panel and tooltip
+entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py   (~120)  — `raven-importer` entry point
 app_state.py       (~62)  — top-level app state containers

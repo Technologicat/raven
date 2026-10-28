@@ -74,13 +74,65 @@ class TestGroupingAndOrdering:
         assert [entry.title for _, entry in entries_by_cluster[0]] == ["Aardvarks", "mangoes", "Zebras"]
         assert [entry.title for _, entry in entries_by_cluster[1]] == ["apples", "  Bananas ", "Cherries"]
 
-    def test_sort_field_selects_which_field_orders_the_cluster(self):
-        dataset = make_dataset([make_entry("Zebras", 0, year="1999"),
-                                make_entry("Aardvarks", 0, year="2024")])
-        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1], sort_field="year", dataset=dataset)
-        # Sorted by year, the alphabetically-last title comes first -- so this says the field was honored
-        # rather than that some ordering happened.
-        assert [entry.title for _, entry in entries_by_cluster[0]] == ["Zebras", "Aardvarks"]
+    def test_entries_are_in_reference_list_order_within_each_cluster(self):
+        # Each pair differs in only one field, the others being chosen to sort the opposite way, so each
+        # assertion can only pass if that field outranks the ones after it.
+        dataset = make_dataset([make_entry("Aardvarks", 0, author="Sipos et al.", year="2008"),
+                                make_entry("Zebras", 0, author="Gale et al.", year="2015"),
+                                make_entry("Aardvarks", 0, author="Gale et al.", year="2019"),
+                                make_entry("Bananas", 0, author="gale et al.", year="2015")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1, 2, 3], dataset=dataset)
+        assert [(entry.author, entry.year, entry.title) for _, entry in entries_by_cluster[0]] == [
+            ("gale et al.", "2015", "Bananas"),
+            ("Gale et al.", "2015", "Zebras"),
+            ("Gale et al.", "2019", "Aardvarks"),
+            ("Sipos et al.", "2008", "Aardvarks")]
+
+    def test_a_record_with_no_authors_sorts_by_its_title_in_their_place(self):
+        # Blank-first would put it ahead of everyone; it belongs between Gale and Sipos, at "M".
+        dataset = make_dataset([make_entry("Sustainability in schools", 0, author="Sipos et al.", year="2008"),
+                                make_entry("Mapping health education", 0, author="", year="2020"),
+                                make_entry("Four impediments", 0, author="Gale et al.", year="2015")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1, 2], dataset=dataset)
+        assert [entry.title for _, entry in entries_by_cluster[0]] == [
+            "Four impediments", "Mapping health education", "Sustainability in schools"]
+
+    def test_an_accented_letter_sorts_with_its_base_letter(self):
+        # Compared code point by code point, "á" sorts after every ASCII letter, which put Sá after Sipos.
+        dataset = make_dataset([make_entry("B", 0, author="Sipos et al.", year="2008"),
+                                make_entry("A", 0, author="Sá et al.", year="2022")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1], dataset=dataset)
+        assert [entry.author for _, entry in entries_by_cluster[0]] == ["Sá et al.", "Sipos et al."]
+
+    def test_an_undated_work_follows_the_dated_ones_by_the_same_authors(self):
+        dataset = make_dataset([make_entry("Aardvarks", 0, author="Gale et al.", year=""),
+                                make_entry("Zebras", 0, author="Gale et al.", year="2015")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1], dataset=dataset)
+        assert [entry.year for _, entry in entries_by_cluster[0]] == ["2015", ""]
+
+    def test_a_record_blank_but_for_its_abstract_sorts_by_the_abstract(self):
+        dataset = make_dataset([make_entry("", 0, author="", year="", abstract="Zoonoses in the curriculum."),
+                                make_entry("", 0, author="", year="", abstract="Active learning strategies."),
+                                make_entry("Mapping", 0, author="Gale et al.", year="2015", abstract="")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1, 2], dataset=dataset)
+        assert [entry.abstract or entry.author for _, entry in entries_by_cluster[0]] == [
+            "Active learning strategies.", "Gale et al.", "Zoonoses in the curriculum."]
+
+    def test_records_identical_in_every_field_keep_a_fixed_order(self):
+        # The last tie-break: without it, two such records could swap places between two rebuilds.
+        twins = [make_entry("Same", 0, author="Gale", year="2015", data_idx=i) for i in (7, 3)]
+        assert sorted(twins, key=entry_renderer.reference_order) == [twins[1], twins[0]]
+
+    def test_sort_key_selects_the_order_within_the_cluster(self):
+        dataset = make_dataset([make_entry("Zebras", 0, author="Ahlberg", year="1999"),
+                                make_entry("Aardvarks", 0, author="Zimmerman", year="2024")])
+        entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1], sort_key=lambda entry: entry.title,
+                                                                         dataset=dataset)
+        # The default order would put Ahlberg's "Zebras" first, so this says the key was honored rather
+        # than that some ordering happened.
+        assert [entry.title for _, entry in entries_by_cluster[0]] == ["Aardvarks", "Zebras"]
+        default, _ = entry_renderer.get_entries_for_selection([0, 1], dataset=dataset)
+        assert [entry.title for _, entry in default[0]] == ["Zebras", "Aardvarks"]
 
     def test_an_empty_selection_gathers_nothing_and_does_not_divide_by_zero(self, two_clusters):
         # `max_n` is shared out over the clusters present, so an empty selection is the case where that

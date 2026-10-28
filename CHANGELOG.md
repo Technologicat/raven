@@ -133,6 +133,12 @@
   - Reloading the same model with different settings, such as another quantization or flash attention toggled, is now followed as a model change.
   - The per-turn note telling the model which model it is names its quantization, and states the context length once rather than twice.
 
+#### Raven-visualizer
+
+- **Within each cluster, the info panel and the plot's tooltip list papers in reference-list order**: by authors, then year, then title, where they were by title.
+  - A paper with no authors is listed by its title in their place, as a reference list puts it, and an undated one after the dated ones by the same authors.
+  - Accents do not move a name to the end: *Sá* comes before *Sipos*.
+
 #### Raven-deduplicate
 
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.

@@ -131,11 +131,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Settings window: expose `gui_config` in the GUI. Currently only in `config.py`. Note: this is a general gap — most Visualizer settings are not runtime-configurable.
 
 - **[Medium]** Configurable annotation tooltip and info panel: which fields to show, sort by which field.
-  - **Wanted first: within each cluster, sort the info panel's entries in reference-list order** — authors, then
-    year, then title. Asked for after a manual verification pass over a clustered corpus (2026-10-28).
-    `raven.papers.scopebib.report._reading_order` already
-    computes this key for scopebib's reports; a shared home for it (`raven.papers.bibtex`?) would let both use
-    one definition.
+  The order within a cluster is a key function, `entry_renderer.get_entries_for_selection(sort_key=...)`,
+  defaulting to reference-list order, so choosing one is a matter of naming the alternatives.
 
 - **[Medium]** Layout switchable left/right: which side of the screen the info panel is on (for on-site collaboration, physical laptop placement constraints).
   - **The case that came up (2026-10-28): pair work**, with the plot on the left and the info panel on the
