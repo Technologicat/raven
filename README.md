@@ -16,6 +16,7 @@
 
 - [The Raven constellation](#the-raven-constellation)
     - [Raven-visualizer: Visualize research literature](#raven-visualizer-visualize-research-literature)
+    - [Raven-papers: Prepare a literature corpus](#raven-papers-prepare-a-literature-corpus)
     - [Raven-librarian: Multiversal LLM frontend](#raven-librarian-multiversal-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
     - [Raven-xdot-viewer: Interactive GraphViz graph viewer](#raven-xdot-viewer-interactive-graphviz-graph-viewer)
@@ -91,6 +92,23 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 - This was the original *Raven*.
 
 *Added in v0.2.5: CSV import.*
+
+## Raven-papers: Prepare a literature corpus
+
+- **Documentation**: [Paper tools manual](raven/papers/README.md), which documents the rules each tool applies. For which tool to reach for, and in what order, see [*Building a bibliography*](#building-a-bibliography).
+- **Goal**: Turn what the databases hand you into a corpus worth screening, and say exactly what was done to it on the way.
+  - **Status**: :white_check_mark: Operational, as command-line tools. In use for a scoping review.
+- **Features**:
+  - Find and fetch: arXiv search, BibTeX from arXiv identifiers, fulltext PDF download
+  - Repair a database export before a parser refuses its damaged entries, and convert Web of Science, CSV and PDF metadata to BibTeX
+  - Merge the duplicates a multi-database search leaves, matching on DOI and on normalized title
+  - Fill missing and truncated abstracts from Crossref, by DOI, without a language model
+  - Remove what cannot be screened, and with a local LLM, set aside what is not about your topic, handing you a worklist of everything it was unsure about
+  - Check a manuscript's reference list against the corpus it was written from
+  - Every step writes an audit of what it changed and why, for the method section
+  - 100% local, apart from the arXiv and Crossref lookups you ask for
+
+*Added in v0.2.11: `raven-fillbib`, `raven-scopebib` and `raven-checkrefs`.*
 
 ## Raven-librarian: Multiversal LLM frontend
 
