@@ -142,3 +142,20 @@ class TestWithSpacy:
         title = "Unfitted finite element methods"
         (content,) = records.content_word_counts([title], nlp)
         assert not records.is_uninformative(content, records.informative_words(title))
+
+
+class TestItemNumber:
+    @pytest.mark.parametrize("value, expected", [(3, 3), ("3", 3), ("record 3", 3), ("#3", 3), (" 3 ", 3),
+                                                 ("Record 0", 0)])
+    def test_a_number_alone_or_after_a_label_is_read(self, value, expected):
+        assert records.item_number({"i": value}, 10) == expected
+
+    @pytest.mark.parametrize("value", [True, False, None, "", "three", "3a", "1 of 3", 3.0, [3]])
+    def test_anything_else_names_nothing(self, value):
+        assert records.item_number({"i": value}, 10) is None
+
+    def test_a_number_outside_the_batch_names_nothing(self):
+        assert records.item_number({"i": 10}, 10) is None and records.item_number({"i": -1}, 10) is None
+
+    def test_an_answer_that_is_not_an_object_names_nothing(self):
+        assert records.item_number(["i", 3], 10) is None and records.item_number({}, 10) is None

@@ -14,7 +14,8 @@ abstract and venue as readable text, and a link.
 __all__ = ["Record", "records_of", "load_records",
            "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL", "CALIBRATED_FLAG_SHARE",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
-           "describe_abstract"]
+           "describe_abstract",
+           "item_number"]
 
 import dataclasses
 import functools
@@ -184,3 +185,31 @@ def describe_abstract(record: Record) -> str:
     if not record.abstract:
         return "none"
     return "teaser" if papers_utils.looks_truncated(record.abstract) else "full"
+
+
+# --------------------------------------------------------------------------------
+# Which record in a batch an answer is about
+
+_LABELLED_NUMBER = re.compile(r"\D*?(\d+)\s*")
+
+
+def item_number(answer: object, n_items: int) -> int | None:
+    """The batch index an LLM's answer names in its `"i"`, or `None` if it names none of the `n_items`.
+
+    An integer is taken as it is. A string is taken when it holds one number, at its end, after any label:
+    `"3"`, `"record 3"` and `"#3"` all name 3.
+    """
+    # A record is shown as `--- record 3 ---` and asked for by "the record's number, copied exactly", which
+    # a model can read either way; one reviewer batch was lost to `"record 0"` and the rest.
+    if not isinstance(answer, dict):
+        return None
+    value = answer.get("i")
+    if isinstance(value, bool):  # a JSON true is an int to Python, and names nothing
+        return None
+    if isinstance(value, int):
+        i = value
+    elif isinstance(value, str) and (match := _LABELLED_NUMBER.fullmatch(value.strip())):
+        i = int(match.group(1))
+    else:
+        return None
+    return i if 0 <= i < n_items else None

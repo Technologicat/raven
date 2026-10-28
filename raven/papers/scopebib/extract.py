@@ -122,13 +122,8 @@ def ask_fields(llm_settings: env, batch: list[tuple[str, scope_records.Record]],
         return {}, [turn]
     out = {}
     for answer in answers:
-        if not isinstance(answer, dict) or "i" not in answer:
-            continue
-        try:
-            i = int(answer["i"])
-        except (TypeError, ValueError):
-            continue
-        if 0 <= i < len(batch):
+        i = scope_records.item_number(answer, len(batch))
+        if i is not None:
             key, record = batch[i]
             out[key] = normalize(answer, definition, record)
     return out, [turn]

@@ -60,6 +60,13 @@ class TestAsking:
         answers, turns = review.ask_reviews(None, [("k", RECORD)], definition=definition)
         assert answers == {"k": {"belongs": True, "case": "Counts ravens."}} and len(turns) == 1
 
+    def test_a_number_given_as_the_label_it_was_shown_under_is_read(self, definition, monkeypatch):
+        # The shape a whole batch once came back in: the model copied "record 1" from `--- record 1 ---`.
+        script(monkeypatch, json.dumps([{"i": "record 0", "belongs": False, "case": "a"},
+                                        {"i": "record 1", "belongs": True, "case": "b"}]))
+        answers, _ = review.ask_reviews(None, [("k0", RECORD), ("k1", RECORD)], definition=definition)
+        assert answers == {"k0": {"belongs": False, "case": "a"}, "k1": {"belongs": True, "case": "b"}}
+
     def test_a_belongs_that_is_not_a_boolean_is_unanswered(self, definition, monkeypatch):
         script(monkeypatch, json.dumps([{"i": 0, "belongs": "maybe", "case": ""}]))
         answers, _ = review.ask_reviews(None, [("k", RECORD)], definition=definition)

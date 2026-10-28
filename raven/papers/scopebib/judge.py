@@ -197,13 +197,8 @@ def _ask(llm_settings: env, prompt: str, *, batch: list[tuple[str, scope_records
         return {}, [record]
     out = {}
     for answer in answers:
-        if not isinstance(answer, dict) or "i" not in answer:
-            continue
-        try:
-            i = int(answer["i"])
-        except (TypeError, ValueError):
-            continue
-        if 0 <= i < len(batch):
+        i = scope_records.item_number(answer, len(batch))
+        if i is not None:
             out[batch[i][0]] = normalize(answer, definition, source)
     return out, [record]
 

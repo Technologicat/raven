@@ -111,13 +111,8 @@ def ask_reviews(llm_settings: env, batch: list[tuple[str, scope_records.Record]]
         return {}, [turn]
     out = {}
     for answer in answers:
-        if not isinstance(answer, dict) or "i" not in answer:
-            continue
-        try:
-            i = int(answer["i"])
-        except (TypeError, ValueError):
-            continue
-        if 0 <= i < len(batch):
+        i = scope_records.item_number(answer, len(batch))
+        if i is not None:
             belongs = answer.get("belongs")
             out[batch[i][0]] = {"belongs": belongs if belongs in (True, False) else None,
                                 "case": " ".join(str(answer.get("case") or "").split())[:300]}
