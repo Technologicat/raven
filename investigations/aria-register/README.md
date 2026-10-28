@@ -424,8 +424,33 @@ genuinely solves, for `technical_wit`, which no prompt of the first set invited.
 
 ```bash
 python investigations/aria-register/probe_register.py --prompts 2026-10-28 --samples 10 --neutral-samples 5
-python investigations/aria-register/judge_register.py investigations/aria-register/register-prompts2-<fp>.jsonl
+python investigations/aria-register/judge_register.py investigations/aria-register/register-prompts2-7e8dd60a.jsonl
 ```
+
+**Run 2026-10-28** (probe ledger `register-prompts2-7e8dd60a`, judge `register-judged-f3b3c874`), not yet
+checked against a blind sample:
+
+| condition | elicitors `clear` | neutral `clear` |
+|---|---:|---:|
+| `card_on` | 25 / 60 (42%) | 1 / 15 |
+| `card_off` | 8 / 60 (13%) | 0 / 15 |
+| `plain` | 8 / 60 (13%) | 0 / 15 |
+
+- **The user card makes the difference again**, more sharply than on the first set; `card_off` and `plain`
+  tie, so on these prompts Aria's card adds nothing over a one-liner.
+- **`creative` is the model's**: `clear` 9, 7 and 8 of 10 across the conditions, nearly all
+  `deadpan_absurd`, so it does not separate them. The difference comes from `absurd` (9 / 0 / 0),
+  `everyday_technical` (5 / 1 / 0), and less from `wrong_premise` and `vague`.
+- **`technical_wit` appears only under `card_on`** (10 / 0 / 0), and the new `everyday_technical` prompt is
+  where it shows.
+- **`clumsy_system` drew nothing** in any condition (one borderline under `card_on`): the replies say no
+  pictures arrived. A candidate for replacing in a third set.
+- Self-description in 2 of 225, confrontational in 0, a quote missing in 0; the quote retry fired once
+  (`card_on/creative-c23159/9`). `funny`, unscored: attempts in 39 of 75 under `card_on`, 15 under
+  `card_off`, 23 under `plain`.
+
+**Next: a blind sample of these replies**, aimed at both sides of v6's line, rated by the maintainer — the
+check these grades have not had, and the measure of what leaving landing out of the grade costs.
 
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
