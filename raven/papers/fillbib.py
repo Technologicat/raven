@@ -588,7 +588,7 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--out-dir", dest="out_dir", default=None, type=str, metavar="DIR",
                         help="Write the filled bibliographies and their audits here, instead of beside each input file. Created if it does not exist.")
     cache = parser.add_mutually_exclusive_group()
-    cache.add_argument("--cache", dest="cache", default=None, type=str, metavar="FILE",
+    cache.add_argument("--cache", dest="cache_path", default=None, type=str, metavar="FILE",
                        help="Keep Crossref's answers in this JSONL file, and ask only for DOIs it does not hold. Crossref asks its users to cache. Default: <bib stem>.crossref.jsonl beside the output.")
     cache.add_argument("--no-cache", dest="cache_enabled", action="store_false", default=True,
                        help="Keep no cache: ask Crossref about every DOI, every run.")
@@ -611,7 +611,7 @@ def main() -> None:  # pragma: no cover
     # `bibtexparser` logs a warning per record it cannot read. Those are `raven-fixbib`'s business.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
 
-    maybe_given_cache = pathlib.Path(opts.cache).expanduser().resolve() if opts.cache else None
+    maybe_given_cache = pathlib.Path(opts.cache_path).expanduser().resolve() if opts.cache_path else None
     for filename in opts.filenames:
         path = pathlib.Path(filename).expanduser().resolve()
         try:
