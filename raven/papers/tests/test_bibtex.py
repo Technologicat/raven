@@ -6,9 +6,9 @@ from bibtexparser.model import MiddlewareErrorBlock
 
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
                                  brace_repair_candidates, decode_html_entities, entries_to_bibtex,
-                                 entry_field, entry_venue, field_value, header_key, parse_file,
-                                 parse_string, readable_text,
-                                 relocate_rights_notices, repair_duplicate_field_keys,
+                                 entry_doi, entry_field, entry_venue, field_value, find_doi,
+                                 header_key, parse_file, parse_string, readable_text,
+                                 recover_dois, relocate_rights_notices, repair_duplicate_field_keys,
                                  repair_failed_block, repair_name_lists,
                                  unbalanced_field_names, write_string)
 
@@ -468,6 +468,90 @@ class TestRelocateRightsNotices:
         once, count = relocate_rights_notices(self.WITH_NOTICE)
         assert count == 1
         assert relocate_rights_notices(once) == (once, 0)
+
+
+class TestFindDoi:
+    # The spellings a hand-built bibliography put into its citation keys, as found in one.
+    def test_the_doi_is_found_in_every_spelling_a_key_carries(self):
+        for text in ["https://doi.org/10.1007/978-1-4020-6416-6_19", "http://dx.doi.org/10.1007/978-1-4020-6416-6_19",
+                     "DOI: 10.1007/978-1-4020-6416-6_19", "doi: 10.1007/978-1-4020-6416-6_19",
+                     "doi:10.1007/978-1-4020-6416-6_19", "DOI 10.1007/978-1-4020-6416-6_19",
+                     "DOI: https://doi.org/10.1007/978-1-4020-6416-6_19",
+                     "https://psycnet.apa.org/doi/10.1007/978-1-4020-6416-6_19",
+                     "10.1007/978-1-4020-6416-6_19"]:
+            assert find_doi(text) == "10.1007/978-1-4020-6416-6_19", text
+
+    def test_what_follows_the_doi_is_left_behind(self):
+        assert find_doi("doi: 10.1111/j.1746-1561.2011.00586.x. PMID: 2151786") == "10.1111/j.1746-1561.2011.00586.x"
+
+    def test_the_case_is_kept(self):
+        assert find_doi("https://doi.org/10.1089/SUS.2014.9815") == "10.1089/SUS.2014.9815"
+
+    def test_text_with_no_doi_gives_none(self):
+        for text in ["cooke2011", "https://www.example.org/pdfs/article.pdf", "", "10.12/too-short-a-registrant"]:
+            assert find_doi(text) is None, text
+
+
+class TestEntryDoi:
+    @staticmethod
+    def _entry(source):
+        return parse_string(source, split_names=False).entries[0]
+
+    def test_the_doi_field_comes_first_then_the_url_then_the_key(self):
+        three = "@article{10.1000/key,\n  doi = {10.1000/field},\n  url = {https://doi.org/10.1000/url},\n}\n"
+        assert entry_doi(self._entry(three)) == ("doi", "10.1000/field")
+        two = "@article{10.1000/key,\n  url = {https://doi.org/10.1000/url},\n}\n"
+        assert entry_doi(self._entry(two)) == ("url", "10.1000/url")
+        one = "@article{10.1000/key,\n  title = {T},\n}\n"
+        assert entry_doi(self._entry(one)) == ("key", "10.1000/key")
+
+    def test_a_record_with_a_doi_nowhere_gives_none(self):
+        assert entry_doi(self._entry("@article{cooke2011,\n  url = {https://example.org/a},\n}\n")) is None
+
+
+class TestRecoverDois:
+    IN_KEY = "@article{https://doi.org/10.1000/abc,\n  title = {A Study},\n  year = {2024}\n}\n"
+
+    @staticmethod
+    def _fields(source):
+        return {f.key: f.value for f in parse_string(source, split_names=False).entries[0].fields}
+
+    def test_a_doi_in_the_key_is_copied_into_a_doi_field(self):
+        recovered, count = recover_dois(self.IN_KEY)
+        assert count == 1
+        assert self._fields(recovered) == {"doi": "10.1000/abc", "title": "A Study", "year": "2024"}
+
+    def test_the_key_is_left_as_it_was(self):
+        recovered, _count = recover_dois(self.IN_KEY)
+        assert parse_string(recovered, split_names=False).entries[0].key == "https://doi.org/10.1000/abc"
+
+    def test_a_doi_in_the_url_is_copied_too(self):
+        source = "@article{smith2024,\n  url = {https://doi.org/10.1000/abc},\n}\n"
+        recovered, count = recover_dois(source)
+        assert count == 1 and self._fields(recovered)["doi"] == "10.1000/abc"
+
+    def test_the_only_change_is_one_added_line_matching_the_records_indentation(self):
+        recovered, _count = recover_dois(self.IN_KEY)
+        assert recovered == self.IN_KEY.replace(",\n", ",\n  doi = {10.1000/abc},\n", 1)
+
+    def test_an_existing_doi_field_is_not_touched_even_an_empty_one(self):
+        for source in ["@article{10.1000/key,\n  doi = {10.1000/other},\n}\n",
+                       "@article{10.1000/key,\n  doi = {},\n}\n"]:
+            assert recover_dois(source) == (source, 0)
+
+    def test_a_record_with_a_doi_nowhere_is_untouched(self):
+        source = "@article{cooke2011,\n  title = {T},\n}\n"
+        assert recover_dois(source) == (source, 0)
+
+    def test_the_records_around_it_are_untouched_byte_for_byte(self):
+        untouched = "@article{cooke2011,\n\ttitle = {Untouched},\n}"
+        recovered, count = recover_dois(f"{untouched}\n\n{self.IN_KEY}")
+        assert count == 1 and recovered.startswith(untouched + "\n\n")
+
+    def test_the_result_parses_and_the_run_is_idempotent(self):
+        once, count = recover_dois(self.IN_KEY)
+        assert count == 1
+        assert recover_dois(once) == (once, 0)
 
 
 class TestFieldSpans:

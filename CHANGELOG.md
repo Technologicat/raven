@@ -50,6 +50,11 @@
   - For scripts, every `raven.client.mayberemote` service that holds a model carries the same in `model_info`, in either mode: the server's model in remote mode, which its configuration decides, rather than the one asked for.
   - `allow_remote=False` keeps a service local whether or not the server is running, the counterpart of `allow_local=False`: for a result that must not depend on how the server is configured.
 
+#### Raven-fixbib
+
+- **A DOI written into the citation key or the `url` is copied into a `doi` field**, where the other paper tools look for it. A hand-built bibliography sometimes uses the DOI as the key itself, as `https://doi.org/…`, `DOI: …` and the like.
+  - Nothing is removed: the key and the `url` stay as they were, and a record with a `doi` field already is left alone. `--no-recover-dois` switches it off.
+
 #### Raven-deduplicate
 
 - **The audit is an Excel spreadsheet by default**, which opens as it is in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV, and a path given to `--audit` chooses by its extension.

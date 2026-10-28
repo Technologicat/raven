@@ -228,6 +228,16 @@ A record whose braces would not survive the split is left alone. Everything outs
 
 `--keep-notices` leaves abstracts as they are.
 
+### A DOI in the citation key
+
+A bibliography built by hand sometimes uses each paper's DOI as its citation key, pasted in whatever spelling the source offered — `https://doi.org/10…`, `DOI: 10…`, `doi:10…`, or with a `PMID` after it. The DOI is then in the file but not in a `doi` field, which is where `raven-fillbib`, `raven-deduplicate` and `raven-scopebib --fill` look for it, so to them the record has none.
+
+**Copied into a `doi` field**, as the record's first field. The DOI is looked for in the `url` first and then in the key, and written as it is spelled there, without the resolver address, the label or anything after it.
+
+**Nothing is removed.** The key stays as it was, since other files may cite it, and so does the `url`. A record that has a `doi` field already is left alone, even if that field is empty.
+
+`--no-recover-dois` leaves records without one.
+
 ### What it reports
 
 Every report names the fault, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which fault it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is reported as *too many commas* rather than as a suspected brace problem.

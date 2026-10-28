@@ -58,8 +58,6 @@ logger = logging.getLogger(__name__)
 # A list item starts a line with `12.`, `12)` or `[12]`. Two or more of them make the document a numbered list.
 _NUMBERED_PATTERN = re.compile(r"^[ \t]*(?:\[\d+\]|\d+[.)])[ \t]+", re.MULTILINE)
 
-_DOI_PATTERN = re.compile(r"10\.\d{4,}/\S+", re.IGNORECASE)
-
 # Matching runs shorter than this do not count toward `title_coverage`. A long entry contains most short
 # letter sequences somewhere, so without a floor a title would be "covered" by unrelated text.
 _MIN_RUN = 4
@@ -89,8 +87,8 @@ def split_entries(text: str) -> tuple[list[str], str]:
 
 
 def _first_doi(text: str) -> str | None:
-    match = _DOI_PATTERN.search(text)
-    return papers_utils.normalize_doi(match.group(0)) if match else None
+    maybe_doi = bibtex.find_doi(text)
+    return papers_utils.normalize_doi(maybe_doi) if maybe_doi is not None else None
 
 
 def entries_of(texts: list[str]) -> list[DocumentEntry]:
@@ -110,13 +108,11 @@ class Reference:
 
 
 def references_of(library: Library) -> list[Reference]:
-    """A `Reference` per record of `library`. The DOI is looked for in `doi`, then `url`, then the key."""
+    """A `Reference` per record of `library`. The DOI is looked for as `bibtex.entry_doi` does."""
     out = []
     for entry in library.entries:
-        maybe_doi = next((doi for doi in (_first_doi(source) for source in (bibtex.entry_field(entry, "doi"),
-                                                                             bibtex.entry_field(entry, "url"),
-                                                                             entry.key))
-                          if doi), None)
+        maybe_found = bibtex.entry_doi(entry)
+        maybe_doi = papers_utils.normalize_doi(maybe_found[1]) if maybe_found is not None else None
         title = bibtex.readable_text(bibtex.entry_field(entry, "title"))
         out.append(Reference(key=entry.key, title=title, maybe_doi=maybe_doi,
                              maybe_title_key=deduplicate.normalize_title(title)))

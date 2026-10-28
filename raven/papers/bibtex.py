@@ -16,9 +16,10 @@ Repairing: `repair_record`, `repair_duplicate_field_keys` and `repair_name_lists
 field name that occurs twice, and authors listed APA-style rather than joined with `and`. Both take the record's text and hand back text, so a caller may parse the result or
 write it to a file; `raven.papers.fixbib` does the latter.
 
-`decode_html_entities` and `relocate_rights_notices` are text-to-text as well, and fix what is *inside*
-records a parser is perfectly happy with: HTML a database left in the field values, and a publisher's
-rights notice appended to an abstract that is metadata in the wrong field.
+`decode_html_entities`, `relocate_rights_notices` and `recover_dois` are text-to-text as well, and fix what
+is *inside* records a parser is perfectly happy with: HTML a database left in the field values, a
+publisher's rights notice appended to an abstract that is metadata in the wrong field, and a DOI written
+only into the citation key or the `url`.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from __future__ import annotations
 __all__ = ["parse_file", "parse_string", "write_string",
 
            "entry_field", "readable_text", "VENUE_FIELDS", "entry_venue",
+           "DOI_PLACES", "find_doi", "entry_doi",
 
            "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
 
@@ -33,6 +35,7 @@ __all__ = ["parse_file", "parse_string", "write_string",
            "read_repeated_keys",
            "decode_html_entities",
            "relocate_rights_notices",
+           "recover_dois",
 
            "entries_to_bibtex"]
 
@@ -53,6 +56,7 @@ from ..common.text import boilerplate
 from ..common.text import entities
 
 from . import identifiers
+from . import utils as papers_utils
 from .utils import bibtex_escape
 
 
@@ -191,6 +195,35 @@ def entry_venue(entry: Entry) -> str:
         if text:
             return readable_text(text)
     return ""
+
+
+_DOI_IN_TEXT = re.compile(r"10\.\d{4,}/\S+", re.IGNORECASE)
+
+#: Where `entry_doi` looks, in order. The key is a place too: a hand-built bibliography sometimes uses the
+#: DOI as its citation key, in whatever spelling it was pasted in (`https://doi.org/...`, `doi: ...`).
+DOI_PLACES = ("doi", "url", "key")
+
+
+def find_doi(text: str) -> str | None:
+    """The first DOI written anywhere in `text`, as it is spelled there, or `None` if there is none.
+
+    Whatever surrounds it — a resolver URL, a `doi:` label, a trailing `. PMID: 123` — is left behind, and so
+    is trailing sentence punctuation. The case is kept; `papers.utils.normalize_doi` makes the comparison key.
+    """
+    match = _DOI_IN_TEXT.search(text)
+    if match is None:
+        return None
+    doi = match.group(0).rstrip(".,;:")
+    return doi if papers_utils.normalize_doi(doi) is not None else None
+
+
+def entry_doi(entry: Entry) -> tuple[str, str] | None:
+    """`(place, doi)` for the first of `DOI_PLACES` holding a DOI, as `find_doi` spells it; `None` if none does."""
+    for place in DOI_PLACES:
+        maybe_doi = find_doi(entry.key if place == "key" else entry_field(entry, place))
+        if maybe_doi is not None:
+            return place, maybe_doi
+    return None
 
 
 # --------------------------------------------------------------------------------
@@ -882,6 +915,60 @@ def relocate_rights_notices(source: str, field: str = "copyright") -> tuple[str,
         moved += 1
     pieces.append(source[cursor:])
     return "".join(pieces), moved
+
+
+def _add_doi_field(raw: str, entry: Entry, doi: str) -> str | None:
+    """`raw` with a `doi` field as its first, or `None` where the parser does not read it back exactly so."""
+    header_end = raw.find("\n")
+    if header_end == -1:
+        return None
+    following = raw[header_end + 1:]
+    indent = following[:len(following) - len(following.lstrip(" \t"))]
+    candidate = raw[:header_end + 1] + f"{indent}doi = {{{doi}}},\n" + following
+    try:
+        library = parse_string(candidate, split_names=False)
+    except Exception:  # noqa: BLE001 -- an edit that breaks the parser is just a failed edit
+        return None
+    if len(library.entries) != 1:
+        return None
+    new = library.entries[0]
+    expected = {field.key: field.value for field in entry.fields} | {"doi": doi}
+    if new.key != entry.key or {field.key: field.value for field in new.fields} != expected:
+        return None
+    return candidate
+
+
+def recover_dois(source: str) -> tuple[str, int]:
+    """Give each record that has no `doi` field the DOI it carries somewhere else.
+
+    Returns `(text, how many were added)`.
+
+    The DOI is looked for in `url` and then in the citation key (see `entry_doi`), and written as
+    `find_doi` spells it, as the record's first field. Nothing is removed, the key included. A record with a
+    `doi` field already is left alone, even an empty one: that field is somebody's, and the value it ought
+    to hold is not this function's to decide. Everything outside an added line is byte for byte as it was.
+    """
+    library = parse_string(source, split_names=False)
+    pieces, cursor, added = [], 0, 0
+    for entry in library.entries:
+        if "doi" in entry.fields_dict:
+            continue
+        maybe_found = entry_doi(entry)
+        if maybe_found is None:
+            continue
+        raw = entry.raw
+        start = source.find(raw, cursor)
+        if start == -1:  # should not happen; skip rather than corrupt the file on a guess
+            continue
+        candidate = _add_doi_field(raw, entry, maybe_found[1])
+        if candidate is None:
+            continue
+        pieces.append(source[cursor:start])
+        pieces.append(candidate)
+        cursor = start + len(raw)
+        added += 1
+    pieces.append(source[cursor:])
+    return "".join(pieces), added
 
 
 def _entry_arxiv_id(entry, keep_version: bool) -> str:
