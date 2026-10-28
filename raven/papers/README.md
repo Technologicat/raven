@@ -325,6 +325,7 @@ Not every record arrives with the abstract its publisher wrote. Some have none, 
 raven-fillbib corpus.bib                                  # corpus_filled.bib + corpus_fill_audit.xlsx
 raven-fillbib --cache crossref.jsonl corpus.bib           # keep Crossref's answers for a rerun
 raven-fillbib -n corpus.bib                               # report only
+raven-fillbib --keep-appended corpus.bib                  # leave appended plain language summaries in
 ```
 
 Run it after `raven-deduplicate` and before `raven-siftbib`, so that what the sift judges is the corpus after filling.
@@ -366,7 +367,7 @@ There is no separate test for "looks cut off". A truncated abstract is found by 
 - **before it**, the start of the text, the start of a line, or the end of a sentence (`.`, `...`, `…`, `!` or `?`, and any closing brackets or quotes after it);
 - **after it**, a colon, a line break, the end of the text, or a capital letter — glued on, as the exports have it (`...Plain language summaryThis study explores…`), or after a space.
 
-Everything from the heading on is left out of the comparison only. A record that keeps its own abstract keeps its second text too. Crossref's copy is handled from its structure instead: a section titled *Plain language summary* is left out when the abstract is rendered, so a filled or completed abstract never carries one.
+Everything from the heading on is left out of the comparison. **It is also removed from a record that keeps its own abstract**, so that what comes out is the abstract alone, and the audit lists that record with `second text removed` added to its outcome; *abstract before* shows what was there. A teaser keeps its `...`, being still a teaser. Where the second text is all the abstract a record has, it stays. `--keep-appended` turns the removal off. Crossref's copy is handled from its structure instead: a section titled *Plain language summary* is left out when the abstract is rendered, so a filled or completed abstract never carries one.
 
 **Two consequences worth knowing.** Crossref keeps a structured abstract's section headings (*Background*, *Methods*, …), so a copy of ours that dropped them is no prefix of Crossref's, and is kept and listed rather than replaced. And the audit's `% of ours in Crossref's` column — the share of our words found in Crossref's text, in the same order — is there for the person reading the audit, to sort the near-misses from the different texts. It decides nothing.
 
@@ -470,7 +471,7 @@ flowchart TD
     RULES -->|"keep"| KEPT["kept"]
 ```
 
-0. **Fill** (no LLM; only with `--fill`). Fills missing abstracts and completes truncated ones from Crossref, by DOI, exactly as [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref) does, so that the sift and every step after it read the whole text. Leaves `00-fill-audit`. Crossref's answers are kept in the ledger directory, so only the first run asks it. A lookup that fails stops the run before the judge and names the DOI, rather than letting a record be judged on its teaser after an earlier run judged its whole abstract.
+0. **Fill** (no LLM; only with `--fill`). Fills missing abstracts and completes truncated ones from Crossref, by DOI, exactly as [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref) does, so that the sift and every step after it read the whole text. That includes removing a second text appended to an abstract, which `--keep-appended` turns off, and which is recorded in `run.toml` as `keep_appended`. Leaves `00-fill-audit`. Crossref's answers are kept in the ledger directory, so only the first run asks it. A lookup that fails stops the run before the judge and names the DOI, rather than letting a record be judged on its teaser after an earlier run judged its whole abstract.
 
    **`--fill` is the one step that leaves your machine: it sends every DOI in the corpus to Crossref**, which is a list of what your review is about. Everything else `raven-scopebib` asks goes to your own LLM backend. The abstracts it brings back remain their publisher's or authors' copyright ([the details](#copyright)).
 

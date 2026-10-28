@@ -61,6 +61,7 @@
 - **New tool: fill missing and truncated abstracts from Crossref**, by DOI. `raven-fillbib corpus.bib` writes `corpus_filled.bib` and an audit.
   - An abstract is replaced only where the record's own is the beginning of Crossref's, so a teaser cut off by a database export is completed, and a different version of the text is left alone and listed for you to look at.
   - Written in LaTeX: italics, bold, super- and subscripts, and a structured abstract's section headings, one paragraph per section. A plain language summary is left out.
+  - A second text that a database export appended to an abstract the record keeps — a plain language summary, a graphical abstract, an alternate abstract — is removed, so what comes out is the abstract alone. The audit lists each such record. `--keep-appended` leaves them in.
   - The audit names every record it changed and every one it could not help, with the reason — `no DOI, cannot retrieve` among them.
   - Beside each record's abstract the audit shows Crossref's, and how much of the record's text is in it, so the differences that matter sort to the top.
   - The abstracts remain their publisher's or authors' copyright: the filled file is for your own screening, not for publishing.
@@ -78,7 +79,7 @@
   - A record is removed only on positive evidence, and a second pass goes over every removal looking for a case that it belongs. Everything it was unsure about goes to one worklist for a person, `04-CHECK-BY-HAND`, and `raven-scopebib finish` applies the decisions marked there.
   - For the records it keeps, it can also record what each one says — the level a study is set at, say — and remove what your rules over those answers rule out.
   - `run --pilot` tries it on 50 records first, with one report to read before committing to the corpus.
-  - `--fill` completes truncated abstracts and fills missing ones from Crossref before anything is judged, as `raven-fillbib` does. Opt-in, since it sends the corpus's DOIs to Crossref.
+  - `--fill` completes truncated abstracts and fills missing ones from Crossref before anything is judged, as `raven-fillbib` does, second texts appended to an abstract included (`--keep-appended` to keep them). Opt-in, since it sends the corpus's DOIs to Crossref.
   - Answers are saved as they arrive, so a run that stops resumes where it was. A record edited since it was answered — an abstract completed by `raven-fillbib`, a title corrected by hand — is asked again, and only it.
   - Every answer is saved, so an interrupted run resumes, and every run writes `run.toml`, which repeats it — with no LLM at all when every answer is saved. Each report names the model behind every step.
   - Before any work, a run works out whether it needs the LLM at all, and if it does, connects at once: a backend that cannot be reached, has no model loaded, or has the wrong one is reported at the start, not an hour in.

@@ -89,12 +89,15 @@ def load_corpus(bib_path: str | pathlib.Path, *,
                 seed: int = 42,
                 stopwords: Container[str] | None = None,
                 fill: bool = False,
+                strip_appended: bool = True,
                 maybe_crossref_cache: str | pathlib.Path | None = None) -> Corpus:
     """Read the `.bib` at `bib_path`, fill its abstracts, sift it, draw a sample, and measure the titles.
 
     `nlp`, `stopwords`: as `raven.papers.scopebib.records.title_measures` takes them.
     `fill`: fill missing and truncated abstracts from Crossref first, as `raven-fillbib` does. This sends
             every DOI in the corpus to Crossref.
+    `strip_appended`: in the fill, remove a second text appended to an abstract the record keeps
+                      (`raven.papers.fillbib.fill`).
     `maybe_crossref_cache`: where to keep Crossref's answers, so that a run after the first asks nothing
                             (`raven.papers.fillbib.fetch_crossref`); `None` for no cache.
 
@@ -117,7 +120,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
             raise PipelineError(f"filling abstracts: Crossref could not be asked about {len(failed)} "
                                 f"{'DOI' if len(failed) == 1 else 'DOIs'} ({shown}); run again when it answers. "  # plural
                                 f"First failure: {next(iter(failed.values()))}")
-        library, maybe_fill = fillbib.fill(library, abstracts)
+        library, maybe_fill = fillbib.fill(library, abstracts, strip_appended=strip_appended)
     maybe_sift = None
     criteria = [siftbib.require_field(field) for field in require] + [siftbib.parse_min_chars(spec)
                                                                       for spec in min_chars]

@@ -338,6 +338,17 @@ class TestLoadingTheCorpus:
         assert corpus.maybe_sift.dropped == [], "filled first, the bare record has an abstract when the sift asks"
         assert asked == [(["10.1234/bare", "10.1234/whole"], tmp_path / "crossref.jsonl")]
 
+    @pytest.mark.parametrize("strip_appended, expected", [(True, "We explain ravens."),
+                                                           (False, "We explain ravens. Plain language summaryBirds.")])
+    def test_the_fill_removes_a_second_text_unless_asked_to_keep_it(self, tmp_path, monkeypatch, strip_appended,
+                                                                    expected):
+        monkeypatch.setattr(fillbib, "fetch_crossref", lambda *args, **kwargs: ({}, {}))
+        path = tmp_path / "in.bib"
+        path.write_text("@article{a,\n  title = {Ravens explained},\n"
+                        "  abstract = {We explain ravens. Plain language summaryBirds.}\n}\n", encoding="utf-8")
+        corpus = pipeline.load_corpus(path, nlp=_NLP(), stopwords=STOPWORDS, fill=True, strip_appended=strip_appended)
+        assert [record.abstract for record in corpus.records] == [expected]
+
     def test_without_fill_crossref_is_not_asked(self, tmp_path, monkeypatch):
         # The control for the test above: the same corpus, and the bare record goes to the sift.
         monkeypatch.setattr(fillbib, "fetch_crossref", lambda *args, **kwargs: pytest.fail("Crossref was asked"))

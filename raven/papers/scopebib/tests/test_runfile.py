@@ -48,6 +48,7 @@ class TestLoading:
         ('[run]\nuntil = "judge"\n', r"\[run\]: unknown key 'until'"),
         ('[run]\nserver_nlp = "yes"\n', "expected true or false"),
         ('[run]\nfill = 1\n', "expected true or false"),
+        ('[run]\nkeep_appended = "no"\n', "expected true or false"),
     ])
     def test_a_mistake_is_named_with_its_file(self, tmp_path, text, complaint):
         path = write(tmp_path, text)
@@ -86,7 +87,7 @@ class TestWriting:
                                     require=("abstract",), min_chars=("abstract=200",), maybe_sample=50,
                                     maybe_pilot=50, maybe_seed=42, maybe_control=40, maybe_replicate=2,
                                     maybe_format="ods", maybe_server_nlp=True, maybe_context_length=131072,
-                                    maybe_fill=True),
+                                    maybe_fill=True, maybe_keep_appended=True),
                            {"judge": StagePlan('a "quoted"\\model\tname\x01', "0970b39f"),
                             "review": StagePlan("b"), "extract": StagePlan()})
         path = tmp_path / "out" / "run.toml"

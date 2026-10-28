@@ -27,14 +27,18 @@ filled bibliography to screen and study the literature, and do not publish it.
 The filled abstract is written as LaTeX, BibTeX's own markup: italics, bold, super- and subscripts, and a
 structured abstract's section headings in bold, each section its own paragraph. A plain language
 summary, which some publishers deposit as a section of the abstract, is left out.
+
+Some database exports append a second text to the abstract — a plain language summary, a graphical
+abstract, an alternate abstract, each under its heading. Where a record keeps its own abstract, that is
+removed too, and the audit lists the record; `--keep-appended` leaves it in.
 """
 
 from __future__ import annotations
 
 __all__ = ["render_jats", "comparable",
 
-           "FILLED", "REPAIRED", "DIFFERS", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
-           "LOOKUP_FAILED", "LOOKS_TRUNCATED",
+           "FILLED", "REPAIRED", "DIFFERS", "SAME", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
+           "LOOKUP_FAILED", "LOOKS_TRUNCATED", "APPENDED_REMOVED",
            "AuditRow", "AUDIT_COLUMNS", "words_shared", "fill", "audit_rows", "write_audit",
 
            "fetch_crossref",
@@ -287,6 +291,7 @@ def comparable(text: str) -> str:
 FILLED = "filled: had no abstract"
 REPAIRED = "repaired: ours was the start of Crossref's"
 DIFFERS = "kept ours: Crossref's is a different text"
+SAME = "kept ours: the same text as Crossref's"
 NO_DOI = "no DOI, cannot retrieve"
 NOT_IN_CROSSREF = "DOI not found in Crossref"
 NO_ABSTRACT_IN_CROSSREF = "Crossref has no abstract"
@@ -295,6 +300,9 @@ LOOKUP_FAILED = "lookup failed"
 # Appended to the outcome of a record that kept an abstract ending in an ellipsis. The ellipsis itself is
 # at the far end of a long cell, where a spreadsheet puts it a screen or more out of view.
 LOOKS_TRUNCATED = "ours looks truncated"
+
+# Appended to the outcome of a record that kept its own abstract and had a second text removed from it.
+APPENDED_REMOVED = "second text removed"
 
 _CHANGED = (FILLED, REPAIRED)
 
@@ -353,15 +361,26 @@ def _needs_one(abstract: str) -> bool:
     return not abstract.strip() or papers_utils.looks_truncated(abstract)
 
 
+def _without_appended_abstract(abstract: str) -> str:
+    """`abstract` without a second text appended to it, or unchanged where removing one would leave no text."""
+    cut = _without_appended_text(abstract)
+    return cut.rstrip() if cut != abstract and comparable(cut) else abstract
+
+
 def fill(library: bibtexparser.Library,
          abstracts: Mapping[str, str | None],
          *,
-         failed: Mapping[str, str] | None = None) -> tuple[bibtexparser.Library, list[AuditRow]]:
+         failed: Mapping[str, str] | None = None,
+         strip_appended: bool = True) -> tuple[bibtexparser.Library, list[AuditRow]]:
     """Fill and repair `library`'s abstracts from `abstracts`, and account for what happened.
 
     `abstracts` maps a normalized DOI (see `raven.papers.utils.normalize_doi`) to the abstract found for it,
     as a BibTeX field value, or to `None` where the record was found and has no abstract. A DOI absent from
     it was not found. `failed` maps a DOI to why its lookup failed.
+
+    `strip_appended`: where a record keeps its own abstract, remove a second text appended to it — a plain
+    language summary, a graphical abstract, an alternate abstract — from its heading on. Not done where
+    the second text is all the abstract there is.
 
     Returns `(filled, audit)`. `filled` is a copy of `library`; the input is not modified. The audit lists
     every record that was changed, every record whose abstract differs from the one found, and every record
@@ -389,7 +408,7 @@ def fill(library: bibtexparser.Library,
             if not ours_key:
                 outcome = FILLED
             elif ours_key == theirs_key:
-                continue  # ours is already whole
+                outcome = SAME
             elif len(ours_key) >= _MIN_PREFIX_CHARS and theirs_key.startswith(ours_key):
                 outcome = REPAIRED
             else:
@@ -398,9 +417,13 @@ def fill(library: bibtexparser.Library,
         if outcome in _CHANGED:
             entry.set_field(Field("abstract", theirs))
         else:
-            if outcome != DIFFERS and not _needs_one(ours):
-                continue  # nothing found, and nothing visibly missing: not worth a reader's time
-            if papers_utils.looks_truncated(ours):
+            kept = _without_appended_abstract(ours) if strip_appended else ours
+            if kept != ours:
+                entry.set_field(Field("abstract", kept))
+                outcome = f"{outcome}; {APPENDED_REMOVED}"
+            elif outcome == SAME or (outcome != DIFFERS and not _needs_one(ours)):
+                continue  # nothing changed, and nothing visibly missing: not worth a reader's time
+            if papers_utils.looks_truncated(kept):
                 outcome = f"{outcome}; {LOOKS_TRUNCATED}"
         audit.append(AuditRow(key=entry.key,
                               outcome=outcome,
@@ -523,7 +546,7 @@ def fetch_crossref(dois: Iterable[str],
 # --------------------------------------------------------------------------------
 # Command line
 
-_OUTCOME_ORDER = (FILLED, REPAIRED, DIFFERS, NO_DOI, NOT_IN_CROSSREF, NO_ABSTRACT_IN_CROSSREF)
+_OUTCOME_ORDER = (FILLED, REPAIRED, DIFFERS, SAME, NO_DOI, NOT_IN_CROSSREF, NO_ABSTRACT_IN_CROSSREF)
 
 
 def _report(total: int, audit: list[AuditRow]) -> None:
@@ -531,15 +554,20 @@ def _report(total: int, audit: list[AuditRow]) -> None:
     print(f"{total} records")
     counts: dict[str, int] = {}
     truncated: dict[str, int] = {}
+    removed = 0
     for row in audit:
         outcome = LOOKUP_FAILED if row.outcome.startswith(LOOKUP_FAILED) else row.outcome.split("; ")[0]
         counts[outcome] = counts.get(outcome, 0) + 1
         if row.outcome.endswith(LOOKS_TRUNCATED):
             truncated[outcome] = truncated.get(outcome, 0) + 1
+        if f"; {APPENDED_REMOVED}" in row.outcome:
+            removed += 1
     for outcome in (*_OUTCOME_ORDER, LOOKUP_FAILED):
         if counts.get(outcome):
             maybe_truncated = f" ({truncated[outcome]} of them {LOOKS_TRUNCATED})" if truncated.get(outcome) else ""
             print(f"  {counts[outcome]:>6}  {outcome}{maybe_truncated}")
+    if removed:
+        print(f"  {removed:>6}  of the abstracts kept: {APPENDED_REMOVED}")
 
 
 def main() -> None:  # pragma: no cover
@@ -561,6 +589,8 @@ def main() -> None:  # pragma: no cover
                         help="Write the filled bibliographies and their audits here, instead of beside each input file. Created if it does not exist.")
     parser.add_argument("--cache", dest="cache", default=None, type=str, metavar="FILE",
                         help="Keep Crossref's answers in this JSONL file, and ask only for DOIs it does not hold. Crossref asks its users to cache.")
+    parser.add_argument("--keep-appended", dest="keep_appended", action="store_true", default=False,
+                        help="Where a record keeps its own abstract, keep a second text appended to it — a plain language summary, a graphical abstract, an alternate abstract. By default it is removed, and the audit lists the record.")
     parser.add_argument("-n", "--dry-run", dest="dry_run", action="store_true", default=False,
                         help="Look up and report what would change, and write nothing.")
     parser.add_argument("--log", metavar="PATH", default=None,
@@ -590,7 +620,7 @@ def main() -> None:  # pragma: no cover
         dois = [doi for doi in (papers_utils.normalize_doi(bibtex.entry_field(entry, "doi"))
                                 for entry in library.entries) if doi]
         abstracts, failed = fetch_crossref(dois, maybe_cache_path=maybe_cache_path)
-        filled, audit = fill(library, abstracts, failed=failed)
+        filled, audit = fill(library, abstracts, failed=failed, strip_appended=not opts.keep_appended)
         print(f"\n{path}")
         _report(len(library.entries), audit)
 

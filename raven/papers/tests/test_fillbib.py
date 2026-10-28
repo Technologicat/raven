@@ -116,7 +116,7 @@ class TestComparable:
     @pytest.mark.parametrize("joined", [
         "Abstract part ...Plain language summaryOther part",       # glued on, as the exports have it
         "Abstract part ...Plain Language Summary Other part",
-        "Abstract part.]Alternate abstract:Otra parte",
+        "Abstract part.Alternate abstract:Otra parte",
         "Abstract part.” Graphical abstract: Other part",      # `”` ”
         "Abstract part\nPlain language summary\nOther part",       # at the start of a line
     ])
@@ -241,6 +241,40 @@ class TestFill:
     def test_a_whole_abstract_that_could_not_be_looked_up_is_not_listed(self):
         bib = library(record("nodoi", abstract=WHOLE), record("absent", doi="10.1234/absent", abstract=WHOLE))
         _, audit = fillbib.fill(bib, {})
+        assert audit == []
+
+    def test_a_second_text_is_removed_from_an_abstract_the_record_keeps(self):
+        ours = "A whole abstract of our own. Plain language summaryWhat we did, simply."
+        filled, audit = fillbib.fill(library(record("a", abstract=ours)), {})
+        assert abstract_of(filled, "a") == "A whole abstract of our own."
+        assert [(row.outcome, row.before) for row in audit] == [(f"{fillbib.NO_DOI}; {fillbib.APPENDED_REMOVED}", ours)]
+
+    def test_a_second_text_is_removed_where_the_abstract_equals_crossrefs(self):
+        ours = WHOLE + " Plain language summaryWhat we did, simply."
+        filled, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=ours)), {self.DOI: WHOLE})
+        assert abstract_of(filled, "a") == WHOLE
+        assert audit[0].outcome == f"{fillbib.SAME}; {fillbib.APPENDED_REMOVED}"
+
+    def test_a_teaser_keeps_its_ellipsis_when_its_second_text_goes(self):
+        other = "This study investigates something else entirely, with a different opening sentence."
+        ours = TEASER + "Plain language summaryWhat we did, simp ..."
+        filled, audit = fillbib.fill(library(record("a", doi=self.DOI, abstract=ours)), {self.DOI: other})
+        assert abstract_of(filled, "a") == TEASER
+        assert audit[0].outcome == f"{fillbib.DIFFERS}; {fillbib.APPENDED_REMOVED}; {fillbib.LOOKS_TRUNCATED}"
+
+    def test_a_second_text_that_is_all_there_is_stays(self):
+        ours = "Plain language summary: What we did, simply, in a few words of our own."
+        filled, audit = fillbib.fill(library(record("a", abstract=ours)), {})
+        assert abstract_of(filled, "a") == ours
+        assert audit == []
+
+    def test_keeping_second_texts_leaves_the_abstract_as_it_was(self):
+        ours = WHOLE + " Plain language summaryWhat we did, simply."
+        bib = library(record("a", doi=self.DOI, abstract=ours))
+        stripped, _ = fillbib.fill(bib, {self.DOI: WHOLE})
+        assert abstract_of(stripped, "a") != ours, "nothing was removed by default, so this cannot test keeping"
+        kept, audit = fillbib.fill(bib, {self.DOI: WHOLE}, strip_appended=False)
+        assert abstract_of(kept, "a") == ours
         assert audit == []
 
     def test_the_input_library_is_not_modified(self):
