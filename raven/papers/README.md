@@ -37,6 +37,7 @@ Thirteen command-line tools for the part of a literature review that happens bef
     - [Why it errs toward leaving duplicates](#why-it-errs-toward-leaving-duplicates)
 - [`raven-fillbib` — filling in abstracts from Crossref](#raven-fillbib--filling-in-abstracts-from-crossref)
     - [When an abstract is replaced](#when-an-abstract-is-replaced)
+    - [How the comparison works, exactly](#how-the-comparison-works-exactly)
     - [What it cannot fill](#what-it-cannot-fill)
     - [Copyright](#copyright)
     - [What comes out](#what-comes-out)
@@ -335,6 +336,39 @@ Run it after `raven-deduplicate` and before `raven-siftbib`, so that what the si
 That one rule does two jobs. It finds the truncated abstracts without guessing what a cut-off one looks like, and it checks that what replaces each one is the same text continued. Where Crossref's abstract is a different text — an earlier version, a rewritten opening — the record keeps its own, and the audit lists it for you to look at.
 
 A record with no abstract at all takes Crossref's.
+
+### How the comparison works, exactly
+
+No language model is involved; every decision is a fixed rule.
+
+**Both abstracts are first reduced to a comparable form**, by these steps in order:
+
+1. Cut at the heading of a second text appended to the abstract, if there is one (see below).
+2. Remove a trailing ellipsis, `...` or `…`, and the whitespace around it.
+3. Normalize the Unicode (NFKC), and turn LaTeX and HTML markup into plain characters: accents, ligatures, super- and subscripts.
+4. Remove any remaining HTML or XML tags.
+5. Remove a leading `Abstract:` or `Summary:` label, and a publisher's rights notice at the end. A notice is looked for only in the last 600 characters: a `©` or `(c) 2025` anywhere there, and phrases such as `All rights reserved` only where they open a sentence, so that an abstract *about* copyright keeps its words.
+6. Casefold, and keep only the letters and digits, in any script: no spaces, no punctuation.
+
+So punctuation, spacing, markup, labels and copyright lines cannot make two copies of one text look different. A difference in the wording, even one word, does.
+
+**Then the record falls into one of four cases:**
+
+- Ours is empty: filled with Crossref's.
+- The two are equal: nothing changes.
+- Ours is the beginning of Crossref's, and at least 40 letters and digits long: replaced with Crossref's. The minimum stops a fragment such as `[No abstract available]`, or a lone heading, from counting as the start of a real abstract.
+- Anything else: ours is kept, and listed in the audit as `kept ours: Crossref's is a different text`.
+
+There is no separate test for "looks cut off". A truncated abstract is found by being the beginning of the whole one. The audit does mark a kept abstract ending in an ellipsis as `ours looks truncated`, since that ellipsis is at the far end of a long cell, but the mark decides nothing. Length decides nothing either, since some abstracts are simply short.
+
+**A second text appended to the abstract** is a thing some database exports do: the field holds the abstract, then a heading, then the start of a second text, each part cut short. The headings recognized are *Plain language summary*, *Graphical abstract* and *Alternate abstract*, in any capitalization. The same words occur in prose about plain language summaries, so a heading counts only where a heading can stand:
+
+- **before it**, the start of the text, the start of a line, or the end of a sentence (`.`, `...`, `…`, `!` or `?`, and any closing brackets or quotes after it);
+- **after it**, a colon, a line break, the end of the text, or a capital letter — glued on, as the exports have it (`...Plain language summaryThis study explores…`), or after a space.
+
+Everything from the heading on is left out of the comparison only. A record that keeps its own abstract keeps its second text too. Crossref's copy is handled from its structure instead: a section titled *Plain language summary* is left out when the abstract is rendered, so a filled or completed abstract never carries one.
+
+**Two consequences worth knowing.** Crossref keeps a structured abstract's section headings (*Background*, *Methods*, …), so a copy of ours that dropped them is no prefix of Crossref's, and is kept and listed rather than replaced. And the audit's `% of ours in Crossref's` column — the share of our words found in Crossref's text, in the same order — is there for the person reading the audit, to sort the near-misses from the different texts. It decides nothing.
 
 **The new abstract is written in LaTeX**, BibTeX's own markup: italics, bold, and super- and subscripts, including those inside formulas, so that H₂ and x² survive. A structured abstract keeps its section headings, in bold, with each section a paragraph of its own. A plain language summary, which some publishers deposit beside the abstract, is left out.
 
