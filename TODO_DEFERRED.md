@@ -27,6 +27,40 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Retry a dropped connection in the Raven-server client
+
+*Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep` (`reconnect_attempts`), `raven.papers.httpfetch`*
+
+`raven.client.api` makes its requests directly — 36 `requests.get`/`requests.post` call sites, no shared
+helper — and none retries. So a short network drop between a client and Raven-server fails whatever was
+asking: in `raven-importer` (and the Visualizer's import window) the embeddings or NLP stage, which fails
+the whole import; in `raven-indexer`, the run. Only the heartbeat retries, and it only reports.
+
+Route the calls through one helper that retries a connection error a few times, seconds apart, as the
+sweep now does for the LLM backend (2026-10-28) and `httpfetch` does for arXiv and Crossref. Two things to
+settle while doing it: the streaming endpoints (avatar video, TTS audio), where a retry mid-stream is a
+different thing from a retry before it; and which errors count — a refused connection and a timeout, not
+an HTTP error status the server sent on purpose.
+
+Found while surveying the CLI tools for the sweep's retry (2026-10-28).
+
+## `raven-deduplicate --judge` onto the shared sweep
+
+*Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep`*
+
+`judge_pairs` and `judge_doi_fit` (`raven.papers.deduplicate`) run their own batch loop over the LLM: a
+failed batch is logged and skipped, and its pairs are asked again on the next run, from a JSONL state file.
+What they lack is what `raven-scopebib` and `raven-pdf2bib` get from `raven.librarian.sweep`: a probe after
+each batch that stops the run when the backend has gone (here every remaining batch fails in turn), the wait
+that rides out a short drop, a stop when the model changes under the run, and ledgers named for the
+instrument, so answers from another model or prompt are not mixed in.
+
+Moving them onto `Sweep` gets all of it. The cost is the state file: it becomes a ledger, and state files
+written so far either carry over (`sweep.Ledger` seeded under the instrument that made them, as scopebib's
+converted ledgers were) or are asked again.
+
+Found while surveying the CLI tools for the sweep's retry (2026-10-28).
+
 ## Preparing a `raven-scopebib` definition file, as a manual section
 
 *Cluster: scopebib · Cost: ? · Gate: more studies to generalize from · Filed: 2026-10-28*
