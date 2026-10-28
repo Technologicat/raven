@@ -340,6 +340,8 @@ Beside each tool's own options, several are spelled the same way everywhere. Not
 
 Beside the desktop apps, Raven installs a set of headless tools. They exist so that the parts of a workflow that do not need a window do not open one — a document collection can be indexed over SSH, and a bibliography can be assembled in a shell pipeline.
 
+**Each of them can as well be run by an LLM agent, asked in plain words**, and their manuals are written for an agent to read as much as for you: point yours at the manual of the tool in question.
+
 ### Document database
 
 - **`raven-indexer`** builds or refreshes *Librarian*'s RAG index over a documents directory, then exits. Useful when you have just dropped several hundred files into the folder and would rather not watch the GUI chew through them, and necessary on a headless machine. `-d/--db-dir` writes the index somewhere other than the configured location, so several collections can be kept side by side. See [the Librarian README](raven/librarian/README.md#indexing-from-the-command-line-raven-indexer) for the options.

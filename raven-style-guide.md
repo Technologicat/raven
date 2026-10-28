@@ -413,6 +413,24 @@ fails the run. `python scripts/check_option_lists.py` asks whether the card offe
 documents. Neither can read the app's key handler, so do that too: a card may legitimately omit keys — the
 `Ctrl+Shift+` M/R/T/L debug keys are deliberately off every card, and live in the READMEs.
 
+### A command-line tool's manual has two readers
+
+A person, and an LLM agent running the tool on that person's behalf. The second is not hypothetical: by
+2026-10-28 Juha was asking an agent to run Raven's CLI tools, in plain words, more often than running them
+by hand. The manuals say so to their readers (`README.md` → *Command-line tools*, and the papers manual's
+opening), so they have to hold up to it.
+
+**Write so that the agent can act on the page literally**, because it will. For each tool, say:
+
+- **What it changes in place, and what it writes beside its input** — and under which names.
+- **What leaves the machine**, and to where: a DOI list sent to Crossref is a statement of what the review
+  is about. `raven-scopebib --fill` is the model.
+- **What to check afterwards**, and what a failure looks like when it is not an error message: an audit to
+  read, a count that should add up, a file that should exist.
+
+A person reading for the gist skims these and loses nothing. An agent that is not told them has to infer
+them, from the code or from guesses, and its report back reads the same either way.
+
 ## Docstrings
 
 reStructuredText format. Extensive for public API, pragmatic for internals:

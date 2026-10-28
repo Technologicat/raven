@@ -10,6 +10,8 @@ Thirteen command-line tools for the part of a literature review that happens bef
 
 **This manual documents the rules the tools apply** — what counts as the same paper, when a record is dropped, what a merge keeps. For the pipeline itself, in the order you would run it, see [*Command-line tools*](../../README.md#command-line-tools) in the main README.
 
+**It is written for an LLM agent as much as for you.** A tool here can just as well be run by asking an agent to do it — *"deduplicate this export, fill in the abstracts, and screen it against this topic"* — and an agent reads this manual to find out how. Point yours at this file.
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Contents**
 
