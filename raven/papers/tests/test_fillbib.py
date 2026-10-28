@@ -390,6 +390,14 @@ class TestFetchCrossref:
         assert crossref.requests == []
         assert first == second == ({"10.1000/a": "A."}, {})
 
+    def test_the_cache_directory_is_created_if_missing(self, tmp_path):
+        # A first `raven-scopebib run --fill` into a fresh output directory, whose ledger directory does not
+        # exist yet when the cache is opened.
+        cache = tmp_path / "fresh" / "ledgers" / "crossref.jsonl"
+        fillbib.fetch_crossref(["10.1000/a"], maybe_cache_path=cache, delay=0,
+                               get=FakeCrossref({"10.1000/a": "<jats:p>A.</jats:p>"}))
+        assert json.loads(cache.read_text())["abstract"] == "<jats:p>A.</jats:p>"
+
     def test_the_cache_keeps_the_raw_answer(self, tmp_path):
         cache = tmp_path / "crossref.jsonl"
         fillbib.fetch_crossref(["10.1000/a"], maybe_cache_path=cache, delay=0,

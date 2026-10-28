@@ -550,6 +550,7 @@ def fetch_crossref(dois: Iterable[str],
     `maybe_cache_path`: a JSONL file of Crossref's answers. DOIs answered there are not asked again, and
     new answers are appended — so a rerun asks Crossref nothing it has answered, which Crossref asks of
     its users. The raw answer is what is stored, so a change in rendering does not need a new lookup.
+    The file is created if missing, and so is its directory.
 
     `batch_size` and `delay` default to `raven.papers.config`'s `crossref_doi_batch_size` and
     `crossref_request_delay`. `get` defaults to `raven.papers.httpfetch.polite_get`, and is there for tests.
@@ -569,6 +570,8 @@ def fetch_crossref(dois: Iterable[str],
     batches += [plain[i:i + batch_size] for i in range(0, len(plain), batch_size)]
 
     failed = {}
+    if maybe_cache_path:
+        maybe_cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_file = maybe_cache_path.open("a", encoding="utf-8") if maybe_cache_path else None
     try:
         for index, batch in enumerate(batches):
