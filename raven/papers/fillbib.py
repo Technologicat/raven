@@ -39,7 +39,9 @@ __all__ = ["render_jats", "comparable",
 
            "FILLED", "REPAIRED", "DIFFERS", "SAME", "NO_DOI", "NOT_IN_CROSSREF", "NO_ABSTRACT_IN_CROSSREF",
            "LOOKUP_FAILED", "LOOKS_TRUNCATED", "APPENDED_REMOVED",
-           "AuditRow", "AUDIT_COLUMNS", "words_shared", "fill", "audit_rows", "write_audit",
+           "NOW_PRESENT", "NOW_TRUNCATED", "NOW_NONE",
+           "AuditRow", "SHARED_COLUMN", "AUDIT_COLUMNS", "words_shared", "fill", "audit_rows", "summary",
+           "write_audit",
 
            "fetch_crossref",
 
@@ -306,6 +308,18 @@ APPENDED_REMOVED = "second text removed"
 
 _CHANGED = (FILLED, REPAIRED)
 
+# What a record's abstract is like after the fill, as the audit's "abstract now" column says. "present"
+# rather than "whole": a publisher that truncates without an ellipsis cannot be seen.
+NOW_PRESENT = "present"
+NOW_TRUNCATED = 'ends in "..."'
+NOW_NONE = "none"
+
+
+def _now(abstract: str) -> str:
+    if not abstract.strip():
+        return NOW_NONE
+    return NOW_TRUNCATED if papers_utils.looks_truncated(abstract) else NOW_PRESENT
+
 
 @dataclasses.dataclass(frozen=True)
 class AuditRow:
@@ -314,10 +328,12 @@ class AuditRow:
     `before` is the record's abstract as it was and `crossref` the one Crossref has, both in readable form;
     the record now carries `crossref` where the outcome is a fill or a repair, and `before` otherwise.
     `maybe_shared` is `words_shared` of the two, or `None` where there are not two to compare. `link` is where
-    to read the paper (see `raven.papers.utils.paper_url`).
+    to read the paper (see `raven.papers.utils.paper_url`). `abstract_now` is what the record's abstract is
+    like after the fill: `NOW_PRESENT`, `NOW_TRUNCATED` or `NOW_NONE`.
     """
     key: str
     outcome: str
+    abstract_now: str
     title: str
     venue: str
     link: str = ""
@@ -326,7 +342,9 @@ class AuditRow:
     crossref: str = ""
 
 
-AUDIT_COLUMNS = ("key", "outcome", "% of ours in Crossref's", "title", "venue", "link",
+SHARED_COLUMN = "% of ours in Crossref's"
+
+AUDIT_COLUMNS = ("key", "outcome", "abstract now", SHARED_COLUMN, "title", "venue", "link",
                  "abstract before", "Crossref's abstract")
 
 
@@ -416,6 +434,7 @@ def fill(library: bibtexparser.Library,
 
         if outcome in _CHANGED:
             entry.set_field(Field("abstract", theirs))
+            kept = theirs
         else:
             kept = _without_appended_abstract(ours) if strip_appended else ours
             if kept != ours:
@@ -427,6 +446,7 @@ def fill(library: bibtexparser.Library,
                 outcome = f"{outcome}; {LOOKS_TRUNCATED}"
         audit.append(AuditRow(key=entry.key,
                               outcome=outcome,
+                              abstract_now=_now(kept),
                               title=bibtex.readable_text(bibtex.entry_field(entry, "title")),
                               venue=bibtex.entry_venue(entry),
                               link=papers_utils.paper_url(bibtex.entry_field(entry, "doi"),
@@ -439,10 +459,54 @@ def fill(library: bibtexparser.Library,
 
 def audit_rows(audit: list[AuditRow]) -> list[tuple]:
     """`audit` as table rows, in the order of `AUDIT_COLUMNS`."""
-    return [(row.key, row.outcome,
+    return [(row.key, row.outcome, row.abstract_now,
              "" if row.maybe_shared is None else round(100 * row.maybe_shared),
              row.title, row.venue, row.link, row.before, row.crossref)
             for row in audit]
+
+
+# Why a record has no abstract after the fill, in the order the summary lists them.
+_NONE_BECAUSE = ((NO_ABSTRACT_IN_CROSSREF, "Crossref has none"), (NO_DOI, "no DOI"),
+                 (NOT_IN_CROSSREF, "DOI not found in Crossref"), (LOOKUP_FAILED, "lookup failed"))
+
+
+def summary(filled: bibtexparser.Library, audit: list[AuditRow]) -> str:
+    """What a fill did, as `raven-fillbib` prints it: what was changed, and then what the abstracts are like
+    after the fill, a part that adds up to the number of records.
+
+    `filled` and `audit` are what `fill` returned.
+    """
+    # Labels are phrased so that no verb agrees with the count beside it: "1 have an abstract" is wrong and
+    # "1 with an abstract" is not.
+    def outcome_of(row: AuditRow) -> str:  # the outcome without its suffixes
+        return LOOKUP_FAILED if row.outcome.startswith(LOOKUP_FAILED) else row.outcome.split("; ")[0]
+
+    abstracts = [bibtex.entry_field(entry, "abstract") for entry in filled.entries]
+    with_one = [abstract for abstract in abstracts if abstract.strip()]
+    outcomes = [outcome_of(row) for row in audit]
+    # Every record left with no abstract is in the audit, since it visibly lacks one.
+    none_because = [outcome_of(row) for row in audit if row.abstract_now == NOW_NONE]
+
+    def line(count: int, label: str, *, depth: int = 0) -> str:
+        return f"  {count:>6}  {'  ' * depth}{label}"
+
+    changed = [(outcomes.count(FILLED), "filled: had no abstract"),
+               (outcomes.count(REPAIRED), "completed: ours was the start of Crossref's"),
+               (sum(1 for row in audit if f"; {APPENDED_REMOVED}" in row.outcome),
+                "second text removed from an abstract we kept")]
+    lines = [f"{len(abstracts)} records", "changed:"]
+    lines += [line(count, label) for count, label in changed if count] or ["  nothing"]
+    lines += ["after the fill:", line(len(with_one), "with an abstract")]
+    truncated = sum(1 for abstract in with_one if papers_utils.looks_truncated(abstract))
+    if truncated:
+        lines.append(line(truncated, 'of them ending in "..."', depth=1))
+    if differs := outcomes.count(DIFFERS):
+        lines.append(line(differs, "of them differing from Crossref's text: worth a look, sorting the audit by "
+                                   f"{SHARED_COLUMN!r}", depth=1))
+    lines.append(line(len(abstracts) - len(with_one), "with no abstract"))
+    lines += [line(count, label, depth=1) for outcome, label in _NONE_BECAUSE
+              if (count := none_because.count(outcome))]
+    return "\n".join(lines)
 
 
 def write_audit(path: pathlib.Path, audit: list[AuditRow], sources: list[str]) -> None:
@@ -546,30 +610,6 @@ def fetch_crossref(dois: Iterable[str],
 # --------------------------------------------------------------------------------
 # Command line
 
-_OUTCOME_ORDER = (FILLED, REPAIRED, DIFFERS, SAME, NO_DOI, NOT_IN_CROSSREF, NO_ABSTRACT_IN_CROSSREF)
-
-
-def _report(total: int, audit: list[AuditRow]) -> None:
-    """Print what the run did, one line per outcome."""
-    print(f"{total} records")
-    counts: dict[str, int] = {}
-    truncated: dict[str, int] = {}
-    removed = 0
-    for row in audit:
-        outcome = LOOKUP_FAILED if row.outcome.startswith(LOOKUP_FAILED) else row.outcome.split("; ")[0]
-        counts[outcome] = counts.get(outcome, 0) + 1
-        if row.outcome.endswith(LOOKS_TRUNCATED):
-            truncated[outcome] = truncated.get(outcome, 0) + 1
-        if f"; {APPENDED_REMOVED}" in row.outcome:
-            removed += 1
-    for outcome in (*_OUTCOME_ORDER, LOOKUP_FAILED):
-        if counts.get(outcome):
-            maybe_truncated = f" ({truncated[outcome]} of them {LOOKS_TRUNCATED})" if truncated.get(outcome) else ""
-            print(f"  {counts[outcome]:>6}  {outcome}{maybe_truncated}")
-    if removed:
-        print(f"  {removed:>6}  of the abstracts kept: {APPENDED_REMOVED}")
-
-
 def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="Fill missing and truncated abstracts in a BibTeX file from "
                                                  "Crossref, by DOI, and write an audit of what changed and "
@@ -631,7 +671,7 @@ def main() -> None:  # pragma: no cover
         abstracts, failed = fetch_crossref(dois, maybe_cache_path=maybe_cache_path)
         filled, audit = fill(library, abstracts, failed=failed, strip_appended=not opts.keep_appended)
         print(f"\n{path}")
-        _report(len(library.entries), audit)
+        print(summary(filled, audit))
 
         if opts.dry_run:
             continue

@@ -73,12 +73,15 @@ class Corpus:
     `maybe_sift`: what the sift removed, or `None` where none ran.
     `measures`: each title's measure, by key (`raven.papers.scopebib.records.title_measures`).
     `maybe_fill`: the fill's audit (`raven.papers.fillbib.fill`), or `None` where none ran.
+    `maybe_fill_summary`: the fill's summary of what it did, over the whole corpus before the sift
+                          (`raven.papers.fillbib.summary`), or `None` where none ran.
     """
     library: object
     records: list[scope_records.Record]
     maybe_sift: scope_report.SiftResult | None
     measures: dict[str, scope_records.TitleMeasure]
     maybe_fill: list[fillbib.AuditRow] | None = None
+    maybe_fill_summary: str | None = None
 
 
 def load_corpus(bib_path: str | pathlib.Path, *,
@@ -109,7 +112,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
                 file does not change it.
     """
     library = bibtex.parse_file(pathlib.Path(bib_path), split_names=False)
-    maybe_fill = None
+    maybe_fill = maybe_fill_summary = None
     if fill:
         dois = [doi for doi in (papers_utils.normalize_doi(bibtex.entry_field(entry, "doi"))
                                 for entry in library.entries) if doi]
@@ -121,6 +124,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
                                 f"{'DOI' if len(failed) == 1 else 'DOIs'} ({shown}); run again when it answers. "  # plural
                                 f"First failure: {next(iter(failed.values()))}")
         library, maybe_fill = fillbib.fill(library, abstracts, strip_appended=strip_appended)
+        maybe_fill_summary = fillbib.summary(library, maybe_fill)
     maybe_sift = None
     criteria = [siftbib.require_field(field) for field in require] + [siftbib.parse_min_chars(spec)
                                                                       for spec in min_chars]
@@ -132,7 +136,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
         library = scope_report.select(library, set(random.Random(seed).sample(keys, min(maybe_sample, len(keys)))))
     records = scope_records.records_of(library)
     return Corpus(library, records, maybe_sift, scope_records.title_measures(records, nlp, stopwords=stopwords),
-                  maybe_fill)
+                  maybe_fill, maybe_fill_summary)
 
 
 def materials(definition: scope_definition.Definition, *, replicate: int = 1) -> dict[str, str]:

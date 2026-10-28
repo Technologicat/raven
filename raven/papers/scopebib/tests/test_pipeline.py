@@ -335,6 +335,7 @@ class TestLoadingTheCorpus:
                                       maybe_crossref_cache=tmp_path / "crossref.jsonl")
         assert {record.key: record.abstract for record in corpus.records}["bare"] == "Ravens are explained at last."
         assert [(row.key, row.outcome) for row in corpus.maybe_fill] == [("bare", fillbib.FILLED)]
+        assert corpus.maybe_fill_summary.startswith("2 records\n"), "the summary covers the corpus before the sift"
         assert corpus.maybe_sift.dropped == [], "filled first, the bare record has an abstract when the sift asks"
         assert asked == [(["10.1234/bare", "10.1234/whole"], tmp_path / "crossref.jsonl")]
 

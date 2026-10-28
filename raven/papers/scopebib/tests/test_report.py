@@ -152,12 +152,14 @@ class TestFiles:
         assert removed[0]["key"] == "bare" and removed[0]["removed by"] == "sift"
 
     def test_the_fill_has_an_audit_of_its_own(self, run, definition, tmp_path):
-        fill = [fillbib.AuditRow(key="teaser", outcome=fillbib.REPAIRED, title="Teaser", venue="", maybe_shared=1.0,
+        fill = [fillbib.AuditRow(key="teaser", outcome=fillbib.REPAIRED, abstract_now=fillbib.NOW_PRESENT,
+                                 title="Teaser", venue="", maybe_shared=1.0,
                                  before="It begins ...", crossref="It begins, and goes on.")]
         written = {path.name for path in write(run, definition, tmp_path / "out", maybe_fill=fill)}
         assert f"{report.FILL_AUDIT}.tsv" in written
         rows = tabular.read_table(tmp_path / "out" / f"{report.FILL_AUDIT}.tsv")
-        assert [(row["key"], row["outcome"]) for row in rows] == [("teaser", fillbib.REPAIRED)]
+        assert [(row["key"], row["outcome"], row["abstract now"]) for row in rows] == [
+            ("teaser", fillbib.REPAIRED, fillbib.NOW_PRESENT)]
 
     def test_no_fill_no_fill_audit(self, run, definition, tmp_path):
         assert f"{report.FILL_AUDIT}.tsv" not in {path.name for path in write(run, definition, tmp_path / "out")}

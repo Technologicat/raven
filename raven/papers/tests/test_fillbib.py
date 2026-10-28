@@ -277,6 +277,12 @@ class TestFill:
         assert abstract_of(kept, "a") == ours
         assert audit == []
 
+    def test_the_audit_says_what_each_abstract_is_like_now(self):
+        bib = library(record("filled", doi=self.DOI), record("teaser", abstract=TEASER), record("none"))
+        _, audit = fillbib.fill(bib, {self.DOI: WHOLE})
+        assert {row.key: row.abstract_now for row in audit} == {
+            "filled": fillbib.NOW_PRESENT, "teaser": fillbib.NOW_TRUNCATED, "none": fillbib.NOW_NONE}
+
     def test_the_input_library_is_not_modified(self):
         bib = library(record("a", doi=self.DOI))
         fillbib.fill(bib, {self.DOI: WHOLE})
@@ -286,6 +292,42 @@ class TestFill:
         theirs = "\\textbf{Background}\n\nFirst, 50\\% of it.\n\n\\textbf{Aim}\n\nSecond."
         filled, _ = fillbib.fill(library(record("a", doi=self.DOI)), {self.DOI: theirs})
         assert abstract_of(bibtex.parse_string(bibtex.write_string(filled)), "a") == theirs
+
+
+class TestSummary:
+    def test_the_state_after_the_fill_adds_up_and_says_why_an_abstract_is_missing(self):
+        other = "This study investigates something else entirely, with a different opening sentence."
+        bib = library(record("filled", doi="10.1234/filled"),
+                      record("repaired", doi="10.1234/repaired", abstract=TEASER),
+                      record("stripped", abstract=WHOLE + " Plain language summaryWhat we did."),
+                      record("differs", doi="10.1234/differs", abstract=WHOLE),
+                      record("teaser", doi="10.1234/teaser", abstract=TEASER),
+                      record("whole", abstract=WHOLE),
+                      record("none", doi="10.1234/none"),
+                      record("nodoi"),
+                      record("broken", doi="10.1234/broken"))
+        filled, audit = fillbib.fill(bib, {"10.1234/filled": WHOLE, "10.1234/repaired": WHOLE, "10.1234/differs": other,
+                                           "10.1234/teaser": None, "10.1234/none": None},
+                                     failed={"10.1234/broken": "ConnectionError: x"})
+        assert fillbib.summary(filled, audit).splitlines() == [
+            "9 records",
+            "changed:",
+            "       1  filled: had no abstract",
+            "       1  completed: ours was the start of Crossref's",
+            "       1  second text removed from an abstract we kept",
+            "after the fill:",
+            "       6  with an abstract",
+            '       1    of them ending in "..."',
+            "       1    of them differing from Crossref's text: worth a look, sorting the audit by "
+            f"{fillbib.SHARED_COLUMN!r}",
+            "       3  with no abstract",
+            "       1    Crossref has none",
+            "       1    no DOI",
+            "       1    lookup failed"]
+
+    def test_a_fill_that_changed_nothing_says_so(self):
+        filled, audit = fillbib.fill(library(record("whole", abstract=WHOLE)), {})
+        assert fillbib.summary(filled, audit).splitlines()[1:3] == ["changed:", "  nothing"]
 
 
 class FakeResponse:
@@ -363,7 +405,7 @@ class TestFetchCrossref:
 
 def test_write_audit_names_the_tool_and_the_copyright(tmp_path):
     path = tmp_path / "audit.tsv"
-    fillbib.write_audit(path, [fillbib.AuditRow(key="a", outcome=fillbib.NO_DOI, title="T", venue="V")],
+    fillbib.write_audit(path, [fillbib.AuditRow(key="a", outcome=fillbib.NO_DOI, abstract_now=fillbib.NOW_NONE, title="T", venue="V")],
                         ["in.bib"])
     text = path.read_text(encoding="utf-8")
     assert "raven-fillbib" in text and "copyright" in text

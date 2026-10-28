@@ -262,7 +262,6 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                takes it.
     `sheet`, `require_every_decision`: for `finish`.
     """
-    from .. import fillbib
     from . import definition as scope_definition
     from . import models as scope_models
     from . import pipeline, report, runfile
@@ -274,12 +273,8 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                   strip_appended=not settings.maybe_keep_appended,
                                   maybe_crossref_cache=plan.ledger_dir / CROSSREF_CACHE,
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample, seed=settings.maybe_seed)
-    if corpus.maybe_fill is not None:
-        changed = sum(1 for row in corpus.maybe_fill if row.outcome in (fillbib.FILLED, fillbib.REPAIRED))
-        print(f"abstracts filled or completed from Crossref: {changed}")
-        removed = sum(1 for row in corpus.maybe_fill if f"; {fillbib.APPENDED_REMOVED}" in row.outcome)
-        if removed:
-            print(f"abstracts with a second text removed: {removed}")
+    if corpus.maybe_fill_summary is not None:
+        print(f"the fill, from Crossref:\n{corpus.maybe_fill_summary}")
     print(f"{len(corpus.records)} records"
           + (f", after the sift removed {len(corpus.maybe_sift.dropped)}" if corpus.maybe_sift else ""))
     run_path = plan.reports_dir / "run.toml"

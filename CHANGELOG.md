@@ -64,7 +64,8 @@
   - A second text that a database export appended to an abstract the record keeps — a plain language summary, a graphical abstract, an alternate abstract — is removed, so what comes out is the abstract alone. The audit lists each such record. `--keep-appended` leaves them in.
   - The audit names every record it changed and every one it could not help, with the reason — `no DOI, cannot retrieve` among them.
   - Crossref's answers are kept beside the output, in `<name>.crossref.jsonl`, so a rerun asks only about DOIs it has not seen. `--cache FILE` puts them elsewhere, and `--no-cache` keeps none.
-  - Beside each record's abstract the audit shows Crossref's, and how much of the record's text is in it, so the differences that matter sort to the top.
+  - Beside each record's abstract the audit shows Crossref's, and how much of the record's text is in it, so the differences that matter sort to the top. A column says what each abstract is like now: present, ending in `...`, or none.
+  - The printed summary says what was changed, and then what the abstracts are like after the fill, adding up to the number of records — including how many still have none, and why.
   - The abstracts remain their publisher's or authors' copyright: the filled file is for your own screening, not for publishing.
 
 #### Raven-siftbib
