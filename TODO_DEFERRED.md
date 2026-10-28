@@ -44,6 +44,11 @@ Two studies so far, which reached a definition from different starting points:
   reason. The reasons grouped into four exclusions, which became the tests. That does not scale much past
   150 records.
 
+**In both, the researchers did not write the file.** They handed over their observations, and an LLM
+agent (Claude, in a Claude Code session) extracted what they implied and wrote the definition from them,
+which the researchers then reviewed. So the section may be less about writing a definition by hand than
+about what observations to collect, and in what form, for one to be drafted from them.
+
 Things learned along the way that the section would draw on: `run --pilot` exists to calibrate a definition
 on a sample before the whole corpus; what belongs goes in `scope_notes`, where the reviewer reads it, and
 how to read evidence in `hints`; and on the health education study, the first full run's check-by-hand
