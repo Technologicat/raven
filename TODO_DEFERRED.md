@@ -132,8 +132,9 @@ shows *"[offtopic?]"* beside the cluster's label.
 
 **And report the number itself, per cluster, not only the flag** (maintainer, 2026-10-28). On the health
 education corpus the 2D map showed one cluster as by far the most scattered, which read as "no real theme";
-in the embedding space it was the most coherent of them all — its cohesion highest against its nearest
-neighbouring cluster, and four in five of each member's nearest neighbours inside it — and what bound it was
+in the embedding space it was the most distinct of them all — the widest margin between its cohesion and
+that of its nearest neighbouring cluster, the highest silhouette, and four in five of each member's nearest
+neighbours inside it, though not the highest cohesion outright — and what bound it was
 the umbrella topic with the subject missing. The map cannot show this: the projection does not keep cluster
 sizes or densities. So the import summary, and the info panel's cluster header, should give each cluster's
 cohesion beside the corpus's own (its mean pairwise cosine), with the margin to the nearest other cluster
