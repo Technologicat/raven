@@ -49,6 +49,10 @@ agent (Claude, in a Claude Code session) extracted what they implied and wrote t
 which the researchers then reviewed. So the section may be less about writing a definition by hand than
 about what observations to collect, and in what form, for one to be drafted from them.
 
+**And the drafting step could be a tool feature**: something like `raven-scopebib draft`, taking the
+researchers' notes and writing a definition for them to review. The section and the feature would answer
+the same question, so they want deciding together.
+
 Things learned along the way that the section would draw on: `run --pilot` exists to calibrate a definition
 on a sample before the whole corpus; what belongs goes in `scope_notes`, where the reviewer reads it, and
 how to read evidence in `hints`; and on the health education study, the first full run's check-by-hand
