@@ -406,6 +406,26 @@ What the notes show, beyond the counts:
   it evidence. Not every `clear` carries a joke: the directness ones carry an edge instead (the thank-you
   replies, the wrong-premise correction), so landing could at most bear on `deadpan_absurd` and
   `technical_wit`.
+  - **Decided 2026-10-28: no.** `clear` stays a judgement of shape; `funny` is reported beside it and does not
+    affect the grade, so a reader can filter on both. The next blind sample shows whether the gap matters.
+
+### Rubric v6, on a second prompt set (2026-10-28)
+
+**Rubric v6** keeps v5's rule that an invited correction is not directness by itself, and adds what can carry
+it: an understated remark that lets the user see why the premise could not have been true, with the GIL
+reply from the third sample as the example. Landing stays out of the grade (above). **A quote not found in
+its reply is asked about once more**, naming the form (`judge_register.rate`), before the answer is kept.
+
+**A second prompt set** (`probe_register.py --prompts 2026-10-28`, ledger `register-prompts2-*`): the same
+kinds of elicitor with new content, so that nothing the maintainer has rated recurs; no replays, no other
+stored remark with the same vibe being at hand; and one new kind, an everyday problem a technical tool
+genuinely solves, for `technical_wit`, which no prompt of the first set invited. Run on the model step 1 used,
+`qwen3.8-27b` (Q4_K_XL), with step 1's sample counts: 10 per elicitor, 5 per neutral prompt, 225 replies.
+
+```bash
+python investigations/aria-register/probe_register.py --prompts 2026-10-28 --samples 10 --neutral-samples 5
+python investigations/aria-register/judge_register.py investigations/aria-register/register-prompts2-<fp>.jsonl
+```
 
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 

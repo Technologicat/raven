@@ -30,6 +30,9 @@ marked. `--blind-check SAMPLE` then judges only that sample's replies and prints
 ratings, which is the cheap test of a rubric before it is run over everything. The rubric's examples are
 therefore all from outside the sample it is checked on.
 
+A quote not found in its reply word for word is asked about once more, naming the form, and the second
+answer is kept (`quote_retried`), still flagged in `quotes_missing` if it misses again.
+
 The run is a `raven.librarian.sweep` over the probe's ledger, so it resumes; the fingerprint covers the
 rubric, the sampler and the probe ledger it reads. A blind check and a full run under one rubric share a
 ledger, so the full run asks only what the check did not.
@@ -66,9 +69,12 @@ left for the reader to notice. It may question the premise of the exchange itsel
 fourth wall, or let it show between the lines that the user is being unreasonable or silly. Example: \
 after a run of test messages, "Did you have any real work for me, or shall we keep testing?" Saying the \
 edge outright, bluntly, overshoots it. So does commenting on the user's motives or calling the exchange \
-a test of the assistant: that is commentary, not wit. A correction the user's message invited is NOT \
-directness - if the user states something false and the reply says so, that is just the answer. Being \
-concise or skipping pleasantries is not enough either.
+a test of the assistant: that is commentary, not wit. A correction the user's message invited is not \
+directness by itself - if the user states something false and the reply says so, that is just the answer. \
+What can carry it is how the correction is made: an understated remark that lets the user see why the \
+premise could not have been true. Example: told that the GIL was removed in Python 3.12, "No. The GIL was \
+not removed in 3.12. That would have been a headline feature if it had been." The first sentence is the \
+answer; the second is the edge. Being concise or skipping pleasantries is not enough either.
 
 "deadpan_absurd": the reply commits to an absurd premise, answer or framing and plays it entirely straight, \
 as though it were perfectly normal, without winking. Treating a made-up or silly thing with full \
@@ -129,6 +135,15 @@ The assistant's reply:
 >>>
 """
 
+# Said once more to the judge when a quote it gave is not in the reply word for word, before its answer is
+# kept: a paraphrased quote points at no passage anyone can check. Part of the instrument, so in the
+# fingerprint.
+QUOTE_RETRY = """
+
+Your earlier answer to this quoted, for {names}, a passage that is not in the reply word for word. Answer \
+again, the same way: copy each quote exactly from the reply, or leave it "" if no single passage stands for \
+the form."""
+
 FEATURES = ("directness", "deadpan_absurd", "technical_wit")
 GRADES = ("clear", "borderline", "none")
 FUNNY = ("very", "somewhat", "not", "no_attempt")
@@ -184,6 +199,33 @@ def normalize(answer: dict, reply: str) -> dict:
     out["funny"] = funny if funny in FUNNY else None
     out["voice"] = out["grade"] == "clear"
     return out
+
+
+def rate(settings: env, user: str, reply: str,
+         maybe_abort: netutil.Abort | None = None) -> tuple[dict | None, list[agent.TurnRecord]]:
+    """Ask the judge about one reply: the rating, or `None` where its answer did not parse, and every turn.
+
+    A quote not found in the reply is asked about once more, naming the form (`QUOTE_RETRY`); the second
+    answer is kept, marked `quote_retried`, and still flagged in `quotes_missing` if it misses again.
+    """
+    prompt = RUBRIC.format(user=user.strip(), reply=reply.strip())
+    records = []
+
+    def ask(text: str) -> dict | None:
+        record = agent.ask_record(settings, text, maybe_abort=maybe_abort)
+        records.append(record)
+        try:
+            rating = agent.parse_json_reply(record.reply or "")
+        except ValueError:
+            return None
+        return normalize(rating, reply) if isinstance(rating, dict) else None
+
+    rating = ask(prompt)
+    if rating is not None and rating["quotes_missing"]:
+        retried = ask(prompt + QUOTE_RETRY.format(names=", ".join(rating["quotes_missing"])))
+        if retried is not None:
+            rating = {**retried, "quote_retried": True}
+    return rating, records
 
 
 CONDITIONS = ("card_on", "card_off", "plain")
@@ -368,22 +410,18 @@ def main() -> int:
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["temperature"] = JUDGE_TEMPERATURE
-    material = json.dumps({"rubric": RUBRIC, "temperature": JUDGE_TEMPERATURE, "probe": probe_path.name})
+    material = json.dumps({"rubric": RUBRIC, "quote_retry": QUOTE_RETRY, "temperature": JUDGE_TEMPERATURE,
+                           "probe": probe_path.name})
     ledger = sweep.Ledger(out_dir, "register-judged", sweep.fingerprint(llm_settings, material, declared=opts.declare))
     print(f"instrument {ledger.fingerprint} -> {ledger.path.name}")
 
     def ask_batch(settings: env, batch: list[tuple[str, dict]],
                   maybe_abort: netutil.Abort | None) -> tuple[dict, list[agent.TurnRecord]]:
         (item_id, answer), = batch
-        record = agent.ask_record(settings, RUBRIC.format(user=users[item_id].strip(), reply=answer["reply"].strip()),
-                                  maybe_abort=maybe_abort)
-        try:
-            rating = agent.parse_json_reply(record.reply or "")
-        except ValueError:
-            rating = None
-        if not isinstance(rating, dict):
-            return {item_id: sweep.Failure("the judge's reply did not parse; it is in the traces")}, [record]
-        return {item_id: normalize(rating, answer["reply"])}, [record]
+        rating, records = rate(settings, users[item_id], answer["reply"], maybe_abort)
+        if rating is None:
+            return {item_id: sweep.Failure("the judge's reply did not parse; it is in the traces")}, records
+        return {item_id: rating}, records
 
     hand = read_blind_ratings(pathlib.Path(opts.blind_check)) if opts.blind_check else None
     items = sorted((item_id, answer) for item_id, answer in answers.items() if hand is None or item_id in hand)

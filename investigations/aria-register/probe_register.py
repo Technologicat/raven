@@ -23,6 +23,11 @@ message. The two October examples that reacted to the automatic document search 
 search keyed on the whole message and on a garbled query, both since fixed, so the stimulus no longer
 exists.
 
+The prompts come in sets, by the date each was written (`--prompts`, the newest by default), each writing
+its own ledger: `register-step1-*` for the first, `register-prompts2-*` for the second. A second set was
+needed because the first set's replies were used up for blind rating. The second has no replays, and adds
+an everyday problem a technical tool genuinely solves, which invites `technical_wit`.
+
 The run is a `raven.librarian.sweep`. An item is `condition/prompt/sample`, ordered sample-major so that a
 run stopped early is balanced across conditions and prompts. The prompt's name carries a hash of its text,
 so editing one prompt asks only that prompt again; the fingerprint covers the conditions' system texts and
@@ -55,29 +60,56 @@ PLAIN_CARD = "You are {char}, an AI assistant."
 SOURCE_DATASTORE = pathlib.Path.home() / ".config" / "raven" / "librarian" / "chat_orig.json"
 SOURCE_SIDECARS = pathlib.Path.home() / ".config" / "raven" / "librarian" / "chat.sidecars"
 
-ELICITORS = {
-    # Replayed in content from 2026-09-25, where it drew "are you testing my creativity?" under another
-    # character. A fresh chat, so it needs nothing stored.
-    "shoelaces": "How to tie your shoelaces without touching the shoelaces?",
-    "vague": "Can you make my code faster?",
-    "wrong_premise": "Since the GIL was removed in Python 3.12, threads are now the obvious choice for "
-                     "CPU-bound work, right?",
-    "creative": "Propose a name for a new physical unit: one that measures how far a meeting runs over "
-                "its schedule.",
-    "clumsy_system": "Did the attachment I just sent come through?",  # nothing is attached
+# The prompt sets, by the date each was written. Each writes its own ledger, so a set's replies are never
+# judged together with another's, and the first set's fingerprint is what it was when it ran.
+PROMPT_SETS = {
+    "2026-10-21": env(
+        ledger="register-step1",
+        elicitors={
+            # Replayed in content from 2026-09-25, where it drew "are you testing my creativity?" under another
+            # character. A fresh chat, so it needs nothing stored.
+            "shoelaces": "How to tie your shoelaces without touching the shoelaces?",
+            "vague": "Can you make my code faster?",
+            "wrong_premise": "Since the GIL was removed in Python 3.12, threads are now the obvious choice for "
+                             "CPU-bound work, right?",
+            "creative": "Propose a name for a new physical unit: one that measures how far a meeting runs over "
+                        "its schedule.",
+            "clumsy_system": "Did the attachment I just sent come through?",  # nothing is attached
+        },
+        # Replays: the node holding the remark. The turn is re-run from its parent.
+        replays={
+            "replay_pipe": "gensym#forest-node:6276d1e3-b961-4596-add0-4b9672cf96f7",  # "...your side of the pipe"
+            "replay_thanks": "gensym#forest-node:73906825-bcb0-428e-966b-4ba736f6bab4",  # "...or for the actual work"
+        },
+        neutral={
+            "boiling": "What is the boiling point of water at 2000 m altitude?",
+            "fourier": "Briefly explain what a Fourier transform does.",
+            "sort": "How do I sort a list of dicts by one key in Python?",
+        }),
+    # New prompts of the same kinds, because the first set's replies are used up for blind rating: the same
+    # prompt recurring in every sample makes its replies read as less witty to the rater. No replays: no
+    # other stored remark with the same vibe was at hand. One new kind, for `technical_wit`, which no prompt
+    # of the first set invited.
+    "2026-10-28": env(
+        ledger="register-prompts2",
+        elicitors={
+            "absurd": "How can I be on time for a meeting that started yesterday?",
+            "vague": "Can you fix the bug?",
+            "wrong_premise": "Since Python 3.13 made `list.sort()` return the sorted list, I can finally chain "
+                             "it, right?",
+            "creative": "Propose a name for a unit that measures how long a 'quick question' actually takes.",
+            "clumsy_system": "Which of the two pictures I attached do you like better?",  # nothing is attached
+            "everyday_technical": "My nightstand has a pile of unread books and I keep buying more. How do I "
+                                  "decide what to read next?",
+        },
+        replays={},
+        neutral={
+            "capital": "What is the capital of Australia?",
+            "hash_table": "Briefly explain what a hash table is.",
+            "reverse": "How do I reverse a string in Python?",
+        }),
 }
-
-# Replays: the node holding the remark. The turn is re-run from its parent.
-REPLAYS = {
-    "replay_pipe": "gensym#forest-node:6276d1e3-b961-4596-add0-4b9672cf96f7",  # "...your side of the pipe"
-    "replay_thanks": "gensym#forest-node:73906825-bcb0-428e-966b-4ba736f6bab4",  # "...or for the actual work"
-}
-
-NEUTRAL = {
-    "boiling": "What is the boiling point of water at 2000 m altitude?",
-    "fourier": "Briefly explain what a Fourier transform does.",
-    "sort": "How do I sort a list of dicts by one key in Python?",
-}
+LATEST = "2026-10-28"
 
 
 def short_hash(text: str) -> str:
@@ -132,12 +164,14 @@ def build_replay(llm_settings: env, payloads: list[dict]) -> tuple[chattree.Fore
     return datastore, head
 
 
-def make_items(n_samples: int, n_neutral_samples: int | None = None) -> list[tuple[str, dict]]:
+def make_items(prompt_set: env, n_samples: int, n_neutral_samples: int | None = None) -> list[tuple[str, dict]]:
     """`condition/prompt/sample`, sample-major, so an early stop leaves every cell with the same count
     give or take one. The neutral prompts stop at `n_neutral_samples`, when given."""
-    prompts = ([(f"{name}-{short_hash(text)}", "elicitor", {"text": text}) for name, text in ELICITORS.items()] +
-               [(f"{name}-{short_hash(node_id)}", "elicitor", {"replay": node_id}) for name, node_id in REPLAYS.items()] +
-               [(f"{name}-{short_hash(text)}", "neutral", {"text": text}) for name, text in NEUTRAL.items()])
+    prompts = ([(f"{name}-{short_hash(text)}", "elicitor", {"text": text})
+                for name, text in prompt_set.elicitors.items()] +
+               [(f"{name}-{short_hash(node_id)}", "elicitor", {"replay": node_id})
+                for name, node_id in prompt_set.replays.items()] +
+               [(f"{name}-{short_hash(text)}", "neutral", {"text": text}) for name, text in prompt_set.neutral.items()])
     items = []
     for sample in range(n_samples):
         for condition in ("card_on", "card_off", "plain"):
@@ -151,6 +185,8 @@ def make_items(n_samples: int, n_neutral_samples: int | None = None) -> list[tup
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--prompts", default=LATEST, choices=sorted(PROMPT_SETS),
+                        help="which prompt set, by the date it was written")
     parser.add_argument("--samples", type=int, default=5, help="replies per condition and prompt")
     parser.add_argument("--neutral-samples", type=int, default=None, metavar="N",
                         help="replies per condition for the neutral prompts, when fewer than --samples: the "
@@ -168,13 +204,14 @@ def main() -> int:
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["max_tokens"] = MAX_TOKENS
     conditions = condition_texts(llm_settings)
-    replays = {node_id: load_replay(node_id) for node_id in REPLAYS.values()}
+    prompt_set = PROMPT_SETS[opts.prompts]
+    replays = {node_id: load_replay(node_id) for node_id in prompt_set.replays.values()}
 
     material = json.dumps({"conditions": conditions, "max_tokens": MAX_TOKENS,
                            "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")},
                            "retain_thinking": llm_settings.retain_thinking},
                           sort_keys=True)
-    ledger = sweep.Ledger(out_dir, "register-step1", sweep.fingerprint(llm_settings, material, declared=opts.declare))
+    ledger = sweep.Ledger(out_dir, prompt_set.ledger, sweep.fingerprint(llm_settings, material, declared=opts.declare))
     print(f"instrument {ledger.fingerprint} -> {ledger.path.name}")
 
     stream_path = out_dir / "stream.log"
@@ -199,7 +236,7 @@ def main() -> int:
                           "reasoning": list(record.reasoning),
                           "tool_calls": dict(record.tool_calls)}}, [record]
 
-    result = sweep.Sweep(llm_settings, ask_batch, make_items(opts.samples, opts.neutral_samples), ledger,
+    result = sweep.Sweep(llm_settings, ask_batch, make_items(prompt_set, opts.samples, opts.neutral_samples), ledger,
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
     if result.outcome is not sweep.completed:
         print(f"\nstopped ({result.outcome}): {result.message or 'cancelled'}\nrun again to resume")
