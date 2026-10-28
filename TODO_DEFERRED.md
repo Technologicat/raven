@@ -27,6 +27,29 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Preparing a `raven-scopebib` definition file, as a manual section
+
+*Cluster: scopebib · Cost: ? · Gate: more studies to generalize from · Filed: 2026-10-28*
+
+The papers manual says what each part of a definition file means (*Writing a definition file*), and not how
+a researcher or a team arrives at one: given a research topic and perhaps a handful of spot checks on the
+corpus, what goes in it. A section, perhaps *Preparing the rules file*, should say.
+
+Two studies so far, which reached a definition from different starting points:
+
+- **The AOKK study** anchored on its search query, which was extensive enough to name most of what the
+  search meant and so most of what it did not.
+- **A health education study** (2026-10-28) anchored on a manual pass over the corpus as the Visualizer
+  clustered it: someone read every record, cluster by cluster, and marked the out-of-scope ones with a
+  reason. The reasons grouped into four exclusions, which became the tests. That does not scale much past
+  150 records.
+
+Things learned along the way that the section would draw on: `run --pilot` exists to calibrate a definition
+on a sample before the whole corpus; what belongs goes in `scope_notes`, where the reviewer reads it, and
+how to read evidence in `hints`; and on the health education study, the first full run's check-by-hand
+list is what showed where the definition said too little — 17 of its 42 rows were removals the reviewer
+argued back in, against an exclusion it had not been told.
+
 ## Dehyphenate a word broken mid-line, where the line break was already lost
 
 *Cluster: dehyphenation · Cost: M · Gate: none · Filed: 2026-10-28*
