@@ -31,6 +31,7 @@
 - [Visualize](#visualize)
     - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
+    - [Put the info panel on the right](#put-the-info-panel-on-the-right)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
 - [Limitations](#limitations)
@@ -403,6 +404,17 @@ Like many GUI apps, Raven also accepts a dataset file from the command line, whe
 ```bash
 raven-visualizer mydata.pickle
 ```
+
+
+## Put the info panel on the right
+
+By default the info panel is on the left, the plot on the right, and the toolbar between them. To swap the sides, start the app with `--panel-side right`:
+
+```bash
+raven-visualizer --panel-side right mydata.pickle
+```
+
+The toolbar stays in the middle. Handy for pair work at one screen.
 
 
 ## Create a word cloud

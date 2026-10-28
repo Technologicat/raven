@@ -35,6 +35,9 @@ parser.add_argument('--backend-url', metavar='URL', default=None,
                          'http://localhost:1234. Consulted only when the import settings ask for an LLM '
                          '(cluster keywords, or summaries), so pointing this at nothing is how to exercise '
                          'the fallback to frequency keywords.')
+parser.add_argument('--panel-side', choices=['left', 'right'], default='left',
+                    help='which side of the window the info panel is on, with the plot on the other and the toolbar '
+                         'between them (default: left)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Raven on GitHub" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
@@ -456,6 +459,7 @@ def update_animations():
     # The scroll end flasher needs the correct height for "item_information_panel"  # tag
     # to know the viewport coordinates for its bottom overlay.
     info_panel.update_height()
+    update_plot_width()  # same startup problem, when the plot is not the last column
 
     # ----------------------------------------
     # Show loading spinner when info panel is refreshing
@@ -820,6 +824,13 @@ with timer() as tim:
                         plotter.create_highlight_series()  # some utilities may access the highlight series before the app has completely booted up
                 dpg.bind_item_theme("plot", "my_plotter_theme")
 
+    # The columns are built info panel, toolbar, plot. With the panel on the right they are moved into the
+    # mirror order, the toolbar staying between the other two.
+    if opts.panel_side == "right":
+        dpg.move_item("info_and_help", parent="main_container")  # tag  # to the end
+        dpg.move_item("search_and_plotter_panel", parent="main_container", before="toolbar_group")  # tag
+        dpg.configure_item("search_and_plotter_panel", autosize_x=False)  # tag  # sized by `update_plot_width`
+
     # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
                     label="Word cloud",
@@ -1040,11 +1051,29 @@ def resize_gui():
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
+def update_plot_width():
+    """Size the plot column RIGHT NOW to the width the other two columns leave, when it is not the last column.
+
+    The last column fills the rest of the window by itself (`autosize_x`); a column before the others cannot,
+    so with the info panel on the right this gives the plot an explicit width. No-op otherwise.
+    """
+    if opts.panel_side != "right":
+        return
+    window_w, _ = guiutils.get_widget_size("main_window")  # tag
+    info_w, _ = guiutils.get_widget_size("info_and_help")  # tag
+    toolbar_w, _ = guiutils.get_widget_size("toolbar_group")  # tag
+    plot_w = (window_w - 2 * guiutils.DPG_WINDOW_PADDING
+              - info_w - toolbar_w - 2 * guiutils.DPG_ITEM_SPACING_X)  # two gaps between three columns
+    if plot_w > 0 and dpg.get_item_width("search_and_plotter_panel") != plot_w:  # tag
+        dpg.set_item_width("search_and_plotter_panel", plot_w)  # tag
+
 def _resize_gui():
     """Resize dynamically sized GUI elements, RIGHT NOW."""
     logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Updating info panel height.")
     info_panel.update_height()
+    logger.debug("_resize_gui: Updating plot width.")
+    update_plot_width()
     logger.debug("_resize_gui: Updating info panel current item on-screen coordinates.")
     info_panel.update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")

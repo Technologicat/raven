@@ -134,9 +134,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   The order within a cluster is a key function, `entry_renderer.get_entries_for_selection(sort_key=...)`,
   defaulting to reference-list order, so choosing one is a matter of naming the alternatives.
 
-- **[Medium]** Layout switchable left/right: which side of the screen the info panel is on (for on-site collaboration, physical laptop placement constraints).
-  - **The case that came up (2026-10-28): pair work**, with the plot on the left and the info panel on the
-    right. The toolbar stays in the middle, between the two, as now.
+- **[Medium]** Layout switchable left/right *while the app runs*: which side of the screen the info panel is on (for on-site collaboration, physical laptop placement constraints).
+  - **At startup it already is**, `--panel-side right` (2026-10-28). The reorder is `dpg.move_item` on the three
+    columns of `main_container` and `update_plot_width` sizes the plot, so a runtime toggle reuses both.
+  - **What it needs that the flag did not**: somewhere to remember the choice — the Visualizer has no persistent
+    app state yet, as Librarian does — and a hotkey or toolbar button, with its help-card row.
 
 - **[Medium]** Show item slug (BibTeX identifier).
 
