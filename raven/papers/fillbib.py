@@ -590,7 +590,7 @@ def main() -> None:  # pragma: no cover
     cache = parser.add_mutually_exclusive_group()
     cache.add_argument("--cache", dest="cache", default=None, type=str, metavar="FILE",
                        help="Keep Crossref's answers in this JSONL file, and ask only for DOIs it does not hold. Crossref asks its users to cache. Default: <bib stem>.crossref.jsonl beside the output.")
-    cache.add_argument("--no-cache", dest="no_cache", action="store_true", default=False,
+    cache.add_argument("--no-cache", dest="cache_enabled", action="store_false", default=True,
                        help="Keep no cache: ask Crossref about every DOI, every run.")
     parser.add_argument("--keep-appended", dest="keep_appended", action="store_true", default=False,
                         help="Where a record keeps its own abstract, keep a second text appended to it — a plain language summary, a graphical abstract, an alternate abstract. By default it is removed, and the audit lists the record.")
@@ -620,11 +620,11 @@ def main() -> None:  # pragma: no cover
             print(f"{path}: cannot read ({type(exc).__name__}: {exc})", file=sys.stderr)
             continue
         directory = pathlib.Path(opts.out_dir).expanduser().resolve() if opts.out_dir else path.parent
-        if opts.no_cache:
-            maybe_cache_path = None
-        else:
+        if opts.cache_enabled:
             maybe_cache_path = maybe_given_cache or directory / f"{path.stem}.crossref.jsonl"
             maybe_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            maybe_cache_path = None
 
         dois = [doi for doi in (papers_utils.normalize_doi(bibtex.entry_field(entry, "doi"))
                                 for entry in library.entries) if doi]
