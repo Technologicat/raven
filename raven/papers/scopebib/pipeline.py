@@ -101,8 +101,8 @@ def load_corpus(bib_path: str | pathlib.Path, *,
     `maybe_crossref_cache`: where to keep Crossref's answers, so that a run after the first asks nothing
                             (`raven.papers.fillbib.fetch_crossref`); `None` for no cache.
 
-    Raises `PipelineError` where a lookup failed: a record left unfilled would read differently from the run
-    before, and every stage that shows it would ask about it again, on the worse text.
+    Raises `PipelineError` where a lookup failed. Otherwise the record would be judged on its teaser, and the
+    next run, once Crossref answers, would fill it and every stage that shows it would ask about it again.
     `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them; with neither, no sift runs.
     `maybe_sample`: draw this many records, after the sift; `None` for all of them.
     `seed`: which records the sample draws. The draw is over the keys in sorted order, so reordering the
