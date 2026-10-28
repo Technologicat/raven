@@ -570,6 +570,68 @@ Its parts, top to bottom:
 
 A mistake in the file is reported with the file and the entry it is in, before anything is asked.
 
+#### A second example: a topic inside an umbrella
+
+A search on sustainability in health education, run under the wider heading of education for sustainable development. Shortened from a definition used in practice — two of its four tests, and one of its four fields:
+
+```toml
+scope = "studies on sustainability, sustainable development and education for sustainable development (ESD) in health education"
+
+scope_notes = """
+"Health education" here means health as SUBJECT MATTER that someone is taught or learns - nutrition,
+physical activity and physical education, mental health, sexual health, environmental health, planetary
+health, health literacy - in an educational institution: preschool, school, teacher education, or a
+university or college.
+
+Education for sustainable development is the umbrella this search was made under, and much of what it found
+is ESD with no health in it. That is NOT health education, however much sustainability it contains. Nor is
+a work that names health only as one dimension of sustainability, rather than as what is taught.
+
+"Health education" is also used for training people to work in a health profession - "medical education",
+"public health education". That is a different field, and out of scope. Training TEACHERS to teach health
+in schools is not health professions education.
+"""
+
+hints = """
+"Sustainability" has a second sense that matched this search by accident: a programme or intervention
+being SUSTAINED, that is kept running over time after its launch. A study of whether a school health
+programme was still running after five years uses the word in that sense.
+"""
+
+[[test]]
+name = "not_health"
+asks = """true ONLY if the work is positively about education whose subject matter is something other than
+health, with no health content taught or learned. Health named only as one dimension of sustainability,
+rather than as what is taught, is not health content."""
+
+[[test]]
+name = "health_professions"
+asks = """true ONLY if the people being educated are positively training for, or working in, a health
+profession, or are the faculty who teach them. False for pupils, for teachers and student teachers, and
+when the work does not say who is learning."""
+
+[[field]]
+name = "sustainability_sense"
+asks = "in which sense the work uses \"sustainability\" or \"sustainable\""
+[field.values]
+sustainable_development = "in the sense of sustainable development, whether or not other senses also appear"
+programme_continuity = "only in the sense of a programme or intervention being kept running over time"
+other_sense = "only in some other sense, such as lasting effects or financial viability"
+none = "the work does not use the word at all"
+
+[[rule]]
+label = "sustainability possibly not in the sense of sustainable development"
+when = { sustainability_sense = ["programme_continuity", "other_sense", "none"] }
+action = "hold"
+```
+
+What it shows that the first example does not:
+
+- **A topic inside an umbrella.** The `scope` stays a phrase, and `scope_notes` says what belongs at the length that takes: the umbrella's topics without health are out, and so is the neighbouring field that shares the topic's name.
+- **Each exclusion stated twice**: as a test, which removes, and in `scope_notes`, which the reviewer reads. With the health-professions exclusion in the test alone, the reviewer argued those removals back in, medical education being health education in the plain sense of the words.
+- **A word with two senses, handled at both ends.** The hint warns the judge, and the field records which sense each kept record uses, so that a rule can send the doubtful ones to a person.
+- **Rules that only hold.** When this definition's rules removed records, their quotes overruled the judge's keeps on weak evidence — a preschool programme removed for mentioning community centres — so here every rule sends its records to a person instead.
+
 ### Calibrating with a pilot
 
 **Run a pilot before the whole corpus**, and read it: `run --pilot` asks every LLM step about a seeded sample of 50 records (`--pilot N` for another number), and writes one report, `PILOT`, into `pilot/` under the output directory. Its answers go into the same ledgers the full run reads, so the full run asks only the rest. After editing the definition, a pilot run again asks again.
