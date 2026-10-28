@@ -15,7 +15,7 @@ __all__ = ["Record", "records_of", "load_records",
            "MIN_CONTENT_WORDS", "MIN_CONTENT_DENSITY", "SPACY_MODEL", "CALIBRATED_FLAG_SHARE",
            "informative_words", "content_word_counts", "is_uninformative", "TitleMeasure", "title_measures",
            "describe_abstract",
-           "item_number"]
+           "answer_list", "item_number"]
 
 import dataclasses
 import functools
@@ -189,6 +189,19 @@ def describe_abstract(record: Record) -> str:
 
 # --------------------------------------------------------------------------------
 # Which record in a batch an answer is about
+
+def answer_list(parsed: object) -> list | None:
+    """The answers in an LLM's parsed JSON reply: a list as it is, a lone object as a list of one, else `None`.
+
+    A batch of one record is sometimes answered with the answer itself rather than an array holding it.
+    Its `"i"` still decides which record it answers, as inside an array.
+    """
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return [parsed]
+    return None
+
 
 _LABELLED_NUMBER = re.compile(r"\D*?(\d+)\s*")
 

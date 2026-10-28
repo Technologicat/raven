@@ -106,6 +106,12 @@ class TestThePrompt:
         assert "Abstract (TRUNCATED): It begins ..." in prompts[0]
         assert "Abstract: (none)" in prompts[0]
 
+    def test_a_one_record_batch_answered_with_a_bare_object_is_read(self, definition, monkeypatch):
+        # The shape a lone record's answer once came back in: the answer itself, not an array of one.
+        script(monkeypatch, ['{"i": 0, "not_birds": true, "wrong_bird": false, "confidence": "high", "why": "x"}'])
+        answers, _ = judge.ask_abstracts(None, [("a", record("a", abstract="Lizards."))], definition=definition)
+        assert set(answers) == {"a"} and answers["a"]["tests"]["not_birds"] is True
+
     def test_the_instrument_follows_the_tests_but_not_their_wrapping(self, tmp_path, definition):
         def material(text):
             path = tmp_path / "other.scope.toml"

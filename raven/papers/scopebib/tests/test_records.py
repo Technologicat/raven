@@ -159,3 +159,16 @@ class TestItemNumber:
 
     def test_an_answer_that_is_not_an_object_names_nothing(self):
         assert records.item_number(["i", 3], 10) is None and records.item_number({}, 10) is None
+
+
+class TestAnswerList:
+    def test_a_list_is_taken_as_it_is(self):
+        answers = [{"i": 0}, {"i": 1}]
+        assert records.answer_list(answers) is answers
+
+    def test_a_lone_object_is_a_list_of_one(self):
+        assert records.answer_list({"i": 0}) == [{"i": 0}]
+
+    @pytest.mark.parametrize("parsed", [None, "text", 3, True])
+    def test_anything_else_is_no_answers(self, parsed):
+        assert records.answer_list(parsed) is None

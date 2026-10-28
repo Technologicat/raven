@@ -188,11 +188,12 @@ def _ask(llm_settings: env, prompt: str, *, batch: list[tuple[str, scope_records
         reason = "the reply was cut off at the token cap; its traces hold what there was"
         return {key: sweep.Failure(reason) for key, _ in batch}, [record]
     try:
-        answers = agent.parse_json_reply(record.reply or "")
+        parsed = agent.parse_json_reply(record.reply or "")
     except ValueError:
-        answers = None
-    if not isinstance(answers, list):
-        logger.warning(f"_ask: expected a JSON array from the {source} pass, got {type(answers).__name__}; "
+        parsed = None
+    answers = scope_records.answer_list(parsed)
+    if answers is None:
+        logger.warning(f"_ask: expected a JSON array from the {source} pass, got {type(parsed).__name__}; "
                        "the reply is in the traces")
         return {}, [record]
     out = {}

@@ -103,11 +103,12 @@ def ask_reviews(llm_settings: env, batch: list[tuple[str, scope_records.Record]]
         reason = "the reply was cut off at the token cap; its traces hold what there was"
         return {key: sweep.Failure(reason) for key, _ in batch}, [turn]
     try:
-        answers = agent.parse_json_reply(turn.reply or "")
+        parsed = agent.parse_json_reply(turn.reply or "")
     except ValueError:
-        answers = None
-    if not isinstance(answers, list):
-        logger.warning(f"ask_reviews: expected a JSON array, got {type(answers).__name__}; the reply is in the traces")
+        parsed = None
+    answers = scope_records.answer_list(parsed)
+    if answers is None:
+        logger.warning(f"ask_reviews: expected a JSON array, got {type(parsed).__name__}; the reply is in the traces")
         return {}, [turn]
     out = {}
     for answer in answers:
