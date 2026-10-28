@@ -27,6 +27,23 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Stratified samples for `raven-scopebib` replicates
+
+*Cluster: scopebib · Cost: M · Gate: a full run whose verdicts can define the strata · Filed: 2026-10-28*
+
+A replicate's `--sample N` is a simple random draw of keys (`pipeline.load_corpus`), and `compare` reports
+agreement and Cohen's kappa over it. Disagreement between runs concentrates where the judge is unsure, and
+a simple random sample holds few such records, so the test-retest figure a methods section wants rests on
+its smallest group.
+
+Stratify instead on a first run's verdict × confidence (`judge.final_answers` over its ledgers; a full run
+supplies them for free), oversampling the uncertain strata. `compare` then reports agreement per stratum,
+and an overall figure reweighted by each stratum's share of the corpus. Kappa only overall: within a
+stratum nearly every record has one verdict, and kappa there is unstable. `review.draw_control` is the
+existing stratified draw in the package, proportional rather than oversampled.
+
+Raised by Juha (2026-10-28), asking whether replicates were stratified.
+
 ## The Markdown renderer has no sub- or superscript
 
 *Cluster: markdown-renderer · Cost: ? · Gate: the renderer overhaul, after the MCP client (2026-10-09) · Filed: 2026-10-27*
