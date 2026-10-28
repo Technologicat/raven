@@ -14,6 +14,12 @@ from ..common.text import stopwords
 import dearpygui.dearpygui as dpg
 
 # --------------------------------------------------------------------------------
+# Per-user data
+
+visualizer_userdata_dir = global_config.toplevel_userdata_dir / "visualizer"
+state_file = visualizer_userdata_dir / "state.json"  # GUI choices kept between sessions; see `savedstate`
+
+# --------------------------------------------------------------------------------
 # Compute devices
 #
 # Configured in `raven.client.config.devices`. The importer reaches its embedder, its spaCy pipeline

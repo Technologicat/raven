@@ -35,9 +35,10 @@ parser.add_argument('--backend-url', metavar='URL', default=None,
                          'http://localhost:1234. Consulted only when the import settings ask for an LLM '
                          '(cluster keywords, or summaries), so pointing this at nothing is how to exercise '
                          'the fallback to frequency keywords.')
-parser.add_argument('--panel-side', choices=['left', 'right'], default='left',
+parser.add_argument('--panel-side', choices=['left', 'right'], default=None,
                     help='which side of the window the info panel is on, with the plot on the other and the toolbar '
-                         'between them (default: left)')
+                         'between them; Ctrl+Shift+P swaps them while the app runs (default: as when the app last '
+                         'closed, and left the first time)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Raven on GitHub" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
@@ -125,6 +126,7 @@ with timer() as tim:
     from . import importer_gui  # ...and its GUI
     from . import info_panel
     from . import plotter
+    from . import savedstate
     from . import search
     from . import selection
     from . import word_cloud
@@ -709,6 +711,15 @@ with timer() as tim:
                 # Miscellaneous controls
 
                 add_separator()
+                dpg.add_button(label=fa.ICON_LEFT_RIGHT,
+                               tag="panel_side_button",
+                               callback=lambda: toggle_panel_side(),  # defined below, looked up when clicked
+                               indent=gui_config.toolbutton_indent,
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("panel_side_button", app_state.themes_and_fonts.icon_font_solid)  # tag
+                dpg.add_tooltip("panel_side_button", tag="panel_side_tooltip")  # tag
+                dpg.add_text("Move the info panel to the other side [Ctrl+Shift+P]", parent="panel_side_tooltip")  # tag
+
                 def toggle_fullscreen():
                     dpg.toggle_viewport_fullscreen()
                     resize_gui()  # see below
@@ -735,8 +746,10 @@ with timer() as tim:
                                  tag="help_tooltip_text")
 
             # Search and plotter
+            # Sized by `update_plot_width` from the first frame on, whichever side it is on; this is an estimate.
             with dpg.child_window(tag="search_and_plotter_panel",
-                                  autosize_x=True,
+                                  width=(gui_config.main_window_w - gui_config.info_panel_w
+                                         - gui_config.toolbar_inner_w - 4 * guiutils.DPG_WINDOW_PADDING),
                                   autosize_y=True):
                 # Search bar
                 #
@@ -824,12 +837,19 @@ with timer() as tim:
                         plotter.create_highlight_series()  # some utilities may access the highlight series before the app has completely booted up
                 dpg.bind_item_theme("plot", "my_plotter_theme")
 
-    # The columns are built info panel, toolbar, plot. With the panel on the right they are moved into the
-    # mirror order, the toolbar staying between the other two.
-    if opts.panel_side == "right":
-        dpg.move_item("info_and_help", parent="main_container")  # tag  # to the end
-        dpg.move_item("search_and_plotter_panel", parent="main_container", before="toolbar_group")  # tag
-        dpg.configure_item("search_and_plotter_panel", autosize_x=False)  # tag  # sized by `update_plot_width`
+    # The columns of the main window, left to right, for each side the info panel can be on. The toolbar
+    # stays between the other two.
+    _COLUMNS = {"left": ("info_and_help", "toolbar_group", "search_and_plotter_panel"),  # tag
+                "right": ("search_and_plotter_panel", "toolbar_group", "info_and_help")}  # tag
+
+    def arrange_columns(side: str) -> None:
+        """Put the main window's columns in the order for the info panel being on `side`, `"left"` or `"right"`."""
+        for column in _COLUMNS[side]:  # each to the end in turn, which leaves them in this order
+            dpg.move_item(column, parent="main_container")  # tag
+
+    # Which side the info panel is on: the command line if it says, else as when the app last closed.
+    panel_side = opts.panel_side if opts.panel_side is not None else savedstate.load(visualizer_config.state_file)["panel_side"]
+    arrange_columns(panel_side)
 
     # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
@@ -931,7 +951,10 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
-               # The meta keys last: about the app rather than about anything in it.
+               # The window's layout.
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+Shift+P", action_indent=0, action="Move the info panel to the other side", notes='"panel"'),
+               # The meta keys last, where Raven's cards put them: about the app rather than about anything in it.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
@@ -1052,13 +1075,8 @@ def resize_gui():
     logger.debug("resize_gui: Done.")
 
 def update_plot_width():
-    """Size the plot column RIGHT NOW to the width the other two columns leave, when it is not the last column.
-
-    The last column fills the rest of the window by itself (`autosize_x`); a column before the others cannot,
-    so with the info panel on the right this gives the plot an explicit width. No-op otherwise.
-    """
-    if opts.panel_side != "right":
-        return
+    """Size the plot column RIGHT NOW to the width the other two columns leave, whichever side it is on."""
+    # Explicit on both sides: a column can fill the rest of the window by itself only when it is the last one.
     window_w, _ = guiutils.get_widget_size("main_window")  # tag
     info_w, _ = guiutils.get_widget_size("info_and_help")  # tag
     toolbar_w, _ = guiutils.get_widget_size("toolbar_group")  # tag
@@ -1083,6 +1101,17 @@ def _resize_gui():
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
     info_panel.rebuild_dimmer_overlay()
     logger.debug("_resize_gui: Done.")
+
+def toggle_panel_side():
+    """Move the info panel to the other side of the window, and the plot to the side it left."""
+    global panel_side
+    panel_side = "right" if panel_side == "left" else "left"
+    logger.info(f"toggle_panel_side: info panel now on the {panel_side}.")
+    arrange_columns(panel_side)
+    # What is placed by screen position (the dimmer over the info panel, the current item's marker) can be
+    # placed again only once a frame has laid out the new order.
+    if guiutils.split_frame(operation="toggle_panel_side: lay out the swapped columns", required=False):
+        _resize_gui()
 
 
 # Old versions of DPG have a bug where they don't always call the viewport resize callback, but it seems to work in 1.11 and later.
@@ -1376,6 +1405,8 @@ def hotkeys_callback(sender, app_data):
             selection.redo()
         elif key == dpg.mvKey_C:
             info_panel.copy_current_entry_to_clipboard()
+        elif key == dpg.mvKey_P:
+            toggle_panel_side()
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
             dpg.show_metrics()
@@ -1589,6 +1620,11 @@ except KeyboardInterrupt:
     pass
 finally:
     logger.info("App render loop exited.")
+
+    try:
+        savedstate.save(visualizer_config.state_file, {"panel_side": panel_side})
+    except Exception as exc:
+        logger.warning(f"Could not save the app state to '{visualizer_config.state_file}': {type(exc)}: {exc}")
 
     guiutils.shutdown(cancel_tasks=_gui_cancel_tasks, release=_gui_release)
 

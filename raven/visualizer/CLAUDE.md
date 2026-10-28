@@ -1,6 +1,6 @@
 # Visualizer — CLAUDE.md
 
-~8.0k lines across 13 modules. The `app.py` split has landed.
+~8.0k lines across 14 modules. The `app.py` split has landed.
 
 Sizes are rounded to two significant figures, measured **2026-09-14** — they are here for the shape of the
 package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
@@ -23,6 +23,7 @@ word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py   (~120)  — `raven-importer` entry point
+savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side), as JSON
 app_state.py       (~62)  — top-level app state containers
 ```
 

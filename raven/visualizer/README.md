@@ -408,13 +408,13 @@ raven-visualizer mydata.pickle
 
 ## Put the info panel on the right
 
-By default the info panel is on the left, the plot on the right, and the toolbar between them. To swap the sides, start the app with `--panel-side right`:
+By default the info panel is on the left, the plot on the right, and the toolbar between them. Press **Ctrl+Shift+P**, or click the ↔ button in the toolbar, to swap the sides; the toolbar stays in the middle. Handy for pair work at one screen.
+
+The app remembers the side when it closes, and starts with it the next time. To choose for one session, give it on the command line, which wins over what was remembered:
 
 ```bash
 raven-visualizer --panel-side right mydata.pickle
 ```
-
-The toolbar stays in the middle. Handy for pair work at one screen.
 
 
 ## Create a word cloud
@@ -463,6 +463,12 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 |---|---|
 | `F1` | Help card |
 | `F11` | Toggle fullscreen |
+
+### Layout
+
+| Key | Action |
+|---|---|
+| `Ctrl+Shift+P` | Move the info panel to the other side of the window |
 
 ### Datasets and search
 

@@ -43,7 +43,8 @@
 - **`raven-importer` can import without the LLM**, as the GUI importer already could.
   - `--no-llm` leaves out the stages that need one for this run, and tries no backend.
   - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.
-- **`--panel-side right` puts the info panel on the right**, with the plot on the left and the toolbar still between them.
+- **The info panel can be on the right**, with the plot on the left and the toolbar still between them. **Ctrl+Shift+P**, or the new ↔ toolbutton, swaps the sides while the app runs.
+  - The app remembers the side when it closes. `--panel-side left` or `right` chooses for one session, over what was remembered.
 
 #### Raven-server
 
