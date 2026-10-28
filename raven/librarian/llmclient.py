@@ -632,7 +632,7 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
         settings[name] = fresh[name]
     return backend_status(settings)
 
-def follow_model_swap(settings: env) -> bool:
+def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
     """Bring `settings` up to date if the backend has loaded a different model since. Return whether it had.
 
     Cheap enough to call before every turn: one request, and nothing more unless the model changed. Only what
@@ -646,14 +646,19 @@ def follow_model_swap(settings: env) -> bool:
 
     When the backend does not answer, it only records that (`backend_is_reachable`, which `backend_status`
     reads), so that a frontend can say so; recovering is `reconnect`'s job. Returns `False` then.
+
+    `reprobe`: ask even a backend already marked unreachable, and mark it reachable again if it answers.
+               For a caller waiting out a dropped connection without `reconnect`, which would rebuild the
+               settings.
     """
-    if not settings.backend_is_reachable:
+    if not settings.backend_is_reachable and not reprobe:
         return False
     try:
         info = resolve_model_info(settings.backend_url, settings.backend_flavor)
     except requests.exceptions.RequestException:
         settings.backend_is_reachable = False
         return False
+    settings.backend_is_reachable = True
     if info == settings.model_record:
         return False
 

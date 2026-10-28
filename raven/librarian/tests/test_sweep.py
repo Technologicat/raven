@@ -261,11 +261,59 @@ class TestSweep:
                 raise llmclient.requests.exceptions.ConnectionError("nothing listening")
             monkeypatch.setattr(llmclient, "resolve_model_info", refuse)
             raise llmclient.requests.exceptions.ConnectionError("nothing listening")
-        result = sweep.Sweep(llm_settings, ask, _items(3), ledger).run()
+        probes = []
+        real = llmclient.follow_model_swap
+        monkeypatch.setattr(llmclient, "follow_model_swap", lambda s, **kw: probes.append(kw) or real(s, **kw))
+        result = sweep.Sweep(llm_settings, ask, _items(3), ledger, reconnect_attempts=2, reconnect_delay=0).run()
         assert result.outcome is sweep.backend_unavailable
+        assert probes == [{}, {"reprobe": True}, {"reprobe": True}], "the probe, then each retry"
         assert asked == ["item0"], "the run went on asking a backend that was not there"
         assert result.message  # the operator is told why
         assert set(ledger.latest()) == {"item0"}  # the rest were never tried, so nothing is said about them
+
+    def test_a_backend_that_drops_out_briefly_is_waited_for_and_the_run_goes_on(self, llm_settings, tmp_path,
+                                                                                 monkeypatch, caplog):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        record = llm_settings.model_record
+        answers = iter([llmclient.requests.exceptions.ConnectionError("no route to host"), record])
+
+        def blip(backend_url, flavor):  # the first probe fails, every later one answers
+            outcome = next(answers, record)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        monkeypatch.setattr(llmclient, "resolve_model_info", blip)
+        with caplog.at_level(logging.INFO, logger="raven.librarian.sweep"):
+            result = sweep.Sweep(llm_settings, _echo, _items(3), ledger, reconnect_delay=0).run()
+        assert (result.outcome, result.done) == (sweep.completed, 3)
+        assert any("trying again" in r.message for r in caplog.records), "the wait should be logged"
+        assert any("answers again, after 1 retry" in r.message for r in caplog.records)
+
+    def test_a_model_changed_during_the_outage_still_stops_the_run(self, llm_settings, tmp_path, monkeypatch):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        other = llmclient._model_info(**(dict(llm_settings.model_record) | {"quantization": "Q8_0"}))
+        answers = iter([llmclient.requests.exceptions.ConnectionError("no route to host")])
+
+        def back_with_another(backend_url, flavor):
+            outcome = next(answers, other)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        monkeypatch.setattr(llmclient, "resolve_model_info", back_with_another)
+        result = sweep.Sweep(llm_settings, _echo, _items(3), ledger, reconnect_delay=0).run()
+        assert result.outcome is sweep.model_changed
+        assert set(ledger.answers()) == {"item0"}
+
+    def test_no_attempts_stops_at_once(self, llm_settings, tmp_path, monkeypatch):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        calls = []
+
+        def refuse(backend_url, flavor):
+            calls.append(1)
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "resolve_model_info", refuse)
+        result = sweep.Sweep(llm_settings, _echo, _items(3), ledger, reconnect_attempts=0).run()
+        assert result.outcome is sweep.backend_unavailable and len(calls) == 1
 
     def test_a_swapped_model_stops_the_run_after_the_batch_it_answered(self, llm_settings, tmp_path, monkeypatch):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")

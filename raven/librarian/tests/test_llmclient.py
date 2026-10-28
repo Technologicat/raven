@@ -1891,6 +1891,15 @@ class TestFollowModelSwap:
         assert llmclient.follow_model_swap(settings) is False
         assert settings.tokens_per_character == 0.5, "the calibration was reset with no model change"
 
+    def test_a_backend_marked_unreachable_is_asked_again_only_on_request(self, settings, monkeypatch):
+        self._backend_has(monkeypatch)
+        settings.backend_is_reachable = False
+        assert llmclient.follow_model_swap(settings) is False
+        assert settings.backend_is_reachable is False, "asked a backend marked unreachable without being told to"
+        assert llmclient.follow_model_swap(settings, reprobe=True) is False
+        assert settings.backend_is_reachable is True, "an answer to a reprobe marks the backend reachable again"
+        assert settings.system_prompt == "a per-run override", "a reprobe must not rebuild the settings"
+
     def test_a_reload_with_different_settings_is_followed(self, settings, monkeypatch):
         # Same label, context length, vision and loaded state: only the load settings differ, which is the
         # change a comparison of the derived fields alone cannot see.
