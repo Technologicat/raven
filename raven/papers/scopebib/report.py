@@ -35,10 +35,10 @@ stage that did not run. A copy saved under any other name is left alone.
 
 __all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
            "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
-           "FinishedRunError", "finished_outputs", "refuse_if_finished",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
-           "SiftResult", "select", "write_reports",
+           "SiftResult", "select",
+           "FinishedRunError", "finished_outputs", "refuse_if_finished", "write_reports",
            "KEEP", "DROP", "FinishError", "finish",
            "PILOT_REPORT", "KEEP_SAMPLE", "title_bounds_note", "write_pilot_report"]
 
