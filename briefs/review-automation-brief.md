@@ -1,6 +1,6 @@
 # Automating a literature review: what the two current studies need next
 
-*Status: collecting (2026-10-29). Nothing here is scheduled yet; the order below is a first proposal.*
+*Status: collecting (2026-10-29). Item 10 has a date (a prototype early in the week of 2026-11-02); the rest is unscheduled, and the order below is a first proposal.*
 
 Two studies are using Raven's paper tools end to end, and between them they have turned up the next layer
 of work:
@@ -49,10 +49,36 @@ they fit together and in what order. Settled decisions that left no diff go in t
    reading the accepted set's map: on the health-education corpus the 2D map misrepresented which cluster
    was the real one.
 
-## To be added
+## Analysis
 
-The maintainer has one or two more items for this set (2026-10-29).
+These two are the maintainer's (2026-10-29), and the first comes first in the whole brief: a prototype is
+wanted early in the week of 2026-11-02, for the health-education study.
+
+10. **Clustering the accepted set by the research questions, with an LLM.** A small accepted set does not
+    cluster by embedding: the health-education run d's 40 records gave no cluster at all, in high
+    dimensions or in 2D. But 40 titles and abstracts are about 9,700 words, roughly 13k tokens, which fits
+    in one prompt with room to spare. So: give the model the study's research questions and every abstract
+    at once, and ask it to group the studies in the light of those questions, naming each group and saying
+    why each study is in it. Run it several times, to see how stable the grouping is. For this study it
+    would replace the HDBSCAN clusters.
+    - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
+      match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
+      usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
+      run, or what is stable across them.
+11. **Inductive and deductive content analysis, agentified**, after Elo & Kyngäs, *The qualitative content
+    analysis process* (Journal of Advanced Nursing, 2008).
+    - **The test set exists**: the coauthor did this by hand for the biology and geography studies, and both
+      published papers record the method and the results (archived in
+      `00_stuff/rawdata/biology_geography_health_education/published/`). Run it on those two first,
+      compare, and only then on the health-education set.
+    - **It reads fulltexts**, one at a time, which ties it to item 8's fetching. The maintainer expects at
+      least a representative set from the coauthor in the week of 2026-11-02.
+    - **Related reading, beside the Elo & Kyngäs PDF**: Elo et al. (2014) on the trustworthiness of
+      qualitative content analysis, and Borse et al. (2025, arXiv 2508.14764) on inter-rater reliability
+      between LLMs and human raters in qualitative analysis — the question this item puts to the test.
 
 ## Decision log
 
 - **2026-10-29**: this brief created, to hold the review-automation items of both studies as one set.
+- **2026-10-29**: items 10 and 11 added by the maintainer; item 10 is the nearest deadline, a prototype
+  early in the week of 2026-11-02, and replaces the HDBSCAN clusters for the health-education study.
