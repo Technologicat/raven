@@ -70,6 +70,17 @@ wanted early in the week of 2026-11-02, for the health-education study.
     - **How far it scales is open**: at about 300 tokens a record the context holds roughly 400, but how
       well the model reads a prompt of 100k tokens and more, as against how much fits, is unmeasured, and
       its thinking grows with the set.
+    - **The output side is two settings, not a limit**: the backend caps a reply at 16k tokens per round
+      today, and the cap can be raised; the chat template's `low` effort switch asks for less thinking
+      (maintainer, 2026-10-29). A grouping of 161 records with a reason each, thinking included, is the case
+      to watch.
+    - **The test sets have to be recovered first.** No file on disk is the set a cluster table covers.
+      Biology's paper reviewed 131 studies (165 after deduplication, then 34 rejected by hand); the newest
+      bibliography, `202508/biology.bib`, has 163 entries, 2 of them unreadable, and 9 more records were
+      split out of it in December 2025 into `biology_missing.bib` and `biology_broken_entries.bib`, some
+      still unreadable. Geography's table covers 127 of its bibliography's 133. `raven-checkrefs` against
+      each paper's cluster table, over the union of the files, names the covered set and flags what the
+      bibliographies lack; `raven-fixbib` repairs what it can of the unreadable records first.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
