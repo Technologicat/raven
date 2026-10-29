@@ -35,6 +35,7 @@ __all__ = ["parse_file", "parse_string", "write_string",
            "read_repeated_keys",
            "decode_html_entities",
            "relocate_rights_notices",
+           "split_swallowed_fields",
            "recover_dois",
 
            "entries_to_bibtex"]
@@ -917,6 +918,127 @@ def relocate_rights_notices(source: str, field: str = "copyright") -> tuple[str,
     return "".join(pieces), moved
 
 
+_SWALLOWED_FIELD_HEAD = re.compile(r"[ \t\r]*\n\s*([A-Za-z][\w-]*)\s*=\s*")
+
+
+def _line_break(raw: str) -> str:
+    """The line break `raw` uses, so that a line added to it matches the lines around it."""
+    return "\r\n" if "\r\n" in raw else "\n"
+
+
+def _swallowed_parts(value: str) -> tuple[str, str, str] | None:
+    """`(own value, name, swallowed value)` if a field's undelimited `value` holds another field, else `None`.
+
+    The shape is `{A}`, a line break, then `name = {B}` and nothing more: what a field looks like when the
+    comma after it went missing, or when it was opened with a surplus brace that a surplus closing one
+    balances. Both values come back without their outer delimiters.
+    """
+    if not value.startswith("{"):
+        return None
+    own_end = _scan_value(value, 0)
+    if own_end is None or value[own_end - 1] != "}":
+        return None
+    head = _SWALLOWED_FIELD_HEAD.match(value, own_end)
+    if head is None:
+        return None
+    swallowed_end = _scan_value(value, head.end())
+    if swallowed_end is None or value[swallowed_end:].strip():
+        return None
+    return value[1:own_end - 1], head.group(1), _undelimit(value[head.end():swallowed_end].strip())
+
+
+def _split_in_record(raw: str) -> str | None:
+    """One record with the first field found swallowed by another split back out. `None` if there is none.
+
+    The swallowed field goes in after the one that held it, matching the record's indentation; a record that
+    has that field already keeps what is there and gains the swallowed value on a line below it.
+    """
+    spans = _field_spans(raw)
+    if not spans:
+        return None
+    # A missing comma: this module's scanner ends a value at its closing brace and sees two fields, where
+    # `bibtexparser` reads the second as the end of the first. The comma is all that is missing.
+    for this, following in zip(spans, spans[1:]):
+        gap = raw[this.value_end:following.name_start]
+        if "," in gap or "\n" not in gap:
+            continue
+        expected = {span.key: _undelimit(raw[span.value_start:span.value_end]) for span in (this, following)}
+        if _reads_back(raw, expected):  # the parser reads the two apart already; nothing is swallowed
+            continue
+        candidate = raw[:this.value_end] + "," + raw[this.value_end:]
+        if _reads_back(candidate, expected):
+            return candidate
+    for span in spans:
+        maybe_parts = _swallowed_parts(_undelimit(raw[span.value_start:span.value_end]))
+        if maybe_parts is None:
+            continue
+        own, name, swallowed = maybe_parts
+        if not (_braces_balance(own) and _braces_balance(swallowed)):
+            return None
+        line_start = raw.rfind("\n", 0, span.name_start) + 1
+        indent = raw[line_start:span.name_start]
+        existing = next((other for other in spans if other.key == name.lower() and other is not span), None)
+        if existing is None:
+            candidate = (raw[:span.value_start] + "{" + own + "}"
+                         + f",{_line_break(raw)}{indent}{name} = {{{swallowed}}}" + raw[span.value_end:])
+            expected = {span.key: own, name.lower(): swallowed}
+        else:
+            kept = _undelimit(raw[existing.value_start:existing.value_end])
+            combined = f"{kept}\n{swallowed}"
+            first, second = sorted([(span.value_start, span.value_end, "{" + own + "}"),
+                                    (existing.value_start, existing.value_end, "{" + combined + "}")])
+            candidate = raw[:first[0]] + first[2] + raw[first[1]:second[0]] + second[2] + raw[second[1]:]
+            expected = {span.key: own, name.lower(): combined}
+        return candidate if _reads_back(candidate, expected) else None
+    return None
+
+
+def _reads_back(candidate: str, expected: dict[str, str]) -> bool:
+    """Whether the one record `candidate` parses with each field of `expected` holding exactly its value."""
+    # The parser is the judge, as for every edit in this module, and on the values rather than on
+    # "an entry came back".
+    try:
+        library = parse_string(candidate, split_names=False)
+    except Exception:  # noqa: BLE001 -- an edit that breaks the parser is just a failed edit
+        return False
+    if len(library.entries) != 1:
+        return False
+    fields = library.entries[0].fields_dict
+    return all(key in fields and fields[key].value == value for key, value in expected.items())
+
+
+def split_swallowed_fields(source: str) -> tuple[str, int]:
+    """Split each field that another field's braces swallowed back out into a field of its own.
+
+    Returns `(text, how many were split)`.
+
+    A record written by hand can lose a field into the one before it, in two ways that read alike: the comma
+    after a field went missing, or the field was opened with `{{` and the next one closed with `}}`. Either
+    way the record parses, and the second field is read as the end of the first — keywords as the end of
+    an abstract. Such a field is split back out when its value is a braced group, a line break, then
+    `name = {...}` and nothing more; one field holding several is split until none is left. Everything
+    outside a split record is byte for byte as it was.
+    """
+    library = parse_string(source, split_names=False)
+    pieces, cursor, split = [], 0, 0
+    for entry in library.entries:
+        raw = entry.raw
+        start = source.find(raw, cursor)
+        if start == -1:  # should not happen; skip rather than corrupt the file on a guess
+            continue
+        candidate, n = raw, 0
+        while (maybe_next := _split_in_record(candidate)) is not None:
+            candidate, n = maybe_next, n + 1
+        if not n:
+            continue
+        pieces.append(source[cursor:start])
+        pieces.append(candidate)
+        cursor = start + len(raw)
+        split += n
+    pieces.append(source[cursor:])
+    return "".join(pieces), split
+
+
 def _add_doi_field(raw: str, entry: Entry, doi: str) -> str | None:
     """`raw` with a `doi` field as its first, or `None` where the parser does not read it back exactly so."""
     header_end = raw.find("\n")
@@ -924,7 +1046,7 @@ def _add_doi_field(raw: str, entry: Entry, doi: str) -> str | None:
         return None
     following = raw[header_end + 1:]
     indent = following[:len(following) - len(following.lstrip(" \t"))]
-    candidate = raw[:header_end + 1] + f"{indent}doi = {{{doi}}},\n" + following
+    candidate = raw[:header_end + 1] + f"{indent}doi = {{{doi}}},{_line_break(raw)}" + following
     try:
         library = parse_string(candidate, split_names=False)
     except Exception:  # noqa: BLE001 -- an edit that breaks the parser is just a failed edit

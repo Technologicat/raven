@@ -54,6 +54,7 @@
 
 #### Raven-fixbib
 
+- **A field read as the end of the one before it is split back out**: where the comma after a field went missing, or a stray `{{` … `}}` pair put the next field inside it. A slip of bibliographies kept by hand, where keywords can end up read as the last line of the abstract.
 - **A DOI written into the citation key or the `url` is copied into a `doi` field**, where the other paper tools look for it. A hand-built bibliography sometimes uses the DOI as the key itself, as `https://doi.org/…`, `DOI: …` and the like.
   - Nothing is removed: the key and the `url` stay as they were, and a record with a `doi` field already is left alone. `--no-recover-dois` switches it off.
 

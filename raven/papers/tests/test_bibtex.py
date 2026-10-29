@@ -8,7 +8,7 @@ from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _un
                                  brace_repair_candidates, decode_html_entities, entries_to_bibtex,
                                  entry_doi, entry_field, entry_venue, field_value, find_doi,
                                  header_key, parse_file, parse_string, readable_text,
-                                 recover_dois, relocate_rights_notices, repair_duplicate_field_keys,
+                                 recover_dois, relocate_rights_notices, repair_duplicate_field_keys, split_swallowed_fields,
                                  repair_failed_block, repair_name_lists,
                                  unbalanced_field_names, write_string)
 
@@ -548,10 +548,68 @@ class TestRecoverDois:
         recovered, count = recover_dois(f"{untouched}\n\n{self.IN_KEY}")
         assert count == 1 and recovered.startswith(untouched + "\n\n")
 
+    def test_a_crlf_record_gets_a_crlf_line(self):
+        recovered, count = recover_dois(self.IN_KEY.replace("\n", "\r\n"))
+        assert count == 1 and "\n" not in recovered.replace("\r\n", ""), "a bare LF was added"
+
     def test_the_result_parses_and_the_run_is_idempotent(self):
         once, count = recover_dois(self.IN_KEY)
         assert count == 1
         assert recover_dois(once) == (once, 0)
+
+
+class TestSplitSwallowedFields:
+    # The two slips that hide a field inside the one before it, as found in hand-built bibliographies.
+    BRACES = "@article{a,\n  title = {A},\n  abstract = {{We study things.}\nKeywords = {health, schools}}\n}\n"
+    COMMA = "@book{b,\n  year = {1965},\n  address={Oxford}\n  publisher={Pergamon Press}\n}\n"
+
+    @staticmethod
+    def _fields(source):
+        return {f.key: f.value for f in parse_string(source, split_names=False).entries[0].fields}
+
+    def test_the_fixtures_read_as_one_field_before_the_repair(self):
+        # Without this, the tests below could pass on records that were never broken.
+        assert "Keywords" in self._fields(self.BRACES)["abstract"]
+        assert "publisher" in self._fields(self.COMMA)["address"]
+
+    def test_a_field_inside_a_surplus_pair_of_braces_is_split_out(self):
+        repaired, count = split_swallowed_fields(self.BRACES)
+        assert count == 1
+        fields = self._fields(repaired)
+        assert fields["abstract"] == "We study things." and fields["keywords"] == "health, schools"
+
+    def test_a_missing_comma_gets_its_comma_and_nothing_else(self):
+        repaired, count = split_swallowed_fields(self.COMMA)
+        assert count == 1
+        assert repaired == self.COMMA.replace("address={Oxford}\n", "address={Oxford},\n")
+        assert self._fields(repaired)["publisher"] == "Pergamon Press"
+
+    def test_crlf_line_breaks_are_kept(self):
+        for source in (self.BRACES, self.COMMA):
+            crlf = source.replace("\n", "\r\n")
+            repaired, count = split_swallowed_fields(crlf)
+            assert count == 1 and "\n" not in repaired.replace("\r\n", ""), "a bare LF was added"
+
+    def test_a_field_the_record_has_already_gains_the_swallowed_value_below_its_own(self):
+        source = self.BRACES.replace("  title = {A},\n", "  title = {A},\n  keywords = {earlier},\n")
+        repaired, count = split_swallowed_fields(source)
+        assert count == 1 and self._fields(repaired)["keywords"] == "earlier\nhealth, schools"
+
+    def test_an_equals_sign_in_a_value_is_not_a_field(self):
+        for source in ["@article{c,\n  abstract = {We set x = {1} throughout.}\n}\n",
+                       "@article{c,\n  abstract = {{Part one} keywords = {inline, no line break}}\n}\n",
+                       "@article{c,\n  abstract = {{Part one}\nnot a field = {x}}\n}\n"]:
+            assert split_swallowed_fields(source) == (source, 0), source
+
+    def test_the_records_around_it_are_untouched_byte_for_byte(self):
+        untouched = "@article{z,\n\ttitle = {Untouched},\n}"
+        repaired, count = split_swallowed_fields(f"{untouched}\n\n{self.BRACES}")
+        assert count == 1 and repaired.startswith(untouched + "\n\n")
+
+    def test_the_run_is_idempotent(self):
+        for source in (self.BRACES, self.COMMA):
+            once, _count = split_swallowed_fields(source)
+            assert split_swallowed_fields(once) == (once, 0)
 
 
 class TestFieldSpans:

@@ -42,6 +42,11 @@ it would read that way in every tool downstream — a citation, a word cloud, a 
 entities are decoded and re-escaped for BibTeX, and everything around them is left byte for byte as it
 was. `--keep-entities` switches it off.
 
+**A field read as the end of the one before it** is split back out. A record written by hand can lose the
+comma after a field, or open a field with `{{` that the next one closes with `}}`; either way it still
+parses, and keywords, say, arrive as the last line of the abstract. A field is split out only where the
+line break and the `name = {...}` are unmistakable, and the parser must read both fields back.
+
 **A DOI written only into the citation key or the `url`** is copied into a `doi` field. A hand-built
 bibliography sometimes uses the DOI as the key itself, pasted in whatever spelling the source offered —
 `https://doi.org/10...`, `DOI: 10...`, `doi:10...` — and `raven-fillbib` and `raven-deduplicate`, which
@@ -234,7 +239,7 @@ def _summarize_by_kind(reports: list[RepairReport]) -> str:
 
 
 def main() -> None:  # pragma: no cover
-    parser = argparse.ArgumentParser(description="""Repair a BibTeX file: records a parser refuses to read — field values whose braces do not balance, entries naming the same field twice — HTML character entities left in the field values of records that read perfectly well, and a DOI written only into the citation key or the `url`. Writes a new file unless asked to edit in place.""",
+    parser = argparse.ArgumentParser(description="""Repair a BibTeX file: records a parser refuses to read — field values whose braces do not balance, entries naming the same field twice — HTML character entities left in the field values of records that read perfectly well, a field read as the end of the one before it, and a DOI written only into the citation key or the `url`. Writes a new file unless asked to edit in place.""",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_fixed", type=str, metavar="suf",
@@ -266,7 +271,7 @@ def main() -> None:  # pragma: no cover
     # decision an application gets to make and a library does not.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
 
-    total_recovered = total_unrecovered = total_decoded = total_moved = total_dois = 0
+    total_recovered = total_unrecovered = total_decoded = total_split = total_moved = total_dois = 0
     for filename in opts.filenames:
         path = pathlib.Path(filename).expanduser().resolve()
         try:
@@ -279,14 +284,18 @@ def main() -> None:  # pragma: no cover
         # decoding cannot change how many lines the file has -- a separator or control character becomes
         # a space rather than itself -- so the line numbers reported below still point into the user's
         # own file.
-        decoded = moved = dois = 0
+        decoded = split = moved = dois = 0
         if not opts.keep_entities:
             source, decoded = bibtex.decode_html_entities(source)
+        # Before the notices and the DOIs: a field swallowed at the end of an abstract hides a notice there,
+        # and a swallowed `doi` would have the DOI recovery add a second one.
+        source, split = bibtex.split_swallowed_fields(source)
         if not opts.keep_notices:
             source, moved = bibtex.relocate_rights_notices(source)
         if opts.recover_dois:
             source, dois = bibtex.recover_dois(source)
         total_decoded += decoded
+        total_split += split
         total_moved += moved
         total_dois += dois
 
@@ -305,6 +314,8 @@ def main() -> None:  # pragma: no cover
 
         if decoded:
             print(f"{path.name}: decoded {decoded} HTML character entit{'y' if decoded == 1 else 'ies'}.")
+        if split:
+            print(f"{path.name}: split out {split} field{textutil.plural_s(split)} that the field before swallowed.")
         if moved:
             print(f"{path.name}: moved {moved} rights notice{textutil.plural_s(moved)} out of `abstract` into `copyright`.")
         if dois:
@@ -313,7 +324,7 @@ def main() -> None:  # pragma: no cover
             print(f"{path.name}: repaired {len(recovered)} record{textutil.plural_s(len(recovered))} — {_summarize_by_kind(recovered)}.")
         if unrecovered:
             print(f"{path.name}: {len(unrecovered)} record{textutil.plural_s(len(unrecovered))} still unreadable — {_summarize_by_kind(unrecovered)}.")
-        if not recovered and not decoded and not moved and not dois:
+        if not recovered and not decoded and not split and not moved and not dois:
             if not unrecovered:
                 print(f"{path.name}: nothing to repair.")
             continue
@@ -333,8 +344,9 @@ def main() -> None:  # pragma: no cover
         # no verb agreeing with the number — English would want "1 record needs" and "2 records need".
         print(f"\nRecords needing a look by hand: {total_unrecovered}. What would fix them is not "
               f"recoverable from the text.", file=sys.stderr)
-    if total_recovered or total_unrecovered or total_decoded or total_moved or total_dois:
+    if total_recovered or total_unrecovered or total_decoded or total_split or total_moved or total_dois:
         extras = "".join([f", {total_decoded} entit{'y' if total_decoded == 1 else 'ies'} decoded" if total_decoded else "",  # plural
+                          f", {total_split} swallowed field{textutil.plural_s(total_split)} split out" if total_split else "",
                           f", {total_moved} rights notice{textutil.plural_s(total_moved)} moved" if total_moved else "",
                           f", {total_dois} DOI{textutil.plural_s(total_dois)} copied into `doi`" if total_dois else ""])
         print(f"Total: {total_recovered} repaired, {total_unrecovered} left for you{extras}.")

@@ -230,6 +230,14 @@ A record whose braces would not survive the split is left alone. Everything outs
 
 `--keep-notices` leaves abstracts as they are.
 
+### A field read as the end of the one before it
+
+A record written by hand can lose a field into the one before it, in two ways that look alike once read: the comma after a field goes missing, or a field is opened with `{{` and the next one closed with `}}`. The record still parses, so nothing reports it, and the second field arrives as the last line of the first — keywords as the end of an abstract, a publisher inside the address. Everything that reads the abstract reads the keywords with it.
+
+**Split back out** into a field of its own: the comma is put back, or the surplus braces go and the field gets its own line. Only where the shape is unmistakable — a line break, then `name = {...}` and nothing more — and only where the parser then reads both fields back exactly. A record that has the field already keeps what is there and gains the swallowed value on a line below it.
+
+It is always on, being a repair rather than a choice. The slip is a hand-editing one: none of the database exports it was checked against had it, and several bibliographies kept by hand did.
+
 ### A DOI in the citation key
 
 A bibliography built by hand sometimes uses each paper's DOI as its citation key, pasted in whatever spelling the source offered — `https://doi.org/10…`, `DOI: 10…`, `doi:10…`, or with a `PMID` after it. The DOI is then in the file but not in a `doi` field, which is where `raven-fillbib`, `raven-deduplicate` and `raven-scopebib --fill` look for it, so to them the record has none.
