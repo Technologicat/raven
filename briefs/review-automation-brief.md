@@ -56,7 +56,7 @@ wanted early in the week of 2026-11-02, for the health-education study.
 
 10. **Clustering the accepted set by the research questions, with an LLM.** A small accepted set does not
     cluster by embedding: the health-education run d's 40 records gave no cluster at all, in high
-    dimensions or in 2D. But 40 titles and abstracts are about 9,700 words, roughly 13k tokens, which fits
+    dimensions or in 2D. But 40 titles and abstracts are 9,702 words, 12,171 tokens to the served model, which fits
     in one prompt with room to spare. So: give the model the study's research questions and every abstract
     at once, and ask it to group the studies in the light of those questions, naming each group and saying
     why each study is in it. Run it several times, to see how stable the grouping is. For this study it
