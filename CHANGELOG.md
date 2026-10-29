@@ -206,12 +206,17 @@
 
 - **An author list written APA-style is repaired**, rewritten into BibTeX's `and`-separated form, and so is a stray comma at the end of a name. A list whose parts do not pair up as surname and initials is still reported rather than guessed at. Both kinds are reported as names BibTeX cannot split, where v0.2.10 called them unreadable.
 - **A record the parser abandons mid-header is reported with the parser's reason**, such as a citekey containing `=`. In v0.2.10 the reason came out empty.
-- **`-o` given a path is refused with a message saying it takes a suffix**, as in `_fixed`; with `raven-siftbib` too. In v0.2.10 `raven-fixbib` crashed with a traceback, and `raven-siftbib` wrote its output into another directory or failed there.
+- **`-o` given a path is refused with a message saying it takes a suffix**, as in `_fixed`. In v0.2.10 it crashed with a traceback.
   - An empty suffix is refused as well. It named the output after the input, so the input was overwritten without `--in-place` being asked for.
 
 #### Raven-deduplicate
 
 - **A record whose key an earlier record already has is no longer lost.** In v0.2.10 it was dropped without a word, which happens whenever two exports read as one corpus share a key scheme. It is now read under a new key and matched like any other record. The run names each repeated key, and says whether the two were the same paper and merged, under the key the file gave them, or different papers both kept.
+
+#### Raven-siftbib
+
+- **`-o` given a path is refused with a message saying it takes a suffix**, as in `_sifted`. In v0.2.10 the run failed writing its output, or wrote it into a directory named after the path, where one happened to exist.
+  - An empty suffix is refused as well. It named the output after the input, so the input was overwritten.
 
 #### Constellation-wide
 
