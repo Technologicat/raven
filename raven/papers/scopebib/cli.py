@@ -111,8 +111,8 @@ def _parser() -> argparse.ArgumentParser:
     helps = {"run": "Every stage in order, then the reports.",
              "judge": "The judge stage alone: an LLM applies the definition's tests to each record (01-auto-judged). "
                       "Then the reports.",
-             "review": "The review stage alone: an LLM looks for a case for keeping each record the judge dropped "
-                       "(02-Auto-reviewed). "
+             "review": "The review stage alone: an LLM looks for a case that each record the judge dropped "
+                       "belongs in scope after all (02-Auto-reviewed). "
                        "Then the reports.",
              "extract": "The extract stage alone: an LLM reads the definition's fields off each kept record, with "
                         "a quote for each, and the rules act on them (03-ruled). Then the reports.",

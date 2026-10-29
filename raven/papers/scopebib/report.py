@@ -15,7 +15,7 @@ order:
     00-sift.<fmt>             what the sift removed, and on which criterion
     00-sifted.bib             what it kept: the judge's input
     01-auto-judged.<fmt>      every judged record: the verdict, the tests, the judge's reason
-    02-Auto-reviewed.<fmt>    the drops and the control, with the reviewer's case for keeping each
+    02-Auto-reviewed.<fmt>    the drops and the control, with any case the reviewer made that a record belongs in scope after all
     03-ruled.<fmt>            the keeps: their fields, their quotes, the rule that acted
     04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why
     04-Removed.<fmt>          every record removed, by which stage and why
@@ -146,7 +146,7 @@ def outcomes(records: Iterable[scope_records.Record], *,
             if answer.get("rescued"):
                 out[record.key] = Outcome(TO_A_PERSON, "review", first_test,
                                           f"the judge dropped it ({_judge_reason(answer)}); "
-                                          f"the reviewer's case for keeping it: {answer['case']}")
+                                          f"the reviewer's case that it belongs in scope: {answer['case']}")
             else:
                 out[record.key] = Outcome(TO_A_PERSON, "judge", first_test,
                                           f"the judge was not sure enough to drop it: {_judge_reason(answer)}")
@@ -357,7 +357,7 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
            "drops is not telling them apart",
            "the control is records the judge kept, drawn at the drops' mix of confidence and shown to the "
            "reviewer unlabelled; it is labelled only here, and the reviewer's answer about it changes nothing"],
-          ("group", "key", "reviewer found a case", "reviewer's case for keeping", "judge verdict", "judge confidence", "tests true", "judge why",
+          ("group", "key", "reviewer found a case", "reviewer's case that it belongs", "judge verdict", "judge confidence", "tests true", "judge why",
            *_RECORD_COLUMNS),
           rows)
 
@@ -641,8 +641,8 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
 
     One table, a `section` column first, in the order a person should read it — what a mistake costs:
 
-      1. **The judge's drops**, each with the test that fired, its reason, and the reviewer's case for keeping it where it
-         made one. A false drop loses a record silently, so these are read first, all of them.
+      1. **The judge's drops**, each with the test that fired, its reason, and the reviewer's case that it belongs
+         in scope, where it made one. A false drop loses a record silently, so these are read first, all of them.
       2. **The records the judge sent to review.** Mostly obvious drops means the tests are too timid;
          mostly obvious keeps, too eager.
       3. **A sample of the keeps**, `KEEP_SAMPLE` of them drawn by `seed`, with their fields and what the
@@ -704,7 +704,7 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
                          f"{len(keeps)} kept, of which {len(sampled)} shown; {len(title_only)} title-only",
                          "read the sections in order: a false drop costs most, as it loses a record silently"],
                         ("section", "key", "decided by", "verdict", "confidence", "pass", "why",
-                         "reviewer", "reviewer's case for keeping", "rules", "rules' note", *field_columns, "thin title",
+                         "reviewer", "reviewer's case that it belongs", "rules", "rules' note", *field_columns, "thin title",
                          *_RECORD_COLUMNS),
                         rows)
     for fmt in tabular.FORMATS:

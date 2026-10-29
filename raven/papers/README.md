@@ -648,7 +648,7 @@ What it shows that the first example does not:
 
 The report's sections are in the order a mistake costs:
 
-1. **The drops**, with the test that fired, its reason, and the reviewer's case for keeping it, where it made one. A false drop loses a record silently, so read all of them.
+1. **The drops**, with the test that fired, its reason, and the reviewer's case that it belongs in scope, where it made one. A false drop loses a record silently, so read all of them.
 2. **The records sent to review.** Mostly obvious drops means the tests are too timid; mostly obvious keeps, too eager.
 3. **A sample of the keeps**, with their fields and what the rules did. Anything here that plainly should have gone is a test that is missing.
 4. **The title-only records**, however they ended, these being the inputs most likely to break a test. Where there are none, it says so.
@@ -665,7 +665,7 @@ Named by step, so that listing the directory shows the pipeline in order. `<fmt>
 | `00-sift.<fmt>` | what the sift removed, and on which criterion |
 | `00-sifted.bib` | what it kept: the judge's input |
 | `01-auto-judged.<fmt>` | every judged record: the verdict, each test, the judge's reason |
-| `02-Auto-reviewed.<fmt>` | the drops and the control, with the reviewer's case for keeping each |
+| `02-Auto-reviewed.<fmt>` | the drops and the control, with any case the reviewer made that a record belongs in scope after all |
 | `03-ruled.<fmt>` | the judge's keeps: their fields, their quotes, the rule that acted |
 | `04-CHECK-BY-HAND.<fmt>` | every record sent to a person, with why, and a blank `decision` column |
 | `04-Removed.<fmt>` | every record removed, by which step and why, the sift's included |

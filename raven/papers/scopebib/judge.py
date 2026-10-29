@@ -289,9 +289,9 @@ def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
     judge from, or any test answered true."""
     # The third trigger is the asymmetry rather than a second guess at the confidence. A false keep costs a
     # reader one line; a false drop removes a record and leaves nothing behind to notice it by. In the
-    # prototype, confidence from a title alone carried no information about whether a drop was right: a
-    # case for keeping was found for 3.9% of the drops made confidently from a title, against 0.3% of those
-    # made confidently after the abstract.
+    # prototype, confidence from a title alone carried no information about whether a drop was right: the
+    # reviewer found a case that the record belongs for 3.9% of the drops made confidently from a title,
+    # against 0.3% of those made confidently after the abstract.
     return (answer["confidence"] == "low"
             or measure.uninformative
             or True in answer["tests"].values())
