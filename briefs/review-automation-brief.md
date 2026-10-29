@@ -117,10 +117,12 @@ wanted early in the week of 2026-11-02, for the health-education study.
       study, a study allowed under two themes. Coding each study per research question is the other
       reading of "by the research questions", and grows into item 11 instead (decided 2026-10-29).
     - **Which level of the tables is the human one**: the sub-themes exist because the Visualizer's
-      clusters turned out to hold several themes each (maintainer, 2026-10-29), so the top level is
-      partly the algorithm's, and the sub-themes are what people found in it. They are a valid concept
-      for classification in their own right. So compare at both levels, and read where they differ: a
-      grouping that splits or merges the top-level clusters differently need not disagree with people.
+      clusters turned out to hold several themes each (maintainer, 2026-10-29). Every name in the tables
+      is human, at both levels, the Visualizer's keywords serving only as a sanity check; what came from
+      the algorithm is the top level's *membership*, which studies were grouped together. The sub-themes
+      are a valid concept for classification in their own right. So compare at both levels, and read
+      where they differ: a grouping that splits or merges the top-level clusters differently need not
+      disagree with people.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
