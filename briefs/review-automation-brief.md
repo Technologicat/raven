@@ -107,8 +107,11 @@ wanted early in the week of 2026-11-02, for the health-education study.
         both themes (maintainer, 2026-10-29); the paper's text does not say so. A ground truth that allows
         a study two places means item 10's comparison must allow it too: either placement agrees with
         people, and so does both.
-      - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011. A
-        surname-and-year match misses it; `raven-checkrefs` matches on titles too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
+      - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011, and
+        2011 is right — the article's own running heads say *European Journal of Geography 1 (2011)*
+        (checked by the maintainer, 2026-10-29). The 2016 comes from the bibliography's record, so the table
+        was written from the bib. A surname-and-year match misses it; `raven-checkrefs` matches on titles
+        too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
         gives a count per cluster. The table is also item 10's ground truth, study by study.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
