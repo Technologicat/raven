@@ -122,9 +122,9 @@ wanted early in the week of 2026-11-02, for the health-education study.
         that easy to miss is why it was taken for one list. `raven-checkrefs` paired 126 of the 127 with
         records, three of them proposals well clear of their runners-up. The 127th, Yli-Panula et al.
         (2020), is in no cluster and has no record — the same shape as biology's Sterling (2013), and
-        **for the coauthor** likewise. The content analysis reviewed 114, and nothing in the list marks
-        which: 127 places less the 13 outliers is 114, which would make it every clustered study but the
-        outliers — arithmetic, not yet confirmed.
+        **for the coauthor** likewise. The content analysis reviewed 114: every clustered place but the 13
+        outliers, rejected by hand (the paper, p. 25). So `published/geography_content_analysis.bib` holds
+        113 studies, Boehm et al. being two of the 114 places.
       - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011, and
         2011 is right — the article's own running heads say *European Journal of Geography 1 (2011)*
         (checked by the maintainer, 2026-10-29). The 2016 comes from the bibliography's record, so the table
