@@ -249,6 +249,22 @@ class TestRemovedRowsPasteIntoTheWorklist:
         sifted = next(row for row in removed if row["key"] == "bare")
         assert (sifted["title"], sifted["decision"]) == ("Bare", "")
 
+    def test_the_keeps_have_the_worklists_columns_and_a_pasted_one_is_dropped(self, finished, definition, tmp_path):
+        write(finished, definition, tmp_path / "out")
+        worklist = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")
+        kept = tabular.read_table(tmp_path / "out" / f"{report.KEPT_AUDIT}.tsv")
+        assert sorted(row["key"] for row in kept) == ["forest", "unextracted", "unjudged"]
+        columns = list(worklist[0])
+        assert len(columns) == len(kept[0]) and [list(kept[0]).index(name) for name in ("key", "decision", "note")] == [
+            columns.index(name) for name in ("key", "decision", "note")]
+        pasted = dict(zip(columns, next(row for row in kept if row["key"] == "forest").values()))
+        pasted["decision"] = "drop"
+        marked = tmp_path / "marked.tsv"
+        tabular.write_table(marked, [], columns, [list(row.values()) for row in worklist] + [list(pasted.values())])
+        finish(finished, definition, tmp_path / "out", marked)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert "forest" not in [entry.key for entry in final_bib.entries]
+
     def test_a_removal_pasted_into_the_marked_worklist_is_restored(self, finished, definition, tmp_path):
         write(finished, definition, tmp_path / "out")
         worklist = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")

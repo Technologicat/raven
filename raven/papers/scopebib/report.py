@@ -20,7 +20,8 @@ order:
     02b-ruled.<fmt>           the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
     03a-CHECK-BY-HAND.<fmt>   every record sent to a person, with why
     03b-removed.<fmt>         every record removed, by which stage and why
-    03c-kept.bib              the records that survived every stage
+    03c-kept.<fmt>            the records that survived every stage, in the worklist's columns
+    03c-kept.bib              the same records as BibTeX
     04a-hand-decided.<fmt>    every decision a person made, on 03a-CHECK-BY-HAND and against the run
     04b-final.bib             the kept records, and those a person kept
 
@@ -34,7 +35,7 @@ stage that did not run. A copy saved under any other name is left alone.
 """
 
 __all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
-           "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
+           "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
            "SiftResult", "select",
@@ -70,11 +71,13 @@ REVIEW_AUDIT = "02a-auto-reviewed"
 EXTRACT_AUDIT = "02b-ruled"
 CHECK_BY_HAND = "03a-CHECK-BY-HAND"
 REMOVED_AUDIT = "03b-removed"
+KEPT_AUDIT = "03c-kept"
 KEPT_BIB = "03c-kept.bib"
 HAND_AUDIT = "04a-hand-decided"
 FINAL_BIB = "04b-final.bib"
 
-_TABLES = (FILL_AUDIT, SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
+_TABLES = (FILL_AUDIT, SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, KEPT_AUDIT,
+           HAND_AUDIT)
 
 #: Every file name `write_reports` can write, and so every name it may remove as stale.
 OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [PREPROCESSED_BIB, KEPT_BIB, FINAL_BIB])
@@ -454,7 +457,7 @@ def _extract_table(table, *, extractions: dict[str, dict], by_key: dict[str, sco
            f"records extracted: {len(keys)}; {tally}",
            "the rules are the definition's as it stands, applied when this was written; a value the model gave "
            "outside a field's vocabulary reads as not_stated, and is shown under 'unrecognized'"],
-          ("key", "action", "rule", "note", *field_columns, "unrecognized", *_RECORD_COLUMNS),
+          ("key", "action", "rule", "rule's note", *field_columns, "unrecognized", *_RECORD_COLUMNS),
           [(key, decisions[key].action, decisions[key].label or "", decisions[key].note,
             *field_cells(extractions[key]),
             "; ".join(f"{name}: {value}" for name, value in extractions[key]["raw"].items()),
@@ -522,6 +525,17 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
            f"to overturn a removal, copy its row into your marked {CHECK_BY_HAND} and mark it 'keep'"],
           ("key", "removed by", "decided by", "why", "decision", "earlier", "note", *_RECORD_COLUMNS),
           rows)
+
+    # The keeps in the same layout, for the same reason: a keep a person disagrees with is copied across and
+    # marked 'drop'. The kept bib beside it is the same records, for the tools that read BibTeX.
+    kept = sorted((key for key, outcome in result.items() if outcome.action == KEPT), key=order)
+    table(KEPT_AUDIT,
+          [summary,
+           f"records kept: {len(kept)}",
+           f"to overturn a keep, copy its row into your marked {CHECK_BY_HAND} and mark it 'drop'"],
+          ("key", "kept by", "decided by", "why", "decision", "earlier", "note", *_RECORD_COLUMNS),
+          [(key, result[key].stage, result[key].decided_by, result[key].reason, "", "", "", *_record_cells(by_key[key]))
+           for key in kept])
 
 
 # --------------------------------------------------------------------------------
@@ -834,7 +848,7 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
                          f"{len(keeps)} kept, of which {len(sampled)} shown; {len(title_only)} title-only",
                          "read the sections in order: a false drop costs most, as it loses a record silently"],
                         ("section", "key", "decided by", "verdict", "confidence", "pass", "why",
-                         "reviewer", "reviewer's case that it belongs", "rules", "rules' note", *field_columns, "thin title",
+                         "reviewer", "reviewer's case that it belongs", "rules", "rule's note", *field_columns, "thin title",
                          *_RECORD_COLUMNS),
                         rows)
     for fmt in tabular.FORMATS:

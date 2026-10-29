@@ -671,7 +671,7 @@ Named by step, so that listing the directory shows the pipeline in order. `<fmt>
 | `02b-ruled.<fmt>` | the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each |
 | `03a-CHECK-BY-HAND.<fmt>` | every record sent to a person, with why, and a blank `decision` column |
 | `03b-removed.<fmt>` | every record removed, by which step and why, the sift's included, in the worklist's columns so that a row copies into it whole |
-| `03c-kept.bib` | the records that survived every step |
+| `03c-kept.<fmt>`, `03c-kept.bib` | the records that survived every step: as a table in the worklist's columns, and as BibTeX |
 | `04a-hand-decided.<fmt>`, `04b-final.bib` | written by `finish`: every decision a person made, and the final bibliography |
 | `run.toml` | the [run file](#the-run-file-and-repeating-a-run) |
 | `ledgers/` | every answer the LLM gave, with the model calls themselves |
@@ -688,6 +688,7 @@ The order is what a mistake costs. The first two files are where a wrong answer 
 
 1. **`03a-CHECK-BY-HAND`: decide each row.** These are the records the tool would not decide alone, each with the step that sent it (`sent by`), the test or rule involved (`decided by`) and why. Mark `decision` [as `finish` reads it](#checking-by-hand-and-finish). Where earlier decisions were carried in, the highlighted rows at the top come first: there the new run went against what you decided.
 2. **`03b-removed`: look for removals that should not have happened.** A wrong removal costs a record with nothing to show for it, and nothing else in the folder will bring it back to you. Read it grouped by `removed by` and `decided by`, and look for a test or rule removing a kind of record you meant to keep: wrong removals often come as a class rather than one by one. A class is a definition to fix, and running again with [your decisions carried](#running-again-after-a-change-with-your-decisions-kept) is cheaper than overturning each. A single wrong one is overturned in your marked sheet: copy its row there, whole — this file has the worklist's columns, in the same places — and mark it `keep`.
+   A keep that should not be there is overturned the same way, from `03c-kept`, marked `drop`.
 3. **`02a-auto-reviewed`: read the reviewer's cases.** A case the reviewer made for a dropped record is an argument that your definition removes something it should not, and it is where a disagreement with the definition shows first. Begin with [the comparison in its header](#the-reviewers-control): it says whether the reviewer's cases are worth reading.
 4. **`00a-filled` and `00b-sifted`: once per corpus.** What the fill could not complete, and what the sift removed for having nothing to screen. The sift's removals were never judged at all, so a record you know belongs and find here needs an abstract, or a criterion loosened.
 5. **`01-auto-judged` and `02b-ruled`: when something needs explaining.** Every test's answer and reason, and every field with its quote, for a record whose fate surprised you, and for a methods section.
@@ -729,7 +730,7 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - a record sent to a person that is missing from the sheet — it is not this run's sheet, or rows were deleted;
 - a run with records still waiting on a step: finish the run first.
 
-**To overturn the run itself, add a row for the record**: its key and `keep` or `drop` is all it needs. For a removal you disagree with, copy its whole row from `03b-removed`, which has the worklist's columns in the same places; for a keep, take its key from `02b-ruled`.
+**To overturn the run itself, add a row for the record**: its key and `keep` or `drop` is all it needs. Copy its whole row from `03b-removed` for a removal you disagree with, or from `03c-kept` for a keep: both have the worklist's columns in the same places.
 
 - `keep` restores a record the run removed, and `drop` removes one it kept. `finish` lists every override in its output, and `04a-hand-decided` records each with what the run had done, which stage did it, and why.
 - A blank on such a row decides nothing. "A blank drops" belongs to the worklist, and never removes a record the run kept; nor does a `drop` here put the worklist into the every-row mode.
