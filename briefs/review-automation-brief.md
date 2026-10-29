@@ -61,6 +61,15 @@ wanted early in the week of 2026-11-02, for the health-education study.
     at once, and ask it to group the studies in the light of those questions, naming each group and saying
     why each study is in it. Run it several times, to see how stable the grouping is. For this study it
     would replace the HDBSCAN clusters.
+    - **The two earlier studies are its test set, and their sizes fit too**: geography's bibliography is 133
+      records, 35,088 tokens of titles and abstracts; biology's is 161, 49,884 (counted 2026-10-29 with
+      the served model's tokenizer). Both have a cluster table made by hand — geography's in the study's
+      materials, biology's in its published paper — so the grouping can be compared with people before it
+      is used on health education. Compare on the set each table covers: the geography paper screened to
+      127, against the bibliography's 133.
+    - **How far it scales is open**: at about 300 tokens a record the context holds roughly 400, but how
+      well the model reads a prompt of 100k tokens and more, as against how much fits, is unmeasured, and
+      its thinking grows with the set.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
