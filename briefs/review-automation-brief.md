@@ -107,6 +107,15 @@ wanted early in the week of 2026-11-02, for the health-education study.
         both themes (maintainer, 2026-10-29); the paper's text does not say so. A ground truth that allows
         a study two places means item 10's comparison must allow it too: either placement agrees with
         people, and so does both.
+      - **Biology's set is recovered** (2026-10-29): `published/biology_bibliometric.bib`, Table 6's 165
+        studies (167 places; Hamman 2018 and Faizah et al. 2024 are placed twice, as the paper's text says),
+        and `published/biology_content_analysis.bib`, the 131 the appendix does not asterisk — the asterisk
+        marks only studies left out of the content analysis, all 165 being in the bibliometric one
+        (maintainer). The appendix lists one study more, Sterling (2013), which is in no cluster and has no
+        record: taken to be a slip in the appendix, **to confirm with the coauthor** in the week of
+        2026-11-02. Table 6 dates Baena-Morales et al. 2023, the publisher 2024. The vision model misread six
+        of Table 6's 165 names, which the text layer corrected: trust the image for structure, the text for
+        spelling.
       - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011, and
         2011 is right — the article's own running heads say *European Journal of Geography 1 (2011)*
         (checked by the maintainer, 2026-10-29). The 2016 comes from the bibliography's record, so the table
