@@ -118,7 +118,9 @@ wanted early in the week of 2026-11-02, for the health-education study.
       reading of "by the research questions", and grows into item 11 instead (decided 2026-10-29).
     - **Which level of the tables is the human one**: the sub-themes exist because the Visualizer's
       clusters turned out to hold several themes each (maintainer, 2026-10-29). Every name in the tables
-      is human, at both levels, the Visualizer's keywords serving only as a sanity check; what came from
+      is human, at both levels, the Visualizer's keywords serving only as a sanity check — frequency-based
+      for biology, which predates the LLM keyword mode and found them of little use, and LLM-made for
+      geography, which found them good and named the topics by hand anyway; what came from
       the algorithm is the top level's *membership*, which studies were grouped together. The sub-themes
       are a valid concept for classification in their own right. So compare at both levels, and read
       where they differ: a grouping that splits or merges the top-level clusters differently need not
