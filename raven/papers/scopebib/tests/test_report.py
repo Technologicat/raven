@@ -147,9 +147,13 @@ class TestFiles:
                                                                 venue="")],
                                  criteria=[siftbib.require_field("abstract")])
         written = {path.name for path in write(run, definition, tmp_path / "out", maybe_sift=sift)}
-        assert {f"{report.SIFT_AUDIT}.tsv", report.SIFTED_BIB} <= written
+        assert {f"{report.SIFT_AUDIT}.tsv", report.PREPROCESSED_BIB} <= written
         removed = tabular.read_table(tmp_path / "out" / f"{report.REMOVED_AUDIT}.tsv")
         assert removed[0]["key"] == "bare" and removed[0]["removed by"] == "sift"
+
+    def test_no_preprocessed_bib_without_a_fill_or_a_sift(self, run, definition, tmp_path):
+        written = {path.name for path in write(run, definition, tmp_path / "out")}
+        assert report.PREPROCESSED_BIB not in written
 
     def test_the_fill_has_an_audit_of_its_own(self, run, definition, tmp_path):
         fill = [fillbib.AuditRow(key="teaser", outcome=fillbib.REPAIRED, abstract_now=fillbib.NOW_PRESENT,
@@ -157,6 +161,7 @@ class TestFiles:
                                  before="It begins ...", crossref="It begins, and goes on.")]
         written = {path.name for path in write(run, definition, tmp_path / "out", maybe_fill=fill)}
         assert f"{report.FILL_AUDIT}.tsv" in written
+        assert report.PREPROCESSED_BIB in written, "the fill alone changes what the judge reads"
         rows = tabular.read_table(tmp_path / "out" / f"{report.FILL_AUDIT}.tsv")
         assert [(row["key"], row["outcome"], row["abstract now"]) for row in rows] == [
             ("teaser", fillbib.REPAIRED, fillbib.NOW_PRESENT)]

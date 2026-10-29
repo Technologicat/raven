@@ -2,7 +2,7 @@
 
     raven-scopebib run corpus.bib --definition corpus.scope.toml --out-dir out --require abstract
     raven-scopebib run --run-file out/run.toml          # the same run again, from its own record
-    raven-scopebib finish out/04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
+    raven-scopebib finish out/03a-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
 
 Subcommands: `run` does every stage in order (`--until STAGE` stops after one); `judge`, `review` and
 `extract` run one stage; `report` writes the reports from what is saved; `finish` applies a person's decisions
@@ -112,10 +112,10 @@ def _parser() -> argparse.ArgumentParser:
              "judge": "The judge stage alone: an LLM applies the definition's tests to each record (01-auto-judged). "
                       "Then the reports.",
              "review": "The review stage alone: an LLM looks for a case that each record the judge dropped "
-                       "belongs in scope after all (02-Auto-reviewed). "
+                       "belongs in scope after all (02a-auto-reviewed). "
                        "Then the reports.",
              "extract": "The extract stage alone: an LLM reads the definition's fields off each kept record, with "
-                        "a quote for each, and the rules act on them (03-ruled). Then the reports.",
+                        "a quote for each, and the rules act on them (02b-ruled). Then the reports.",
              "report": "The reports, from the answers already saved."}
     for command, text in helps.items():
         subparser = commands.add_parser(command, parents=[common], help=text)
@@ -125,7 +125,7 @@ def _parser() -> argparse.ArgumentParser:
             subparser.add_argument("--until", default=None, choices=COMMANDS["run"], help="Stop after this stage.")
     # `finish` takes the marked sheet where the others take the `.bib`, which comes from the run file or `--bib`.
     finish = commands.add_parser("finish", parents=[common],
-                                 help="Apply a person's decisions on a marked copy of 04-CHECK-BY-HAND, including rows "
+                                 help="Apply a person's decisions on a marked copy of 03a-CHECK-BY-HAND, including rows "
                                       "added to overturn what the run kept or removed outright.")
     finish.add_argument("sheet", metavar="MARKED_SHEET", help="The marked copy, in any table format.")
     finish.add_argument("--bib", default=None, metavar="FILE",

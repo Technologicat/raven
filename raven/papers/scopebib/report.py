@@ -11,20 +11,20 @@ whose fields have not been extracted — so a partial run removes and keeps only
 **The files** (`write_reports`) are named by stage, so that listing the directory shows the pipeline in
 order:
 
-    00-fill.<fmt>             the abstracts filled from Crossref, and the records it could not help
-    00-sift.<fmt>             what the sift removed, and on which criterion
-    00-sifted.bib             what it kept: the judge's input
+    00a-filled.<fmt>          the abstracts filled from Crossref, and the records it could not help
+    00b-sifted.<fmt>          what the sift removed, and on which criterion
+    00c-preprocessed.bib      the input as filled and sifted: what the judge reads
     01-auto-judged.<fmt>      every judged record: the verdict, the tests, the judge's reason
-    02-Auto-reviewed.<fmt>    the judge's drops, and a sample of its keeps as a control, with any case
+    02a-auto-reviewed.<fmt>   the judge's drops, and a sample of its keeps as a control, with any case
                               the reviewer made that a record belongs in scope after all
-    03-ruled.<fmt>            the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
-    04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why
-    04-Removed.<fmt>          every record removed, by which stage and why
-    04-Kept.bib               the records that survived every stage
-    05-Hand-decisions.<fmt>   every decision a person made, on 04-CHECK-BY-HAND and against the run
-    05-Final.bib              the kept records, and those a person kept
+    02b-ruled.<fmt>           the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
+    03a-CHECK-BY-HAND.<fmt>   every record sent to a person, with why
+    03b-removed.<fmt>         every record removed, by which stage and why
+    03c-kept.bib              the records that survived every stage
+    04a-hand-decided.<fmt>    every decision a person made, on 03a-CHECK-BY-HAND and against the run
+    04b-final.bib             the kept records, and those a person kept
 
-The 05 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
+The 04 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
 built from an older worklist, they would look current while describing another run.
 
 The directory is shared with whatever else the user keeps there, so a write removes only files bearing one
@@ -32,7 +32,7 @@ of these exact names that it did not write this time — a previous run's report
 stage that did not run. A copy saved under any other name is left alone.
 """
 
-__all__ = ["FILL_AUDIT", "SIFT_AUDIT", "SIFTED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
+__all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
            "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
@@ -59,22 +59,22 @@ from . import review as scope_review
 from . import rules as scope_rules
 
 # The stems of the tables, written in whichever of `tabular.FORMATS` the caller asks for, and the two `.bib`s.
-FILL_AUDIT = "00-fill"
-SIFT_AUDIT = "00-sift"
-SIFTED_BIB = "00-sifted.bib"
+FILL_AUDIT = "00a-filled"
+SIFT_AUDIT = "00b-sifted"
+PREPROCESSED_BIB = "00c-preprocessed.bib"
 JUDGE_AUDIT = "01-auto-judged"
-REVIEW_AUDIT = "02-Auto-reviewed"
-EXTRACT_AUDIT = "03-ruled"
-CHECK_BY_HAND = "04-CHECK-BY-HAND"
-REMOVED_AUDIT = "04-Removed"
-KEPT_BIB = "04-Kept.bib"
-HAND_AUDIT = "05-Hand-decisions"
-FINAL_BIB = "05-Final.bib"
+REVIEW_AUDIT = "02a-auto-reviewed"
+EXTRACT_AUDIT = "02b-ruled"
+CHECK_BY_HAND = "03a-CHECK-BY-HAND"
+REMOVED_AUDIT = "03b-removed"
+KEPT_BIB = "03c-kept.bib"
+HAND_AUDIT = "04a-hand-decided"
+FINAL_BIB = "04b-final.bib"
 
 _TABLES = (FILL_AUDIT, SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
 
 #: Every file name `write_reports` can write, and so every name it may remove as stale.
-OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [SIFTED_BIB, KEPT_BIB, FINAL_BIB])
+OWNED_NAMES = frozenset([f"{stem}.{fmt}" for stem in _TABLES for fmt in tabular.FORMATS] + [PREPROCESSED_BIB, KEPT_BIB, FINAL_BIB])
 
 # Outcomes.
 REMOVED = "removed"
@@ -279,7 +279,9 @@ def write_reports(out_dir: str | pathlib.Path, *,
               siftbib.AUDIT_COLUMNS,
               [(record.key, record.reason, record.title, record.venue, record.link, record.abstract)
                for record in sift.dropped])
-        path = out_dir / SIFTED_BIB
+
+    if maybe_fill is not None or maybe_sift is not None:
+        path = out_dir / PREPROCESSED_BIB
         path.write_text(bibtex.write_string(library), encoding="utf-8")
         written.append(path)
 

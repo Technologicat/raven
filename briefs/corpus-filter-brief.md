@@ -513,28 +513,28 @@ the stages are separable and each is tested alone. The console script is the `cl
      records a sample and a control draw, and replicates share it so as to draw the same records.
    - **`raven-siftbib` runs as stage 0** inside `run`, through `siftbib.sift`, its criteria given on the
      command line as `raven-siftbib` takes them; no criteria, no sift.
-   - **The names** carry how much a file needs reading (renamed 2026-10-29): capitals for the one a
-     person acts on, a capital initial for what to read or keep, lowercase for what explains a stage.
-     A stage's file names its result (`sifted`, `ruled`, `Removed`), and `auto-` marks the two an LLM
-     decided, so neither is taken for a person's review:
+   - **The names** (renamed 2026-10-29): the number is the depth in the pipeline, a letter tells apart
+     files at one depth in reading order, and each is named for its result in the past tense, `auto-` and
+     `hand-` saying who decided. The worklist breaks the pattern in capitals so that it is the file seen,
+     and `final.bib` names the product:
 
      ```
-     00-sift.<fmt>            what the sift removed, and on which criterion
-     00-sifted.bib            what it kept: the judge's input
-     01-auto-judged.<fmt>     every judged record: the verdict, the tests, the judge's reason
-     02-Auto-reviewed.<fmt>   the judge's drops, and a sample of its keeps as a control, with any case
-                              the reviewer made that a record belongs in scope after all
-     03-ruled.<fmt>           the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
-     04-CHECK-BY-HAND.<fmt>   every record sent to a person, with why, and a blank `decision` column
-     04-Removed.<fmt>         every record removed, by which stage and why, the sift's included
-     04-Kept.bib              the records that survived every stage
-     run.toml                 the run file
+     00b-sifted.<fmt>          what the sift removed, and on which criterion
+     00c-preprocessed.bib      the input as filled and sifted: what the judge reads
+     01-auto-judged.<fmt>      every judged record: the verdict, the tests, the judge's reason
+     02a-auto-reviewed.<fmt>   the judge's drops, and a sample of its keeps as a control, with any case
+                               the reviewer made that a record belongs in scope after all
+     02b-ruled.<fmt>           the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
+     03a-CHECK-BY-HAND.<fmt>   every record sent to a person, with why, and a blank `decision` column
+     03b-removed.<fmt>         every record removed, by which stage and why, the sift's included
+     03c-kept.bib              the records that survived every stage
+     run.toml                  the run file
      ```
 
      The descriptions go into the docs.
    - **`report` owns exactly the names it can write** — those stems in each table format, and the two
      `.bib`s — rather than every `NN-` file, so a previous run's report in another format is removed while a
-     copy saved as `04-CHECK-BY-HAND-marked.xlsx` survives. The docs' warning is then only about saving over
+     copy saved as `03a-CHECK-BY-HAND-marked.xlsx` survives. The docs' warning is then only about saving over
      the original name.
    - **A record is pending while a stage it needs has not answered**: a drop the reviewer has not read
      (every drop is reviewed, so none is final before), a keep not yet extracted. A pending record is in
@@ -563,11 +563,11 @@ the stages are separable and each is tested alone. The console script is the `cl
    - **The control, as the docs must explain it** (maintainer: how it is chosen, how many, and how a user
      tells it from the real results): kept records drawn by `review.draw_control` at the drops' mix of
      confidence, seeded; `--control N`, default 40 as in the prototype's `review_drops.py`; labelled only
-     in `02-Auto-reviewed`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
+     in `02a-auto-reviewed`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
      alone, so a control record cannot reach the worklist or the removals. The audit's header compares the
      case rate among the drops with the rate among the control, which is the line to read first.
    - **A fifth stage, `finish`** (maintainer, 2026-10-22, not in the first plan): reads a marked copy of
-     `04-CHECK-BY-HAND`, applies the person's decisions, and writes `05-Final.bib` and `05-Hand-decisions`.
+     `03a-CHECK-BY-HAND`, applies the person's decisions, and writes `04b-final.bib` and `04a-hand-decided`.
      - **A sheet marks either its keeps alone or every row**, decisions in any case. Typing one of two
        full words per row is friction over hundreds of rows for someone with one paste buffer, so the
        default is to mark only the keeps, a blank dropping. Marking every row, `keep` or `drop`, is the
@@ -584,7 +584,7 @@ the stages are separable and each is tested alone. The console script is the `cl
        with blank meaning drop, a missing row would drop unseen, and it means the sheet is not this run's
        worklist. A row whose record the run has since settled is ignored with a warning, and a pending
        record refuses, the run being unfinished.
-     - **`write_reports` removes the 05 files**, which `finish` writes: built from an older worklist, they
+     - **`write_reports` removes the 04 files**, which `finish` writes: built from an older worklist, they
        would look current. Rewriting the reports means finishing again, which asks nothing of a model.
    - **`report` built 2026-10-22.** Over the prototype's converted answers it reproduces step 6's judge
      side exactly: 1069 removed, 153 to a person (139 unsure, 14 rescued). On the rules side the 138
@@ -636,7 +636,7 @@ the stages are separable and each is tested alone. The console script is the `cl
    and one of 5 not, and a sheet with no `keep` at all warns that everything drops;
    `--require-every-decision`, which refuses any blank; a worklist record missing from the sheet, and a run
    with pending records, which refuse; a row whose record the run has since settled, which is ignored with
-   a warning; and that rewriting the reports removes the 05 files, so `finish` runs again after.
+   a warning; and that rewriting the reports removes the 04 files, so `finish` runs again after.
    **And it must explain replicates and `compare`** (maintainer, 2026-10-23): what a replicate is for
    (test-retest reliability of an LLM judge); that `--replicate 2` asks once more, over the records not yet
    answered under its own instrument, into ledgers of its own, leaving replicate 1's untouched, so it costs
