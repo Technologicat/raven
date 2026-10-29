@@ -222,6 +222,8 @@
 
 - **Raven-server's `--secure` mode works with Raven's own apps.**
   - The apps sent the API key in a form the server could not read, so a secure server refused every request from them.
+- **Closing an app while a file dialog is open no longer risks a crash on the way out.**
+  - Rare, and not reproducible on demand: the dialog's background thread had to check on the app at the moment it was closing.
 
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 
@@ -415,8 +417,6 @@
 
 #### Constellation-wide
 
-- **Closing an app while a file dialog is open no longer risks a crash on the way out.**
-  - Rare, and not reproducible on demand: the dialog's background thread had to check on the app at the moment it was closing.
 - **Tab in the file dialog no longer lights up the path field for a moment.**
 - **The file dialog's blue keyboard mark now follows a click.** In v0.2.9 it stayed where it was, and the keys went with it.
   - Clicking the find field puts the mark there.
