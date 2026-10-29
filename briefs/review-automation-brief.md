@@ -102,10 +102,13 @@ wanted early in the week of 2026-11-02, for the health-education study.
         `published/geography-table5/` (gitignored): every count check passes — rows against their *n*,
         clusters against *Count*, 127 in all, 13 outliers. One page returned each row's citations as one
         `; `-joined string, which the assembler splits.
-      - **What the table itself gets wrong**: it lists Boehm et al. (2024) in both #0 and #6, the
-        reference list holding one such study, so it covers 126 distinct studies; and it cites Boehn &
-        Hamann (2016), where the reference list has 2011. A surname-and-year match misses the second;
-        `raven-checkrefs` matches on titles too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
+      - **One study sits in two clusters, on purpose**: Boehm et al. (2024) is in both #0 and #6, so the
+        table's 127 places cover 126 distinct studies. The authors placed it twice because it belongs under
+        both themes (maintainer, 2026-10-29); the paper's text does not say so. A ground truth that allows
+        a study two places means item 10's comparison must allow it too: either placement agrees with
+        people, and so does both.
+      - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011. A
+        surname-and-year match misses it; `raven-checkrefs` matches on titles too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
         gives a count per cluster. The table is also item 10's ground truth, study by study.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
