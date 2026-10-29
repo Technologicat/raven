@@ -15,7 +15,7 @@ check finds data faults in the `.bib` as a side effect.
 
   1. **DOI**, from the record's `doi` field, its `url` or its key, against the first DOI in the entry.
   2. **Title**: the record's normalized title appears whole in the normalized entry, and in no other entry
-     still free.
+     still free — or, among several, the one alone in carrying the record's year.
   3. **Proposed**: what is left on both sides is paired one-to-one, best `title_coverage` first. A proposal
      is reported with its score and the runner-up's, and counted apart from the matches. The margin over
      the runner-up is what tells a respelled title from a coincidence, where the score alone cannot: a wrong
@@ -112,6 +112,7 @@ class Reference:
     title: str
     maybe_doi: str | None
     maybe_title_key: str | None
+    maybe_year: str | None = None
 
 
 def references_of(library: Library) -> list[Reference]:
@@ -121,8 +122,10 @@ def references_of(library: Library) -> list[Reference]:
         maybe_found = bibtex.entry_doi(entry)
         maybe_doi = papers_utils.normalize_doi(maybe_found[1]) if maybe_found is not None else None
         title = bibtex.readable_text(bibtex.entry_field(entry, "title"))
+        maybe_year = re.search(r"\d{4}", bibtex.entry_field(entry, "year") or "")
         out.append(Reference(key=entry.key, title=title, maybe_doi=maybe_doi,
-                             maybe_title_key=deduplicate.normalize_title(title)))
+                             maybe_title_key=deduplicate.normalize_title(title),
+                             maybe_year=maybe_year.group(0) if maybe_year else None))
     return out
 
 
@@ -197,8 +200,10 @@ def check(references: list[Reference], entries: list[DocumentEntry]) -> list[Row
     # A title matches an entry it appears in whole, but only one that is still free and the only free one it
     # appears in. A short title ("Development") appears whole in many entries; taking the first of them would
     # take another record's entry. Repeating until nothing changes lets longer titles claim their entries
-    # first, which leaves the short one a single place to go. A title still ambiguous at the end goes on to
-    # the proposals, which pair one-to-one and report the margin.
+    # first, which leaves the short one a single place to go. Where several free entries still hold it, the
+    # record's year decides if it names just one of them: an author who reuses a title for a later edition
+    # (the same chapter in 2004 and 2013) is told apart by nothing else. A title still ambiguous at the end
+    # goes on to the proposals, which pair one-to-one and report the margin.
     while True:
         leftover: list[Reference] = []
         progress = False
@@ -206,6 +211,9 @@ def check(references: list[Reference], entries: list[DocumentEntry]) -> list[Row
             free = [entry for entry in entries
                     if entry.number not in used and reference.maybe_title_key and entry.maybe_key
                     and reference.maybe_title_key in entry.maybe_key]
+            if len(free) > 1 and reference.maybe_year:
+                same_year = [entry for entry in free if re.search(rf"\b{reference.maybe_year}\b", entry.text)]
+                free = same_year if len(same_year) == 1 else free
             if len(free) == 1:
                 matched.append(Row(MATCHED_BY_TITLE, reference, free[0]))
                 used.add(free[0].number)

@@ -95,6 +95,19 @@ class TestSplitting:
 
 
 class TestMatching:
+    def test_a_title_used_twice_is_told_apart_by_year(self, tmp_path):
+        """One chapter, reissued: the same title in two entries, and a record for each edition."""
+        path = tmp_path / "editions.bib"
+        path.write_text("@incollection{S2013, title = {An analysis of sustainability education}, author = {Sterling, S.}, "
+                        "year = {2013}}\n@incollection{S2004, title = {An analysis of sustainability education}, "
+                        "author = {Sterling, S.}, year = {2004}}\n", encoding="utf-8")
+        references = checkrefs.references_of(bibtex.parse_file(path, split_names=False))
+        entries = checkrefs.entries_of(["Sterling, S. (2004). An analysis of sustainability education. In Higher education.",
+                                        "Sterling, S. (2013). An analysis of sustainability education. In The curriculum."])
+        rows = by_key(checkrefs.check(references, entries))
+        assert {key: (row.status, row.maybe_entry.number if row.maybe_entry else None) for key, row in rows.items()} == {
+            "S2004": (checkrefs.MATCHED_BY_TITLE, 1), "S2013": (checkrefs.MATCHED_BY_TITLE, 2)}
+
     def test_a_short_title_goes_to_its_own_entry_not_the_first_containing_it(self, tmp_path):
         """A one-word title appears whole inside another record's entry; the longer title claims that one."""
         path = tmp_path / "short.bib"
