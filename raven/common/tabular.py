@@ -26,8 +26,7 @@ FORMATS = ("tsv", "xlsx", "ods")
 _DATA_SHEET = "Table"
 _NOTES_SHEET = "Notes"
 
-# A highlighted row in a spreadsheet: bold, on a pale amber, which reads as "look here" without the alarm of
-# red, and leaves black text legible.
+# A highlighted row in a spreadsheet: bold, on a pale amber that leaves black text legible.
 _HIGHLIGHT_FILL = "#FFE7A8"
 
 # Column widths in a spreadsheet, in characters: as wide as the widest cell, within these bounds. Wide
