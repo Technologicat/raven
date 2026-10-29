@@ -15,7 +15,8 @@ order:
     00-sift.<fmt>             what the sift removed, and on which criterion
     00-sifted.bib             what it kept: the judge's input
     01-auto-judged.<fmt>      every judged record: the verdict, the tests, the judge's reason
-    02-Auto-reviewed.<fmt>    the drops and the control, with any case the reviewer made that a record belongs in scope after all
+    02-Auto-reviewed.<fmt>    the judge's drops, and a sample of its keeps as a control, with any case
+                              the reviewer made that a record belongs in scope after all
     03-ruled.<fmt>            the judge's keeps: their fields and quotes, and whether the rules kept, held or removed each
     04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why
     04-Removed.<fmt>          every record removed, by which stage and why
