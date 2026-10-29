@@ -738,7 +738,7 @@ raven-scopebib report --run-file out/run.toml --set-aside-finished \
 
 - **Any sheet with `key` and `decision` columns will do**: the set-aside `04a-hand-decided`, which records every decision explicitly and is the one to prefer, a marked `03a-CHECK-BY-HAND`, or one of your own. A sheet marked keeps-alone is read as `finish` read it, so its blanks carry as drops.
 - **The new `03a-CHECK-BY-HAND` comes out filled in**: each record you decided before has your decision in `decision`, and again in `earlier` for reference, with your `note`.
-- **A decision the new run goes against is the first row of the sheet, highlighted** — a record you kept that the new rules remove, or one you dropped that they keep. Its `why` says what you decided and what the run did, by which step, and your decision is filled in, so it stands unless you change it. The run also prints how many there are.
+- **Decisions the new run goes against come first in the sheet, highlighted**, one row each — a record you kept that the new rules remove, or one you dropped that they keep. A row's `why` says what you decided and what the run did, by which step, and your decision is filled in, so it stands unless you change it. The run also prints how many there are.
 - **Then every row must be marked.** A sheet carrying earlier decisions is never read as keeps-alone, so a record new to this run cannot drop by being left blank: `finish` refuses, naming the blank rows. Your earlier decisions are already filled in, so what is left to mark is the new records.
 - A decision on a record this run does not hold is ignored, with a warning.
 
