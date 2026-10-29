@@ -699,7 +699,7 @@ Mark your copy of `03a-CHECK-BY-HAND` in its `decision` column, then:
 raven-scopebib finish 03a-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
 ```
 
-which writes `04b-final.bib` — the kept records and those you kept — and `04a-hand-decided`, recording each decision, with a `note` column carried over if you added one. Only the `key` and `decision` columns are needed: the rest are there for you to read.
+which writes `04b-final.bib` — the kept records and those you kept — and `04a-hand-decided`, recording each decision with what you wrote in the `note` column. Only the `key` and `decision` columns are needed: the rest are there for you to read.
 
 **Mark the keeps alone, or every row.**
 

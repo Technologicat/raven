@@ -613,8 +613,8 @@ def finish(out_dir: str | pathlib.Path, *,
 
     `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Only its `key` and `decision`
              columns are required. The `decision` column marks either the keeps alone, `KEEP` with a blank
-             dropping, or every row, `KEEP` or `DROP`; case and surrounding space do not matter. A `note`
-             column, where the person added one, is carried into the audit.
+             dropping, or every row, `KEEP` or `DROP`; case and surrounding space do not matter. The `note`
+             column, which the worklist has and a sheet of one's own may lack, is carried into the audit.
              A row may also name a record the run kept or removed outright: marked `KEEP` or `DROP`, it
              overrides the run, and a blank there is no decision.
     `library`, `records`, `definition`, `final`, `reviews`, `extractions`, `provenance`, `table_format`:
