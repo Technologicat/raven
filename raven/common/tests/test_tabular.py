@@ -115,6 +115,36 @@ class TestSpreadsheets:
                                             {"key": "x", "verdict": "x"}]
 
 
+class TestHighlight:
+    """A highlighted row is bold on a fill in a spreadsheet; the others are left plain."""
+
+    def test_xlsx(self, tmp_path):
+        import openpyxl
+        path = tmp_path / "t.xlsx"
+        tabular.write_table(path, [], ["key", "n"], [("a", 1), ("b", 2)], highlight=[1])
+        sheet = openpyxl.load_workbook(path).worksheets[0]
+        plain, marked = sheet["A2"], sheet["A3"]
+        assert not plain.font.b and plain.fill.fgColor.rgb in (None, "00000000")
+        assert marked.font.b and marked.fill.fgColor.rgb.endswith("FFE7A8")
+        assert sheet["B3"].font.b, "a number cell in a highlighted row is highlighted too"
+
+    def test_ods(self, tmp_path):
+        from odf.opendocument import load
+        from odf.table import TableCell, TableRow
+        path = tmp_path / "t.ods"
+        tabular.write_table(path, [], ["key", "n"], [("a", 1), ("b", 2)], highlight=[1])
+        rows = load(str(path)).spreadsheet.getElementsByType(TableRow)
+        styles = [[cell.getAttribute("stylename") for cell in row.getElementsByType(TableCell)] for row in rows]
+        assert styles[1] == [None, None] and styles[2] == ["highlight", "highlight"]
+        assert tabular.read_table(path) == [{"key": "a", "n": "1"}, {"key": "b", "n": "2"}]
+
+    def test_tsv_is_unchanged(self, tmp_path):
+        plain, marked = tmp_path / "plain.tsv", tmp_path / "marked.tsv"
+        tabular.write_table(plain, [], ["key"], [("a",), ("b",)])
+        tabular.write_table(marked, [], ["key"], [("a",), ("b",)], highlight=[1])
+        assert plain.read_bytes() == marked.read_bytes()
+
+
 class TestTsv:
     """A TSV report opens in a spreadsheet with one row per record and every cell intact."""
 

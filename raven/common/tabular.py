@@ -26,6 +26,10 @@ FORMATS = ("tsv", "xlsx", "ods")
 _DATA_SHEET = "Table"
 _NOTES_SHEET = "Notes"
 
+# A highlighted row in a spreadsheet: bold, on a pale amber, which reads as "look here" without the alarm of
+# red, and leaves black text legible.
+_HIGHLIGHT_FILL = "#FFE7A8"
+
 # Column widths in a spreadsheet, in characters: as wide as the widest cell, within these bounds. Wide
 # enough that a title reads at a glance, narrow enough that one long abstract does not push the rest of the
 # table off the screen.
@@ -53,7 +57,8 @@ def tsv_cell(value: object) -> str:
 def write_table(path: str | pathlib.Path,
                 comments: Iterable[str],
                 columns: Iterable[str],
-                rows: Iterable[Iterable[object]]) -> None:
+                rows: Iterable[Iterable[object]], *,
+                highlight: Iterable[int] = ()) -> None:
     """Write a table to `path`, in the format its extension names (see `FORMATS`).
 
     `comments`: lines saying what the table is. A `# ` line each above the header in a TSV; one row each on
@@ -61,6 +66,9 @@ def write_table(path: str | pathlib.Path,
     `columns`: the column names, written as the header row.
     `rows`: one iterable of cells per row. A cell that is `None` is written empty. In a spreadsheet, an
             `int` or a `float` is written as a number, so that it sorts as one; anything else as text.
+    `highlight`: indices into `rows` of the rows a reader must not miss, drawn bold on a pale fill in a
+                 spreadsheet. A TSV has no styling, so there it changes nothing: put what such a row needs
+                 to say in its cells as well.
 
     In a TSV, every cell goes through `tsv_cell`, so each row is one line, and a cell containing a `"` is
     quoted with the `"` doubled — the CSV convention a spreadsheet's import follows, which otherwise reads
@@ -70,12 +78,13 @@ def write_table(path: str | pathlib.Path,
     comments = list(comments)
     columns = list(columns)
     rows = [["" if cell is None else cell for cell in row] for row in rows]
+    highlight = frozenset(highlight)
     if fmt == "tsv":
         _write_tsv(path, comments, columns, rows)
     elif fmt == "xlsx":
-        _write_xlsx(path, comments, columns, rows)
+        _write_xlsx(path, comments, columns, rows, highlight)
     else:
-        _write_ods(path, comments, columns, rows)
+        _write_ods(path, comments, columns, rows, highlight)
 
 
 def read_table(path: str | pathlib.Path) -> list[dict[str, str]]:
@@ -143,7 +152,7 @@ def _cell_to_str(value: object) -> str:
     return str(value)
 
 
-def _write_xlsx(path, comments, columns, rows) -> None:
+def _write_xlsx(path, comments, columns, rows, highlight) -> None:
     import xlsxwriter
 
     workbook = xlsxwriter.Workbook(str(path), {"strings_to_numbers": False,
@@ -151,14 +160,16 @@ def _write_xlsx(path, comments, columns, rows) -> None:
                                                "strings_to_urls": False})
     try:
         bold = workbook.add_format({"bold": True})
+        marked = workbook.add_format({"bold": True, "bg_color": _HIGHLIGHT_FILL})
         sheet = workbook.add_worksheet(_DATA_SHEET)
         sheet.write_row(0, 0, columns, bold)
         for i, row in enumerate(rows, start=1):
+            style = marked if i - 1 in highlight else None
             for j, cell in enumerate(row):
                 if _is_number(cell):
-                    sheet.write_number(i, j, cell)
+                    sheet.write_number(i, j, cell, style)
                 else:
-                    sheet.write_string(i, j, str(cell))
+                    sheet.write_string(i, j, str(cell), style)
         for j, width in enumerate(_column_widths(columns, rows)):
             sheet.set_column(j, j, width)
         sheet.freeze_panes(1, 0)
@@ -184,9 +195,9 @@ def _read_xlsx(path) -> list[list[str]]:
         workbook.close()
 
 
-def _write_ods(path, comments, columns, rows) -> None:
+def _write_ods(path, comments, columns, rows, highlight) -> None:
     from odf.opendocument import OpenDocumentSpreadsheet
-    from odf.style import Style, TableColumnProperties, TextProperties
+    from odf.style import Style, TableCellProperties, TableColumnProperties, TextProperties
     from odf.table import Table, TableCell, TableColumn, TableRow
     from odf.text import P
 
@@ -194,6 +205,10 @@ def _write_ods(path, comments, columns, rows) -> None:
     bold = Style(name="header", family="table-cell")
     bold.addElement(TextProperties(fontweight="bold"))
     document.automaticstyles.addElement(bold)
+    marked = Style(name="highlight", family="table-cell")
+    marked.addElement(TextProperties(fontweight="bold"))
+    marked.addElement(TableCellProperties(backgroundcolor=_HIGHLIGHT_FILL))
+    document.automaticstyles.addElement(marked)
 
     def text_cell(value: str, style=None) -> TableCell:
         cell = TableCell(valuetype="string", stylename=style) if style else TableCell(valuetype="string")
@@ -214,14 +229,16 @@ def _write_ods(path, comments, columns, rows) -> None:
     for column in columns:
         header.addElement(text_cell(str(column), bold))
     table.addElement(header)
-    for row in rows:
+    for i, row in enumerate(rows):
         table_row = TableRow()
+        style = marked if i in highlight else None
         for cell in row:
             if _is_number(cell):
-                table_cell = TableCell(valuetype="float", value=cell)
+                table_cell = (TableCell(valuetype="float", value=cell, stylename=style) if style
+                              else TableCell(valuetype="float", value=cell))
                 table_cell.addElement(P(text=str(cell)))
             else:
-                table_cell = text_cell(str(cell))
+                table_cell = text_cell(str(cell), style)
             table_row.addElement(table_cell)
         table.addElement(table_row)
     document.spreadsheet.addElement(table)
