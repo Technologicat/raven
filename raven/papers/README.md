@@ -494,24 +494,26 @@ flowchart TD
     RULES -->|"keep"| KEPT["kept"]
 ```
 
-0. **Fill** (no LLM; only with `--fill`). Fills missing abstracts and completes truncated ones from Crossref, by DOI, exactly as [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref) does, so that the sift and every step after it read the whole text. That includes removing a second text appended to an abstract, which `--keep-appended` turns off, and which is recorded in `run.toml` as `keep_appended`. Leaves `00-fill-audit`. Crossref's answers are kept in the ledger directory, so only the first run asks it. A lookup that fails stops the run before the judge and names the DOI. Otherwise the record would be judged on its teaser, and the next run, once Crossref answers, would fill it and ask about it again.
+0. **Fill** (no LLM; only with `--fill`). Fills missing abstracts and completes truncated ones from Crossref, by DOI, exactly as [`raven-fillbib`](#raven-fillbib--filling-in-abstracts-from-crossref) does, so that the sift and every step after it read the whole text. That includes removing a second text appended to an abstract, which `--keep-appended` turns off, and which is recorded in `run.toml` as `keep_appended`. Leaves `00-fill`. Crossref's answers are kept in the ledger directory, so only the first run asks it. A lookup that fails stops the run before the judge and names the DOI. Otherwise the record would be judged on its teaser, and the next run, once Crossref answers, would fill it and ask about it again.
 
    **`--fill` is the one step that leaves your machine: it sends every DOI in the corpus to Crossref**, which is a list of what your review is about. Everything else `raven-scopebib` asks goes to your own LLM backend. The abstracts it brings back remain their publisher's or authors' copyright ([the details](#copyright)).
 
-1. **Sift** (no LLM). Removes the records with nothing to screen, on the criteria you give it — `--require abstract`, `--min-chars abstract=200` — exactly as [`raven-siftbib`](#raven-siftbib--removing-what-a-review-cannot-screen) does. Without criteria, nothing is sifted. Leaves `00-sift-audit` and `00-sifted.bib`.
+1. **Sift** (no LLM). Removes the records with nothing to screen, on the criteria you give it — `--require abstract`, `--min-chars abstract=200` — exactly as [`raven-siftbib`](#raven-siftbib--removing-what-a-review-cannot-screen) does. Without criteria, nothing is sifted. Leaves `00-sift` and `00-sifted.bib`.
 2. **The judge, on titles** (LLM, every record). Asks each of your definition's tests about each record, from its title and where it was published. A test answered true means *positive evidence* that the record is off topic in that way; a record that says nothing keeps. With the answers comes one confidence for the record, high, medium or low, and a reason.
 3. **The judge, on abstracts** (LLM, the escalated records). A record is asked again with its abstract when the title pass was unsure (low confidence), when its title is too thin to judge from, or when any test came back true at all — a removal is never made from a title alone. *About 400 of the 1000.* A title is too thin when it has fewer than three content words, or when content words are under 40% of its words: "Rethinking the paradigm" names nothing, and neither does a long title padded with filler. An abstract that breaks off mid-sentence, a publisher's preview, lowers the answer's confidence to low, whatever the model said.
 
-   The verdict: a test true at high confidence, or at medium after reading the abstract, **drops** the record; any other true, or a test left unanswered, sends it **to review**; otherwise it is **kept**. *About 250 drops, 30 to review and 720 keeps.* Leaves `01-judge-audit`.
-4. **The reviewer** (LLM, the drops). A second pass — normally the same model, asked afresh — with the opposite question: is there a credible case that this record belongs? It is told nothing about the judge, its tests or why the record is in front of it. A drop it makes a case for goes to a person rather than out. *It finds a case for a few of the 250.* It also reads a [control](#the-reviewers-control). Leaves `02-review-audit`.
+   The verdict: a test true at high confidence, or at medium after reading the abstract, **drops** the record; any other true, or a test left unanswered, sends it **to review**; otherwise it is **kept**. *About 250 drops, 30 to review and 720 keeps.* Leaves `01-auto-judged`.
+4. **The reviewer** (LLM, the drops). A second pass — normally the same model, asked afresh — with the opposite question: is there a credible case that this record belongs? It is told nothing about the judge, its tests or why the record is in front of it. A drop it makes a case for goes to a person rather than out. *It finds a case for a few of the 250.* It also reads a [control](#the-reviewers-control). Leaves `02-Auto-reviewed`.
 5. **The extractor** (LLM, the keeps). The judge keeps a record whenever no test is positively true, so a keep carries no reason of its own. The extractor records what each kept record says, field by field — the level a study is set at, say — with the record's own words for the answers that need them.
-6. **The rules** (no LLM). Your definition's rules over those fields: remove what the fields positively rule out, hold for a person what they make doubtful, keep the rest. *Of the 720 keeps, about 150 removed and 45 held.* Leaves `03-extract-audit`.
+6. **The rules** (no LLM). Your definition's rules over those fields: remove what the fields positively rule out, hold for a person what they make doubtful, keep the rest. *Of the 720 keeps, about 150 removed and 45 held.* Leaves `03-ruled`.
+
+**Steps 5 and 6 are one stage on the command line, `extract`**: `raven-scopebib extract`, `--until extract`, and `[extract]` in the run file. It is named for what its LLM step does, and its file `03-ruled` for what the rules then did with it.
 
 **A person comes in once, at the end**, with `04-CHECK-BY-HAND`: the judge's sends to review, the reviewer's rescues and the rules' holds, *about 80 of the 1000*, each with why it is there. See [checking by hand](#checking-by-hand-and-finish).
 
 **Steps 1 and 6, and the reports, ask nothing**, so they are free to run again: a changed rule or a different table format costs seconds. The LLM steps keep every answer in a ledger, so an interrupted run resumes where it stopped, and only a change to what is asked starts them afresh (see [what starts a fresh ledger](#what-starts-a-fresh-ledger)).
 
-`run` does the steps in order; `run --until judge` stops after one, and `judge`, `review` and `extract` run one alone. `report` writes the reports from what is saved.
+`run` does the steps in order; `run --until judge` stops after one, and `judge`, `review` and `extract` (steps 5 and 6) run one alone. `report` writes the reports from what is saved.
 
 ### Writing a definition file
 
@@ -646,7 +648,7 @@ What it shows that the first example does not:
 
 The report's sections are in the order a mistake costs:
 
-1. **The drops**, with the test that fired, its reason, and the reviewer's case where it made one. A false drop loses a record silently, so read all of them.
+1. **The drops**, with the test that fired, its reason, and the reviewer's case for keeping it, where it made one. A false drop loses a record silently, so read all of them.
 2. **The records sent to review.** Mostly obvious drops means the tests are too timid; mostly obvious keeps, too eager.
 3. **A sample of the keeps**, with their fields and what the rules did. Anything here that plainly should have gone is a test that is missing.
 4. **The title-only records**, however they ended, these being the inputs most likely to break a test. Where there are none, it says so.
@@ -659,22 +661,22 @@ Named by step, so that listing the directory shows the pipeline in order. `<fmt>
 
 | File | What it is |
 |---|---|
-| `00-fill-audit.<fmt>` | with `--fill`: every abstract the fill changed, and every record it could not help, as [`raven-fillbib`'s audit](#what-comes-out) |
-| `00-sift-audit.<fmt>` | what the sift removed, and on which criterion |
+| `00-fill.<fmt>` | with `--fill`: every abstract the fill changed, and every record it could not help, as [`raven-fillbib`'s audit](#what-comes-out) |
+| `00-sift.<fmt>` | what the sift removed, and on which criterion |
 | `00-sifted.bib` | what it kept: the judge's input |
-| `01-judge-audit.<fmt>` | every judged record: the verdict, each test, the judge's reason |
-| `02-review-audit.<fmt>` | the drops and the control, with the reviewer's case |
-| `03-extract-audit.<fmt>` | the judge's keeps: their fields, their quotes, the rule that acted |
+| `01-auto-judged.<fmt>` | every judged record: the verdict, each test, the judge's reason |
+| `02-Auto-reviewed.<fmt>` | the drops and the control, with the reviewer's case for keeping each |
+| `03-ruled.<fmt>` | the judge's keeps: their fields, their quotes, the rule that acted |
 | `04-CHECK-BY-HAND.<fmt>` | every record sent to a person, with why, and a blank `decision` column |
-| `04-removed-audit.<fmt>` | every record removed, by which step and why, the sift's included |
-| `04-kept.bib` | the records that survived every step |
-| `05-hand-audit.<fmt>`, `05-final.bib` | written by `finish`: every decision a person made, and the final bibliography |
+| `04-Removed.<fmt>` | every record removed, by which step and why, the sift's included |
+| `04-Kept.bib` | the records that survived every step |
+| `05-Hand-decisions.<fmt>`, `05-Final.bib` | written by `finish`: every decision a person made, and the final bibliography |
 | `run.toml` | the [run file](#the-run-file-and-repeating-a-run) |
 | `ledgers/` | every answer the LLM gave, with the model calls themselves |
 
-The `-audit` files are the record of what each step did, for checking and for a methods section; each opens with the tool's version, the input, the definition, and the model and instrument of each step. `04-CHECK-BY-HAND`, `04-kept.bib` and the 05 files are what you act on.
+**The names say how much reading each file needs.** `04-CHECK-BY-HAND`, in capitals, is the one you act on. A capital initial marks what to read (`02-Auto-reviewed`, `04-Removed`) and what to keep (`04-Kept.bib`, the 05 files). The lowercase files explain how a step came to its answers: read them when something needs explaining, and cite them in a methods section. `auto-` marks the two steps an LLM decided. Every table opens with the tool's version, the input, the definition, and the model and instrument of each step.
 
-**A record waiting on a step is in neither the removals nor `04-kept.bib`**: a drop the reviewer has not read, a keep not yet extracted. The counts each run prints say how many.
+**A record waiting on a step is in neither the removals nor `04-Kept.bib`**: a drop the reviewer has not read, a keep not yet extracted. The counts each run prints say how many.
 
 **The tool owns these names and no others.** Writing the reports removes any file bearing one of them that it did not just write — a previous run's report in another format — and touches nothing else in the directory. **So save a marked copy of `04-CHECK-BY-HAND` under a name of your own**, such as `04-CHECK-BY-HAND-marked.xlsx`: the original is rewritten on every run.
 
@@ -684,7 +686,7 @@ A reviewer that finds a case for everything would look thorough and tell you not
 
 - **How they are chosen:** drawn at random by `--seed`, at the drops' own mix of confidence, so that the control is as hard as what it is compared against.
 - **How many:** `--control N`, 40 by default.
-- **How to tell them apart:** only in `02-review-audit`, whose `group` column says `drop` or `control`. They appear nowhere else: the reviewer's answer about a control record changes nothing.
+- **How to tell them apart:** only in `02-Auto-reviewed`, whose `group` column says `drop` or `control`. They appear nowhere else: the reviewer's answer about a control record changes nothing.
 
 **Read the comparison first.** The audit's header gives the share of drops the reviewer found a case for, and the share of the control. A case for most of the control and few of the drops means the reviewer discriminates; similar shares mean its cases say little.
 
@@ -696,7 +698,7 @@ Mark your copy of `04-CHECK-BY-HAND` in its `decision` column, then:
 raven-scopebib finish 04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
 ```
 
-which writes `05-final.bib` — the kept records and those you kept — and `05-hand-audit`, recording each decision, with a `note` column carried over if you added one. Only the `key` and `decision` columns are needed: the rest are there for you to read.
+which writes `05-Final.bib` — the kept records and those you kept — and `05-Hand-decisions`, recording each decision, with a `note` column carried over if you added one. Only the `key` and `decision` columns are needed: the rest are there for you to read.
 
 **Mark the keeps alone, or every row.**
 
@@ -713,9 +715,9 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - a record sent to a person that is missing from the sheet — it is not this run's sheet, or rows were deleted;
 - a run with records still waiting on a step: finish the run first.
 
-**To overturn the run itself, add a row for the record**: its key and `keep` or `drop`, nothing else. The key is in `04-removed-audit` for a removal you disagree with, and in `03-extract-audit` for a keep.
+**To overturn the run itself, add a row for the record**: its key and `keep` or `drop`, nothing else. The key is in `04-Removed` for a removal you disagree with, and in `03-ruled` for a keep.
 
-- `keep` restores a record the run removed, and `drop` removes one it kept. `finish` lists every override in its output, and `05-hand-audit` records each with what the run had done, which stage did it, and why.
+- `keep` restores a record the run removed, and `drop` removes one it kept. `finish` lists every override in its output, and `05-Hand-decisions` records each with what the run had done, which stage did it, and why.
 - A blank on such a row decides nothing. "A blank drops" belongs to the worklist, and never removes a record the run kept; nor does a `drop` here put the worklist into the every-row mode.
 - So a sheet copied from an earlier run applies its marked rows to whatever this run settled outright. That is meant, as a person's decision wins, and the output lists each one so that none passes unseen.
 - A row naming a record the run does not hold, such as a key mistyped or one the sift removed, is ignored with a warning.

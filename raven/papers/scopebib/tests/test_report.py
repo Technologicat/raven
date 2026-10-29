@@ -371,7 +371,7 @@ class TestPilotReport:
     def test_a_rescued_drop_shows_the_reviewers_case(self, run, definition, tmp_path):
         _, rows = self.write(run, definition, tmp_path)
         rescued = next(row for row in rows if row["key"] == "rescued")
-        assert (rescued["reviewer"], rescued["reviewer's case"]) == ("case found", "it counts ravens")
+        assert (rescued["reviewer"], rescued["reviewer's case for keeping"]) == ("case found", "it counts ravens")
 
     def test_a_keep_shows_its_fields_and_what_the_rules_did(self, run, definition, tmp_path):
         _, rows = self.write(run, definition, tmp_path)

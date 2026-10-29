@@ -513,19 +513,21 @@ the stages are separable and each is tested alone. The console script is the `cl
      records a sample and a control draw, and replicates share it so as to draw the same records.
    - **`raven-siftbib` runs as stage 0** inside `run`, through `siftbib.sift`, its criteria given on the
      command line as `raven-siftbib` takes them; no criteria, no sift.
-   - **The names**, the audits marked `-audit` so no reader takes one for a result, and the results sharing
-     the number 04, the worklist in capitals so it is the file that is seen:
+   - **The names** carry how much a file needs reading (renamed 2026-10-29): capitals for the one a
+     person acts on, a capital initial for what to read or keep, lowercase for what explains a stage.
+     A stage's file names its result (`sifted`, `ruled`, `Removed`), and `auto-` marks the two an LLM
+     decided, so neither is taken for a person's review:
 
      ```
-     00-sift-audit.<fmt>       what the sift removed, and on which criterion
-     00-sifted.bib             what it kept: the judge's input
-     01-judge-audit.<fmt>      every judged record: the verdict, the tests, the judge's reason
-     02-review-audit.<fmt>     the drops and the control, with the reviewer's case
-     03-extract-audit.<fmt>    the judge's keeps: their fields, their quotes, the rule that acted
-     04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why, and a blank `decision` column
-     04-removed-audit.<fmt>    every record removed, by which stage and why, the sift's included
-     04-kept.bib               the records that survived every stage
-     run.toml                  the run file
+     00-sift.<fmt>            what the sift removed, and on which criterion
+     00-sifted.bib            what it kept: the judge's input
+     01-auto-judged.<fmt>     every judged record: the verdict, the tests, the judge's reason
+     02-Auto-reviewed.<fmt>   the drops and the control, with the reviewer's case for keeping each
+     03-ruled.<fmt>           the judge's keeps: their fields, their quotes, the rule that acted
+     04-CHECK-BY-HAND.<fmt>   every record sent to a person, with why, and a blank `decision` column
+     04-Removed.<fmt>         every record removed, by which stage and why, the sift's included
+     04-Kept.bib              the records that survived every stage
+     run.toml                 the run file
      ```
 
      The descriptions go into the docs.
@@ -560,11 +562,11 @@ the stages are separable and each is tested alone. The console script is the `cl
    - **The control, as the docs must explain it** (maintainer: how it is chosen, how many, and how a user
      tells it from the real results): kept records drawn by `review.draw_control` at the drops' mix of
      confidence, seeded; `--control N`, default 40 as in the prototype's `review_drops.py`; labelled only
-     in `02-review-audit`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
+     in `02-Auto-reviewed`'s `group` column, never to the reviewer; and inert — `apply_reviews` acts on drops
      alone, so a control record cannot reach the worklist or the removals. The audit's header compares the
      case rate among the drops with the rate among the control, which is the line to read first.
    - **A fifth stage, `finish`** (maintainer, 2026-10-22, not in the first plan): reads a marked copy of
-     `04-CHECK-BY-HAND`, applies the person's decisions, and writes `05-final.bib` and `05-hand-audit`.
+     `04-CHECK-BY-HAND`, applies the person's decisions, and writes `05-Final.bib` and `05-Hand-decisions`.
      - **A sheet marks either its keeps alone or every row**, decisions in any case. Typing one of two
        full words per row is friction over hundreds of rows for someone with one paste buffer, so the
        default is to mark only the keeps, a blank dropping. Marking every row, `keep` or `drop`, is the

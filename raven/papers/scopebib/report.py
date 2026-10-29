@@ -11,17 +11,17 @@ whose fields have not been extracted — so a partial run removes and keeps only
 **The files** (`write_reports`) are named by stage, so that listing the directory shows the pipeline in
 order:
 
-    00-fill-audit.<fmt>      the abstracts filled from Crossref, and the records it could not help
-    00-sift-audit.<fmt>      what the sift removed, and on which criterion
-    00-sifted.bib            what it kept: the judge's input
-    01-judge-audit.<fmt>     every judged record: the verdict, the tests, the judge's reason
-    02-review-audit.<fmt>    the drops and the control, with the reviewer's case
-    03-extract-audit.<fmt>   the keeps: their fields, their quotes, the rule that acted
-    04-CHECK-BY-HAND.<fmt>   every record sent to a person, with why
-    04-removed-audit.<fmt>   every record removed, by which stage and why
-    04-kept.bib              the records that survived every stage
-    05-hand-audit.<fmt>      every decision a person made, on 04-CHECK-BY-HAND and against the run
-    05-final.bib             the kept records, and those a person kept
+    00-fill.<fmt>             the abstracts filled from Crossref, and the records it could not help
+    00-sift.<fmt>             what the sift removed, and on which criterion
+    00-sifted.bib             what it kept: the judge's input
+    01-auto-judged.<fmt>      every judged record: the verdict, the tests, the judge's reason
+    02-Auto-reviewed.<fmt>    the drops and the control, with the reviewer's case for keeping each
+    03-ruled.<fmt>            the keeps: their fields, their quotes, the rule that acted
+    04-CHECK-BY-HAND.<fmt>    every record sent to a person, with why
+    04-Removed.<fmt>          every record removed, by which stage and why
+    04-Kept.bib               the records that survived every stage
+    05-Hand-decisions.<fmt>   every decision a person made, on 04-CHECK-BY-HAND and against the run
+    05-Final.bib              the kept records, and those a person kept
 
 The 05 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
 built from an older worklist, they would look current while describing another run.
@@ -58,17 +58,17 @@ from . import review as scope_review
 from . import rules as scope_rules
 
 # The stems of the tables, written in whichever of `tabular.FORMATS` the caller asks for, and the two `.bib`s.
-FILL_AUDIT = "00-fill-audit"
-SIFT_AUDIT = "00-sift-audit"
+FILL_AUDIT = "00-fill"
+SIFT_AUDIT = "00-sift"
 SIFTED_BIB = "00-sifted.bib"
-JUDGE_AUDIT = "01-judge-audit"
-REVIEW_AUDIT = "02-review-audit"
-EXTRACT_AUDIT = "03-extract-audit"
+JUDGE_AUDIT = "01-auto-judged"
+REVIEW_AUDIT = "02-Auto-reviewed"
+EXTRACT_AUDIT = "03-ruled"
 CHECK_BY_HAND = "04-CHECK-BY-HAND"
-REMOVED_AUDIT = "04-removed-audit"
-KEPT_BIB = "04-kept.bib"
-HAND_AUDIT = "05-hand-audit"
-FINAL_BIB = "05-final.bib"
+REMOVED_AUDIT = "04-Removed"
+KEPT_BIB = "04-Kept.bib"
+HAND_AUDIT = "05-Hand-decisions"
+FINAL_BIB = "05-Final.bib"
 
 _TABLES = (FILL_AUDIT, SIFT_AUDIT, JUDGE_AUDIT, REVIEW_AUDIT, EXTRACT_AUDIT, CHECK_BY_HAND, REMOVED_AUDIT, HAND_AUDIT)
 
@@ -146,7 +146,7 @@ def outcomes(records: Iterable[scope_records.Record], *,
             if answer.get("rescued"):
                 out[record.key] = Outcome(TO_A_PERSON, "review", first_test,
                                           f"the judge dropped it ({_judge_reason(answer)}); "
-                                          f"the reviewer's case for it: {answer['case']}")
+                                          f"the reviewer's case for keeping it: {answer['case']}")
             else:
                 out[record.key] = Outcome(TO_A_PERSON, "judge", first_test,
                                           f"the judge was not sure enough to drop it: {_judge_reason(answer)}")
@@ -357,7 +357,7 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
            "drops is not telling them apart",
            "the control is records the judge kept, drawn at the drops' mix of confidence and shown to the "
            "reviewer unlabelled; it is labelled only here, and the reviewer's answer about it changes nothing"],
-          ("group", "key", "reviewer found a case", "reviewer's case", "judge verdict", "judge confidence", "tests true", "judge why",
+          ("group", "key", "reviewer found a case", "reviewer's case for keeping", "judge verdict", "judge confidence", "tests true", "judge why",
            *_RECORD_COLUMNS),
           rows)
 
@@ -641,7 +641,7 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
 
     One table, a `section` column first, in the order a person should read it — what a mistake costs:
 
-      1. **The judge's drops**, each with the test that fired, its reason, and the reviewer's case where it
+      1. **The judge's drops**, each with the test that fired, its reason, and the reviewer's case for keeping it where it
          made one. A false drop loses a record silently, so these are read first, all of them.
       2. **The records the judge sent to review.** Mostly obvious drops means the tests are too timid;
          mostly obvious keeps, too eager.
@@ -704,7 +704,7 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
                          f"{len(keeps)} kept, of which {len(sampled)} shown; {len(title_only)} title-only",
                          "read the sections in order: a false drop costs most, as it loses a record silently"],
                         ("section", "key", "decided by", "verdict", "confidence", "pass", "why",
-                         "reviewer", "reviewer's case", "rules", "rules' note", *field_columns, "thin title",
+                         "reviewer", "reviewer's case for keeping", "rules", "rules' note", *field_columns, "thin title",
                          *_RECORD_COLUMNS),
                         rows)
     for fmt in tabular.FORMATS:

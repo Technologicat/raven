@@ -109,7 +109,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
     helps = {"run": "Every stage in order, then the reports.",
-             **{stage: f"The {stage} stage alone, then the reports." for stage in ("judge", "review", "extract")},
+             "judge": "The judge stage alone: an LLM applies the definition's tests to each record (01-auto-judged). "
+                      "Then the reports.",
+             "review": "The review stage alone: an LLM looks for a case for keeping each record the judge dropped "
+                       "(02-Auto-reviewed). "
+                       "Then the reports.",
+             "extract": "The extract stage alone: an LLM reads the definition's fields off each kept record, with "
+                        "a quote for each, and the rules act on them (03-ruled). Then the reports.",
              "report": "The reports, from the answers already saved."}
     for command, text in helps.items():
         subparser = commands.add_parser(command, parents=[common], help=text)
