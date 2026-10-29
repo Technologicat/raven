@@ -153,7 +153,8 @@ form reads better than the hyphenated one. Getting that to work reliably is the 
 against a handful of examples. Gather the candidates from every corpus on hand and check them by hand,
 rather than calibrating on hand-made examples.
 
-Seen in a SCOPUS export during the health-education clustering pass (2026-10-28).
+Seen in a SCOPUS export during the health-education clustering pass (2026-10-28), and again in the same
+corpus the next day: `how-ever`, mid-line, in a third abstract.
 
 ## Stratified samples for `raven-scopebib` replicates
 
