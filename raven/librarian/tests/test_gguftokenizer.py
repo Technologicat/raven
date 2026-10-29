@@ -204,6 +204,12 @@ def test_a_verified_tokenizer_loads_and_counts(tmp_path):
     assert len(tokenizer.encode("hello", add_special_tokens=False).ids) == 4
 
 
+def test_a_str_path_loads_as_a_pathlib_one_does(tmp_path):
+    path = write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35")
+    tokenizer = load(str(path), cache_dir=str(tmp_path / "cache"))
+    assert tokenizer is not None and len(tokenizer.encode("hello", add_special_tokens=False).ids) == 4
+
+
 def test_a_vocabulary_with_no_merges_is_declined(tmp_path):
     """It would build, round-trip, and quietly count one token per character — a wrong number without a `~`."""
     assert load(write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="qwen35", merges=())) is None

@@ -396,9 +396,9 @@ def _build(gguf_path: pathlib.Path) -> Optional[tuple[Any, str, Optional[str]]]:
         logger.warning(f"load: could not build a tokenizer from '{gguf_path}': {type(exc)}: {exc}. Falling back to token estimates.")
         return None
 
-def load(gguf_path: pathlib.Path,
+def load(gguf_path: str | pathlib.Path,
          backend_counter: Optional[Callable[[str], Optional[int]]] = None,
-         cache_dir: Optional[pathlib.Path] = None) -> Optional[Any]:
+         cache_dir: str | pathlib.Path | None = None) -> Optional[Any]:
     """Build the tokenizer stored in `gguf_path`. Returns a `tokenizers.Tokenizer`, or `None`.
 
     `None` means the file could not be read, its tokenizer is of a class this module cannot assemble, the
@@ -417,6 +417,8 @@ def load(gguf_path: pathlib.Path,
     GGUF reader parsing every metadata field on the way past — so call this off any thread that must stay
     responsive. Loading from the cache skips that part.
     """
+    gguf_path = pathlib.Path(gguf_path)
+    cache_dir = pathlib.Path(cache_dir) if cache_dir is not None else None
     entry = _cache_entry(cache_dir, gguf_path) if cache_dir is not None else None
     cached = _read_cache(*entry) if entry is not None else None
     built = cached if cached is not None else _build(gguf_path)
