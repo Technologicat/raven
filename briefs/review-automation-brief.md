@@ -21,9 +21,8 @@ they fit together and in what order. Settled decisions that left no diff go in t
    records the new run settled the other way — which `finish` cannot reach, since they never reach the
    worklist. The same thing is what the AOKK team needs when their hand labels arrive: a new list with
    their decisions already filled in, so nothing is redone. Not filed yet; this brief is its first entry.
-2. **`finish` overturning a removal** — `TODO_DEFERRED.md`, *`raven-scopebib finish` cannot overturn a
-   removal*. The other half of item 1: a decision against a run's outright keep or removal, applied by the
-   tool and recorded in the hand audit, rather than edited into the final bib by hand.
+2. **`finish` overturning the run** — done 2026-10-29: a row added to the marked sheet, a key and `keep` or
+   `drop`, overrides an outright removal or keep, is listed in the output and recorded in the hand audit.
 3. **Preparing a definition, and drafting one from notes** — `TODO_DEFERRED.md`, *Preparing a
    `raven-scopebib` definition file, as a manual section*, which also carries the `raven-scopebib draft`
    idea. Both definitions so far were drafted by an agent from the researchers' observations.

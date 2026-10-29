@@ -696,7 +696,7 @@ Mark your copy of `04-CHECK-BY-HAND` in its `decision` column, then:
 raven-scopebib finish 04-CHECK-BY-HAND-marked.xlsx --run-file out/run.toml
 ```
 
-which writes `05-final.bib` — the kept records and those you kept — and `05-hand-audit`, recording each decision, with a `note` column carried over if you added one.
+which writes `05-final.bib` — the kept records and those you kept — and `05-hand-audit`, recording each decision, with a `note` column carried over if you added one. Only the `key` and `decision` columns are needed: the rest are there for you to read.
 
 **Mark the keeps alone, or every row.**
 
@@ -713,7 +713,12 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - a record sent to a person that is missing from the sheet — it is not this run's sheet, or rows were deleted;
 - a run with records still waiting on a step: finish the run first.
 
-**A row whose record the run no longer sends to a person is ignored**, with a warning: a re-run has settled it.
+**To overturn the run itself, add a row for the record**: its key and `keep` or `drop`, nothing else. The key is in `04-removed-audit` for a removal you disagree with, and in `03-extract-audit` for a keep.
+
+- `keep` restores a record the run removed, and `drop` removes one it kept. `finish` lists every override in its output, and `05-hand-audit` records each with what the run had done, which stage did it, and why.
+- A blank on such a row decides nothing. "A blank drops" belongs to the worklist, and never removes a record the run kept; nor does a `drop` here put the worklist into the every-row mode.
+- So a sheet copied from an earlier run applies its marked rows to whatever this run settled outright. That is meant, as a person's decision wins, and the output lists each one so that none passes unseen.
+- A row naming a record the run does not hold, such as a key mistyped or one the sift removed, is ignored with a warning.
 
 **Writing the reports again removes the 05 files**, which would otherwise describe an older worklist; run `finish` again after.
 

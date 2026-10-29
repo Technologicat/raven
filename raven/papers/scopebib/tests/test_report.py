@@ -258,13 +258,44 @@ class TestFinish:
         with pytest.raises(report.FinishError, match="not in the sheet.*nowhere"):
             finish(finished, definition, tmp_path / "out", sheet)
 
-    def test_a_row_the_run_has_since_settled_is_ignored_with_a_warning(self, finished, definition, tmp_path):
+    def test_a_blank_on_a_record_the_run_settled_changes_nothing(self, finished, definition, tmp_path):
+        """'A blank drops' is the worklist's convention, and must not remove a record the run kept."""
         sheet = mark(tmp_path / "marked.tsv", ("forest", "", ""), ("rescued", "keep", ""), ("unsure", "keep", ""),
                      ("nowhere", "keep", ""))
         _, warnings = finish(finished, definition, tmp_path / "out", sheet)
-        assert any("no longer sends to a person" in warning and "forest" in warning for warning in warnings)
+        assert not any("overriding" in warning for warning in warnings)
         final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
         assert "forest" in [entry.key for entry in final_bib.entries]
+
+    def test_a_marked_row_overrides_the_run_both_ways(self, finished, definition, tmp_path):
+        """A removal restored and a keep dropped, from rows carrying nothing but a key and a decision."""
+        assert {key: outcomes_of(finished, definition)[key].action for key in ("dropped", "city", "forest")} == {
+            "dropped": report.REMOVED, "city": report.REMOVED, "forest": report.KEPT}
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep"), ("unsure", ""), ("dropped", "KEEP"),
+                     ("nowhere", ""), ("forest", "drop"), ("city", "drop"), columns=("key", "decision"))
+        _, warnings = finish(finished, definition, tmp_path / "out", sheet)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert sorted(entry.key for entry in final_bib.entries) == ["dropped", "rescued", "unextracted", "unjudged"]
+        assert sorted(w for w in warnings if w.startswith("overriding")) == [
+            "overriding the run: dropped, removed by the judge stage, now keep by hand",
+            "overriding the run: forest, kept by the rules stage, now drop by hand"]
+        audit = {row["key"]: row for row in tabular.read_table(tmp_path / "out" / f"{report.HAND_AUDIT}.tsv")}
+        assert (audit["dropped"]["decision"], audit["dropped"]["the run had"]) == ("keep", report.REMOVED)
+        assert (audit["forest"]["decision"], audit["forest"]["the run had"]) == ("drop", report.KEPT)
+        assert "city" not in audit, "a row agreeing with the run is no override"
+
+    def test_a_row_naming_a_record_the_run_lacks_is_ignored_with_a_warning(self, finished, definition, tmp_path):
+        sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep"), ("unsure", ""), ("nowhere", ""),
+                     ("no-such-key", "keep"), columns=("key", "decision"))
+        _, warnings = finish(finished, definition, tmp_path / "out", sheet)
+        assert any("does not hold" in warning and "no-such-key" in warning for warning in warnings)
+
+    def test_a_bad_decision_is_named_by_its_row_in_the_sheet(self, finished, definition, tmp_path):
+        """Override rows interleave with the worklist, so a row number must count every row of the sheet."""
+        sheet = mark(tmp_path / "marked.tsv", ("forest", "keep"), ("dropped", "keep"), ("rescued", "kep"),
+                     ("unsure", ""), ("nowhere", ""), columns=("key", "decision"))
+        with pytest.raises(report.FinishError, match="row 4 \\(rescued\\)"):
+            finish(finished, definition, tmp_path / "out", sheet)
 
     def test_an_unfinished_run_is_refused(self, run, definition, tmp_path):
         sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""))
@@ -303,7 +334,7 @@ class TestFinish:
 
 class TestTrailingBlanks:
     def warning(self, *decisions):
-        return report._trailing_blank_warning(list(decisions), first_row=2)
+        return report._trailing_blank_warning(list(decisions), list(range(2, 2 + len(decisions))))
 
     def test_a_tail_longer_than_any_earlier_blank_run_is_suspect(self):
         assert "the last 3 rows, from row 5 on" in self.warning("keep", "", "keep", "", "", "")

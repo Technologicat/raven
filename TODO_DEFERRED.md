@@ -47,23 +47,6 @@ swallowed-field repairs, would then use it too. Mixed endings in one file: pick 
 To go in with the next round of bib-tool polish (maintainer, 2026-10-29). Raised the morning of
 2026-10-29, on the geography bib.
 
-## `raven-scopebib finish` cannot overturn a removal
-
-*Cluster: scopebib · Cost: S? · Gate: a design look (planned for the afternoon of 2026-10-29) · Filed: 2026-10-29*
-
-`finish` applies a person's decisions to the rows of `04-CHECK-BY-HAND` only. A record the tool removed
-outright never reaches that list, so a person who finds a wrong removal, reading `04-removed-audit`, has
-no way to say so to the tool: the final bib leaves it out, and the hand audit has no line for it. The
-workaround is to add the record to the final bib by hand, which the tool's own record then does not show.
-
-Seen on the health education corpus's second look (2026-10-29): of the 44 records run d removed that the
-person re-read, one was wrongly removed, and had to be put back by hand.
-
-The likely shape: `finish` also takes a marked copy of `04-removed-audit` (a `decision` column, `KEEP`
-overturning a removal), applies it, and records each overturned removal in the hand audit with the stage
-that made it. To settle in the design: one sheet or two, and whether an overturned removal should also
-show in the reports a later run writes.
-
 ## Visualizer: Ctrl+F cannot reach the search field after the panel is swapped at runtime
 
 *Cluster: visualizer-layout · Cost: ? · Gate: none · Filed: 2026-10-29 · See also: `dpg-notes.md`, "`focus_item` cannot focus a child window"; `investigations/dpg-focus/focus_after_move_item_probe.py`*

@@ -119,7 +119,8 @@ def _parser() -> argparse.ArgumentParser:
             subparser.add_argument("--until", default=None, choices=COMMANDS["run"], help="Stop after this stage.")
     # `finish` takes the marked sheet where the others take the `.bib`, which comes from the run file or `--bib`.
     finish = commands.add_parser("finish", parents=[common],
-                                 help="Apply a person's decisions on a marked copy of 04-CHECK-BY-HAND.")
+                                 help="Apply a person's decisions on a marked copy of 04-CHECK-BY-HAND, including rows "
+                                      "added to overturn what the run kept or removed outright.")
     finish.add_argument("sheet", metavar="MARKED_SHEET", help="The marked copy, in any table format.")
     finish.add_argument("--bib", default=None, metavar="FILE",
                         help="The BibTeX file the run filtered. Optional where --run-file names one.")

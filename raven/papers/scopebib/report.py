@@ -20,7 +20,7 @@ order:
     04-CHECK-BY-HAND.<fmt>   every record sent to a person, with why
     04-removed-audit.<fmt>   every record removed, by which stage and why
     04-kept.bib              the records that survived every stage
-    05-hand-audit.<fmt>      every decision a person made on 04-CHECK-BY-HAND
+    05-hand-audit.<fmt>      every decision a person made, on 04-CHECK-BY-HAND and against the run
     05-final.bib             the kept records, and those a person kept
 
 The 05 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
@@ -454,7 +454,7 @@ class FinishError(ValueError):
     """A marked worklist `finish` cannot act on, with every row or key at fault named."""
 
 
-def _trailing_blank_warning(decisions: list[str], first_row: int) -> str | None:
+def _trailing_blank_warning(decisions: list[str], row_numbers: list[int]) -> str | None:
     """A warning when the blanks at the end of a sheet marking only its keeps look like marking that stopped
     partway.
 
@@ -473,7 +473,7 @@ def _trailing_blank_warning(decisions: list[str], first_row: int) -> str | None:
                 "if that is what you meant, this is normal")
     if tail <= max(runs[:-tail], default=0):
         return None
-    return (f"the last {tail} rows, from row {first_row + len(decisions) - tail} on, have no decision, so they "
+    return (f"the last {tail} rows, from row {row_numbers[-tail]} on, have no decision, so they "
             f"will be dropped; that is the longest blank run in the sheet, which is how marking that stopped "
             f"partway looks. If you meant to drop them, this is normal")
 
@@ -491,18 +491,20 @@ def finish(out_dir: str | pathlib.Path, *,
            require_every_decision: bool = False) -> tuple[list[pathlib.Path], list[str]]:
     """Apply a person's decisions on a marked copy of the worklist, and write `FINAL_BIB` and `HAND_AUDIT`.
 
-    `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Its `decision` column marks
-             either the keeps alone, `KEEP` with a blank dropping, or every row, `KEEP` or `DROP`; case and
-             surrounding space do not matter. A `note` column, where the person added one, is carried into
-             the audit.
+    `sheet`: the marked worklist, in any of `raven.common.tabular.FORMATS`. Only its `key` and `decision`
+             columns are required. The `decision` column marks either the keeps alone, `KEEP` with a blank
+             dropping, or every row, `KEEP` or `DROP`; case and surrounding space do not matter. A `note`
+             column, where the person added one, is carried into the audit.
+             A row may also name a record the run kept or removed outright: marked `KEEP` or `DROP`, it
+             overrides the run, and a blank there is no decision.
     `library`, `records`, `definition`, `final`, `reviews`, `extractions`, `provenance`, `table_format`:
              as `write_reports` takes them; the worklist is worked out from them afresh.
     `require_every_decision`: refuse a blank decision rather than reading it as a drop, so that every row
                               must be marked.
 
-    Returns `(written, warnings)`: the paths written, and what the person should be told — a row whose key
-    the run has since settled, which is ignored, and a run of blank rows at the end that looks like marking
-    that stopped partway.
+    Returns `(written, warnings)`: the paths written, and what the person should be told — every override
+    applied, a row naming a record the run does not hold, which is ignored, and a run of blank rows at the end
+    that looks like marking that stopped partway.
 
     Raises `FinishError`, writing nothing, when the run is not finished (a record is pending), when the sheet
     has no `key` or `decision` column, when a decision is neither `KEEP`, `DROP` nor blank, when a record of
@@ -520,19 +522,32 @@ def finish(out_dir: str | pathlib.Path, *,
     if rows and not {"key", "decision"} <= rows[0].keys():
         raise FinishError(f"'{sheet}' has no 'key' and 'decision' columns; is it a copy of {CHECK_BY_HAND}?")
 
-    # A spreadsheet numbers the header row 1, so the first record is row 2.
-    first_row = 2
+    # A spreadsheet numbers the header row 1, so the first record is row 2. Rows are numbered by their place
+    # in the sheet, which interleaves the worklist with any overrides a person added.
+    numbered = list(enumerate(rows, start=2))
     worklist = {key for key, outcome in result.items() if outcome.action == TO_A_PERSON}
     warnings, problems, decided = [], [], {}
-    settled = [row["key"] for row in rows if row["key"] not in worklist]
-    if settled:
-        warnings.append(f"{len(settled)} rows name records the run no longer sends to a person, and are ignored: "
-                        f"{', '.join(settled[:5])}" + (", ..." if len(settled) > 5 else ""))
-    rows = [row for row in rows if row["key"] in worklist]
-    decisions = [row["decision"].strip().lower() for row in rows]
-    for i, (row, decision) in enumerate(zip(rows, decisions)):
+    unknown = [row["key"] for _, row in numbered if row["key"] not in result]
+    if unknown:
+        warnings.append(f"{len(unknown)} rows name records this run does not hold, and are ignored: "
+                        f"{', '.join(unknown[:5])}" + (", ..." if len(unknown) > 5 else ""))
+    # A row on a record the run settled outright overrides the run when it is marked. A blank there is no
+    # decision at all: "a blank drops" is the worklist's convention, and must never remove a record the run kept.
+    overrides = {}
+    for number, row in numbered:
+        key = row["key"]
+        if key not in result or key in worklist:
+            continue
+        decision = row["decision"].strip().lower()
         if decision not in (KEEP, DROP, ""):
-            problems.append(f"row {first_row + i} ({row['key']}): '{row['decision']}' is neither '{KEEP}', "
+            problems.append(f"row {number} ({key}): '{row['decision']}' is neither '{KEEP}', '{DROP}' nor blank")
+        elif decision and (decision == KEEP) != (result[key].action == KEPT):
+            overrides[key] = row
+    worked = [(number, row) for number, row in numbered if row["key"] in worklist]
+    decisions = [row["decision"].strip().lower() for _, row in worked]
+    for (number, row), decision in zip(worked, decisions):
+        if decision not in (KEEP, DROP, ""):
+            problems.append(f"row {number} ({row['key']}): '{row['decision']}' is neither '{KEEP}', "
                             f"'{DROP}' nor blank")
         decided[row["key"]] = row
     missing = sorted(worklist - decided.keys())
@@ -541,7 +556,7 @@ def finish(out_dir: str | pathlib.Path, *,
                         f"worklist or rows were deleted: {', '.join(missing[:5])}" + (", ..." if len(missing) > 5 else ""))
     # A sheet marks either its keeps alone, a blank dropping, or every row. One `drop` says the person is
     # marking every row, and a blank beside it is then a row not yet decided.
-    blank = [str(first_row + i) for i, decision in enumerate(decisions) if decision == ""]
+    blank = [str(number) for (number, _), decision in zip(worked, decisions) if decision == ""]
     listed = f"rows {', '.join(blank[:10])}" + (", ..." if len(blank) > 10 else "")
     if blank and DROP in decisions:
         problems.append(f"the sheet marks some rows '{DROP}', so a blank is a row not yet decided, and "
@@ -551,27 +566,37 @@ def finish(out_dir: str | pathlib.Path, *,
         problems.append(f"{len(blank)} rows have no decision ({listed})")
     if problems:
         raise FinishError("; ".join(problems))
-    if maybe_warning := _trailing_blank_warning(decisions, first_row):
+    if maybe_warning := _trailing_blank_warning(decisions, [number for number, _ in worked]):
         warnings.append(maybe_warning)
+    for key, row in overrides.items():
+        warnings.append(f"overriding the run: {key}, {result[key].action} by the {result[key].stage} stage, "
+                        f"now {row['decision'].strip().lower()} by hand")
 
     out_dir = pathlib.Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     by_key = {record.key: record for record in records}
     hand_kept = {key for key, row in decided.items() if row["decision"].strip().lower() == KEEP}
-    keys = sorted(decided, key=lambda key: (key not in hand_kept, _STAGE_ORDER[result[key].stage],
-                                            result[key].decided_by, *_reading_order(by_key[key])))
+    restored = {key for key, row in overrides.items() if row["decision"].strip().lower() == KEEP}
+    unkept = overrides.keys() - restored
+    rows_of = {**decided, **overrides}
+    keys = sorted(rows_of, key=lambda key: (key not in hand_kept | restored, key in overrides,
+                                            _STAGE_ORDER[result[key].stage], result[key].decided_by,
+                                            *_reading_order(by_key[key])))
     path = out_dir / f"{HAND_AUDIT}.{table_format}"
     tabular.write_table(path,
                         [*provenance,
                          f"decisions read from: {sheet}",
                          f"of {len(decided)} records sent to a person: kept {len(hand_kept)}, "
-                         f"dropped {len(decided) - len(hand_kept)}"],
-                        ("key", "decision", "sent by", "decided by", "why", "note", *_RECORD_COLUMNS),
-                        [(key, KEEP if key in hand_kept else DROP, result[key].stage, result[key].decided_by,
-                          result[key].reason, decided[key].get("note", ""), *_record_cells(by_key[key]))
+                         f"dropped {len(decided) - len(hand_kept)}",
+                         f"the run overridden by hand: {len(restored)} removals restored, "
+                         f"{len(unkept)} keeps dropped"],
+                        ("key", "decision", "the run had", "sent by", "decided by", "why", "note", *_RECORD_COLUMNS),
+                        [(key, KEEP if key in hand_kept | restored else DROP, result[key].action, result[key].stage,
+                          result[key].decided_by, result[key].reason, rows_of[key].get("note", ""),
+                          *_record_cells(by_key[key]))
                          for key in keys])
     written = [path]
-    kept = {key for key, outcome in result.items() if outcome.action == KEPT} | hand_kept
+    kept = ({key for key, outcome in result.items() if outcome.action == KEPT} - unkept) | hand_kept | restored
     path = out_dir / FINAL_BIB
     path.write_text(bibtex.write_string(select(library, kept)), encoding="utf-8")
     written.append(path)
