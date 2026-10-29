@@ -27,6 +27,26 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## The bib tools write LF whatever line endings the input had
+
+*Cluster: papers · Cost: S–M? · Gate: none · Filed: 2026-10-29*
+
+A bibliography with CRLF line endings, as a Windows-side export or editor leaves it, comes out of
+`raven-fixbib` with LF: `read_text` translates line endings on the way in, and nothing restores them on
+the way out. The maintainer wants every tool that rewrites a `.bib` to keep the input's line ending type.
+Nothing in `raven/papers/` passes `newline=` anywhere, so the same holds wherever a bib is read and
+written back. The tools that write one: `raven-fixbib`, `raven-fillbib`, `raven-siftbib`,
+`raven-deduplicate`, `raven-burstbib`, `raven-scopebib` (its stage bibs and `finish`). The converters
+that write a new file (`arxiv2bib`, `pdf2bib`, `wos2bib`, `csv2bib`) have no input bib to follow, so
+they keep the platform's convention.
+
+A shared helper beside `bibtex.parse_file` (read, noting the ending; write, restoring it) would serve all
+of them, and the one place this is already handled by hand, `bibtex._line_break` in the DOI and
+swallowed-field repairs, would then use it too. Mixed endings in one file: pick the majority, and say so.
+
+To go in with the next round of bib-tool polish (maintainer, 2026-10-29). Raised the morning of
+2026-10-29, on the geography bib.
+
 ## `raven-scopebib finish` cannot overturn a removal
 
 *Cluster: scopebib · Cost: S? · Gate: a design look (planned for the afternoon of 2026-10-29) · Filed: 2026-10-29*
