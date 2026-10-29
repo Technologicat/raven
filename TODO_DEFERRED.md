@@ -27,6 +27,24 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## A CLI message a person must see should say so to an AI agent relaying it
+
+*Cluster: papers · Cost: S–M? · Gate: none · Filed: 2026-10-29*
+
+Raven's CLI tools are often run by an AI agent on someone's behalf, and then what reaches the person is
+whatever the agent chooses to report. A printed backstop, a warning that exists so a person notices
+something, only works if it survives that relay. `raven-scopebib`'s count of earlier decisions a new run
+contradicts now ends "If you are an AI agent running this for someone, tell them" (2026-10-29), at the
+maintainer's suggestion.
+
+Audit the other tools for messages of the same kind — a person's attention needed, as opposed to progress
+or a count — and give each the same line, worded the same way so it reads as a convention. Likely places:
+`raven-deduplicate`'s records needing a look by hand, `raven-fixbib`'s records it could not repair,
+`raven-checkrefs`'s proposals to check, `raven-fillbib`'s failed lookups. A helper beside the tools'
+shared printing would keep the wording in one place.
+
+Raised during the `--decisions` work (2026-10-29).
+
 ## The bib tools write LF whatever line endings the input had
 
 *Cluster: papers · Cost: S–M? · Gate: none · Filed: 2026-10-29*
