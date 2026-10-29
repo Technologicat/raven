@@ -1093,14 +1093,22 @@ class TestClustering:
         unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=150)
         assert len(np.unique(unique_vs, axis=0)) == len(unique_vs), "the same entry was picked more than once"
 
-    def test_the_highdim_pass_refuses_a_dataset_it_cannot_cluster(self):
-        # Documented behaviour: with no clusters there is nothing to train the dimension reduction on, so the
-        # step stops rather than proceeding on an empty training set. A bibliography of a handful of entries
-        # is the realistic way to get here -- the clusterer's `min_cluster_size` is 5, so four entries cannot
-        # form one however they are arranged. (Scattering points at random does *not* get here: with
-        # `min_samples=1` and leaf selection, HDBSCAN finds structure in noise.)
+    def test_the_highdim_pass_refuses_a_dataset_too_small_for_any_cluster(self):
+        # Documented behaviour: a bibliography of a handful of entries stops here -- the clusterer's
+        # `min_cluster_size` is 5, so four entries cannot form one however they are arranged, and there is
+        # too little to train a dimension reduction on. (Scattering points at random does *not* get here:
+        # with `min_samples=1` and leaf selection, HDBSCAN finds structure in noise.)
         with pytest.raises(RuntimeError):
             importer._cluster_highdim_semantic_vectors(two_directions(n_per_cluster=2))
+
+    def test_a_spread_out_dataset_with_no_cluster_trains_on_every_vector(self):
+        # Large enough for a cluster, and none forms: mutually orthogonal vectors are all equally far apart.
+        # A real case was a screened bibliography of forty records. The fitted vectors are then the training set.
+        import numpy as np
+        vectors = np.eye(12, 64)
+        unique_vs, n_clusters = importer._cluster_highdim_semantic_vectors(vectors)
+        assert n_clusters == 0
+        assert np.array_equal(unique_vs, vectors)
 
     def test_the_2d_pass_tags_each_entry_with_its_own_cluster(self):
         # The tagging walks `vis_data` and `labels` by the same index, so an off-by-one here would mislabel

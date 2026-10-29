@@ -647,7 +647,9 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
           This data is better than using just the cluster medoids for training the dimension reduction mapping.
           The `max_n` limit keeps the dimension reduction training reasonably fast.
 
-    Raises `RuntimeError` if the high-dimensional vectors are so spread out that not even one cluster is detected.
+    When no cluster is detected, `unique_vs` is the vectors fitted themselves, and `n_clusters` is 0. Raises
+    `RuntimeError` when there are too few vectors for even one cluster (fewer than the clusterer's minimum
+    cluster size).
     """
     _update_status_and_log("Detecting semantic clusters...", log_indent=1)
     logger.info(f"        Full dataset has {len(all_vectors)} data points.")
@@ -658,7 +660,8 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
         # precomputed distance matrix — never to the raw vectors we pass — so the value cannot change our
         # result. Passed explicitly because sklearn warns until it is: the default flips False -> True in 1.10,
         # and we may as well already be on the far side of that.
-        clusterer = HDBSCAN(min_cluster_size=5, min_samples=1, cluster_selection_method="leaf", metric="cosine", store_centers="medoid", copy=True)
+        min_cluster_size = 5
+        clusterer = HDBSCAN(min_cluster_size=min_cluster_size, min_samples=1, cluster_selection_method="leaf", metric="cosine", store_centers="medoid", copy=True)
         # clusterer = HDBSCAN(min_cluster_size=5, min_samples=1, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid", algorithm="kd_tree")
         # clusterer = HDBSCAN(min_cluster_size=20, min_samples=5, metric="cosine", store_centers="medoid")  # n_jobs=6,  # n_jobs=-1,
         if len(all_vectors) <= max_n:
@@ -691,6 +694,11 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
             samples_by_cluster = [points[:_MAX_REPRESENTATIVES_PER_CLUSTER, :] for points in points_by_cluster]
             unique_vs = np.concatenate(samples_by_cluster)
             logger.info(f"        Picked a total of {len(unique_vs)} representative points from the detected seed clusters.")
+        elif len(fit_vectors) >= min_cluster_size:
+            # Spread out rather than too small: no cluster held, so there is no stratum to sample from, and
+            # the vectors fitted are themselves the training set.
+            logger.info(f"        No clusters detected in high-dimensional data; training the dimension reduction on all {len(fit_vectors)} data points used.")
+            unique_vs = fit_vectors
         else:
             logger.info("        No clusters detected in high-dimensional data. Cannot train dimension reduction for this dataset. Canceling.")
             raise RuntimeError("No clusters detected in high-dimensional data. Cannot train dimension reduction for this dataset. Canceling.")
