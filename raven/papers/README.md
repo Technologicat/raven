@@ -722,7 +722,7 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - So a sheet copied from an earlier run applies its marked rows to whatever this run settled outright. That is meant, as a person's decision wins, and the output lists each one so that none passes unseen.
 - A row naming a record the run does not hold, such as a key mistyped or one the sift removed, is ignored with a warning.
 
-**Writing the reports again over a finished run is refused**, before any work, naming the 04 files: kept, they would describe an older worklist, and deleted, they would take any edit you made to `04b-final.bib` with them. Save copies of anything you changed, then pass `--discard-finished`, and run `finish` again after.
+**Writing the reports again over a finished run is refused**, before any work, naming the 04 files: kept under their names, they would describe an older worklist while looking current. `--set-aside-finished` moves them aside first, to names like `04b-final, set aside 2026-10-29 14.05.33.bib`, which the tool never touches again — so nothing you decided is lost, and the set-aside hand decisions are what `--decisions` carries into the new run.
 
 ### The run file, and repeating a run
 

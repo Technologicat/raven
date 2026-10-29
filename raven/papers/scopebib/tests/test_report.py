@@ -211,14 +211,26 @@ class TestFinishedRun:
         assert sorted(path.name for path in out.iterdir()) == [report.FINAL_BIB]
         assert (out / report.FINAL_BIB).read_text(encoding="utf-8") == "% edited by hand\n"
 
-    def test_asked_to_discard_it_the_reports_replace_it(self, run, definition, tmp_path):
+    def test_asked_to_set_it_aside_the_reports_are_written_and_nothing_is_lost(self, run, definition, tmp_path):
         out = tmp_path / "out"
         out.mkdir()
         (out / report.FINAL_BIB).write_text("% edited by hand\n", encoding="utf-8")
         (out / f"{report.HAND_AUDIT}.tsv").write_text("x", encoding="utf-8")
-        write(run, definition, out, discard_finished=True)
+        write(run, definition, out, set_aside_finished=True)
         assert report.finished_outputs(out) == []
         assert (out / f"{report.CHECK_BY_HAND}.tsv").exists()
+        [final] = out.glob("04b-final, set aside *.bib")
+        assert final.read_text(encoding="utf-8") == "% edited by hand\n"
+        assert len(list(out.glob(f"{report.HAND_AUDIT}, set aside *.tsv"))) == 1
+
+    def test_setting_aside_twice_in_one_second_keeps_both(self, tmp_path):
+        import datetime
+        now = datetime.datetime(2026, 10, 29, 14, 5, 33)
+        for content in ("first", "second"):
+            (tmp_path / report.FINAL_BIB).write_text(content, encoding="utf-8")
+            report.move_finished_aside(tmp_path, maybe_now=now)
+        assert sorted(path.read_text(encoding="utf-8") for path in tmp_path.iterdir()) == ["first", "second"]
+        assert (tmp_path / "04b-final, set aside 2026-10-29 14.05.33 (2).bib").exists()
 
 
 class TestOwnership:
@@ -349,7 +361,7 @@ class TestFinish:
         finish(finished, definition, tmp_path / "out", sheet, table_format="ods")
         assert (tmp_path / "out" / f"{report.HAND_AUDIT}.ods").exists()
 
-    def test_rewriting_the_reports_removes_what_finish_wrote_only_when_asked(self, finished, definition, tmp_path):
+    def test_rewriting_the_reports_moves_what_finish_wrote_aside_only_when_asked(self, finished, definition, tmp_path):
         sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "", ""), ("nowhere", "", ""))
         written, _ = finish(finished, definition, tmp_path / "out", sheet)
         assert all(path.exists() for path in written)
@@ -357,8 +369,9 @@ class TestFinish:
         with pytest.raises(report.FinishedRunError):
             write(finished, definition, tmp_path / "out")
         assert all(path.exists() for path in written)
-        write(finished, definition, tmp_path / "out", discard_finished=True)
+        write(finished, definition, tmp_path / "out", set_aside_finished=True)
         assert not any(path.exists() for path in written)
+        assert len(list((tmp_path / "out").glob("* set aside *"))) == len(written)
 
 
 class TestTrailingBlanks:

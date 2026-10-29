@@ -200,8 +200,10 @@ class TestARun:
         with pytest.raises(report.FinishedRunError):
             cli.execute(plan, nlp=_NLP(), connect=never)
         assert (out / report.FINAL_BIB).read_text(encoding="utf-8") == "% edited by hand\n"
-        assert cli.execute(plan, nlp=_NLP(), connect=connect, discard_finished=True) == 0
+        assert cli.execute(plan, nlp=_NLP(), connect=connect, set_aside_finished=True) == 0
         assert not (out / report.FINAL_BIB).exists()
+        [kept] = out.glob("04b-final, set aside *.bib")
+        assert kept.read_text(encoding="utf-8") == "% edited by hand\n"
 
 
 class FickleModel(ScriptedModel):

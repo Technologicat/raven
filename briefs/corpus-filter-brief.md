@@ -586,8 +586,9 @@ the stages are separable and each is tested alone. The console script is the `cl
        record refuses, the run being unfinished.
      - **`write_reports` removes the 04 files**, which `finish` writes: built from an older worklist, they
        would look current. Rewriting the reports means finishing again, which asks nothing of a model.
-       Since 2026-10-29 it does so only with `--discard-finished`, refusing otherwise before any work: a
-       rerun of the reports deleted a final bibliography that had been edited by hand.
+       Since 2026-10-29 it refuses instead, before any work, and `--set-aside-finished` moves the files aside
+       under a dated name rather than deleting them: a rerun of the reports had deleted a final
+       bibliography edited by hand, and a person's decisions are not the tool's to remove.
    - **`report` built 2026-10-22.** Over the prototype's converted answers it reproduces step 6's judge
      side exactly: 1069 removed, 153 to a person (139 unsure, 14 rescued). On the rules side the 138
      extractions of the prototype's unknowns now belong to records sent to review, which accounts for the
