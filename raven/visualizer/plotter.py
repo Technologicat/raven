@@ -24,6 +24,7 @@ __all__ = ["get_visible_datapoints",
            "draw_select_radius_indicator",
            "reset_zoom",
            "parse_dataset_file",
+           "colormap_position",
            "load_dataset",
            "create_highlight_series",
            "clear_cluster_color_themes"]
@@ -337,6 +338,18 @@ def parse_dataset_file(filename):
     return ds
 
 
+def colormap_position(label: int, max_label: int) -> float:
+    """Where on the colormap cluster `label` takes its colour, in [0, 1], given the largest label `max_label`.
+
+    The outliers (label -1) sit at 0, and the clusters are spread evenly above them. A dataset of outliers
+    alone (`max_label` -1) puts everything at 0.
+    """
+    # Without the guard that last case is 0 / 0, which numpy integers answer with NaN rather than an error,
+    # and ImPlot then indexes its colour table with the NaN and crashes the process.
+    n_slots = max_label + 1
+    return float((label + 1) / n_slots) if n_slots > 0 else 0.0
+
+
 def load_dataset(ds):
     """Render `ds` (see `parse_dataset_file`) into the plotter's DPG scatter plot.
 
@@ -370,7 +383,7 @@ def load_dataset(ds):
             # See:
             #     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
             #     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
-            color = dpg.sample_colormap(colormap, t=(label + 1) / (max_label + 1))
+            color = dpg.sample_colormap(colormap, t=colormap_position(label, max_label))
             color = [int(255 * component) for component in color]  # RGBA
             color[-1] = int(0.5 * color[-1])  # A; make translucent
             with dpg.theme(tag=series_theme) as this_scatterplot_theme:

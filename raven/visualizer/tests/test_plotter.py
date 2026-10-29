@@ -409,6 +409,19 @@ class TestTheSelectRadiusBrushOutline:
 N_MANY = 100
 
 
+class TestTheClusterColourPosition:
+    def test_outliers_sit_at_zero_and_the_clusters_spread_up_to_one(self):
+        assert [plotter.colormap_position(label, 3) for label in (-1, 0, 1, 2, 3)] == [0.0, 0.25, 0.5, 0.75, 1.0]
+
+    def test_a_dataset_of_outliers_alone_puts_everything_at_zero(self):
+        # The case that crashed the process: every label -1, so the position was 0 / 0, NaN in numpy integers.
+        assert plotter.colormap_position(np.int64(-1), np.int64(-1)) == 0.0
+
+    def test_numpy_labels_give_a_finite_float(self):
+        position = plotter.colormap_position(np.int64(2), np.int64(4))
+        assert isinstance(position, float) and position == 0.6
+
+
 class TestTheHighlightBrightnessCurve:
     def test_the_highlight_brightens_with_the_animation_channel(self):
         dim = plotter.compute_highlight_alpha(0.0, n_data=10, n_many=N_MANY)
