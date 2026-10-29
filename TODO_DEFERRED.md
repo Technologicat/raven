@@ -27,6 +27,34 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Visualizer: Ctrl+F cannot reach the search field after the panel is swapped at runtime
+
+*Cluster: visualizer-layout · Cost: ? · Gate: none · Filed: 2026-10-29 · See also: `dpg-notes.md`, "`focus_item` cannot focus a child window"; `investigations/dpg-focus/focus_after_move_item_probe.py`*
+
+With the info panel swapped to the right by Ctrl+Shift+P or the ↔ button, Ctrl+F and Ctrl+Shift+F no
+longer put the caret in the search field: `give_caret` asks every frame and the request is refused until
+it gives up. Booting with the panel already on the right (`--panel-side right`, or a saved side) works, as
+does swapping back.
+
+The cause is a DPG behaviour, now in the notes: `focus_item` is refused into a child window that was
+created after a sibling and moved in front of it at runtime. The plot column, which holds the search field,
+is built last, and the runtime swap moves it to the front. Redirecting the request does not help — a
+sibling in the same child window, the main window and the child window itself were all tried, and all
+refused.
+
+Ways out, roughly in order of cost:
+
+- **Find a DPG-level reset**, a few more rows in the probe: hiding and showing the moved window, deleting
+  and recreating something small in it. A two-line fix in `toggle_panel_side` if one works.
+- **Build the plot column first**, so that it is the oldest window. The left layout's runtime swap would
+  then put the info panel, the newest, in front — harmless while nothing calls `focus_item` into it, which
+  wants checking.
+- **Rebuild the search row** on a swap, so its window is new and first. Fiddly: the row carries the
+  keyboard-mark follower, the tooltips and its theme.
+- **Apply the swap at next start**, saving the choice and saying so. Trivial, and it loses the live swap.
+
+Found 2026-10-29, the morning after the swap landed.
+
 ## Retry a dropped connection in the Raven-server client
 
 *Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep` (`reconnect_attempts`), `raven.papers.httpfetch`*

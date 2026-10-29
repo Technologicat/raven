@@ -142,6 +142,7 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   than the thumb, so ImGui answers with auto-repeat paging instead of a drag, and the creep is better
   established from the session log above than from any synthetic drag.
 
+- `focus_after_move_item_probe.py` — whether `focus_item` still reaches a field after `move_item` has reordered the child windows: refused when the field's window, built after a sibling, has been moved in front of it at runtime (2026-10-29).
 - `focus_across_child_window_probe.py` — when `focus_item` refuses to move focus at all. Enumerates every
   source/target position across two sibling child windows and the enclosing window. The answer is that
   **only window-level to child is refused**; child to child, including between siblings, works. Added
