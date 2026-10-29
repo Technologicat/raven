@@ -90,7 +90,15 @@ wanted early in the week of 2026-11-02, for the health-education study.
         layer runs the table's columns together, so read it from page images instead (`pdftoppm`, pp.
         22–24), by a vision model, which keeps the layout (maintainer, 2026-10-29); the model served now
         reads images. Match each citation to its entry in the reference list by surname and year, then
-        run `raven-checkrefs` on those entries. Two checks come free: the paper states "a total of 127 clustered studies", and the table
+        run `raven-checkrefs` on those entries.
+      - **How the table counts**: a cluster's *Count* is its total over all its rows, and an *Outliers*
+        row is studies the clustering put in that cluster and the authors excluded from it by hand
+        (maintainer, 2026-10-29: #1's 16 is 11 under *Integration of sustainability* plus 5 outliers). So
+        the checks are that *Count* sums to 127 and the outlier rows to the paper's 13. For item 10, an
+        outlier is a study whose place people disputed, not one that belongs nowhere; score it apart.
+      - **A vision model reads it**: p. 22 transcribed correctly on the first try (2026-10-29), 33
+        citations against a reading by eye, printed punctuation kept and a row cut at the page foot
+        marked as continuing; 28 s a page. Two checks come free: the paper states "a total of 127 clustered studies", and the table
         gives a count per cluster. The table is also item 10's ground truth, study by study.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
