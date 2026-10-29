@@ -165,3 +165,8 @@ wanted early in the week of 2026-11-02, for the health-education study.
 - **2026-10-29**: item 10 produces a grouping shaped like the earlier studies' tables (themes and
   sub-themes); coding per research question goes to item 11. Considered and set aside for the prototype:
   doing both at once, which has nothing on hand to score the coding against.
+- **2026-10-29**: a person marks one sheet, the copy of `03a-CHECK-BY-HAND`, for every decision: wrong
+  removals and keeps are pasted in from `03b-removed` and `03c-kept`, which share its columns, and that
+  sheet is what `--decisions` carries. Considered and set aside: `finish` reading several sheets, one per
+  table marked — more places for a decision to live, for no gain. The sheets' column order and widths are
+  still to tune, from the maintainer's notes on marking at 1080p (expected the week of 2026-11-02).
