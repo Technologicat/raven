@@ -116,6 +116,15 @@ wanted early in the week of 2026-11-02, for the health-education study.
         2026-11-02. Table 6 dates Baena-Morales et al. 2023, the publisher 2024. The vision model misread six
         of Table 6's 165 names, which the text layer corrected: trust the image for structure, the text for
         spelling.
+      - **Geography's set is recovered** (2026-10-29): `published/geography_bibliometric.bib`, Table 5's 126
+        studies. The paper does list its studies apart, as the first 127 entries of its reference list,
+        set off from the rest only by a line of dots on p. 57 (confirmed by the maintainer); a separator
+        that easy to miss is why it was taken for one list. `raven-checkrefs` paired 126 of the 127 with
+        records, three of them proposals well clear of their runners-up. The 127th, Yli-Panula et al.
+        (2020), is in no cluster and has no record — the same shape as biology's Sterling (2013), and
+        **for the coauthor** likewise. The content analysis reviewed 114, and nothing in the list marks
+        which: 127 places less the 13 outliers is 114, which would make it every clustered study but the
+        outliers — arithmetic, not yet confirmed.
       - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011, and
         2011 is right — the article's own running heads say *European Journal of Geography 1 (2011)*
         (checked by the maintainer, 2026-10-29). The 2016 comes from the bibliography's record, so the table
