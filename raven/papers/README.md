@@ -51,6 +51,7 @@ Thirteen command-line tools for the part of a literature review that happens bef
     - [Writing a definition file](#writing-a-definition-file)
     - [Calibrating with a pilot](#calibrating-with-a-pilot)
     - [What a run leaves](#what-a-run-leaves)
+    - [Reading the reports, in order](#reading-the-reports-in-order)
     - [The reviewer's control](#the-reviewers-control)
     - [Checking by hand, and `finish`](#checking-by-hand-and-finish)
     - [Running again after a change, with your decisions kept](#running-again-after-a-change-with-your-decisions-kept)
@@ -680,6 +681,18 @@ Named by step, so that listing the directory shows the pipeline in order. `<fmt>
 **A record waiting on a step is in neither the removals nor `03c-kept.bib`**: a drop the reviewer has not read, a keep not yet extracted. The counts each run prints say how many.
 
 **The tool owns these names and no others.** Writing the reports removes any file bearing one of them that it did not just write — a previous run's report in another format — and touches nothing else in the directory. **So save a marked copy of `03a-CHECK-BY-HAND` under a name of your own**, such as `03a-CHECK-BY-HAND-marked.xlsx`: the original is rewritten on every run.
+
+### Reading the reports, in order
+
+The order is what a mistake costs. The first two files are where a wrong answer reaches your review; the last ones explain how an answer came about.
+
+1. **`03a-CHECK-BY-HAND`: decide each row.** These are the records the tool would not decide alone, each with the step that sent it (`sent by`), the test or rule involved (`decided by`) and why. Mark `decision` [as `finish` reads it](#checking-by-hand-and-finish). Where earlier decisions were carried in, the highlighted rows at the top come first: there the new run went against what you decided.
+2. **`03b-removed`: look for removals that should not have happened.** A wrong removal costs a record with nothing to show for it, and nothing else in the folder will bring it back to you. Read it grouped by `removed by` and `decided by`, and look for a test or rule removing a kind of record you meant to keep: wrong removals often come as a class rather than one by one. A class is a definition to fix, and running again with [your decisions carried](#running-again-after-a-change-with-your-decisions-kept) is cheaper than overturning each. A single wrong one is overturned with a row in your marked sheet.
+3. **`02a-auto-reviewed`: read the reviewer's cases.** A case the reviewer made for a dropped record is an argument that your definition removes something it should not, and it is where a disagreement with the definition shows first. Begin with [the comparison in its header](#the-reviewers-control): it says whether the reviewer's cases are worth reading.
+4. **`00a-filled` and `00b-sifted`: once per corpus.** What the fill could not complete, and what the sift removed for having nothing to screen. The sift's removals were never judged at all, so a record you know belongs and find here needs an abstract, or a criterion loosened.
+5. **`01-auto-judged` and `02b-ruled`: when something needs explaining.** Every test's answer and reason, and every field with its quote, for a record whose fate surprised you, and for a methods section.
+
+`03c-kept.bib` is what the tool kept on its own, and `04b-final.bib`, after `finish`, what you and it kept together.
 
 ### The reviewer's control
 
