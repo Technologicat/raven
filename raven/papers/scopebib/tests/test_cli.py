@@ -206,6 +206,25 @@ class TestARun:
         assert kept.read_text(encoding="utf-8") == "% edited by hand\n"
 
 
+    def test_decisions_from_an_earlier_run_are_carried_and_a_contradiction_is_said(self, files, tmp_path, model,
+                                                                                   connect, capsys):
+        corpus, definition = files
+        out = tmp_path / "out"
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
+                                      "--control", "2")), nlp=_NLP(), connect=connect)
+        removed = tabular.read_table(out / f"{report.REMOVED_AUDIT}.xlsx")
+        assert removed, "nothing was removed, so this fixture cannot carry a contradicted decision"
+        decisions = tmp_path / "decisions.tsv"
+        tabular.write_table(decisions, [], ["key", "decision"], [(removed[0]["key"], "keep")])
+        capsys.readouterr()
+        assert cli.execute(cli.resolve(parse("report", "--run-file", str(out / "run.toml"))), nlp=_NLP(),
+                           connect=connect, maybe_decisions_sheet=str(decisions)) == 0
+        printed = capsys.readouterr().out
+        assert "decisions this run contradicts: 1" in printed and "AI agent" in printed
+        worklist = tabular.read_table(out / f"{report.CHECK_BY_HAND}.xlsx")
+        assert (worklist[0]["key"], worklist[0]["decision"]) == (removed[0]["key"], "keep")
+
+
 class FickleModel(ScriptedModel):
     """The scripted model, which also calls the ravens at dawn not birds."""
 

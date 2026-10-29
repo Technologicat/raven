@@ -16,11 +16,10 @@ they fit together and in what order. Settled decisions that left no diff go in t
 
 ## Screening
 
-1. **Carry a person's decisions from one run to the next.** Done by hand twice on 2026-10-29: a decisions
-   file keyed by record, the next run's check-by-hand list pre-filled from it, and a list of the decided
-   records the new run settled the other way — which `finish` cannot reach, since they never reach the
-   worklist. The same thing is what the AOKK team needs when their hand labels arrive: a new list with
-   their decisions already filled in, so nothing is redone. Not filed yet; this brief is its first entry.
+1. **Carry a person's decisions from one run to the next** — done 2026-10-29: `--decisions` on `run` and
+   `report` fills the new worklist from any sheet of decisions, a decision the new run contradicts first and
+   highlighted, and `--set-aside-finished` keeps the finished run's files. The AOKK team's hand labels can
+   arrive this way, as a sheet keyed by record.
 2. **`finish` overturning the run** — done 2026-10-29: a row added to the marked sheet, a key and `keep` or
    `drop`, overrides an outright removal or keep, is listed in the output and recorded in the hand audit.
 3. **Preparing a definition, and drafting one from notes** — `TODO_DEFERRED.md`, *Preparing a

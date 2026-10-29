@@ -374,6 +374,75 @@ class TestFinish:
         assert len(list((tmp_path / "out").glob("* set aside *"))) == len(written)
 
 
+class TestCarriedDecisions:
+    """Decisions from an earlier run, carried into a new worklist with `maybe_decisions`."""
+
+    DECISIONS = {"rescued": report.EarlierDecision("keep", "looked fine"),   # still sent to a person
+                 "dropped": report.EarlierDecision("keep"),                  # removed by the judge: contradicted
+                 "forest": report.EarlierDecision("drop"),                   # kept by the rules: contradicted
+                 "city": report.EarlierDecision("drop"),                     # removed, as decided: no row
+                 "ghost": report.EarlierDecision("keep")}                    # not in this run
+
+    def test_the_worklist_is_filled_in_and_contradictions_come_first(self, finished, definition, tmp_path):
+        write(finished, definition, tmp_path / "out", maybe_decisions=self.DECISIONS)
+        rows = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")
+        assert [(row["key"], row["sent by"], row["decision"], row["earlier"]) for row in rows] == [
+            ("dropped", "your earlier decision", "keep", "keep"),
+            ("forest", "your earlier decision", "drop", "drop"),
+            ("unsure", "judge", "", ""),
+            ("rescued", "review", "keep", "keep"),
+            ("nowhere", "rules", "", "")]
+        assert rows[0]["why"].startswith("you decided 'keep' earlier; this run removed it, by the judge stage")
+        assert next(row for row in rows if row["key"] == "rescued")["note"] == "looked fine"
+
+    def test_contradictions_are_highlighted_in_a_spreadsheet(self, finished, definition, tmp_path):
+        import openpyxl
+        write(finished, definition, tmp_path / "out", maybe_decisions=self.DECISIONS, table_format="xlsx")
+        sheet = openpyxl.load_workbook(tmp_path / "out" / f"{report.CHECK_BY_HAND}.xlsx").worksheets[0]
+        assert [bool(sheet.cell(row=i, column=1).font.b) for i in range(2, 7)] == [True, True, False, False, False]
+
+    def test_contradicted_names_only_what_the_run_settled_the_other_way(self, finished, definition):
+        assert sorted(report.contradicted(outcomes_of(finished, definition), self.DECISIONS)) == ["dropped", "forest"]
+
+    def test_finish_on_a_carried_sheet_needs_every_row_marked(self, finished, definition, tmp_path):
+        write(finished, definition, tmp_path / "out", maybe_decisions=self.DECISIONS)
+        sheet = tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv"
+        with pytest.raises(report.FinishError, match="carries earlier decisions.*2 are blank"):
+            finish(finished, definition, tmp_path / "out", sheet)
+
+    def test_finish_on_a_marked_carried_sheet_applies_the_earlier_decisions(self, finished, definition, tmp_path):
+        write(finished, definition, tmp_path / "out", maybe_decisions=self.DECISIONS)
+        rows = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")
+        marked = tmp_path / "marked.tsv"
+        tabular.write_table(marked, [], list(rows[0]), [[row[column] or ("drop" if column == "decision" else "")
+                                                         for column in row] for row in rows])
+        finish(finished, definition, tmp_path / "out", marked)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert sorted(entry.key for entry in final_bib.entries) == ["dropped", "rescued", "unextracted", "unjudged"]
+
+
+class TestReadDecisions:
+    def test_a_sheet_marking_every_row_leaves_a_blank_undecided(self, tmp_path):
+        sheet = mark(tmp_path / "d.tsv", ("a", " KEEP ", "fine"), ("b", "drop", ""), ("c", "", ""))
+        assert report.read_decisions(sheet) == {"a": report.EarlierDecision("keep", "fine"),
+                                                "b": report.EarlierDecision("drop", "")}
+
+    def test_a_sheet_marking_its_keeps_alone_reads_a_blank_as_the_drop_it_was(self, tmp_path):
+        """As `finish` read it: carrying it must not lose the drops its blanks made."""
+        sheet = mark(tmp_path / "d.tsv", ("a", "keep", ""), ("c", "", ""))
+        assert report.read_decisions(sheet) == {"a": report.EarlierDecision("keep", ""),
+                                                "c": report.EarlierDecision("drop", "")}
+
+    def test_a_carried_sheet_is_never_read_as_marking_its_keeps_alone(self, tmp_path):
+        sheet = mark(tmp_path / "d.tsv", ("a", "keep", "keep"), ("c", "", ""), columns=("key", "decision", "earlier"))
+        assert report.read_decisions(sheet) == {"a": report.EarlierDecision("keep", "")}
+
+    def test_a_bad_decision_is_refused_with_its_row(self, tmp_path):
+        sheet = mark(tmp_path / "d.tsv", ("a", "keep", ""), ("b", "kep", ""))
+        with pytest.raises(report.FinishError, match="row 3 \\(b\\): 'kep'"):
+            report.read_decisions(sheet)
+
+
 class TestTrailingBlanks:
     def warning(self, *decisions):
         return report._trailing_blank_warning(list(decisions), list(range(2, 2 + len(decisions))))

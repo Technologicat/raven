@@ -53,6 +53,7 @@ Thirteen command-line tools for the part of a literature review that happens bef
     - [What a run leaves](#what-a-run-leaves)
     - [The reviewer's control](#the-reviewers-control)
     - [Checking by hand, and `finish`](#checking-by-hand-and-finish)
+    - [Running again after a change, with your decisions kept](#running-again-after-a-change-with-your-decisions-kept)
     - [The run file, and repeating a run](#the-run-file-and-repeating-a-run)
     - [What starts a fresh ledger](#what-starts-a-fresh-ledger)
     - [Replicates and `compare`](#replicates-and-compare)
@@ -723,6 +724,23 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - A row naming a record the run does not hold, such as a key mistyped or one the sift removed, is ignored with a warning.
 
 **Writing the reports again over a finished run is refused**, before any work, naming the 04 files: kept under their names, they would describe an older worklist while looking current. `--set-aside-finished` moves them aside first, to names like `04b-final, set aside 2026-10-29 14.05.33.bib`, which the tool never touches again — so nothing you decided is lost, and the set-aside hand decisions are what `--decisions` carries into the new run.
+
+### Running again after a change, with your decisions kept
+
+Changing the definition — a test, a rule, the scope — means running again, and you will already have decided on records the first time. **Carry those decisions with `--decisions`**; this is the way to do it:
+
+```bash
+raven-scopebib report --run-file out/run.toml --set-aside-finished \
+    --decisions "out/04a-hand-decided, set aside 2026-10-29 14.05.33.xlsx"
+```
+
+`report` for a changed rule, `run` for a changed test or scope, which the LLM steps have to answer again.
+
+- **Any sheet with `key` and `decision` columns will do**: the set-aside `04a-hand-decided`, which records every decision explicitly and is the one to prefer, a marked `03a-CHECK-BY-HAND`, or one of your own. A sheet marked keeps-alone is read as `finish` read it, so its blanks carry as drops.
+- **The new `03a-CHECK-BY-HAND` comes out filled in**: each record you decided before has your decision in `decision`, and again in `earlier` for reference, with your `note`.
+- **A decision the new run goes against is the first row of the sheet, highlighted** — a record you kept that the new rules remove, or one you dropped that they keep. Its `why` says what you decided and what the run did, by which step, and your decision is filled in, so it stands unless you change it. The run also prints how many there are.
+- **Then every row must be marked.** A sheet carrying earlier decisions is never read as keeps-alone, so a record new to this run cannot drop by being left blank: `finish` refuses, naming the blank rows. Your earlier decisions are already filled in, so what is left to mark is the new records.
+- A decision on a record this run does not hold is ignored, with a warning.
 
 ### The run file, and repeating a run
 

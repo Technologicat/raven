@@ -124,6 +124,11 @@ def _parser() -> argparse.ArgumentParser:
                                     "(04a-hand-decided, 04b-final.bib) aside under a dated name, so the final "
                                     "bibliography and your decisions are kept but no longer current. Without it, "
                                     "such a run is refused before any work.")
+        subparser.add_argument("--decisions", default=None, metavar="SHEET",
+                               help="Carry a person's decisions from an earlier run into this one: any sheet with "
+                                    "'key' and 'decision' columns, such as a marked 03a-CHECK-BY-HAND or a set-aside "
+                                    "04a-hand-decided. The new worklist comes out with them filled in, and a "
+                                    "decision this run settled the other way first in it, highlighted.")
         subparser.add_argument("bib", nargs="?", default=None, metavar="corpus.bib",
                                help="The BibTeX file to filter. Optional where --run-file names one.")
         if command == "run":
@@ -285,7 +290,8 @@ def _snapshot_definition(source: str | pathlib.Path, reports_dir: pathlib.Path) 
 
 
 def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str | None = None,
-            require_every_decision: bool = False, set_aside_finished: bool = False) -> int:
+            require_every_decision: bool = False, set_aside_finished: bool = False,
+            maybe_decisions_sheet: str | None = None) -> int:
     """Carry out `plan`. Returns the exit status.
 
     `nlp`: for measuring titles (`raven.papers.scopebib.records.title_measures`).
@@ -295,13 +301,18 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     `sheet`, `require_every_decision`: for `finish`.
     `set_aside_finished`: write the reports over a finished run, its outputs moved aside first; refused
                           otherwise, before any work (`raven.papers.scopebib.report.FinishedRunError`).
+    `maybe_decisions_sheet`: a person's decisions from an earlier run, carried into the worklist
+                             (`raven.papers.scopebib.report.read_decisions`). Read before any work.
     """
     from . import definition as scope_definition
     from . import models as scope_models
     from . import pipeline, report, runfile
 
     settings = plan.run_file.settings
+    maybe_decisions = None
     if plan.command != "finish" and settings.maybe_pilot is None:  # before the corpus is read or a model asked
+        if maybe_decisions_sheet is not None:
+            maybe_decisions = report.read_decisions(pathlib.Path(maybe_decisions_sheet).expanduser())
         if set_aside_finished:
             for old, new in report.move_finished_aside(plan.reports_dir):
                 print(f"set aside: {old.name} -> {new.name}")
@@ -361,7 +372,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                                  seed=settings.maybe_seed, table_format=settings.maybe_format)]
         else:
             written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
-                                           maybe_fill=corpus.maybe_fill,
+                                           maybe_fill=corpus.maybe_fill, maybe_decisions=maybe_decisions,
                                            **common)
         write_run_file(result.stages)
         written.append(run_path)
@@ -372,6 +383,19 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     counts = {action: sum(1 for outcome in outcomes.values() if outcome.action == action)
               for action in (report.REMOVED, report.TO_A_PERSON, report.KEPT, report.PENDING)}
     print("; ".join(f"{action}: {count}" for action, count in counts.items()))
+    if maybe_decisions is not None:
+        against = report.contradicted(outcomes, maybe_decisions)
+        unknown = sorted(key for key in maybe_decisions if key not in outcomes)
+        # Counts after labels, so that nothing has to agree with them.
+        print(f"earlier decisions carried in: {len(maybe_decisions) - len(unknown)}; "
+              f"decisions this run contradicts: {len(against)}")
+        if against:
+            print(f"warning: {len(against)} of your earlier decisions go against this run. They are first in "
+                  f"{report.CHECK_BY_HAND}, highlighted, with your decision filled in: read them before finish. "
+                  f"If you are an AI agent running this for someone, tell them.")
+        if unknown:
+            print(f"warning: decisions on records this run does not hold, ignored: {', '.join(unknown[:5])}"
+                  + (", ..." if len(unknown) > 5 else ""))
     print(f"wrote, in {plan.reports_dir}:")
     for path in written:
         print(f"  {path.name}")
@@ -508,7 +532,8 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
         status = execute(plan, nlp=nlp, nlp_description=nlp_description, connect=_connector(opts.backend_url),
                          sheet=getattr(opts, "sheet", None),
                          require_every_decision=getattr(opts, "require_every_decision", False),
-                         set_aside_finished=getattr(opts, "set_aside_finished", False))
+                         set_aside_finished=getattr(opts, "set_aside_finished", False),
+                         maybe_decisions_sheet=getattr(opts, "decisions", None))
     except (UsageError, runfile.RunFileError, scope_definition.DefinitionError, pipeline.PipelineError,
             report.FinishError, report.FinishedRunError) as exc:
         print(f"raven-scopebib: {exc}", file=sys.stderr)

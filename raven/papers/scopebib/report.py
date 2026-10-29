@@ -39,7 +39,7 @@ __all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIE
            "Outcome", "outcomes",
            "SiftResult", "select",
            "FinishedRunError", "finished_outputs", "refuse_if_finished", "move_finished_aside", "write_reports",
-           "KEEP", "DROP", "FinishError", "finish",
+           "KEEP", "DROP", "FinishError", "EarlierDecision", "read_decisions", "contradicted", "finish",
            "PILOT_REPORT", "KEEP_SAMPLE", "title_bounds_note", "write_pilot_report"]
 
 import dataclasses
@@ -281,7 +281,8 @@ def write_reports(out_dir: str | pathlib.Path, *,
                   table_format: str = "tsv",
                   maybe_sift: SiftResult | None = None,
                   maybe_fill: list[fillbib.AuditRow] | None = None,
-                  set_aside_finished: bool = False) -> list[pathlib.Path]:
+                  set_aside_finished: bool = False,
+                  maybe_decisions: "dict[str, EarlierDecision] | None" = None) -> list[pathlib.Path]:
     """Write a run's reports into `out_dir`, remove the stale ones, and return the paths written.
 
     `library`: the parsed `.bib` the judge read, after the sift; the kept `.bib` is cut from it.
@@ -294,6 +295,10 @@ def write_reports(out_dir: str | pathlib.Path, *,
     `maybe_sift`: what stage 0 removed, or `None` where no sift ran.
     `maybe_fill`: the audit of stage 0's fill (`raven.papers.fillbib.fill`), or `None` where none ran.
     `set_aside_finished`: move a finished run's outputs aside first (`move_finished_aside`), rather than refuse.
+    `maybe_decisions`: a person's decisions from an earlier run (`read_decisions`), carried into the worklist:
+                       a record still sent to a person has its decision filled in, and one this run settled
+                       the other way gets a row of its own, first and highlighted, with the earlier decision
+                       filled in (`contradicted`).
 
     A stage that has answered nothing writes no table. Raises `FinishedRunError`, writing nothing, when
     `out_dir` holds a finished run's outputs and `set_aside_finished` is false: kept under their own names,
@@ -310,9 +315,10 @@ def write_reports(out_dir: str | pathlib.Path, *,
     result = outcomes(records, definition=definition, final=final, reviews=reviews, extractions=extractions)
     written = []
 
-    def table(stem: str, comments: list[str], columns: Sequence[str], rows: Iterable[Sequence]) -> None:
+    def table(stem: str, comments: list[str], columns: Sequence[str], rows: Iterable[Sequence],
+              highlight: Iterable[int] = ()) -> None:
         path = out_dir / f"{stem}.{table_format}"
-        tabular.write_table(path, [*provenance, *comments], columns, rows)
+        tabular.write_table(path, [*provenance, *comments], columns, rows, highlight=highlight)
         written.append(path)
 
     if maybe_fill is not None:
@@ -343,7 +349,7 @@ def write_reports(out_dir: str | pathlib.Path, *,
         _review_table(table, final=final, reviews=reviews, control=control, by_key=by_key)
     if extractions:
         _extract_table(table, extractions=extractions, by_key=by_key, definition=definition, result=result)
-    _outcome_tables(table, result=result, by_key=by_key, maybe_sift=maybe_sift)
+    _outcome_tables(table, result=result, by_key=by_key, maybe_sift=maybe_sift, decisions=maybe_decisions or {})
 
     kept = {key for key, outcome in result.items() if outcome.action == KEPT}
     path = out_dir / KEPT_BIB
@@ -460,7 +466,7 @@ _STAGE_ORDER = {"sift": 0, "judge": 1, "review": 2, "rules": 3}
 
 
 def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scope_records.Record],
-                    maybe_sift: SiftResult | None) -> None:
+                    maybe_sift: SiftResult | None, decisions: "dict[str, EarlierDecision]") -> None:
     def order(key: str) -> tuple:
         outcome = result[key]
         return (_STAGE_ORDER[outcome.stage], outcome.decided_by, *_reading_order(by_key[key]))
@@ -470,14 +476,33 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
     summary = f"of {len(result)} records: " + "; ".join(f"{action}: {count}" for action, count in counts.items())
 
     to_a_person = sorted((key for key, outcome in result.items() if outcome.action == TO_A_PERSON), key=order)
-    table(CHECK_BY_HAND,
-          [summary,
-           f"each of these {len(to_a_person)} needs a person's decision; the 'decision' column is for that",
-           f"this file is rewritten on every run: save a marked copy under a name of your own, such as "
-           f"{CHECK_BY_HAND}-marked"],
-          ("key", "sent by", "decided by", "why", "decision", *_RECORD_COLUMNS),
-          [(key, result[key].stage, result[key].decided_by, result[key].reason, "", *_record_cells(by_key[key]))
-           for key in to_a_person])
+    # A decision this run contradicts goes first and highlighted, being the one row a person must not miss:
+    # the run has settled the record the other way, so without the row it would never reach them again.
+    against = sorted(contradicted(result, decisions), key=order)
+    carried = [key for key in to_a_person if key in decisions]
+    comments = [summary,
+                f"each of these {len(to_a_person)} needs a person's decision; the 'decision' column is for that"]
+    if decisions:
+        # Phrased with the counts after a label, so that nothing has to agree with them.
+        comments.append(f"earlier decisions carried in: {len(carried) + len(against)}; of them, decisions this run "
+                        f"contradicts, first and highlighted: {len(against)}. Every row must now be marked keep or drop")
+    comments.append(f"this file is rewritten on every run: save a marked copy under a name of your own, such as "
+                    f"{CHECK_BY_HAND}-marked")
+
+    def why_against(key: str) -> str:
+        outcome = result[key]
+        return (f"you decided '{decisions[key].decision}' earlier; this run {outcome.action} it, by the "
+                f"{outcome.stage} stage ({outcome.decided_by}): {outcome.reason}")
+    rows = [(key, "your earlier decision", result[key].decided_by, why_against(key), decisions[key].decision,
+             decisions[key].decision, decisions[key].note, *_record_cells(by_key[key]))
+            for key in against]
+    rows += [(key, result[key].stage, result[key].decided_by, result[key].reason,
+              decisions[key].decision if key in decisions else "", decisions[key].decision if key in decisions else "",
+              decisions[key].note if key in decisions else "", *_record_cells(by_key[key]))
+             for key in to_a_person]
+    table(CHECK_BY_HAND, comments,
+          ("key", "sent by", "decided by", "why", "decision", "earlier", "note", *_RECORD_COLUMNS),
+          rows, highlight=range(len(against)))
 
     removed = sorted((key for key, outcome in result.items() if outcome.action == REMOVED), key=order)
     rows = []
@@ -506,6 +531,47 @@ DROP = "drop"
 
 class FinishError(ValueError):
     """A marked worklist `finish` cannot act on, with every row or key at fault named."""
+
+
+@dataclasses.dataclass(frozen=True)
+class EarlierDecision:
+    """A person's decision on a record, from an earlier run: `KEEP` or `DROP`, and the note they left."""
+    decision: str
+    note: str = ""
+
+
+def read_decisions(path: str | pathlib.Path) -> dict[str, EarlierDecision]:
+    """The decisions in a sheet with `key` and `decision` columns — a marked worklist, a hand-decided table,
+    or one of your own — by key. A `note` column is carried too.
+
+    A blank is read as `finish` reads it: in a sheet marking its keeps alone (no `DROP` anywhere, and no
+    `earlier` column carrying decisions), a blank is a drop; otherwise it is no decision, and skipped.
+
+    Raises `FinishError` when a column is missing or a decision is neither `KEEP`, `DROP` nor blank, naming
+    each row at fault.
+    """
+    rows = tabular.read_table(path)
+    if rows and not {"key", "decision"} <= rows[0].keys():
+        raise FinishError(f"'{path}' has no 'key' and 'decision' columns")
+    out, problems = {}, []
+    marked = [row["decision"].strip().lower() for row in rows]
+    keeps_alone = DROP not in marked and not any((row.get("earlier") or "").strip() for row in rows)
+    for number, (row, decision) in enumerate(zip(rows, marked), start=2):
+        if decision not in (KEEP, DROP, ""):
+            problems.append(f"row {number} ({row['key']}): '{row['decision']}' is neither '{KEEP}', '{DROP}' nor blank")
+        elif decision or keeps_alone:
+            out[row["key"]] = EarlierDecision(decision or DROP, row.get("note", "") or "")
+    if problems:
+        raise FinishError(f"'{path}': " + "; ".join(problems))
+    return out
+
+
+def contradicted(result: dict[str, Outcome], decisions: dict[str, EarlierDecision]) -> list[str]:
+    """The keys of the earlier decisions this run settled outright the other way: a keep it removed, or a drop
+    it kept. Records it sends to a person are not among them; their decisions are carried into the worklist."""
+    return [key for key, decision in decisions.items()
+            if key in result and result[key].action in (KEPT, REMOVED)
+            and (decision.decision == KEEP) != (result[key].action == KEPT)]
 
 
 def _trailing_blank_warning(decisions: list[str], row_numbers: list[int]) -> str | None:
@@ -554,7 +620,8 @@ def finish(out_dir: str | pathlib.Path, *,
     `library`, `records`, `definition`, `final`, `reviews`, `extractions`, `provenance`, `table_format`:
              as `write_reports` takes them; the worklist is worked out from them afresh.
     `require_every_decision`: refuse a blank decision rather than reading it as a drop, so that every row
-                              must be marked.
+                              must be marked. A sheet carrying earlier decisions (`write_reports`'s
+                              `maybe_decisions`, shown in its `earlier` column) is always read so.
 
     Returns `(written, warnings)`: the paths written, and what the person should be told — every override
     applied, a row naming a record the run does not hold, which is ignored, and a run of blank rows at the end
@@ -612,7 +679,13 @@ def finish(out_dir: str | pathlib.Path, *,
     # marking every row, and a blank beside it is then a row not yet decided.
     blank = [str(number) for (number, _), decision in zip(worked, decisions) if decision == ""]
     listed = f"rows {', '.join(blank[:10])}" + (", ..." if len(blank) > 10 else "")
-    if blank and DROP in decisions:
+    # A worklist carrying earlier decisions marks every row the same way: a blank there is a record nobody has
+    # looked at in this run, which must not drop for having been left alone.
+    carries = any((row.get("earlier") or "").strip() for _, row in numbered)
+    if blank and carries:
+        problems.append(f"the sheet carries earlier decisions, so every row must be marked '{KEEP}' or '{DROP}', and "
+                        f"{len(blank)} are blank ({listed})")
+    elif blank and DROP in decisions:
         problems.append(f"the sheet marks some rows '{DROP}', so a blank is a row not yet decided, and "
                         f"{len(blank)} are blank ({listed}). Either decide those, or remove every '{DROP}' so "
                         f"that a blank means drop")
