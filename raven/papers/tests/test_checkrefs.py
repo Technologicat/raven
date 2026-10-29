@@ -95,6 +95,23 @@ class TestSplitting:
 
 
 class TestMatching:
+    def test_a_short_title_goes_to_its_own_entry_not_the_first_containing_it(self, tmp_path):
+        """A one-word title appears whole inside another record's entry; the longer title claims that one."""
+        path = tmp_path / "short.bib"
+        path.write_text("@incollection{KS2018, title = {Development}, author = {Kampourakis, K.}, year = {2018}}\n"
+                        "@inproceedings{AT2023, title = {An examination of reproduction and development in "
+                        "biology curricula}, author = {Akpinarli, S.}, year = {2023}}\n", encoding="utf-8")
+        references = checkrefs.references_of(bibtex.parse_file(path, split_names=False))
+        entries = checkrefs.entries_of([
+            "Akpinarli, S. (2023). An examination of reproduction and development in biology curricula. ICRES.",
+            "Kampourakis, K. (2018). Development. In Teaching biology in schools (pp. 98-110). Routledge."])
+        short = next(r for r in references if r.key == "KS2018")
+        assert all(short.maybe_title_key in e.maybe_key for e in entries), (
+            "the short title is not inside both entries, so this fixture cannot tell first-found from best")
+        rows = by_key(checkrefs.check(references, entries))
+        assert {key: (row.status, row.maybe_entry.number) for key, row in rows.items()} == {
+            "AT2023": (checkrefs.MATCHED_BY_TITLE, 1), "KS2018": (checkrefs.MATCHED_BY_TITLE, 2)}
+
     def test_each_record_lands_where_it_should(self, references, entries):
         rows = by_key(checkrefs.check(references, entries))
         assert {key: (row.status, row.maybe_entry.number if row.maybe_entry else None)

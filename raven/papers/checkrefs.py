@@ -14,7 +14,8 @@ check finds data faults in the `.bib` as a side effect.
 **How a record is matched to an entry**, strongest evidence first:
 
   1. **DOI**, from the record's `doi` field, its `url` or its key, against the first DOI in the entry.
-  2. **Title**: the record's normalized title appears whole in the normalized entry.
+  2. **Title**: the record's normalized title appears whole in the normalized entry, and in no other entry
+     still free.
   3. **Proposed**: what is left on both sides is paired one-to-one, best `title_coverage` first. A proposal
      is reported with its score and the runner-up's, and counted apart from the matches. The margin over
      the runner-up is what tells a respelled title from a coincidence, where the score alone cannot: a wrong
@@ -184,19 +185,36 @@ def check(references: list[Reference], entries: list[DocumentEntry]) -> list[Row
 
     matched: list[Row] = []
     used: set[int] = set()
-    leftover: list[Reference] = []
+    pending: list[Reference] = []
     for reference in references:
         maybe_entry = by_doi.get(reference.maybe_doi) if reference.maybe_doi else None
-        status = MATCHED_BY_DOI
-        if maybe_entry is None and reference.maybe_title_key:
-            maybe_entry = next((entry for entry in entries
-                                if entry.maybe_key and reference.maybe_title_key in entry.maybe_key), None)
-            status = MATCHED_BY_TITLE
         if maybe_entry is None:
-            leftover.append(reference)
+            pending.append(reference)
             continue
-        matched.append(Row(status, reference, maybe_entry))
+        matched.append(Row(MATCHED_BY_DOI, reference, maybe_entry))
         used.add(maybe_entry.number)
+
+    # A title matches an entry it appears in whole, but only one that is still free and the only free one it
+    # appears in. A short title ("Development") appears whole in many entries; taking the first of them would
+    # take another record's entry. Repeating until nothing changes lets longer titles claim their entries
+    # first, which leaves the short one a single place to go. A title still ambiguous at the end goes on to
+    # the proposals, which pair one-to-one and report the margin.
+    while True:
+        leftover: list[Reference] = []
+        progress = False
+        for reference in pending:
+            free = [entry for entry in entries
+                    if entry.number not in used and reference.maybe_title_key and entry.maybe_key
+                    and reference.maybe_title_key in entry.maybe_key]
+            if len(free) == 1:
+                matched.append(Row(MATCHED_BY_TITLE, reference, free[0]))
+                used.add(free[0].number)
+                progress = True
+            else:
+                leftover.append(reference)
+        pending = leftover
+        if not progress:
+            break
 
     # The proposals. Scored against every entry, not only the free ones: the runner-up has to include an
     # entry another record already took, or a duplicate record would look like a confident proposal.
