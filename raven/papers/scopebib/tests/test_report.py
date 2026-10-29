@@ -233,6 +233,35 @@ class TestFinishedRun:
         assert (tmp_path / "04b-final, set aside 2026-10-29 14.05.33 (2).bib").exists()
 
 
+class TestRemovedRowsPasteIntoTheWorklist:
+    def test_the_removals_have_the_worklists_columns_in_its_positions(self, finished, definition, tmp_path):
+        sift = report.SiftResult(dropped=[siftbib.DroppedRecord(key="bare", reason="no abstract", title="Bare",
+                                                                venue="")],
+                                 criteria=[siftbib.require_field("abstract")])
+        write(finished, definition, tmp_path / "out", maybe_sift=sift)
+        worklist = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")
+        removed = tabular.read_table(tmp_path / "out" / f"{report.REMOVED_AUDIT}.tsv")
+        assert removed, "nothing was removed, so this fixture cannot compare the layouts"
+        columns, removed_columns = list(worklist[0]), list(removed[0])
+        assert len(columns) == len(removed_columns)
+        for name in ("key", "decision", "earlier", "note", "title", "abstract"):
+            assert columns.index(name) == removed_columns.index(name), name
+        sifted = next(row for row in removed if row["key"] == "bare")
+        assert (sifted["title"], sifted["decision"]) == ("Bare", "")
+
+    def test_a_removal_pasted_into_the_marked_worklist_is_restored(self, finished, definition, tmp_path):
+        write(finished, definition, tmp_path / "out")
+        worklist = tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.tsv")
+        removed = tabular.read_table(tmp_path / "out" / f"{report.REMOVED_AUDIT}.tsv")
+        pasted = dict(zip(worklist[0], [*next(row for row in removed if row["key"] == "dropped").values()]))
+        pasted["decision"] = "keep"
+        marked = tmp_path / "marked.tsv"
+        tabular.write_table(marked, [], list(worklist[0]), [list(row.values()) for row in worklist] + [list(pasted.values())])
+        finish(finished, definition, tmp_path / "out", marked)
+        final_bib = bibtex.parse_file(tmp_path / "out" / report.FINAL_BIB, split_names=False)
+        assert "dropped" in [entry.key for entry in final_bib.entries]
+
+
 class TestOwnership:
     def test_a_stale_report_goes_and_a_users_copy_stays(self, run, definition, tmp_path):
         out = tmp_path / "out"

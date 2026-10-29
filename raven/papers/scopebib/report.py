@@ -509,15 +509,18 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
     sift_count = 0
     if maybe_sift is not None:
         sift_count = len(maybe_sift.dropped)
-        rows += [(record.key, "sift", record.reason, record.reason, "", "", record.title, record.venue, record.link,
-                  record.abstract)
+        rows += [(record.key, "sift", record.reason, record.reason, "", "", "", "", "", record.title, record.venue,
+                  record.link, record.abstract)
                  for record in maybe_sift.dropped]
-    rows += [(key, result[key].stage, result[key].decided_by, result[key].reason, *_record_cells(by_key[key]))
+    rows += [(key, result[key].stage, result[key].decided_by, result[key].reason, "", "", "", *_record_cells(by_key[key]))
              for key in removed]
+    # The worklist's columns, position for position, so that a wrong removal is copied into the marked
+    # worklist as a whole row and marked there: `finish` reads one sheet, which is then what carries over.
     table(REMOVED_AUDIT,
           [summary,
-           f"records removed: {sift_count + len(removed)}" + (f", of which {sift_count} by the sift" if maybe_sift else "")],
-          ("key", "removed by", "decided by", "why", *_RECORD_COLUMNS),
+           f"records removed: {sift_count + len(removed)}" + (f", of which {sift_count} by the sift" if maybe_sift else ""),
+           f"to overturn a removal, copy its row into your marked {CHECK_BY_HAND} and mark it 'keep'"],
+          ("key", "removed by", "decided by", "why", "decision", "earlier", "note", *_RECORD_COLUMNS),
           rows)
 
 
