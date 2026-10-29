@@ -79,8 +79,13 @@ wanted early in the week of 2026-11-02, for the health-education study.
       bibliography, `202508/biology.bib`, has 163 entries, 2 of them unreadable, and 9 more records were
       split out of it in December 2025 into `biology_missing.bib` and `biology_broken_entries.bib`, some
       still unreadable. Geography's table covers 127 of its bibliography's 133. `raven-checkrefs` against
-      each paper's cluster table, over the union of the files, names the covered set and flags what the
-      bibliographies lack; `raven-fixbib` repairs what it can of the unreadable records first.
+      each paper's own list of the studies, over the union of the files, names the covered set and flags
+      what the bibliographies lack; `raven-fixbib` repairs what it can of the unreadable records first.
+      - **The lists to check against**: each paper lists its studies apart from its references (maintainer,
+        2026-10-29). In the biology paper that is *Appendix A. Clustered Studies (\* Not Reviewed in the
+        Content Analysis)*, which gives the clustered set and, by its asterisks, the reviewed 131 in one
+        place. The geography paper's was not found in its text by a quick search: one *References* section,
+        no appendix; locate it before building.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
