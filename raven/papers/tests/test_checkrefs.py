@@ -78,6 +78,17 @@ class TestSplitting:
         text = "Smith, A. (2020). One.\n\nJones, B. (2021). Two.\n"
         assert checkrefs.split_entries(text) == (["Smith, A. (2020). One.", "Jones, B. (2021). Two."], "lines")
 
+    def test_a_wrapped_line_starting_with_a_number_is_not_a_list_item(self):
+        """An article number or a page range wrapped onto a line of its own, in an author-year list."""
+        text = ("Smith, A. (2020). One. Journal, 5,\n100436. https://doi.org/10.1/x.\n"
+                "Jones, B. (2021). Two. Conference, paper\n04025. https://doi.org/10.1/y.\n")
+        texts, mode = checkrefs.split_entries(text)
+        assert mode == "lines" and len(texts) == 4
+
+    def test_a_stray_number_inside_a_numbered_list_joins_its_entry(self):
+        texts, mode = checkrefs.split_entries("1. A, 2020. Journal, 5,\n100436. doi.\n2. B, 2021. Two.\n")
+        assert (mode, texts) == ("numbered", ["A, 2020. Journal, 5, 100436. doi.", "B, 2021. Two."])
+
     def test_a_number_inside_an_entry_does_not_split_it(self):
         texts, _ = checkrefs.split_entries("1. A, 2020. Vol 3.\n2. B, 2021. Pages 4-5.\n")
         assert len(texts) == 2

@@ -55,8 +55,10 @@ from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
-# A list item starts a line with `12.`, `12)` or `[12]`. Two or more of them make the document a numbered list.
-_NUMBERED_PATTERN = re.compile(r"^[ \t]*(?:\[\d+\]|\d+[.)])[ \t]+", re.MULTILINE)
+# A list item starts a line with `12.`, `12)` or `[12]`. A run of them counting up from 1 makes the document a
+# numbered list; a number out of that run is a wrapped line that happens to start with one (an article number,
+# a page range), and is part of the entry above it.
+_NUMBERED_PATTERN = re.compile(r"^[ \t]*(?:\[(\d+)\]|(\d+)[.)])[ \t]+", re.MULTILINE)
 
 # Matching runs shorter than this do not count toward `title_coverage`. A long entry contains most short
 # letter sequences somewhere, so without a floor a title would be "covered" by unrelated text.
@@ -76,10 +78,14 @@ def split_entries(text: str) -> tuple[list[str], str]:
     """The entries of a reference list, and how it was split: `"numbered"` or `"lines"`.
 
     A numbered list (`1.`, `1)`, `[1]`) is split at the numbers, so an entry wrapped over several lines stays
-    one entry, and whatever precedes the first number — a heading — is dropped. Anything else is taken as
-    one entry per non-empty line, which is how a document extractor returns a paragraph each.
+    one entry, and whatever precedes the first number — a heading — is dropped. The numbers must count up from
+    1; a line starting with any other number continues the entry above it. Anything else is taken as one entry
+    per non-empty line, which is how a document extractor returns a paragraph each.
     """
-    starts = list(_NUMBERED_PATTERN.finditer(text))
+    starts = []
+    for match in _NUMBERED_PATTERN.finditer(text):
+        if int(match.group(1) or match.group(2)) == len(starts) + 1:
+            starts.append(match)
     if len(starts) >= 2:
         ends = [match.start() for match in starts[1:]] + [len(text)]
         return [" ".join(text[start.end():end].split()) for start, end in zip(starts, ends)], "numbered"
