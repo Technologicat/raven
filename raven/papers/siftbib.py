@@ -200,7 +200,7 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--min-chars", dest="min_chars", action="append", default=None, metavar="FIELD=N",
                         help="Keep only records whose FIELD runs to at least N characters. For a field "
                              "that is present and useless — a publisher's truncated teaser abstract, say.")
-    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_sifted", type=str,
+    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_sifted", type=papers_utils.output_suffix,
                         metavar="suf", help="Suffix for naming output files (file.bib -> file_sifted.bib).")
     parser.add_argument("--audit-suffix", dest="audit_suffix", default="_removed", type=str,
                         metavar="suf", help="Suffix for naming audit files (file.bib -> file_removed.xlsx).")

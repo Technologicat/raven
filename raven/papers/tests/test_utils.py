@@ -1,5 +1,9 @@
 """Tests for shared bibliography utilities."""
 
+import argparse
+import importlib
+import sys
+
 import bibtexparser
 from bibtexparser.model import Entry, Field
 from bibtexparser import Library
@@ -8,6 +12,7 @@ import pytest
 
 from raven.papers.utils import bibtex_escape, bibtex_unescape, normalize_doi, paper_url
 from raven.papers.utils import looks_truncated, without_trailing_ellipsis
+from raven.papers import utils as papers_utils
 
 
 class TestBibtexEscape:
@@ -182,3 +187,26 @@ class TestLooksTruncated:
     def test_the_ellipsis_and_its_whitespace_are_what_is_stripped(self):
         assert without_trailing_ellipsis("It goes on ... \n") == "It goes on"
         assert without_trailing_ellipsis("As one put it, ... and so on.") == "As one put it, ... and so on."
+
+
+class TestOutputSuffix:
+    def test_a_suffix_passes_through(self):
+        assert papers_utils.output_suffix("_fixed") == "_fixed"
+
+    @pytest.mark.parametrize("value", ["", "out/x", "/tmp/out_fixed.bib", "dir\\x"])
+    def test_an_empty_suffix_or_a_path_is_refused(self, value):
+        with pytest.raises(argparse.ArgumentTypeError):
+            papers_utils.output_suffix(value)
+
+    @pytest.mark.parametrize("tool", ["fixbib", "fillbib", "siftbib"])
+    def test_each_tool_refuses_a_path_with_a_usage_error(self, tool, tmp_path, capsys, monkeypatch):
+        """A clean exit 2 naming the problem, rather than a traceback or a file written somewhere else."""
+        module = importlib.import_module(f"raven.papers.{tool}")
+        bib = tmp_path / "corpus.bib"
+        bib.write_text("@article{a, title = {T}}\n", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [tool, "-o", str(tmp_path / "out.bib"), str(bib)])
+        with pytest.raises(SystemExit) as excinfo:
+            module.main()
+        assert excinfo.value.code == 2
+        assert "is a path" in capsys.readouterr().err
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["corpus.bib"]

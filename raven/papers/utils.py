@@ -4,8 +4,10 @@ from __future__ import annotations
 
 __all__ = ["deduplicate_arxiv_ids", "bibtex_escape", "bibtex_unescape",
            "normalize_doi", "paper_url",
-           "looks_truncated", "without_trailing_ellipsis"]
+           "looks_truncated", "without_trailing_ellipsis",
+           "output_suffix"]
 
+import argparse
 import re
 
 from . import identifiers
@@ -146,3 +148,18 @@ def looks_truncated(abstract: str) -> bool:
 def without_trailing_ellipsis(text: str) -> str:
     """`text` without the ellipsis `looks_truncated` looks for, and the whitespace around it."""
     return _TRAILING_ELLIPSIS.sub("", text)
+
+
+def output_suffix(value: str) -> str:
+    """An `argparse` type for `--output-suffix`: what goes between a file's stem and its extension.
+
+    Refuses an empty suffix, which would name the output after the input and overwrite it, and one containing
+    a path separator, which would name a file in some other directory. Both are an option misread as taking a
+    path, and the refusal says so.
+    """
+    if not value:
+        raise argparse.ArgumentTypeError("an empty suffix would overwrite the input; use --in-place to ask for that")
+    if "/" in value or "\\" in value:
+        raise argparse.ArgumentTypeError(f"{value!r} is a path; this takes a suffix, as in "
+                                         f"'_fixed' for file.bib -> file_fixed.bib")
+    return value

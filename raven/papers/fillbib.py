@@ -622,7 +622,7 @@ def main() -> None:  # pragma: no cover
                                                  "for your own screening, and do not publish it.",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_filled", type=str,
+    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_filled", type=papers_utils.output_suffix,
                         metavar="suf", help="Suffix for naming output files (file.bib -> file_filled.bib).")
     parser.add_argument("--audit-suffix", dest="audit_suffix", default="_fill_audit", type=str,
                         metavar="suf", help="Suffix for naming audit files (file.bib -> file_fill_audit.xlsx).")

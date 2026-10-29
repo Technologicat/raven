@@ -206,6 +206,8 @@
 
 - **An author list written APA-style is repaired**, rewritten into BibTeX's `and`-separated form, and so is a stray comma at the end of a name. A list whose parts do not pair up as surname and initials is still reported rather than guessed at. Both kinds are reported as names BibTeX cannot split, where v0.2.10 called them unreadable.
 - **A record the parser abandons mid-header is reported with the parser's reason**, such as a citekey containing `=`. In v0.2.10 the reason came out empty.
+- **`-o` given a path is refused with a message saying it takes a suffix**, as in `_fixed`; with `raven-siftbib` too. In v0.2.10 `raven-fixbib` crashed with a traceback, and `raven-siftbib` wrote its output into another directory or failed there.
+  - An empty suffix is refused as well. It named the output after the input, so the input was overwritten without `--in-place` being asked for.
 
 #### Raven-deduplicate
 

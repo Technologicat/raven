@@ -82,6 +82,7 @@ from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
 from ..common import text as textutil
 
 from . import bibtex
+from . import utils as papers_utils
 
 KIND_UNBALANCED_BRACES = "unbalanced braces"
 KIND_DUPLICATE_FIELD_KEYS = "duplicate field keys"
@@ -242,7 +243,7 @@ def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="""Repair a BibTeX file: records a parser refuses to read — field values whose braces do not balance, entries naming the same field twice — HTML character entities left in the field values of records that read perfectly well, a field read as the end of the one before it, and a DOI written only into the citation key or the `url`. Writes a new file unless asked to edit in place.""",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_fixed", type=str, metavar="suf",
+    parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_fixed", type=papers_utils.output_suffix, metavar="suf",
                         help="Suffix for naming output files (file.bib -> file_fixed.bib).")
     parser.add_argument("-i", "--in-place", dest="in_place", action="store_true", default=False,
                         help="Write the repair back to the input file instead of to a new one. Your bibliography is yours, so this never happens unless you ask for it.")
