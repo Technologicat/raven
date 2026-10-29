@@ -98,7 +98,14 @@ wanted early in the week of 2026-11-02, for the health-education study.
         outlier is a study whose place people disputed, not one that belongs nowhere; score it apart.
       - **A vision model reads it**: p. 22 transcribed correctly on the first try (2026-10-29), 33
         citations against a reading by eye, printed punctuation kept and a row cut at the page foot
-        marked as continuing; 28 s a page. Two checks come free: the paper states "a total of 127 clustered studies", and the table
+        marked as continuing; 28 s a page. **All three pages done the same day**, kept with the paper in
+        `published/geography-table5/` (gitignored): every count check passes — rows against their *n*,
+        clusters against *Count*, 127 in all, 13 outliers. One page returned each row's citations as one
+        `; `-joined string, which the assembler splits.
+      - **What the table itself gets wrong**: it lists Boehm et al. (2024) in both #0 and #6, the
+        reference list holding one such study, so it covers 126 distinct studies; and it cites Boehn &
+        Hamann (2016), where the reference list has 2011. A surname-and-year match misses the second;
+        `raven-checkrefs` matches on titles too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
         gives a count per cluster. The table is also item 10's ground truth, study by study.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
