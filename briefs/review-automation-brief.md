@@ -84,8 +84,12 @@ wanted early in the week of 2026-11-02, for the health-education study.
       - **The lists to check against**: each paper lists its studies apart from its references (maintainer,
         2026-10-29). In the biology paper that is *Appendix A. Clustered Studies (\* Not Reviewed in the
         Content Analysis)*, which gives the clustered set and, by its asterisks, the reviewed 131 in one
-        place. The geography paper's was not found in its text by a quick search: one *References* section,
-        no appendix; locate it before building.
+        place. The geography paper has no such list (the maintainer checked the published PDF, 2026-10-29),
+        so its set is recovered from *Table 5*, pp. 22–24: each cluster's studies as author–year citations,
+        beside the item topics with their counts and the cluster's number and top-level topic. Match each
+        citation to its entry in the reference list by surname and year, then run `raven-checkrefs` on those
+        entries. Two checks come free: the paper states "a total of 127 clustered studies", and the table
+        gives a count per cluster. The table is also item 10's ground truth, study by study.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
