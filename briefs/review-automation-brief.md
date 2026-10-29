@@ -113,6 +113,14 @@ wanted early in the week of 2026-11-02, for the health-education study.
         was written from the bib. A surname-and-year match misses it; `raven-checkrefs` matches on titles
         too. Two checks come free: the paper states "a total of 127 clustered studies", and the table
         gives a count per cluster. The table is also item 10's ground truth, study by study.
+    - **What it produces: a grouping shaped like Table 5** — themes, sub-themes within them, a reason per
+      study, a study allowed under two themes. Coding each study per research question is the other
+      reading of "by the research questions", and grows into item 11 instead (decided 2026-10-29).
+    - **Which level of the tables is the human one**: the sub-themes exist because the Visualizer's
+      clusters turned out to hold several themes each (maintainer, 2026-10-29), so the top level is
+      partly the algorithm's, and the sub-themes are what people found in it. They are a valid concept
+      for classification in their own right. So compare at both levels, and read where they differ: a
+      grouping that splits or merges the top-level clusters differently need not disagree with people.
     - **To settle in the prototype**: how the runs are compared, since a clustering has no fixed labels to
       match — an agreement measure that ignores which name a group got (the adjusted Rand index is the
       usual one), plus a read of where the runs differ; and what is shown in the paper — the groups of one
@@ -134,3 +142,6 @@ wanted early in the week of 2026-11-02, for the health-education study.
 - **2026-10-29**: this brief created, to hold the review-automation items of both studies as one set.
 - **2026-10-29**: items 10 and 11 added by the maintainer; item 10 is the nearest deadline, a prototype
   early in the week of 2026-11-02, and replaces the HDBSCAN clusters for the health-education study.
+- **2026-10-29**: item 10 produces a grouping shaped like the earlier studies' tables (themes and
+  sub-themes); coding per research question goes to item 11. Considered and set aside for the prototype:
+  doing both at once, which has nothing on hand to score the coding against.
