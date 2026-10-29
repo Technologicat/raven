@@ -722,7 +722,7 @@ Case does not matter. Anything other than `keep`, `drop` or blank is refused, na
 - So a sheet copied from an earlier run applies its marked rows to whatever this run settled outright. That is meant, as a person's decision wins, and the output lists each one so that none passes unseen.
 - A row naming a record the run does not hold, such as a key mistyped or one the sift removed, is ignored with a warning.
 
-**Writing the reports again removes the 04 files**, which would otherwise describe an older worklist; run `finish` again after.
+**Writing the reports again over a finished run is refused**, before any work, naming the 04 files: kept, they would describe an older worklist, and deleted, they would take any edit you made to `04b-final.bib` with them. Save copies of anything you changed, then pass `--discard-finished`, and run `finish` again after.
 
 ### The run file, and repeating a run
 

@@ -201,6 +201,26 @@ class TestFiles:
         assert len(tabular.read_table(tmp_path / "out" / f"{report.CHECK_BY_HAND}.{table_format}")) == 3
 
 
+class TestFinishedRun:
+    def test_writing_over_a_finished_run_is_refused_and_writes_nothing(self, run, definition, tmp_path):
+        out = tmp_path / "out"
+        out.mkdir()
+        (out / report.FINAL_BIB).write_text("% edited by hand\n", encoding="utf-8")
+        with pytest.raises(report.FinishedRunError, match=report.FINAL_BIB):
+            write(run, definition, out)
+        assert sorted(path.name for path in out.iterdir()) == [report.FINAL_BIB]
+        assert (out / report.FINAL_BIB).read_text(encoding="utf-8") == "% edited by hand\n"
+
+    def test_asked_to_discard_it_the_reports_replace_it(self, run, definition, tmp_path):
+        out = tmp_path / "out"
+        out.mkdir()
+        (out / report.FINAL_BIB).write_text("% edited by hand\n", encoding="utf-8")
+        (out / f"{report.HAND_AUDIT}.tsv").write_text("x", encoding="utf-8")
+        write(run, definition, out, discard_finished=True)
+        assert report.finished_outputs(out) == []
+        assert (out / f"{report.CHECK_BY_HAND}.tsv").exists()
+
+
 class TestOwnership:
     def test_a_stale_report_goes_and_a_users_copy_stays(self, run, definition, tmp_path):
         out = tmp_path / "out"
@@ -329,11 +349,15 @@ class TestFinish:
         finish(finished, definition, tmp_path / "out", sheet, table_format="ods")
         assert (tmp_path / "out" / f"{report.HAND_AUDIT}.ods").exists()
 
-    def test_rewriting_the_reports_removes_the_05_files(self, finished, definition, tmp_path):
+    def test_rewriting_the_reports_removes_what_finish_wrote_only_when_asked(self, finished, definition, tmp_path):
         sheet = mark(tmp_path / "marked.tsv", ("rescued", "keep", ""), ("unsure", "", ""), ("nowhere", "", ""))
         written, _ = finish(finished, definition, tmp_path / "out", sheet)
         assert all(path.exists() for path in written)
-        write(finished, definition, tmp_path / "out")
+        assert report.finished_outputs(tmp_path / "out") == sorted(written)
+        with pytest.raises(report.FinishedRunError):
+            write(finished, definition, tmp_path / "out")
+        assert all(path.exists() for path in written)
+        write(finished, definition, tmp_path / "out", discard_finished=True)
         assert not any(path.exists() for path in written)
 
 

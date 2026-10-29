@@ -24,8 +24,9 @@ order:
     04a-hand-decided.<fmt>    every decision a person made, on 03a-CHECK-BY-HAND and against the run
     04b-final.bib             the kept records, and those a person kept
 
-The 04 files are written by `finish`, from a marked copy of the worklist, and removed by `write_reports`:
-built from an older worklist, they would look current while describing another run.
+The 04 files are written by `finish`, from a marked copy of the worklist. `write_reports` refuses to run
+over them unless told to discard them: kept, they would look current while describing an older worklist, and
+deleted unasked, they would take with them any edit a person made to the final bibliography.
 
 The directory is shared with whatever else the user keeps there, so a write removes only files bearing one
 of these exact names that it did not write this time — a previous run's report in another format, or a
@@ -34,6 +35,7 @@ stage that did not run. A copy saved under any other name is left alone.
 
 __all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIEW_AUDIT", "EXTRACT_AUDIT",
            "CHECK_BY_HAND", "REMOVED_AUDIT", "KEPT_BIB", "HAND_AUDIT", "FINAL_BIB", "OWNED_NAMES",
+           "FinishedRunError", "finished_outputs", "refuse_if_finished",
            "REMOVED", "TO_A_PERSON", "KEPT", "PENDING",
            "Outcome", "outcomes",
            "SiftResult", "select", "write_reports",
@@ -225,6 +227,27 @@ def select(library: bibtexparser.Library, keys: set[str]) -> bibtexparser.Librar
     return out
 
 
+class FinishedRunError(ValueError):
+    """Writing the reports again would delete a finished run's outputs, which `discard_finished` must ask for."""
+
+
+def finished_outputs(out_dir: str | pathlib.Path) -> list[pathlib.Path]:
+    """The files `finish` wrote that are in `out_dir`, in name order: what writing the reports would delete."""
+    out_dir = pathlib.Path(out_dir)
+    names = [f"{HAND_AUDIT}.{fmt}" for fmt in tabular.FORMATS] + [FINAL_BIB]
+    return sorted(out_dir / name for name in names if (out_dir / name).exists())
+
+
+def refuse_if_finished(out_dir: str | pathlib.Path) -> None:
+    """Raise `FinishedRunError`, naming them, when `out_dir` holds a finished run's outputs."""
+    found = finished_outputs(out_dir)
+    if found:
+        raise FinishedRunError(f"{pathlib.Path(out_dir)} holds a finished run ({', '.join(path.name for path in found)}): "
+                               f"writing the reports again would delete those, with any edit made to them by hand. "
+                               f"Save copies under names of your own, then ask for this with --discard-finished, "
+                               f"and run `finish` again after")
+
+
 def write_reports(out_dir: str | pathlib.Path, *,
                   library: bibtexparser.Library,
                   records: Sequence[scope_records.Record],
@@ -236,7 +259,8 @@ def write_reports(out_dir: str | pathlib.Path, *,
                   provenance: Sequence[str],
                   table_format: str = "tsv",
                   maybe_sift: SiftResult | None = None,
-                  maybe_fill: list[fillbib.AuditRow] | None = None) -> list[pathlib.Path]:
+                  maybe_fill: list[fillbib.AuditRow] | None = None,
+                  discard_finished: bool = False) -> list[pathlib.Path]:
     """Write a run's reports into `out_dir`, remove the stale ones, and return the paths written.
 
     `library`: the parsed `.bib` the judge read, after the sift; the kept `.bib` is cut from it.
@@ -248,11 +272,16 @@ def write_reports(out_dir: str | pathlib.Path, *,
     `table_format`: one of `raven.common.tabular.FORMATS`.
     `maybe_sift`: what stage 0 removed, or `None` where no sift ran.
     `maybe_fill`: the audit of stage 0's fill (`raven.papers.fillbib.fill`), or `None` where none ran.
+    `discard_finished`: delete a finished run's outputs (`finished_outputs`) rather than refuse.
 
-    A stage that has answered nothing writes no table.
+    A stage that has answered nothing writes no table. Raises `FinishedRunError`, writing nothing, when
+    `out_dir` holds a finished run's outputs and `discard_finished` is false: they would describe an older
+    worklist if kept, so they go, and with them any edit a person made to the final bibliography.
     """
     if table_format not in tabular.FORMATS:
         raise ValueError(f"write_reports: unknown table format {table_format!r}; expected one of {tabular.FORMATS}")
+    if not discard_finished:
+        refuse_if_finished(out_dir)
     out_dir = pathlib.Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     by_key = {record.key: record for record in records}

@@ -119,6 +119,10 @@ def _parser() -> argparse.ArgumentParser:
              "report": "The reports, from the answers already saved."}
     for command, text in helps.items():
         subparser = commands.add_parser(command, parents=[common], help=text)
+        subparser.add_argument("--discard-finished", action="store_true", default=False,
+                               help="Write the reports over a finished run, deleting what finish wrote there "
+                                    "(04a-hand-decided, 04b-final.bib), hand edits included. Without it, such a "
+                                    "run is refused before any work.")
         subparser.add_argument("bib", nargs="?", default=None, metavar="corpus.bib",
                                help="The BibTeX file to filter. Optional where --run-file names one.")
         if command == "run":
@@ -280,7 +284,7 @@ def _snapshot_definition(source: str | pathlib.Path, reports_dir: pathlib.Path) 
 
 
 def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str | None = None,
-            require_every_decision: bool = False) -> int:
+            require_every_decision: bool = False, discard_finished: bool = False) -> int:
     """Carry out `plan`. Returns the exit status.
 
     `nlp`: for measuring titles (`raven.papers.scopebib.records.title_measures`).
@@ -288,12 +292,16 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
     `connect`: returns the LLM settings, connecting to the backend, as `raven.papers.scopebib.pipeline.run`
                takes it.
     `sheet`, `require_every_decision`: for `finish`.
+    `discard_finished`: write the reports over a finished run, deleting its outputs; refused otherwise, before
+                        any work (`raven.papers.scopebib.report.FinishedRunError`).
     """
     from . import definition as scope_definition
     from . import models as scope_models
     from . import pipeline, report, runfile
 
     settings = plan.run_file.settings
+    if plan.command != "finish" and settings.maybe_pilot is None and not discard_finished:
+        report.refuse_if_finished(plan.reports_dir)  # before the corpus is read and any LLM asked
     if plan.command != "finish":  # `finish` records no run, so it has no recipe to keep a copy for
         settings = dataclasses.replace(settings, maybe_definition=_snapshot_definition(settings.maybe_definition,
                                                                                        plan.reports_dir))
@@ -349,7 +357,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                                  seed=settings.maybe_seed, table_format=settings.maybe_format)]
         else:
             written = report.write_reports(plan.reports_dir, control=state.control, maybe_sift=corpus.maybe_sift,
-                                           maybe_fill=corpus.maybe_fill,
+                                           maybe_fill=corpus.maybe_fill, discard_finished=discard_finished,
                                            **common)
         write_run_file(result.stages)
         written.append(run_path)
@@ -495,9 +503,10 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
         nlp, nlp_description = _nlp(on_server=plan.run_file.settings.maybe_server_nlp, server_url=opts.server_url)
         status = execute(plan, nlp=nlp, nlp_description=nlp_description, connect=_connector(opts.backend_url),
                          sheet=getattr(opts, "sheet", None),
-                         require_every_decision=getattr(opts, "require_every_decision", False))
+                         require_every_decision=getattr(opts, "require_every_decision", False),
+                         discard_finished=getattr(opts, "discard_finished", False))
     except (UsageError, runfile.RunFileError, scope_definition.DefinitionError, pipeline.PipelineError,
-            report.FinishError) as exc:
+            report.FinishError, report.FinishedRunError) as exc:
         print(f"raven-scopebib: {exc}", file=sys.stderr)
         sys.exit(1)
     sys.exit(status)

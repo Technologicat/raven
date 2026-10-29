@@ -187,6 +187,23 @@ class TestARun:
         assert (out / f"{report.CHECK_BY_HAND}.xlsx").exists(), "finish does not rewrite the reports"
 
 
+    def test_a_finished_run_is_refused_before_any_work(self, files, tmp_path, model, connect):
+        corpus, definition = files
+        out = tmp_path / "out"
+        cli.execute(cli.resolve(parse("run", str(corpus), "--definition", str(definition), "--out-dir", str(out),
+                                      "--control", "2")), nlp=_NLP(), connect=connect)
+        (out / report.FINAL_BIB).write_text("% edited by hand\n", encoding="utf-8")
+
+        def never(*args, **kwargs):
+            raise AssertionError("the backend was asked for before the refusal")
+        plan = cli.resolve(parse("report", "--run-file", str(out / "run.toml")))
+        with pytest.raises(report.FinishedRunError):
+            cli.execute(plan, nlp=_NLP(), connect=never)
+        assert (out / report.FINAL_BIB).read_text(encoding="utf-8") == "% edited by hand\n"
+        assert cli.execute(plan, nlp=_NLP(), connect=connect, discard_finished=True) == 0
+        assert not (out / report.FINAL_BIB).exists()
+
+
 class FickleModel(ScriptedModel):
     """The scripted model, which also calls the ravens at dawn not birds."""
 
