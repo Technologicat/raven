@@ -939,6 +939,10 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 - `unpythonic` pure-Python features are fair game. Currently used: `env` (namespace), `Timer` (benchmarking), `@call` (scoping), `box`/`unbox`, `sym`, `dyn`. Other features welcome where they improve clarity. **Do not** use the macro layer (`unpythonic.syntax`) or features that primarily serve as macro backends (e.g. `let` bindings — these exist mainly as a code-generation target for the macros. They *are* usable by hand, since the machinery runs on `env`, but clumsily: the body has to be a callable taking an `env` parameter, so the bindings read as `env.x` rather than as plain names).
 - OOP where appropriate (GUI components, stateful objects)
 - Config via Python modules (`config.py` files, not YAML/JSON)
+- **Writing a TOML file: `raven.common.utils.toml_string` quotes the strings.** The standard library reads TOML
+  (`tomllib`) and has no writer, so a file a tool writes for a person to read back — scopebib's `run.toml`,
+  `deduplicate`'s `instruments.toml` — is assembled by hand, and the quoting is the part that goes wrong.
+  Reach for it rather than for a new dependency or a second hand-rolled escape.
 - Type hints on all new and modified functions (public and internal). Existing untyped code can be left as-is unless you're already editing it. Use the modern spelling — `X | None` (not `Optional[X]`), `list[X]`/`dict[K, V]` (not `typing.List`/`Dict`); the codebase is mid-migration. Full guidance in `raven-style-guide.md` under "Type hints".
 - `__all__`: all public symbols must be listed in `__all__` (PEP 8). Whether locally defined or re-exported, doesn't matter. This allows star-importing a module in a REPL to bring in its public API only.
 - Imports: prefer `import module` + `module.func()` (dotted style) over `from module import func`. Makes it clear at the call site where a function comes from. For modules with ambiguous names, use an alias: `from ..common.gui import utils as guiutils`, `from ..server import config as server_config`.

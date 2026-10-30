@@ -36,6 +36,7 @@ import tomllib
 from collections.abc import Iterable, Mapping
 
 from ...common import tabular
+from ...common import utils as common_utils
 from .. import siftbib
 
 #: The stages that ask a model, in the order a run takes them.
@@ -241,13 +242,6 @@ def with_overrides(run_file: RunFile, *,
     return RunFile(dataclasses.replace(run_file.settings, **given), stages)
 
 
-def _toml_string(value: str) -> str:
-    """`value` as a TOML basic string."""
-    escapes = {"\\": "\\\\", '"': '\\"', "\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f", "\r": "\\r"}
-    return '"' + "".join(escapes.get(char, f"\\u{ord(char):04x}" if ord(char) < 0x20 or ord(char) == 0x7f else char)
-                         for char in value) + '"'
-
-
 def _relative(target: pathlib.Path, base: pathlib.Path) -> str:
     """`target` relative to `base`, with forward slashes, so that the file reads the same on any system.
 
@@ -292,10 +286,10 @@ def write_run_file(path: str | pathlib.Path, run_file: RunFile, *,
     run_lines = []
     for key, name in _PATHS.items():
         if (value := getattr(settings, name)) is not None:
-            run_lines.append(f"{key} = {_toml_string(_relative(pathlib.Path(value).resolve(), path.parent.resolve()))}")
+            run_lines.append(f"{key} = {common_utils.toml_string(_relative(pathlib.Path(value).resolve(), path.parent.resolve()))}")
     for key, name in _LISTS.items():
         if values := getattr(settings, name):
-            run_lines.append(f"{key} = [{', '.join(_toml_string(value) for value in values)}]")
+            run_lines.append(f"{key} = [{', '.join(common_utils.toml_string(value) for value in values)}]")
     if settings.maybe_fill is not None:
         run_lines.append(f"fill = {'true' if settings.maybe_fill else 'false'}")
     if settings.maybe_keep_appended is not None:
@@ -304,7 +298,7 @@ def write_run_file(path: str | pathlib.Path, run_file: RunFile, *,
         if (value := getattr(settings, name)) is not None:
             run_lines.append(f"{key} = {value}")
     if settings.maybe_format is not None:
-        run_lines.append(f"format = {_toml_string(settings.maybe_format)}")
+        run_lines.append(f"format = {common_utils.toml_string(settings.maybe_format)}")
     if settings.maybe_server_nlp is not None:
         run_lines.append(f"server_nlp = {'true' if settings.maybe_server_nlp else 'false'}")
     if run_lines:
@@ -313,9 +307,9 @@ def write_run_file(path: str | pathlib.Path, run_file: RunFile, *,
         plan = run_file.stages.get(stage, StagePlan())
         lines += ["", f"[{stage}]"]
         if plan.maybe_model is not None:
-            lines.append(f"model = {_toml_string(plan.maybe_model)}")
+            lines.append(f"model = {common_utils.toml_string(plan.maybe_model)}")
         if plan.maybe_instrument is not None:
-            lines.append(f"instrument = {_toml_string(plan.maybe_instrument)}")
+            lines.append(f"instrument = {common_utils.toml_string(plan.maybe_instrument)}")
     path.parent.mkdir(parents=True, exist_ok=True)
     maybe_archive = None
     if path.exists() and not path.read_text(encoding="utf-8").startswith(GENERATED):

@@ -1101,3 +1101,11 @@ class TestGcSuspended:
             assert not gc.isenabled(), "the block that exited first turned the collector back on under the other"
         thread.join(5.0)
         assert gc.isenabled()
+
+
+class TestTomlString:
+    @pytest.mark.parametrize("value", ["plain", 'a "quote" and \\ a backslash', "tab\there\nand a newline",
+                                       "a control \x01 character", "ünïcödé", ""])
+    def test_what_is_written_reads_back_as_written(self, value):
+        import tomllib
+        assert tomllib.loads(f"key = {utils.toml_string(value)}")["key"] == value

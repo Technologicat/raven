@@ -11,7 +11,8 @@ __all__ = ["absolutize_filename", "canonical_path",
            "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "make_search_matcher",
            "search_fragment_to_highlight_regex_fragment", "compile_search_highlight_regexes", "has_search_highlight",
-           "chunkify_text"]
+           "chunkify_text",
+           "toml_string"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -929,3 +930,11 @@ def chunkify_text(text: str, chunk_size: int, overlap: int, extra: float, trimme
         start += delta
         chunk_id += 1
     return chunks
+
+
+def toml_string(value: str) -> str:
+    """`value` as a TOML basic string. The standard library reads TOML (`tomllib`) and does not write it, so a
+    file written by hand quotes its strings with this."""
+    escapes = {"\\": "\\\\", '"': '\\"', "\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f", "\r": "\\r"}
+    return '"' + "".join(escapes.get(char, f"\\u{ord(char):04x}" if ord(char) < 0x20 or ord(char) == 0x7f else char)
+                         for char in value) + '"'
