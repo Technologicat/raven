@@ -268,6 +268,8 @@ raven-deduplicate scopus.bib wos.bib proquest.bib springer.bib arxiv.bib -o dedu
 
 Several files are read as one corpus, so there is nothing to concatenate first. Without `-o` the run reports what it would do and writes nothing; your inputs are never modified either way.
 
+**Every run that writes an output records itself beside it, as `<output>_run.toml`**, before any work: the input files, the output and audit, the options, and the judge's ledgers, backend and models. `raven-deduplicate --run-file deduped_run.toml` runs it again, and finishes one that did not start or stopped partway, with nothing else to retype; options given alongside override it. Paths in it are relative to it, so the folder can be moved. How the run logs is not recorded, belonging to one invocation rather than to the run.
+
 **The repair `raven-fixbib` performs is applied on the way through**, so records the parser would otherwise refuse are still counted and HTML left in the field values is still decoded. You get an honest number and a citable file from one command, and you do not need to run `raven-fixbib` first.
 
 ### What counts as the same paper
@@ -327,7 +329,7 @@ Off by default, since it needs a backend. It asks about near-miss titles that no
 
 **The run is resumable.** Answers are kept in ledgers, in a directory beside the output or the audit (`--ledgers DIR` to place it), one for each question and model, and a re-run asks only what is not there yet. A re-run whose answers are all there needs no backend at all. A record edited since its pair was asked is asked again, an answer counting for the text it was given about.
 
-**`instruments.toml` in that directory says which model each question last ran with**, and a re-run reads that model's answers first — so ledgers from several models can sit side by side, and the file decides between them without a backend. Pointing its `instrument` at another ledger in the directory chooses that model's answers.
+**The run file says which model each question was asked with** (below), and a re-run reads that model's answers — so ledgers from several models can sit side by side, and the run file decides between them without a backend. A run resumed with another model loaded is refused before anything is asked, naming both: load the recorded model to finish the run as it began, or remove that question's table from the run file to ask it over with the one loaded.
 
 **A backend that drops out is waited for**: asked again a few times, seconds apart, so a short network drop costs a pause. One that stays away, or has its model swapped, stops the run with a message saying so, and running again resumes where it stopped.
 

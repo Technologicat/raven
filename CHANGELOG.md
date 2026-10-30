@@ -60,6 +60,7 @@
 
 #### Raven-deduplicate
 
+- **A run records itself beside its output, as `<output>_run.toml`, before any work**: inputs, output, audit, options, and the judge's ledgers, backend and models. `--run-file` runs it again, or finishes one that stopped, with nothing to retype; options given with it override it.
 - **The audit is an Excel spreadsheet by default**, which opens as it is in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV, and a path given to `--audit` chooses by its extension.
   - The lines saying which tool and which input go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each merged paper and carries its full abstract**, so a merge can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.
@@ -148,7 +149,7 @@
 
 #### Raven-deduplicate
 
-- **`--judge` keeps its answers in ledgers, in a directory beside the output (`--ledgers DIR`), in place of the JSONL file `--judge-state` named.** A ledger is kept per question and model, so answers another model gave are never read as this one's, and a record edited since it was asked is asked again. `instruments.toml` beside the ledgers records which model each question last ran with, and a re-run reads that model's answers first, with no backend needed.
+- **`--judge` keeps its answers in ledgers, in a directory beside the output (`--ledgers DIR`), in place of the JSONL file `--judge-state` named.** A ledger is kept per question and model, so answers another model gave are never read as this one's, and a record edited since it was asked is asked again. The run file records which model each question was asked with, and a re-run reads that model's answers, with no backend needed; one resumed with another model loaded is refused, naming both.
   - A backend that drops out mid-run is waited for, and one that stays away or changes model stops the run, saying so; running again resumes. Before, every remaining batch failed in turn.
   - A state file from an earlier version is not read: the questions in it are asked again.
 - **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from its ledgers and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.

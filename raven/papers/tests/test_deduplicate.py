@@ -1005,44 +1005,51 @@ class TestJudge:
         dd.judge_pairs(llm_settings, [(edited[0], edited[1], "fuzzy")], ledger_dir=tmp_path)
         assert len(asked) == 1
 
-    def test_a_run_records_the_instrument_it_used(self, llm_settings, tmp_path, monkeypatch):
-        import tomllib
-        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
+    def test_the_instrument_is_recorded_before_anything_is_asked(self, llm_settings, tmp_path, monkeypatch):
+        """So that a run stopping at its first question is still held to the model it began with."""
+        from raven.papers import deduplicate_runfile
+        run_file = tmp_path / "run.toml"
+        recorded_when_asked = []
+
+        def reply(_s, _p):
+            recorded_when_asked.append(deduplicate_runfile.load(run_file).instruments.get("pairs"))
+            return '[{"i": 0, "same": true, "why": "one paper"}]'
+        monkeypatch.setattr(dd, "_ask_judge", replying(reply))
         _parsed, pairs = self._pairs()
-        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path)
-        recorded = tomllib.loads((tmp_path / dd.INSTRUMENTS_FILE).read_text(encoding="utf-8"))["pairs"]
-        assert recorded["model"] == llm_settings.model
+        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path, maybe_run_file=run_file)
+        [recorded] = recorded_when_asked
+        assert recorded is not None and recorded["model"] == llm_settings.model
         assert (tmp_path / f"deduplicate-pairs-{recorded['instrument']}.jsonl").exists()
 
     def _two_models_answered(self, llm_settings, tmp_path, monkeypatch):
-        """Ledgers from two models, both answering every question, the second saying the opposite."""
+        """Ledgers from two models, both answering every question, the second saying the opposite; the run file
+        recording the first."""
         monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         _parsed, pairs = self._pairs()
-        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path)
+        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path, maybe_run_file=tmp_path / "run.toml")
         [first] = [path for path in tmp_path.glob("deduplicate-pairs-*.jsonl") if not path.stem.endswith("-traces")]
         instrument = first.stem.removeprefix("deduplicate-pairs-")
         other = first.read_text(encoding="utf-8").replace(instrument, "0ther0ne").replace('"same": true', '"same": false')
         (tmp_path / "deduplicate-pairs-0ther0ne.jsonl").write_text(other, encoding="utf-8")
-        return pairs
+        return pairs, instrument
 
     def test_the_run_file_chooses_between_two_complete_ledgers_without_connecting(self, llm_settings, tmp_path,
                                                                                   monkeypatch):
-        pairs = self._two_models_answered(llm_settings, tmp_path, monkeypatch)
+        pairs, instrument = self._two_models_answered(llm_settings, tmp_path, monkeypatch)
         monkeypatch.setattr(dd, "_ask_judge", replying(_refuse_to_be_called))
 
         def never():
             raise AssertionError("the run file names a complete ledger, so nothing should connect")
-        assert dd.judge_pairs(never, pairs, ledger_dir=tmp_path) == {(0, 1): True}
-        run_file = tmp_path / dd.INSTRUMENTS_FILE
-        text = run_file.read_text(encoding="utf-8")
-        run_file.write_text(text.replace(text.split('instrument = "')[1].split('"')[0], "0ther0ne"), encoding="utf-8")
-        assert dd.judge_pairs(never, pairs, ledger_dir=tmp_path) == {(0, 1): False}, "the edited record chooses"
+        run_file = tmp_path / "run.toml"
+        assert dd.judge_pairs(never, pairs, ledger_dir=tmp_path, maybe_run_file=run_file) == {(0, 1): True}
+        run_file.write_text(run_file.read_text(encoding="utf-8").replace(instrument, "0ther0ne"), encoding="utf-8")
+        assert dd.judge_pairs(never, pairs, ledger_dir=tmp_path, maybe_run_file=run_file) == {(0, 1): False}, \
+            "the edited record chooses"
 
     def test_without_a_run_file_two_complete_ledgers_need_the_model_to_choose(self, llm_settings, tmp_path,
                                                                               monkeypatch):
         """The control: the run file, not the ledgers alone, is what spared the connection above."""
-        pairs = self._two_models_answered(llm_settings, tmp_path, monkeypatch)
-        (tmp_path / dd.INSTRUMENTS_FILE).unlink()
+        pairs, _instrument = self._two_models_answered(llm_settings, tmp_path, monkeypatch)
         connected = []
 
         def connect():
@@ -1050,6 +1057,17 @@ class TestJudge:
             return llm_settings
         assert dd.judge_pairs(connect, pairs, ledger_dir=tmp_path) == {(0, 1): True}
         assert connected == [1]
+
+    def test_a_run_held_to_one_model_refuses_to_finish_on_another(self, llm_settings, tmp_path, monkeypatch):
+        """Unfinished, and recorded as asked with a model other than the one loaded: refused, naming both."""
+        from raven.papers import deduplicate_runfile
+        run_file = tmp_path / "run.toml"
+        deduplicate_runfile.write(run_file, deduplicate_runfile.with_instrument(
+            deduplicate_runfile.RunFile(), "pairs", model="some-other-model", instrument="0ther0ne"))
+        monkeypatch.setattr(dd, "_ask_judge", replying(_refuse_to_be_called))
+        _parsed, pairs = self._pairs()
+        with pytest.raises(dd.JudgeStopped, match=f"some-other-model.*{llm_settings.model}"):
+            dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path, maybe_run_file=run_file)
 
     def test_the_pair_id_does_not_depend_on_input_order(self, tmp_path, monkeypatch):
         """Resumability keyed on BibTeX keys, not record indices, which shift when files are reordered.

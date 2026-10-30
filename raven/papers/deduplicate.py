@@ -74,7 +74,7 @@ __all__ = ["normalize_title", "is_generic_title",
 
            "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "refused_doi_edges",
 
-           "judge_batch", "JudgeStopped", "INSTRUMENTS_FILE", "judge_pairs",
+           "judge_batch", "JudgeStopped", "judge_pairs",
 
            "doi_candidates", "judge_doi_batch", "judge_doi_fit", "rejected_dois",
 
@@ -105,6 +105,7 @@ from ..common import utils as common_utils
 
 from . import bibtex
 from . import config as papers_config
+from . import deduplicate_runfile
 from . import fixbib
 from . import utils as papers_utils
 
@@ -829,61 +830,44 @@ class JudgeStopped(RuntimeError):
     """The judge's run stopped before every question was asked: the backend went away, or changed model."""
 
 
-#: The judge's run file, in its ledger directory: which model and instrument each question last ran with.
-INSTRUMENTS_FILE = "instruments.toml"
-
-
-def _recorded_instrument(ledger_dir: pathlib.Path, question: str) -> str | None:
-    """The instrument `question` last ran with, as `INSTRUMENTS_FILE` records it, or `None`."""
-    import tomllib
-    path = ledger_dir / INSTRUMENTS_FILE
-    if not path.exists():
+def _recorded_instrument(maybe_run_file: pathlib.Path | None, question: str) -> dict[str, str] | None:
+    """`{"model", "instrument"}` that `question` is recorded as asked with in the run file, or `None`."""
+    if maybe_run_file is None or not maybe_run_file.exists():
         return None
     try:
-        maybe_instrument = tomllib.loads(path.read_text(encoding="utf-8")).get(question, {}).get("instrument")
-    except tomllib.TOMLDecodeError as exc:
-        logger.warning(f"_recorded_instrument: '{path}' does not read, and is ignored: {type(exc)}: {exc}")
+        return deduplicate_runfile.load(maybe_run_file).instruments.get(question)
+    except deduplicate_runfile.RunFileError as exc:
+        logger.warning(f"_recorded_instrument: {exc}; read as recording nothing")
         return None
-    return maybe_instrument if isinstance(maybe_instrument, str) else None
 
 
-def _record_instrument(ledger_dir: pathlib.Path, question: str, *, model: str, instrument: str) -> None:
-    """Record in `INSTRUMENTS_FILE` that `question` ran with `instrument`, on `model`, keeping the other questions'."""
-    import tomllib
-    path = ledger_dir / INSTRUMENTS_FILE
-    tables = {}
-    if path.exists():
-        try:
-            tables = tomllib.loads(path.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError:
-            tables = {}  # rewritten whole below; a run that cannot read it has no use for its rest either
-    tables[question] = {"model": model, "instrument": instrument}
-    lines = ["# Written by raven-deduplicate --judge: the model and instrument each question last ran with.",
-             "# A re-run reads that instrument's ledger first; pointing `instrument` at another ledger in this",
-             "# directory chooses that model's answers."]
-    for name, table in tables.items():
-        if isinstance(table, dict) and isinstance(table.get("instrument"), str):
-            lines += ["", f"[{name}]", f"model = {common_utils.toml_string(str(table.get('model', '')))}",
-                      f"instrument = {common_utils.toml_string(table['instrument'])}"]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+def _record_instrument(run_file: pathlib.Path, question: str, *, model: str, instrument: str) -> None:
+    """Record in the run file that `question` is asked with `instrument`, on `model`, keeping the rest of it."""
+    recorded = deduplicate_runfile.load(run_file) if run_file.exists() else deduplicate_runfile.RunFile()
+    updated = deduplicate_runfile.with_instrument(recorded, question, model=model, instrument=instrument)
+    deduplicate_runfile.write(run_file, updated)
 
 
 def _run_question(llm_settings, *, question: str, material: str, items: list[tuple[str, tuple]], render,
-                  ask_batch, ledger_dir: pathlib.Path, on_progress=None) -> dict[str, dict]:
+                  ask_batch, ledger_dir: pathlib.Path, maybe_run_file: pathlib.Path | None = None,
+                  on_progress=None) -> dict[str, dict]:
     """Answer `items` by a `sweep.Sweep`, or from a ledger already answering them all. Returns `{id: answer}`.
 
     `llm_settings`: from `llmclient.setup`, or a zero-argument callable returning them, called only when
                     something has to be asked.
-    `question`: `"pairs"` or `"dois"`, naming its ledgers in `ledger_dir` and its table in `INSTRUMENTS_FILE`.
+    `question`: `"pairs"` or `"dois"`, naming its ledgers in `ledger_dir` and its table in the run file.
     `material`: the prompt, fingerprinted with the model, so that answers another model or another wording
                 gave are never read as this one's.
     `items`: `(id, item)` pairs. `render(item)`: the item as the prompt shows it, digested so that an answer
              counts only for the text it was given about.
     `ask_batch`: as `sweep.Sweep` takes it.
+    `maybe_run_file`: the run's `deduplicate_runfile`, which records the instrument each question is asked
+                      with as soon as it is known, and holds a resumed run to it; `None` records nothing.
     `on_progress`: `on_progress(asked, total)`, after each batch.
 
-    Raises `JudgeStopped` when the run stops before every item is asked; what was answered stays in the
-    ledger, and a re-run resumes. An item the model left unanswered is absent from the result, and asked
+    Raises `JudgeStopped` when the run stops before every item is asked, what was answered staying in the
+    ledger for a re-run to resume from, or when the run file holds the question to a model other than the
+    one loaded. An item the model left unanswered is absent from the result, and asked
     again by the next run.
     """
     from ..librarian import sweep
@@ -897,33 +881,43 @@ def _run_question(llm_settings, *, question: str, material: str, items: list[tup
 
     def every_item_in(answers: dict) -> bool:
         return all(item_id in answers for item_id, _ in items)
-    # A ledger answering every question is read without connecting. The run file says which instrument the
-    # last run used, and that one is read first. Without it, a ledger is named for its instrument, the model
+    # A ledger answering every question is read without connecting. The run file names the instrument the
+    # run is held to, and that one is read. Without it, a ledger is named for its instrument, the model
     # included, so nothing else could find it without a backend: one ledger answering everything is read,
     # and two, from two models, leave the choice to the model loaded, which the run connects to ask.
-    if (maybe_instrument := _recorded_instrument(ledger_dir, question)) is not None:
-        answers = sweep.Ledger(ledger_dir, name, maybe_instrument).answers(digests)
+    maybe_recorded = _recorded_instrument(maybe_run_file, question)
+    if maybe_recorded is not None:
+        answers = sweep.Ledger(ledger_dir, name, maybe_recorded["instrument"]).answers(digests)
         if every_item_in(answers):
             return answers
-    complete = []
-    for path in sorted(ledger_dir.glob(f"{name}-*.jsonl")):
-        if path.name.endswith("-traces.jsonl"):
-            continue
-        answers = sweep.Ledger(ledger_dir, name, path.stem[len(name) + 1:]).answers(digests)
-        if every_item_in(answers):
-            complete.append(answers)
-    if len(complete) == 1:
-        return complete[0]
+    else:
+        complete = []
+        for path in sorted(ledger_dir.glob(f"{name}-*.jsonl")):
+            if path.name.endswith("-traces.jsonl"):
+                continue
+            answers = sweep.Ledger(ledger_dir, name, path.stem[len(name) + 1:]).answers(digests)
+            if every_item_in(answers):
+                complete.append(answers)
+        if len(complete) == 1:
+            return complete[0]
 
     settings = llm_settings() if callable(llm_settings) else llm_settings
-    ledger = sweep.Ledger(ledger_dir, name, sweep.fingerprint(settings, material))
+    instrument = sweep.fingerprint(settings, material)
+    if maybe_recorded is not None and instrument != maybe_recorded["instrument"]:
+        raise JudgeStopped(f"the run file {maybe_run_file} records the '{question}' question as asked with "
+                           f"{maybe_recorded['model'] or 'another model'} (instrument {maybe_recorded['instrument']}), "
+                           f"and {settings.model} is loaded (instrument {instrument}). Load that model to finish the "
+                           f"run as it began, or remove [{question}] from the run file to ask this question over "
+                           f"with the model loaded.")
+    if maybe_run_file is not None:  # before anything is asked, so that a run stopping partway is held to it
+        _record_instrument(maybe_run_file, question, model=settings.model, instrument=instrument)
+    ledger = sweep.Ledger(ledger_dir, name, instrument)
     result = sweep.Sweep(settings, ask_batch, items, ledger, batch_size=papers_config.judge_batch,
                          header=sweep.instrument_header(settings), digest=digest,
                          on_item=(lambda event: on_progress(event.done + event.failed, event.total))
                          if on_progress is not None else None).run()
     if result.outcome is not sweep.completed:
-        raise JudgeStopped(result.message or str(result.outcome))
-    _record_instrument(ledger_dir, question, model=settings.model, instrument=ledger.fingerprint)
+        raise JudgeStopped(f"{result.message or result.outcome} Run again to resume where it stopped.")
     return ledger.answers(digests)
 
 
@@ -940,6 +934,7 @@ def _pair_id(a: Record, b: Record) -> str:
 def judge_pairs(llm_settings,
                 pairs: list[tuple[Record, Record, str]], *,
                 ledger_dir: pathlib.Path,
+                maybe_run_file: pathlib.Path | None = None,
                 on_progress=None) -> dict[tuple[int, int], bool]:
     """Ask the judge about `pairs`, returning the verdicts clustering can act on.
 
@@ -948,7 +943,7 @@ def judge_pairs(llm_settings,
              records disagree about the DOI.
     `ledger_dir`: where the answers are kept (`_run_question`): a re-run asks only what is not there, so a
                   backend that falls over costs the batch in flight rather than the run.
-    `llm_settings`, `on_progress`: as `_run_question` takes them.
+    `llm_settings`, `maybe_run_file`, `on_progress`: as `_run_question` takes them.
 
     A verdict of "same" is kept only where `_judge_admits` agrees, which is where this stops being a
     model deciding and becomes a model proposing. A pair the model does not answer at all is simply
@@ -968,7 +963,8 @@ def judge_pairs(llm_settings,
 
     answers = _run_question(llm_settings, question="pairs", material=papers_config.judge_instructions,
                             items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}",
-                            ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
+                            ask_batch=ask_batch, ledger_dir=ledger_dir, maybe_run_file=maybe_run_file,
+                            on_progress=on_progress)
     verdicts = {}
     for a, b, _why in pairs:
         answer = answers.get(_pair_id(a, b))
@@ -1069,11 +1065,12 @@ def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]],
 def judge_doi_fit(llm_settings,
                   candidates: list[tuple[Record, Record, str, str]], *,
                   ledger_dir: pathlib.Path,
+                  maybe_run_file: pathlib.Path | None = None,
                   on_progress=None) -> dict[str, dict]:
     """Ask whether each candidate DOI's venue fits the work, returning `{doi: answer}`.
 
-    `ledger_dir`, `llm_settings`, `on_progress`: as `judge_pairs` takes them; this question has ledgers of
-    its own beside that one's.
+    `ledger_dir`, `llm_settings`, `maybe_run_file`, `on_progress`: as `judge_pairs` takes them; this question
+    has ledgers, and a table in the run file, of its own beside that one's.
 
     A candidate the model does not answer at all is simply absent from the result, which leaves the DOI
     where it was — the direction every unanswered question falls in this module. Raises `JudgeStopped` as
@@ -1093,7 +1090,8 @@ def judge_doi_fit(llm_settings,
 
     answers = _run_question(llm_settings, question="dois", material=papers_config.judge_doi_instructions,
                             items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}\n{item[2]}",
-                            ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
+                            ask_batch=ask_batch, ledger_dir=ledger_dir, maybe_run_file=maybe_run_file,
+                            on_progress=on_progress)
     verdicts = {}
     for _base, carrier, doi, _venue in candidates:
         answer = answers.get(_doi_id(carrier, doi))
@@ -1137,10 +1135,12 @@ def _ledger_dir(opts) -> pathlib.Path | None:
 
 def _apply_judge(records: list[Record],
                  clusters: list[Cluster],
-                 opts) -> tuple[list[Cluster], frozenset[str]]:
+                 opts,
+                 maybe_run_file: pathlib.Path | None = None) -> tuple[list[Cluster], frozenset[str]]:
     """Run the opt-in judge passes. CLI glue for `judge_pairs` and `judge_doi_fit`.
 
-    Returns `(clusters, rejected)` — the re-clustered result, and the DOIs a merge may drop.
+    Returns `(clusters, rejected)` — the re-clustered result, and the DOIs a merge may drop. `maybe_run_file`:
+    the run's run file, which records the model each question is asked with; `None` for a run that keeps none.
 
     Two questions, asked in this order because the second depends on the first: which records are one
     work, and then, of the identifiers on a work, which one actually belongs to it. Re-clustering happens
@@ -1191,23 +1191,25 @@ def _apply_judge(records: list[Record],
     maybe_ledger_dir = _ledger_dir(opts)
     if maybe_ledger_dir is None:  # a run writing nothing keeps nothing, its answers included
         with tempfile.TemporaryDirectory() as scratch:
-            return _judge_into(records, clusters, pairs, llm_settings, pathlib.Path(scratch))
+            return _judge_into(records, clusters, pairs, llm_settings, pathlib.Path(scratch), None)
     maybe_ledger_dir.mkdir(parents=True, exist_ok=True)
-    result = _judge_into(records, clusters, pairs, llm_settings, maybe_ledger_dir)
+    result = _judge_into(records, clusters, pairs, llm_settings, maybe_ledger_dir, maybe_run_file)
     print(f"judge: answers in {maybe_ledger_dir}")
     return result
 
 
 def _judge_into(records: list[Record], clusters: list[Cluster], pairs: list[tuple[Record, Record, str]],
-                llm_settings, ledger_dir: pathlib.Path) -> tuple[list[Cluster], frozenset[str]]:
+                llm_settings, ledger_dir: pathlib.Path,
+                maybe_run_file: pathlib.Path | None) -> tuple[list[Cluster], frozenset[str]]:
     """`_apply_judge`'s two questions, their answers kept in `ledger_dir`. Exits, saying why, if the run stops."""
     progress = lambda done, total: print(f"  judged {done}/{total}", flush=True)  # noqa: E731 -- one name, two call sites
 
     if pairs:
         try:
-            verdicts = judge_pairs(llm_settings, pairs, ledger_dir=ledger_dir, on_progress=progress)
+            verdicts = judge_pairs(llm_settings, pairs, ledger_dir=ledger_dir, maybe_run_file=maybe_run_file,
+                                   on_progress=progress)
         except JudgeStopped as exc:
-            print(f"judge: stopped: {exc} Run again to resume where it stopped.", file=sys.stderr)
+            print(f"judge: stopped: {exc}", file=sys.stderr)
             sys.exit(1)
         was_together = {}
         for position, cluster in enumerate(clusters):
@@ -1228,9 +1230,10 @@ def _judge_into(records: list[Record], clusters: list[Cluster], pairs: list[tupl
     if candidates:
         print(f"judge: {len(candidates)} DOI{textutil.plural_s(len(candidates))} to check against the venue claimed for them")
         try:
-            doi_verdicts = judge_doi_fit(llm_settings, candidates, ledger_dir=ledger_dir, on_progress=progress)
+            doi_verdicts = judge_doi_fit(llm_settings, candidates, ledger_dir=ledger_dir,
+                                         maybe_run_file=maybe_run_file, on_progress=progress)
         except JudgeStopped as exc:
-            print(f"judge: stopped: {exc} Run again to resume where it stopped.", file=sys.stderr)
+            print(f"judge: stopped: {exc}", file=sys.stderr)
             sys.exit(1)
         rejected = rejected_dois(clusters, doi_verdicts)
         for doi in sorted(rejected):
@@ -1547,11 +1550,13 @@ def main() -> None:  # pragma: no cover
                         help="Where to write the deduplicated bibliography. Without it, the run reports what it would do and writes nothing.")
     parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.xlsx",
                         help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. TSV, Excel or OpenDocument, by the extension: `.tsv`, `.xlsx` or `.ods`. Defaults to sitting beside the output, as `<output>_audit.xlsx`, or in the format `--audit-format` names.")
+    parser.add_argument("--run-file", dest="run_file", default=None, type=str, metavar="run.toml",
+                        help="Run as this run file says, anything given here overriding it, and keep the run's record in it. Every run writing an output writes one, beside it as `<output>_run.toml`, before any work, so a run that does not start or stops partway can be finished with only this.")
     parser.add_argument("--audit-format", dest="audit_format", default=None, choices=tabular.FORMATS,
                         help="Format of the audit file the tool names itself: TSV, Excel or OpenDocument. With `--audit`, the extension of its path decides instead. Default: xlsx.")
-    parser.add_argument("--no-audit", dest="no_audit", action="store_true", default=False,
+    parser.add_argument("--no-audit", dest="no_audit", action="store_true", default=None,
                         help="Do not write the audit. A merge cannot be read back out of the merged file, so this discards the only record of what happened.")
-    parser.add_argument("--judge", dest="judge", action="store_true", default=False,
+    parser.add_argument("--judge", dest="judge", action="store_true", default=None,
                         help="Also ask an LLM about near-miss titles that no exact key joined. Needs a backend; off by default.")
     parser.add_argument("--ledgers", dest="ledgers", default=None, type=str, metavar="DIR",
                         help="Where to keep the judge's answers, one ledger per question and model. Defaults to a directory beside the output or the audit; a re-run asks only what is not there yet, and one whose answers are all there needs no backend.")
@@ -1562,9 +1567,29 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                         help="Root logger level.")
-    parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="search.bib",
-                        help="BibTeX file(s) to deduplicate. Several are read as one corpus, which is what a multi-database search produces.")
+    parser.add_argument(dest="filenames", nargs="*", default=None, type=str, metavar="search.bib",
+                        help="BibTeX file(s) to deduplicate. Several are read as one corpus, which is what a multi-database search produces. Optional where --run-file names them.")
     opts = parser.parse_args()
+
+    # The run file under the command line: a value given here wins, then the run file's, then the default.
+    maybe_run_file = pathlib.Path(opts.run_file).expanduser().resolve() if opts.run_file else None
+    recorded, maybe_recorded_from = deduplicate_runfile.RunFile(), None
+    if maybe_run_file is not None and maybe_run_file.exists():
+        try:
+            recorded, maybe_recorded_from = deduplicate_runfile.load(maybe_run_file), maybe_run_file
+        except deduplicate_runfile.RunFileError as exc:
+            parser.error(str(exc))
+    for key in deduplicate_runfile.SETTINGS:
+        if getattr(opts, key) in (None, []) and key in recorded.settings:
+            value = recorded.settings[key]
+            setattr(opts, key, [str(item) for item in value] if key == "filenames" else
+                    str(value) if isinstance(value, pathlib.Path) else value)
+    opts.judge, opts.no_audit = bool(opts.judge), bool(opts.no_audit)
+    if not opts.filenames:
+        parser.error("no input: name the .bib file(s), or a --run-file that names them")
+    if maybe_run_file is None and opts.output:
+        maybe_run_file = deduplicate_runfile.default_path(pathlib.Path(opts.output).expanduser().resolve())
+
     if opts.audit:
         try:
             audit_format = tabular.format_of(opts.audit)
@@ -1581,6 +1606,19 @@ def main() -> None:  # pragma: no cover
     # rather than in a library function, because muting someone else's logger is an application's
     # decision to make.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
+
+    if maybe_run_file is not None:  # before any work, keeping what the judge has recorded so far
+        if maybe_recorded_from != maybe_run_file and maybe_run_file.exists():  # the default one, from a run before
+            try:
+                recorded = deduplicate_runfile.load(maybe_run_file)
+            except deduplicate_runfile.RunFileError:
+                recorded = deduplicate_runfile.RunFile()  # rewritten whole; the run is what it records now
+        settings = {key: getattr(opts, key) for key in deduplicate_runfile.SETTINGS if getattr(opts, key) is not None}
+        settings["filenames"] = [pathlib.Path(name).expanduser().resolve() for name in opts.filenames]
+        for key in ("output", "audit", "ledgers"):
+            if settings.get(key):
+                settings[key] = pathlib.Path(settings[key]).expanduser().resolve()
+        deduplicate_runfile.write(maybe_run_file, deduplicate_runfile.RunFile(settings, recorded.instruments))
 
     sources, pieces = [], []
     for filename in opts.filenames:
@@ -1602,7 +1640,7 @@ def main() -> None:  # pragma: no cover
     clusters = cluster_records(records)
     rejected = frozenset()
     if opts.judge:
-        clusters, rejected = _apply_judge(records, clusters, opts)
+        clusters, rejected = _apply_judge(records, clusters, opts, maybe_run_file)
 
     _report(records, clusters, unreadable)
 
