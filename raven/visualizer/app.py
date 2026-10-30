@@ -849,7 +849,19 @@ with timer() as tim:
 
     # Which side the info panel is on: the command line if it says, else as when the app last closed.
     panel_side = opts.panel_side if opts.panel_side is not None else savedstate.load(visualizer_config.state_file)["panel_side"]
-    arrange_columns(panel_side)
+    # The plot column is drawn first in the first frame whatever the side, and a left panel is moved into
+    # place a few frames later (below). DPG refuses `focus_item` into a child window moved in front of a
+    # sibling that the first frame drew before it: with the plot column drawn second, every swap that brought
+    # it to the front left Ctrl+F unable to reach the search field, and nothing done afterwards undoes that.
+    # Until the left panel is in place the window is drawn at zero alpha, which counts as drawing but shows
+    # nothing, so a start does not show the panel jumping across; a hidden window would not count.
+    # `investigations/dpg-focus/focus_after_move_item_probe.py` measures all of it.
+    arrange_columns("right")
+    if panel_side == "left":
+        with dpg.theme(tag="startup_invisible_theme"):
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_style(dpg.mvStyleVar_Alpha, 0.0, category=dpg.mvThemeCat_Core)
+        dpg.bind_item_theme("main_window", "startup_invisible_theme")  # tag
 
     # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
@@ -1587,6 +1599,14 @@ initialize_filedialogs(_default_path)
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
 # The window for the "scroll ends here" animation is also created at frame 10, but via another mechanism (trying to create it each frame, but the implementation blocks it until frame 10).
 dpg.set_frame_callback(10, info_panel.create_dimmer_overlay)
+
+# A left panel goes into place once the first frames have dated the plot column as the older, and the
+# window becomes visible (see where the columns are first arranged).
+if panel_side == "left":
+    def _place_left_panel() -> None:
+        arrange_columns("left")
+        dpg.bind_item_theme("main_window", 0)  # tag
+    dpg.set_frame_callback(3, _place_left_panel)
 
 # A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
 # teardown runs.
