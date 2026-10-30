@@ -342,6 +342,41 @@ def write_tables(out_dir: pathlib.Path, run_id: str, themes: list[dict], studies
                         ["#", "theme", "sub-theme", "key", "citation", "primary", "reason"], placements)
 
 
+def write_outputs(ledger: sweep.Ledger, bib_path: pathlib.Path, studies: list[env], condition: str, *,
+                  maybe_run_ids: list[str] | None = None) -> None:
+    """Write the tables and the dataset of each answered run in `ledger`, into `<ledger's folder>/<fingerprint>/`.
+
+    `maybe_run_ids`: the runs to write; `None` writes every run the ledger answers.
+
+    Everything comes from the ledger: the groupings from its answers, the model and the declarations from its
+    latest header. `studies` (from `bib_path`) only names the studies, so it must hold every key the ledger
+    places; `ValueError` otherwise.
+    """
+    answers = ledger.answers()
+    run_ids = sorted(answers) if maybe_run_ids is None else [r for r in maybe_run_ids if r in answers]
+    keys = [s.key for s in studies]
+    missing = sorted({p["key"] for r in run_ids for t in answers[r]["themes"] for sub in t["subthemes"]
+                      for p in sub["studies"]} - set(keys))
+    if missing:
+        raise ValueError(f"{bib_path.name} lacks {len(missing)} of the keys the ledger places, e.g. {missing[0]}")
+    header = ledger.headers()[-1] if ledger.headers() else {}
+    model_line = (f"model: {header.get('label', 'not recorded')}; "
+                  f"declared: {header.get('declared', 'not recorded')}")
+    run_dir = ledger.directory / ledger.fingerprint
+    run_dir.mkdir(parents=True, exist_ok=True)
+    for run_id in run_ids:
+        answer = answers[run_id]
+        comments = [f"{run_id} of an LLM grouping of {bib_path.name}, condition: {condition}, "
+                    f"instrument {ledger.fingerprint}, seed {answer['seed']}", model_line]
+        write_tables(run_dir, run_id, answer["themes"], studies, answer["problems"], comments)
+        write_dataset(run_dir / f"{run_id}.pickle", bib_path, answer["themes"], keys)
+        n_double = sum(1 for k in keys
+                       if sum(1 for t in answer["themes"] for s in t["subthemes"] for p in s["studies"] if p["key"] == k) > 1)
+        print(f"{run_id}: {len(answer['themes'])} themes, "
+              f"{n_double} placed twice or more, {len(answer.get('repaired', []))} repair turns, "
+              f"{len(answer['problems'])} problems left")
+
+
 # --------------------------------------------------------------------------------
 
 def main() -> int:
@@ -359,6 +394,10 @@ def main() -> int:
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--declare", default=None, metavar="TEXT",
                         help="backend settings the backend does not report, e.g. 'reasoning effort xhigh'")
+    parser.add_argument("--rebuild", default=None, metavar="FINGERPRINT",
+                        help="write the tables and datasets of the ledger with this fingerprint from its stored answers, "
+                             "asking no model: after the output format or the .bib changed, or with no backend at hand. "
+                             "The .bib only names the studies, so give the one the runs saw if their citations matter")
     opts = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -371,6 +410,14 @@ def main() -> int:
     studies = load_studies(bib_path)
     keys = [s.key for s in studies]
     print(f"{len(studies)} studies from {bib_path.name}")
+
+    if opts.rebuild:
+        ledger = sweep.Ledger(out_dir, "grouping", opts.rebuild)
+        if not ledger.path.exists():
+            print(f"no ledger at {ledger.path}")
+            return 1
+        write_outputs(ledger, bib_path, studies, condition)
+        return 0
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["max_tokens"] = MAX_TOKENS
@@ -400,23 +447,7 @@ def main() -> int:
     result = sweep.Sweep(llm_settings, ask_batch, items, ledger,
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
 
-    answers = ledger.answers()
-    run_dir = out_dir / ledger.fingerprint
-    run_dir.mkdir(parents=True, exist_ok=True)
-    for run_id, _ in items:
-        if run_id not in answers:
-            continue
-        answer = answers[run_id]
-        comments = [f"{run_id} of an LLM grouping of {bib_path.name}, aim: {condition}, "
-                    f"instrument {ledger.fingerprint}, seed {answer['seed']}",
-                    f"model: {llm_settings.model}" + (f"; {opts.declare}" if opts.declare else "")]
-        write_tables(run_dir, run_id, answer["themes"], studies, answer["problems"], comments)
-        write_dataset(run_dir / f"{run_id}.pickle", bib_path, answer["themes"], keys)
-        n_double = sum(1 for k in keys
-                       if sum(1 for t in answer["themes"] for s in t["subthemes"] for p in s["studies"] if p["key"] == k) > 1)
-        print(f"{run_id}: {len(answer['themes'])} themes, "
-              f"{n_double} placed twice or more, {len(answer.get('repaired', []))} repair turns, "
-              f"{len(answer['problems'])} problems left")
+    write_outputs(ledger, bib_path, studies, condition, maybe_run_ids=[run_id for run_id, _ in items])
     if result.outcome is not sweep.completed:
         print(f"\nstopped ({result.outcome}): {result.message or 'cancelled'}\nrun again to resume")
         return 1

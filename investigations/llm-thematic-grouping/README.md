@@ -18,7 +18,13 @@ no cluster at all in a set of forty.
   the Visualizer showing one point per record; the tables keep every placement.
   - Resumable: each run is one item of a `raven.librarian.sweep`, and every model call is kept whole in the
     ledger's traces; `stream.log` shows each turn as it streams.
-  - Outputs go beside the `.bib` by default (`llm-grouping/`), with the private data, and not here.
+  - Outputs go beside the `.bib` by default (`llm-grouping/<condition>/`), with the private data, and not
+    here: the ledger in the condition's folder, each run's tables and dataset in `<fingerprint>/` below it.
+  - `--rebuild FINGERPRINT` writes those from the ledger's stored answers, asking no model — after the
+    output format or the `.bib` changes, or with no backend at hand. The `.bib` only names the studies, so
+    give the one the runs saw where their citations matter. Every run of 2026-10-30 was rebuilt this way into
+    the per-fingerprint layout on 2026-10-31, the first evening's from the `.bak-2026-10-30` bib, and checked
+    identical, table for table and dataset for dataset, to the outputs it replaced.
   - Themes only, since 2026-10-30's second batch; the first evening's runs asked for sub-themes too (the
     script at `66c6cea8`). `--guidance FILE` adds an instruction of the user's own, and a reply with slips
     gets a repair turn naming each one, up to two, built on the original prompt so the backend's prefix cache
