@@ -1039,7 +1039,7 @@ class TestJudge:
         assert dd.judge_pairs(never, pairs, ledger_dir=tmp_path) == {(0, 1): False}, "the edited record chooses"
 
     def test_without_a_run_file_two_complete_ledgers_need_the_model_to_choose(self, llm_settings, tmp_path,
-                                                                             monkeypatch):
+                                                                              monkeypatch):
         """The control: the run file, not the ledgers alone, is what spared the connection above."""
         pairs = self._two_models_answered(llm_settings, tmp_path, monkeypatch)
         (tmp_path / dd.INSTRUMENTS_FILE).unlink()
