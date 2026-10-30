@@ -27,6 +27,23 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Report the DPG bugs we know of upstream, together
+
+*Cluster: dpg · Cost: M? · Gate: none · Filed: 2026-10-30 · See also: `dpg-notes.md`; `investigations/dpg-focus/focus_after_move_item_probe.py`*
+
+`focus_item` is refused into a child window moved in front of a sibling that the first frame drew before it,
+and nothing done afterwards undoes it (`dpg-notes.md`, "`focus_item` cannot focus a child window — and does
+harm when asked to"). The probe reproduces it in a few dozen lines of DPG with no Raven code, which is most
+of what an upstream issue needs. The maintainer considers it a bug, and chose to report it later rather than
+now (2026-10-30).
+
+Before reporting, scan `dpg-notes.md` for the other behaviours it records that are bugs rather than design —
+candidates include the stale `mvKey_*` constants, the alias that does not rebind after a delete by alias, and
+the segfault on context recreation — and report what we know of in one pass, each with its reproduction.
+Some may be fixed upstream already, or reported by someone else; check the tracker first. The Visualizer's
+workaround (its first frames draw the plot column first, at zero alpha) is the thing to retire if a fix
+lands.
+
 ## A CLI message a person must see should say so to an AI agent relaying it
 
 *Cluster: papers · Cost: S–M? · Gate: none · Filed: 2026-10-29*
