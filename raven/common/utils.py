@@ -448,11 +448,13 @@ def format_bibtex_author(author):
     jr_part = f" {' '.join(author.jr)}" if author.jr else ""
     return f"{von_part}{last_part}{jr_part}"
 
-def format_bibtex_authors(authors):
-    """Format an author name for use in a citation.
+def format_bibtex_authors(authors, *, conjunction: str = "and") -> str:
+    """Format an author list for use in a citation.
 
     `author`: a list, where each element is an outputs of `bibtexparser.middlewares.SplitNameParts`.
               For details of that format, see the docstring of `format_bibtex_author`.
+
+    `conjunction`: what joins two authors; `"&"` gives the "Author & Other" form some citation styles use.
 
     Returns an `str` suitable for use in a citation:
         - One author: "Author"
@@ -474,7 +476,7 @@ def format_bibtex_authors(authors):
     if len(authors_list) >= 3:
         authors_str = f"{authors_list[0]} et al."
     elif len(authors_list) == 2:
-        authors_str = f"{authors_list[0]} and {authors_list[1]}"
+        authors_str = f"{authors_list[0]} {conjunction} {authors_list[1]}"
     elif len(authors_list) == 1:
         authors_str = authors_list[0]
     else:  # empty author list

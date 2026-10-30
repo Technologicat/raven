@@ -323,6 +323,11 @@ class TestFormatBibtexAuthors:
                    _make_name_parts(last=["Lamport"])]
         assert utils.format_bibtex_authors(authors) == "Knuth and Lamport"
 
+    def test_two_authors_with_another_conjunction(self):
+        authors = [_make_name_parts(last=["Knuth"]),
+                   _make_name_parts(last=["Lamport"])]
+        assert utils.format_bibtex_authors(authors, conjunction="&") == "Knuth & Lamport"
+
     def test_three_authors_et_al(self):
         authors = [_make_name_parts(last=["Knuth"]),
                    _make_name_parts(last=["Lamport"]),
