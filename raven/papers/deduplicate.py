@@ -74,7 +74,7 @@ __all__ = ["normalize_title", "is_generic_title",
 
            "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "refused_doi_edges",
 
-           "judge_batch", "JudgeStopped", "judge_pairs",
+           "judge_batch", "JudgeStopped", "INSTRUMENTS_FILE", "judge_pairs",
 
            "doi_candidates", "judge_doi_batch", "judge_doi_fit", "rejected_dois",
 
@@ -829,14 +829,54 @@ class JudgeStopped(RuntimeError):
     """The judge's run stopped before every question was asked: the backend went away, or changed model."""
 
 
-def _run_question(llm_settings, *, name: str, material: str, items: list[tuple[str, tuple]], render,
+#: The judge's run file, in its ledger directory: which model and instrument each question last ran with.
+INSTRUMENTS_FILE = "instruments.toml"
+
+
+def _recorded_instrument(ledger_dir: pathlib.Path, question: str) -> str | None:
+    """The instrument `question` last ran with, as `INSTRUMENTS_FILE` records it, or `None`."""
+    import tomllib
+    path = ledger_dir / INSTRUMENTS_FILE
+    if not path.exists():
+        return None
+    try:
+        maybe_instrument = tomllib.loads(path.read_text(encoding="utf-8")).get(question, {}).get("instrument")
+    except tomllib.TOMLDecodeError as exc:
+        logger.warning(f"_recorded_instrument: '{path}' does not read, and is ignored: {type(exc)}: {exc}")
+        return None
+    return maybe_instrument if isinstance(maybe_instrument, str) else None
+
+
+def _record_instrument(ledger_dir: pathlib.Path, question: str, *, model: str, instrument: str) -> None:
+    """Record in `INSTRUMENTS_FILE` that `question` ran with `instrument`, on `model`, keeping the other questions'."""
+    import tomllib
+    path = ledger_dir / INSTRUMENTS_FILE
+    tables = {}
+    if path.exists():
+        try:
+            tables = tomllib.loads(path.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError:
+            tables = {}  # rewritten whole below; a run that cannot read it has no use for its rest either
+    tables[question] = {"model": model, "instrument": instrument}
+    lines = ["# Written by raven-deduplicate --judge: the model and instrument each question last ran with.",
+             "# A re-run reads that instrument's ledger first; pointing `instrument` at another ledger in this",
+             "# directory chooses that model's answers."]
+    for name, table in tables.items():
+        if isinstance(table, dict) and isinstance(table.get("instrument"), str):
+            lines += ["", f"[{name}]", f"model = {common_utils.toml_string(str(table.get('model', '')))}",
+                      f"instrument = {common_utils.toml_string(table['instrument'])}"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _run_question(llm_settings, *, question: str, material: str, items: list[tuple[str, tuple]], render,
                   ask_batch, ledger_dir: pathlib.Path, on_progress=None) -> dict[str, dict]:
     """Answer `items` by a `sweep.Sweep`, or from a ledger already answering them all. Returns `{id: answer}`.
 
     `llm_settings`: from `llmclient.setup`, or a zero-argument callable returning them, called only when
                     something has to be asked.
-    `name`: the ledgers' name in `ledger_dir`. `material`: the prompt, fingerprinted with the model, so that
-            answers another model or another wording gave are never read as this one's.
+    `question`: `"pairs"` or `"dois"`, naming its ledgers in `ledger_dir` and its table in `INSTRUMENTS_FILE`.
+    `material`: the prompt, fingerprinted with the model, so that answers another model or another wording
+                gave are never read as this one's.
     `items`: `(id, item)` pairs. `render(item)`: the item as the prompt shows it, digested so that an answer
              counts only for the text it was given about.
     `ask_batch`: as `sweep.Sweep` takes it.
@@ -849,19 +889,28 @@ def _run_question(llm_settings, *, name: str, material: str, items: list[tuple[s
     from ..librarian import sweep
     if not items:
         return {}
+    name = f"deduplicate-{question}"
 
     def digest(item) -> str:
         return sweep.digest(render(item))
     digests = {item_id: digest(item) for item_id, item in items}
-    # A ledger answering every question is read without connecting. A ledger is named for its instrument,
-    # the model included, so nothing else could find it without a backend; two such ledgers, from two
-    # models, leave the choice to the model loaded, and the run connects to make it.
+
+    def every_item_in(answers: dict) -> bool:
+        return all(item_id in answers for item_id, _ in items)
+    # A ledger answering every question is read without connecting. The run file says which instrument the
+    # last run used, and that one is read first. Without it, a ledger is named for its instrument, the model
+    # included, so nothing else could find it without a backend: one ledger answering everything is read,
+    # and two, from two models, leave the choice to the model loaded, which the run connects to ask.
+    if (maybe_instrument := _recorded_instrument(ledger_dir, question)) is not None:
+        answers = sweep.Ledger(ledger_dir, name, maybe_instrument).answers(digests)
+        if every_item_in(answers):
+            return answers
     complete = []
     for path in sorted(ledger_dir.glob(f"{name}-*.jsonl")):
         if path.name.endswith("-traces.jsonl"):
             continue
         answers = sweep.Ledger(ledger_dir, name, path.stem[len(name) + 1:]).answers(digests)
-        if all(item_id in answers for item_id, _ in items):
+        if every_item_in(answers):
             complete.append(answers)
     if len(complete) == 1:
         return complete[0]
@@ -874,6 +923,7 @@ def _run_question(llm_settings, *, name: str, material: str, items: list[tuple[s
                          if on_progress is not None else None).run()
     if result.outcome is not sweep.completed:
         raise JudgeStopped(result.message or str(result.outcome))
+    _record_instrument(ledger_dir, question, model=settings.model, instrument=ledger.fingerprint)
     return ledger.answers(digests)
 
 
@@ -916,7 +966,7 @@ def judge_pairs(llm_settings,
                                           titles=batch[position][1][4])
                  for position, answer in answers.items()}, turns)
 
-    answers = _run_question(llm_settings, name="deduplicate-pairs", material=papers_config.judge_instructions,
+    answers = _run_question(llm_settings, question="pairs", material=papers_config.judge_instructions,
                             items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}",
                             ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
     verdicts = {}
@@ -1041,7 +1091,7 @@ def judge_doi_fit(llm_settings,
                                           venue=batch[position][1][1], title=batch[position][1][4])
                  for position, answer in answers.items()}, turns)
 
-    answers = _run_question(llm_settings, name="deduplicate-dois", material=papers_config.judge_doi_instructions,
+    answers = _run_question(llm_settings, question="dois", material=papers_config.judge_doi_instructions,
                             items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}\n{item[2]}",
                             ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
     verdicts = {}
