@@ -23,6 +23,9 @@ no cluster at all in a set of forty.
   omega index (Collins & Dent 1988) over every placement, and the adjusted Rand index on primary placements.
   The omega index is the ARI generalized to groupings where a study sits in several groups, and equals it
   exactly on disjoint ones (checked on random partitions, 2026-10-30).
+  Then, per condition, a per-study view from how often each pair of studies shares a theme across the runs:
+  the stable cores (together in every run), the studies that drift most, and with `--plot DIR` a heatmap
+  of that co-membership ordered by average linkage. `--bib` names the studies by citation.
 
 ## Running it
 
