@@ -125,6 +125,7 @@ dependencies = [
     "PyTurboJPEG>=1.8.3,<2",
     "feedparser>=6.0.14",  # papers: arXiv search
     "requests>=2.34.2",  # client, librarian, papers (arXiv tools)
+    "urllib3>=2.8.0",  # `raven.common.netutil` tells a request that never reached its server by `urllib3`'s exception; also a dependency of `requests`
     "tqdm>=4.70.1",  # server.stt, papers (arXiv download)
     "trafilatura>=2.3.1",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
     "youtube-transcript-api>=1.2.4",  # server.webfetch; transcript extraction for YouTube URLs

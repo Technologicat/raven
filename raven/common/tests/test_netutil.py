@@ -4,6 +4,7 @@ import io
 import json
 
 import pytest
+import requests
 
 from raven.common import netutil
 
@@ -291,3 +292,60 @@ class TestMaybeAuthorizationValue:
     def test_blank_file_means_no_key(self):
         assert netutil.maybe_authorization_value("") is None
         assert netutil.maybe_authorization_value("  \n") is None
+
+
+def _closed_port() -> int:
+    """A local port nothing listens on: bound, then released."""
+    import socket
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+class TestSendWithRetry:
+    def test_a_refused_connection_never_reached_the_server(self):
+        with pytest.raises(requests.exceptions.ConnectionError) as excinfo:
+            requests.get(f"http://127.0.0.1:{_closed_port()}/", timeout=2)
+        assert netutil.never_reached(excinfo.value)
+
+    def test_a_timeout_waiting_for_the_answer_is_not_counted(self):
+        assert not netutil.never_reached(requests.exceptions.ReadTimeout("slow"))
+        assert netutil.never_reached(requests.exceptions.ConnectTimeout("nobody home"))
+
+    def test_a_connection_dropped_after_sending_is_not_counted(self):
+        import urllib3
+        dropped = requests.exceptions.ConnectionError(urllib3.exceptions.ProtocolError("Connection aborted."))
+        assert not netutil.never_reached(dropped)
+
+    def test_it_tries_again_and_returns_what_succeeds(self):
+        port = _closed_port()
+        calls = []
+
+        def send():
+            calls.append(1)
+            if len(calls) < 3:
+                return requests.get(f"http://127.0.0.1:{port}/", timeout=2)
+            return "answer"
+        assert netutil.send_with_retry(send, attempts=2, delay=0, what="test") == "answer"
+        assert len(calls) == 3
+
+    def test_it_gives_up_after_its_attempts_with_the_last_failure(self):
+        port = _closed_port()
+        calls = []
+
+        def send():
+            calls.append(1)
+            return requests.get(f"http://127.0.0.1:{port}/", timeout=2)
+        with pytest.raises(requests.exceptions.ConnectionError):
+            netutil.send_with_retry(send, attempts=2, delay=0, what="test")
+        assert len(calls) == 3
+
+    def test_a_failure_that_may_have_reached_the_server_is_not_retried(self):
+        calls = []
+
+        def send():
+            calls.append(1)
+            raise requests.exceptions.ReadTimeout("slow")
+        with pytest.raises(requests.exceptions.ReadTimeout):
+            netutil.send_with_retry(send, attempts=3, delay=0, what="test")
+        assert len(calls) == 1

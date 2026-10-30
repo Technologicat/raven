@@ -5,6 +5,8 @@ This module is licensed under the 2-clause BSD license.
 
 __all__ = ["Aborted", "Abort",  # cancelling a request that is blocked in a read
 
+           "never_reached", "send_with_retry",  # trying again a request that never reached its server
+
            "multipart_x_mixed_replace_payload_extractor",
            "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
 
@@ -20,11 +22,13 @@ import re
 import socket
 import sys
 import threading
-from collections.abc import Generator, Iterator
-from typing import Any
+import time
+from collections.abc import Callable, Generator, Iterator
+from typing import Any, TypeVar
 import urllib.parse
 
 import requests
+import urllib3
 
 from unpythonic.net.util import ReceiveBuffer
 
@@ -151,6 +155,44 @@ class Abort:
                 _socket.socket.close(maybe_sock)
             except OSError:
                 pass
+
+def never_reached(exc: BaseException) -> bool:
+    """Whether a `requests` exception means the request never reached its server: connecting timed out, or no
+    connection could be made at all — refused, the name not resolved, the network unreachable.
+
+    Such a request is safe to send again, whatever it does. One that failed after it was sent is not counted,
+    a connection dropped while waiting for the answer included: the server may have acted on it already.
+    """
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return True
+    if not isinstance(exc, requests.exceptions.ConnectionError):
+        return False
+    maybe_cause = exc.args[0] if exc.args else None
+    maybe_cause = getattr(maybe_cause, "reason", maybe_cause)  # `urllib3`'s `MaxRetryError` carries the cause
+    return isinstance(maybe_cause, urllib3.exceptions.NewConnectionError)  # name resolution included
+
+
+_T = TypeVar("_T")
+
+
+def send_with_retry(send: Callable[[], _T], *, attempts: int, delay: float, what: str) -> _T:
+    """Call `send`, which makes one request, and call it again up to `attempts` more times, `delay` seconds
+    apart, while it fails with a request that never reached its server (`never_reached`). Returns what it
+    returns; raises the last failure, and any other at once.
+
+    `what`: the request, for the log, e.g. `"POST http://localhost:5100/api/embeddings/compute"`.
+    """
+    for attempt in range(attempts + 1):
+        try:
+            return send()
+        except requests.exceptions.ConnectionError as exc:
+            if attempt == attempts or not never_reached(exc):
+                raise
+            logger.warning(f"send_with_retry: {what}: could not connect ({type(exc)}: {exc}); "
+                           f"trying again in {delay:g} s ({attempt + 1} of {attempts})")
+            time.sleep(delay)
+    raise AssertionError("send_with_retry: unreachable")  # the loop returns or raises
+
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
