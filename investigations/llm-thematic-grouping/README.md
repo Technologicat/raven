@@ -19,6 +19,10 @@ no cluster at all in a set of forty.
   - Resumable: each run is one item of a `raven.librarian.sweep`, and every model call is kept whole in the
     ledger's traces; `stream.log` shows each turn as it streams.
   - Outputs go beside the `.bib` by default (`llm-grouping/`), with the private data, and not here.
+- **`compare_groupings.py`** — how far the runs agree, pairwise, at the theme and the sub-theme level: the
+  omega index (Collins & Dent 1988) over every placement, and the adjusted Rand index on primary placements.
+  The omega index is the ARI generalized to groupings where a study sits in several groups, and equals it
+  exactly on disjoint ones (checked on random partitions, 2026-10-30).
 
 ## Running it
 
