@@ -148,7 +148,10 @@
 
 #### Raven-deduplicate
 
-- **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from `--judge-state` and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
+- **`--judge` keeps its answers in ledgers, in a directory beside the output (`--ledgers DIR`), in place of the JSONL file `--judge-state` named.** A ledger is kept per question and model, so answers another model gave are never read as this one's, and a record edited since it was asked is asked again.
+  - A backend that drops out mid-run is waited for, and one that stays away or changes model stops the run, saying so; running again resumes. Before, every remaining batch failed in turn.
+  - A state file from an earlier version is not read: the questions in it are asked again.
+- **A `--judge` run whose answers are all saved no longer needs a backend.** It reads them from its ledgers and connects only if there is something left to ask, so re-running a finished deduplication works with no LLM running.
 - **The audit's default name is `<output>_audit.xlsx`**, where v0.2.10 wrote `<output>_audit.tsv`. `--audit-format tsv` keeps the old name.
 
 #### Raven-siftbib

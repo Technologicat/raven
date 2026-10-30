@@ -28,6 +28,21 @@ def entry(key: str, **fields) -> str:
     return f"@article{{{key},\n{body}}}\n"
 
 
+class _Turn:
+    """What `agent.ask_record` hands back, as far as the judge and the sweep's traces read it."""
+
+    def __init__(self, reply):
+        self.reply, self.truncated = reply, False
+
+    def to_dict(self):
+        return {"reply": self.reply}
+
+
+def replying(reply_to):
+    """A stand-in for `dd._ask_judge` from `reply_to(settings, prompt) -> reply text`."""
+    return lambda llm_settings, prompt, maybe_abort=None: _Turn(reply_to(llm_settings, prompt))
+
+
 def clusters_of(source: str, **kwargs):
     """Clusters of a BibTeX string, keyed by the set of BibTeX keys in each."""
     parsed = records(source)
@@ -915,35 +930,35 @@ class TestJudge:
         return parsed, [(a, b, "fuzzy") for a, b in
                         dd.fuzzy_candidates(parsed, dd.cluster_records(parsed))]
 
-    def test_a_verdict_of_same_becomes_a_merge(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]')
+    def test_a_verdict_of_same_becomes_a_merge(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs) == {(0, 1): True}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {(0, 1): True}
 
-    def test_a_verdict_of_different_is_recorded_as_such(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": false, "why": "two papers"}]')
+    def test_a_verdict_of_different_is_recorded_as_such(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": false, "why": "two papers"}]'))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs) == {(0, 1): False}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {(0, 1): False}
 
-    def test_an_answer_whose_index_does_not_resolve_is_dropped(self, monkeypatch):
+    def test_an_answer_whose_index_does_not_resolve_is_dropped(self, llm_settings, tmp_path, monkeypatch):
         """Following the batch classifier: a batch that comes back short leaves those pairs unanswered,
         which is also what makes a re-run the recovery path."""
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 7, "same": true}]')
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 7, "same": true}]'))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs) == {}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {}
 
-    def test_a_reply_that_is_not_json_costs_the_batch_and_not_the_run(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: "I would rather not say.")
+    def test_a_reply_that_is_not_json_costs_the_batch_and_not_the_run(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: "I would rather not say."))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs) == {}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {}
 
-    def test_a_fenced_reply_is_read(self, monkeypatch):
+    def test_a_fenced_reply_is_read(self, llm_settings, tmp_path, monkeypatch):
         monkeypatch.setattr(dd, "_ask_judge",
-                            lambda _s, _p: '```json\n[{"i": 0, "same": true}]\n```')
+                            replying(lambda _s, _p: '```json\n[{"i": 0, "same": true}]\n```'))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs) == {(0, 1): True}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {(0, 1): True}
 
-    def test_a_hallucinated_merge_is_refused_by_python(self, monkeypatch):
+    def test_a_hallucinated_merge_is_refused_by_python(self, llm_settings, tmp_path, monkeypatch):
         """The durable lesson of the batch-classification investigation, applied here.
 
         The model proposes and Python disposes: a "same work" verdict contradicted by the records
@@ -955,38 +970,40 @@ class TestJudge:
                           year="2025"))
         parsed = records(source)
         pairs = [(parsed[0], parsed[1], "fuzzy")]
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "sure"}]')
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "sure"}]'))
 
         assert dd._disagree_on_author(*parsed) and dd._disagree_on_year(*parsed), \
             "the records must actually contradict each other, or the guard has nothing to fire on"
-        assert dd.judge_pairs(None, pairs) == {(0, 1): False}
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {(0, 1): False}
 
-    def test_answers_are_appended_to_the_state_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]')
+    def test_answers_are_kept_in_a_ledger_for_the_question(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         _parsed, pairs = self._pairs()
-        state = tmp_path / "judge.jsonl"
-        dd.judge_pairs(None, pairs, state)
-        assert '"same": true' in state.read_text(encoding="utf-8")
+        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path)
+        [ledger] = [path for path in tmp_path.glob("deduplicate-pairs-*.jsonl") if not path.stem.endswith("-traces")]
+        assert '"same": true' in ledger.read_text(encoding="utf-8")
 
-    def test_a_rerun_asks_nothing_it_has_already_asked(self, tmp_path, monkeypatch):
-        state = tmp_path / "judge.jsonl"
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]')
+    def test_a_rerun_asks_nothing_it_has_already_asked(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         _parsed, pairs = self._pairs()
-        dd.judge_pairs(None, pairs, state)
+        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path)
 
-        def refuse(_settings, _prompt):
-            raise AssertionError("a resumed run must not ask again")
+        monkeypatch.setattr(dd, "_ask_judge", replying(_refuse_to_be_called))
+        assert dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path) == {(0, 1): True}
 
-        monkeypatch.setattr(dd, "_ask_judge", refuse)
-        assert dd.judge_pairs(None, pairs, state) == {(0, 1): True}
-
-    def test_a_state_file_with_a_half_written_last_line_is_still_usable(self, tmp_path, monkeypatch):
-        """A run killed mid-write leaves one. The pair it names is simply asked again."""
-        state = tmp_path / "judge.jsonl"
-        state.write_text('{"pair": "x\\ty", "same": true}\n{"pair": "a\\tb", "sam', encoding="utf-8")
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]')
+    def test_a_record_edited_since_is_asked_again(self, llm_settings, tmp_path, monkeypatch):
+        """An answer counts for the text it was given about; a changed description is a new question."""
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         _parsed, pairs = self._pairs()
-        assert dd.judge_pairs(None, pairs, state) == {(0, 1): True}
+        dd.judge_pairs(llm_settings, pairs, ledger_dir=tmp_path)
+
+        edited = records(self.SOURCE.replace('year = {2025}', 'year = {2024}', 1))
+        assert dd._describe_for_judge(edited[0]) != dd._describe_for_judge(self._pairs()[0][0]), \
+            "the edit must change what the judge is shown, or this cannot tell an edit from none"
+        asked = []
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, prompt: asked.append(prompt) or "[]"))
+        dd.judge_pairs(llm_settings, [(edited[0], edited[1], "fuzzy")], ledger_dir=tmp_path)
+        assert len(asked) == 1
 
     def test_the_pair_id_does_not_depend_on_input_order(self, tmp_path, monkeypatch):
         """Resumability keyed on BibTeX keys, not record indices, which shift when files are reordered.
@@ -994,7 +1011,7 @@ class TestJudge:
         A resumable file that silently answers a different question after an argument is reordered
         would be worse than no resumability at all.
         """
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]')
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "same": true, "why": "one paper"}]'))
         parsed, pairs = self._pairs()
         assert dd._pair_id(parsed[0], parsed[1]) == dd._pair_id(parsed[1], parsed[0])
 
@@ -1016,10 +1033,9 @@ class TestTheJudgeConnectsOnlyToAsk:
     its connection check is replaced, so nothing is contacted.
     """
 
-    def _opts(self, state):
+    def _opts(self, ledgers):
         import argparse
-        return argparse.Namespace(backend_url="http://localhost:9", judge_state=str(state), output=None,
-                                  audit=None)
+        return argparse.Namespace(backend_url="http://localhost:9", ledgers=str(ledgers), output=None, audit=None)
 
     def _attempts(self, monkeypatch):
         from raven.librarian import llmclient
@@ -1032,19 +1048,23 @@ class TestTheJudgeConnectsOnlyToAsk:
         monkeypatch.setattr(llmclient, "test_connection", refuse)
         return attempts
 
-    def test_a_replayed_run_never_connects(self, monkeypatch, tmp_path):
+    def test_a_replayed_run_never_connects(self, llm_settings, monkeypatch, tmp_path):
+        from raven.librarian import llmclient
         parsed = records(TestJudge.SOURCE)
-        state = tmp_path / "judge.jsonl"
-        # Fill the state as a first run would, with the model stubbed out.
+        ledgers = tmp_path / "ledgers"
+        # Fill the ledgers as a first run would, with the model and its backend stood in for.
         with monkeypatch.context() as first_run:
-            first_run.setattr(dd, "_ask_judge", lambda _s, prompt: (
+            first_run.setattr(llmclient, "test_connection", lambda url: True)
+            first_run.setattr(llmclient, "setup", lambda **kwargs: llm_settings)
+            first_run.setattr(llmclient, "backend_status", lambda settings: llmclient.backend_ready)
+            first_run.setattr(dd, "_ask_judge", replying(lambda _s, prompt: (
                 '[{"i": 0, "same": true, "why": "one paper"}]' if "same work" in prompt.lower()
-                else '[{"i": 0, "fits": true, "why": "fits"}]'))
-            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(state))
-        assert state.exists() and state.read_text(encoding="utf-8").strip(), "the first run saved nothing"
+                else '[{"i": 0, "fits": true, "why": "fits"}]')))
+            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(ledgers))
+        assert list(ledgers.glob("deduplicate-pairs-*.jsonl")), "the first run saved nothing"
 
         attempts = self._attempts(monkeypatch)
-        dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(state))
+        dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(ledgers))
         assert attempts == []
 
     def test_a_run_with_a_question_left_does_connect(self, monkeypatch, tmp_path):
@@ -1052,7 +1072,7 @@ class TestTheJudgeConnectsOnlyToAsk:
         parsed = records(TestJudge.SOURCE)
         attempts = self._attempts(monkeypatch)
         with pytest.raises(SystemExit):
-            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(tmp_path / "empty.jsonl"))
+            dd._apply_judge(parsed, dd.cluster_records(parsed), self._opts(tmp_path / "empty"))
         assert attempts == ["http://localhost:9"]
 
 
@@ -1117,10 +1137,10 @@ class TestJudgeDoiFit:
         _parsed, clusters = self._cluster(source)
         assert [doi for _base, _carrier, doi, _venue in dd.doi_candidates(clusters)] == [self.RIGHT_DOI]
 
-    def test_a_rejected_doi_is_dropped_along_with_the_venue_it_was_judged_against(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+    def test_a_rejected_doi_is_dropped_along_with_the_venue_it_was_judged_against(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(self._backend({self.WRONG_DOI: False})))
         _parsed, clusters = self._cluster()
-        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        verdicts = dd.judge_doi_fit(llm_settings, dd.doi_candidates(clusters), ledger_dir=tmp_path)
         rejected = dd.rejected_dois(clusters, verdicts)
         assert rejected == frozenset({self.WRONG_DOI})
 
@@ -1139,60 +1159,50 @@ class TestJudgeDoiFit:
         assert fields["doi"] == self.WRONG_DOI
         assert fields["journal"] == "Astronomy and Astrophysics 687, A227"
 
-    def test_a_work_keeps_a_doi_when_the_judge_rejects_every_one(self, monkeypatch):
+    def test_a_work_keeps_a_doi_when_the_judge_rejects_every_one(self, llm_settings, tmp_path, monkeypatch):
         """A model recognizing nothing is likelier than a work whose every identifier is wrong."""
         monkeypatch.setattr(dd, "_ask_judge",
-                            self._backend({self.WRONG_DOI: False, self.RIGHT_DOI: False}))
+                            replying(self._backend({self.WRONG_DOI: False, self.RIGHT_DOI: False})))
         _parsed, clusters = self._cluster()
-        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        verdicts = dd.judge_doi_fit(llm_settings, dd.doi_candidates(clusters), ledger_dir=tmp_path)
         assert all(answer["fits"] is False for answer in verdicts.values()), \
             "the fixture must have both rejected, or the survivor guard has nothing to fire on"
         assert dd.rejected_dois(clusters, verdicts) == frozenset()
 
-    def test_a_garbled_reply_leaves_every_doi_where_it_was(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: "I would rather not say.")
+    def test_a_garbled_reply_leaves_every_doi_where_it_was(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: "I would rather not say."))
         _parsed, clusters = self._cluster()
-        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        verdicts = dd.judge_doi_fit(llm_settings, dd.doi_candidates(clusters), ledger_dir=tmp_path)
         assert dd.rejected_dois(clusters, verdicts) == frozenset()
 
-    def test_an_answer_omitting_fits_is_read_as_fits(self, monkeypatch):
+    def test_an_answer_omitting_fits_is_read_as_fits(self, llm_settings, tmp_path, monkeypatch):
         """Every unclear case falls toward keeping the identifier somebody's bibliography already has."""
-        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "why": "no idea"}]')
+        monkeypatch.setattr(dd, "_ask_judge", replying(lambda _s, _p: '[{"i": 0, "why": "no idea"}]'))
         _parsed, clusters = self._cluster()
-        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        verdicts = dd.judge_doi_fit(llm_settings, dd.doi_candidates(clusters), ledger_dir=tmp_path)
         assert dd.rejected_dois(clusters, verdicts) == frozenset()
 
-    def test_the_audit_row_says_which_doi_was_dropped(self, monkeypatch):
-        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+    def test_the_audit_row_says_which_doi_was_dropped(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(self._backend({self.WRONG_DOI: False})))
         _parsed, clusters = self._cluster()
-        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        verdicts = dd.judge_doi_fit(llm_settings, dd.doi_candidates(clusters), ledger_dir=tmp_path)
         _merged, row = dd.merge_cluster(clusters[0], dd.rejected_dois(clusters, verdicts))
         assert any(self.WRONG_DOI in difference and "dropped" in difference
                    for difference in row.differences)
 
-    def test_a_rerun_asks_nothing_it_has_already_asked(self, tmp_path, monkeypatch):
-        state = tmp_path / "judge.jsonl"
-        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+    def test_a_rerun_asks_nothing_it_has_already_asked(self, llm_settings, tmp_path, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", replying(self._backend({self.WRONG_DOI: False})))
         _parsed, clusters = self._cluster()
         candidates = dd.doi_candidates(clusters)
-        dd.judge_doi_fit(None, candidates, state)
-        asked = state.read_text(encoding="utf-8").count("\n")
+        dd.judge_doi_fit(llm_settings, candidates, ledger_dir=tmp_path)
 
-        monkeypatch.setattr(dd, "_ask_judge", _refuse_to_be_called)
-        again = dd.judge_doi_fit(None, candidates, state)
-        assert state.read_text(encoding="utf-8").count("\n") == asked
+        monkeypatch.setattr(dd, "_ask_judge", replying(_refuse_to_be_called))
+        again = dd.judge_doi_fit(llm_settings, candidates, ledger_dir=tmp_path)
         assert again[self.WRONG_DOI]["fits"] is False
-
-    def test_a_state_file_written_before_this_question_existed_still_resumes(self, tmp_path):
-        """Pair answers were keyed by `pair` alone until DOI questions needed an `id` beside it."""
-        state = tmp_path / "judge.jsonl"
-        state.write_text(json.dumps({"pair": "a\tb", "same": True, "why": "old"}) + "\n",
-                         encoding="utf-8")
-        assert dd._load_judge_state(state) == {"a\tb": {"pair": "a\tb", "same": True, "why": "old"}}
 
 
 def _refuse_to_be_called(_settings, _prompt):
-    raise AssertionError("the backend was asked a question the state file had already answered")
+    raise AssertionError("the backend was asked a question its ledger had already answered")
 
 
 class TestWholeRun:

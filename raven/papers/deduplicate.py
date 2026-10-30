@@ -74,7 +74,7 @@ __all__ = ["normalize_title", "is_generic_title",
 
            "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "refused_doi_edges",
 
-           "judge_batch", "judge_pairs",
+           "judge_batch", "JudgeStopped", "judge_pairs",
 
            "doi_candidates", "judge_doi_batch", "judge_doi_fit", "rejected_dois",
 
@@ -87,11 +87,11 @@ import collections
 import dataclasses
 import difflib
 import functools
-import json
 import logging
 import pathlib
 import re
 import sys
+import tempfile
 
 from bibtexparser import Library
 from bibtexparser.middlewares import names
@@ -745,18 +745,14 @@ def refused_doi_edges(records: list[Record]) -> list[tuple[Record, Record]]:
     return sorted(refused, key=lambda pair: (pair[0].index, pair[1].index))
 
 
-def _ask_judge(llm_settings, prompt: str) -> str:
-    """One stateless turn, returning the reply text. Raises if the backend did not generate.
+def _ask_judge(llm_settings, prompt: str, maybe_abort=None):
+    """One stateless turn, returning its `agent.TurnRecord`, whose `reply` is the text. Raises if the backend did
+    not generate.
 
-    `llm_settings`: from `llmclient.setup`, or a zero-argument callable returning them. A callable is
-                    called here, at the first question actually asked, so that a run whose answers all
-                    come from a saved state never contacts a backend at all.
-
-    Deferred alias for `agent.ask`, and the import is deferred because the LLM pass is opt-in — `--judge`
-    and `--judge-dois`, both off by default — while the rules run on every invocation. Measured
-    2026-09-02: importing `librarian.agent` costs 1376 ms against this module's own 211 ms, so at module
-    scope every run that never asks the model would pay seven-eighths of its startup for a feature it did
-    not use.
+    Deferred alias for `agent.ask_record`, and the import is deferred because the LLM pass is opt-in —
+    `--judge`, off by default — while the rules run on every invocation. Measured 2026-09-02: importing
+    `librarian.agent` costs 1376 ms against this module's own 211 ms, so at module scope every run that never
+    asks the model would pay seven-eighths of its startup for a feature it did not use.
 
     Kept separate from `_parse_json_payload` below rather than fused into one ask-and-parse call, because
     the two are separate seams: the tests substitute this one to hand `judge_batch` a reply the model
@@ -764,9 +760,7 @@ def _ask_judge(llm_settings, prompt: str) -> str:
     something that has already parsed.
     """
     from ..librarian import agent
-    if callable(llm_settings):
-        llm_settings = llm_settings()
-    return agent.ask(llm_settings, prompt)
+    return agent.ask_record(llm_settings, prompt, maybe_abort=maybe_abort)
 
 
 def _parse_json_payload(text: str):
@@ -775,19 +769,19 @@ def _parse_json_payload(text: str):
     return agent.parse_json_reply(text)
 
 
-def judge_batch(llm_settings, batch: list[tuple[str, str, str]]) -> dict[int, dict]:
-    """Ask about one batch of `(pair id, description, description)`. Returns `{position: answer}`.
+def judge_batch(llm_settings, batch: list[tuple[str, str, str]], maybe_abort=None) -> tuple[dict[int, dict], list]:
+    """Ask about one batch of `(pair id, description, description)`. Returns `({position: answer}, turns)`.
 
     Answers whose index does not resolve are dropped rather than trusted, and a batch that comes back
     short simply leaves those pairs unanswered — which is also what makes a re-run the recovery path for
     a failed batch. Following `investigations/agent-batch-classification/`, where a batch of forty did
-    come back with thirty-nine.
+    come back with thirty-nine. A reply that is not a JSON array answers nothing, and its turn is still
+    returned, so that the traces show what came back.
     """
     items = "\n\n".join(f"{position}.\n  RECORD A:\n{a}\n  RECORD B:\n{b}"
                         for position, (_pair_id, a, b) in enumerate(batch))
-    answers = _parse_json_payload(_ask_judge(llm_settings, papers_config.judge_instructions.format(items=items)))
-    if not isinstance(answers, list):
-        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+    record = _ask_judge(llm_settings, papers_config.judge_instructions.format(items=items), maybe_abort)
+    answers = _read_answer_array(record.reply, "judge_batch")
 
     resolved = {}
     for answer in answers:
@@ -800,7 +794,20 @@ def judge_batch(llm_settings, batch: list[tuple[str, str, str]]) -> dict[int, di
         if 0 <= position < len(batch):
             resolved[position] = {"same": answer.get("same") is True,
                                   "why": str(answer.get("why") or "").strip()}
-    return resolved
+    return resolved, [record]
+
+
+def _read_answer_array(maybe_reply: str | None, caller: str) -> list:
+    """The JSON array in a judge's reply, or an empty list, logged, for a reply that does not hold one."""
+    try:
+        answers = _parse_json_payload(maybe_reply or "")
+    except ValueError as exc:
+        logger.warning(f"{caller}: the reply holds no JSON, {type(exc)}: {exc}")
+        return []
+    if not isinstance(answers, list):
+        logger.warning(f"{caller}: expected a JSON array, got {type(answers).__name__}")
+        return []
+    return answers
 
 
 def _judge_admits(a: Record, b: Record) -> bool:
@@ -818,26 +825,56 @@ def _judge_admits(a: Record, b: Record) -> bool:
     return not (_disagree_on_author(a, b) and _disagree_on_year(a, b))
 
 
-def _load_judge_state(path: pathlib.Path) -> dict[str, dict]:
-    """Answers already recorded, keyed by pair id."""
-    state = {}
-    if not path.exists():
-        return state
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
+class JudgeStopped(RuntimeError):
+    """The judge's run stopped before every question was asked: the backend went away, or changed model."""
+
+
+def _run_question(llm_settings, *, name: str, material: str, items: list[tuple[str, tuple]], render,
+                  ask_batch, ledger_dir: pathlib.Path, on_progress=None) -> dict[str, dict]:
+    """Answer `items` by a `sweep.Sweep`, or from a ledger already answering them all. Returns `{id: answer}`.
+
+    `llm_settings`: from `llmclient.setup`, or a zero-argument callable returning them, called only when
+                    something has to be asked.
+    `name`: the ledgers' name in `ledger_dir`. `material`: the prompt, fingerprinted with the model, so that
+            answers another model or another wording gave are never read as this one's.
+    `items`: `(id, item)` pairs. `render(item)`: the item as the prompt shows it, digested so that an answer
+             counts only for the text it was given about.
+    `ask_batch`: as `sweep.Sweep` takes it.
+    `on_progress`: `on_progress(asked, total)`, after each batch.
+
+    Raises `JudgeStopped` when the run stops before every item is asked; what was answered stays in the
+    ledger, and a re-run resumes. An item the model left unanswered is absent from the result, and asked
+    again by the next run.
+    """
+    from ..librarian import sweep
+    if not items:
+        return {}
+
+    def digest(item) -> str:
+        return sweep.digest(render(item))
+    digests = {item_id: digest(item) for item_id, item in items}
+    # A ledger answering every question is read without connecting. A ledger is named for its instrument,
+    # the model included, so nothing else could find it without a backend; two such ledgers, from two
+    # models, leave the choice to the model loaded, and the run connects to make it.
+    complete = []
+    for path in sorted(ledger_dir.glob(f"{name}-*.jsonl")):
+        if path.name.endswith("-traces.jsonl"):
             continue
-        try:
-            answer = json.loads(line)
-        except json.JSONDecodeError:
-            continue  # a run killed mid-write leaves a partial last line; the pair is simply re-asked
-        if not isinstance(answer, dict):
-            continue
-        # `pair` is what the pair pass wrote before there was a second kind of question, and files
-        # written then must go on resuming; `id` is what both passes write now.
-        identifier = answer.get("id") or answer.get("pair")
-        if identifier:
-            state[identifier] = answer
-    return state
+        answers = sweep.Ledger(ledger_dir, name, path.stem[len(name) + 1:]).answers(digests)
+        if all(item_id in answers for item_id, _ in items):
+            complete.append(answers)
+    if len(complete) == 1:
+        return complete[0]
+
+    settings = llm_settings() if callable(llm_settings) else llm_settings
+    ledger = sweep.Ledger(ledger_dir, name, sweep.fingerprint(settings, material))
+    result = sweep.Sweep(settings, ask_batch, items, ledger, batch_size=papers_config.judge_batch,
+                         header=sweep.instrument_header(settings), digest=digest,
+                         on_item=(lambda event: on_progress(event.done + event.failed, event.total))
+                         if on_progress is not None else None).run()
+    if result.outcome is not sweep.completed:
+        raise JudgeStopped(result.message or str(result.outcome))
+    return ledger.answers(digests)
 
 
 def _pair_id(a: Record, b: Record) -> str:
@@ -851,49 +888,40 @@ def _pair_id(a: Record, b: Record) -> str:
 
 
 def judge_pairs(llm_settings,
-                pairs: list[tuple[Record, Record, str]],
-                maybe_state_path: pathlib.Path | None = None,
+                pairs: list[tuple[Record, Record, str]], *,
+                ledger_dir: pathlib.Path,
                 on_progress=None) -> dict[tuple[int, int], bool]:
     """Ask the judge about `pairs`, returning the verdicts clustering can act on.
 
     `pairs`: `(record, record, why_asked)`, the last naming which question this pair came from —
              `"fuzzy"` for a near-miss the exact keys did not join, `"conflict"` for a merge whose
              records disagree about the DOI.
-
-    `maybe_state_path`: a JSONL appended to as answers arrive. A re-run skips what is already there, so
-                        a backend that falls over two-thirds of the way through costs the batch in
-                        flight rather than the run.
+    `ledger_dir`: where the answers are kept (`_run_question`): a re-run asks only what is not there, so a
+                  backend that falls over costs the batch in flight rather than the run.
+    `llm_settings`, `on_progress`: as `_run_question` takes them.
 
     A verdict of "same" is kept only where `_judge_admits` agrees, which is where this stops being a
     model deciding and becomes a model proposing. A pair the model does not answer at all is simply
-    absent from the result and stays unmerged.
+    absent from the result and stays unmerged. Raises `JudgeStopped` as `_run_question` does.
     """
-    done = _load_judge_state(maybe_state_path) if maybe_state_path else {}
-    todo = [(a, b, why) for a, b, why in pairs if _pair_id(a, b) not in done]
+    items = {}
+    for a, b, why in pairs:
+        first, second = sorted((a, b), key=lambda record: record.key)  # as the id is, so the order cannot matter
+        items.setdefault(_pair_id(a, b), (_describe_for_judge(first), _describe_for_judge(second), why,
+                                          [first.key, second.key], [first.display_title, second.display_title]))
 
-    for start in range(0, len(todo), papers_config.judge_batch):
-        chunk = todo[start:start + papers_config.judge_batch]
-        batch = [(_pair_id(a, b), _describe_for_judge(a), _describe_for_judge(b)) for a, b, _why in chunk]
-        try:
-            answers = judge_batch(llm_settings, batch)
-        except Exception as exc:  # noqa: BLE001 -- a failed batch is a result: re-running is the retry
-            logger.warning(f"judge_pairs: batch at {start} failed, {type(exc)}: {exc}")
-            answers = {}
-        for position, (a, b, why) in enumerate(chunk):
-            if position not in answers:
-                continue
-            answer = dict(answers[position], id=_pair_id(a, b), pair=_pair_id(a, b), asked=why,
-                          keys=[a.key, b.key], titles=[a.display_title, b.display_title])
-            done[answer["id"]] = answer
-            if maybe_state_path is not None:
-                with maybe_state_path.open("a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
-        if on_progress is not None:
-            on_progress(min(start + papers_config.judge_batch, len(todo)), len(todo))
+    def ask_batch(settings, batch, maybe_abort):
+        answers, turns = judge_batch(settings, [(item_id, item[0], item[1]) for item_id, item in batch], maybe_abort)
+        return ({batch[position][0]: dict(answer, asked=batch[position][1][2], keys=batch[position][1][3],
+                                          titles=batch[position][1][4])
+                 for position, answer in answers.items()}, turns)
 
+    answers = _run_question(llm_settings, name="deduplicate-pairs", material=papers_config.judge_instructions,
+                            items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}",
+                            ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
     verdicts = {}
     for a, b, _why in pairs:
-        answer = done.get(_pair_id(a, b))
+        answer = answers.get(_pair_id(a, b))
         if answer is None:
             continue
         same = bool(answer.get("same")) and _judge_admits(a, b)
@@ -959,8 +987,9 @@ def _doi_id(record: Record, doi: str) -> str:
     return f"{record.key}\t{doi}"
 
 
-def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]]) -> dict[int, dict]:
-    """Ask about one batch of `(id, work, venue, doi)`. Returns `{position: answer}`.
+def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]],
+                    maybe_abort=None) -> tuple[dict[int, dict], list]:
+    """Ask about one batch of `(id, work, venue, doi)`. Returns `({position: answer}, turns)`.
 
     An answer that does not parse, or that omits `fits`, is read as **fits** rather than as a rejection.
     Every unclear case has to fall that way: the action a rejection triggers is dropping an identifier
@@ -970,10 +999,8 @@ def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]]) -> dic
                         f"    claimed venue: {venue}\n"
                         f"    (doi {doi} — shown only so you can name it back)"
                         for position, (_id, work, venue, doi) in enumerate(batch))
-    answers = _parse_json_payload(_ask_judge(llm_settings,
-                                             papers_config.judge_doi_instructions.format(items=items)))
-    if not isinstance(answers, list):
-        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+    record = _ask_judge(llm_settings, papers_config.judge_doi_instructions.format(items=items), maybe_abort)
+    answers = _read_answer_array(record.reply, "judge_doi_batch")
 
     resolved = {}
     for answer in answers:
@@ -986,49 +1013,40 @@ def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]]) -> dic
         if 0 <= position < len(batch):
             resolved[position] = {"fits": answer.get("fits") is not False,
                                   "why": str(answer.get("why") or "").strip()}
-    return resolved
+    return resolved, [record]
 
 
 def judge_doi_fit(llm_settings,
-                  candidates: list[tuple[Record, Record, str, str]],
-                  maybe_state_path: pathlib.Path | None = None,
+                  candidates: list[tuple[Record, Record, str, str]], *,
+                  ledger_dir: pathlib.Path,
                   on_progress=None) -> dict[str, dict]:
     """Ask whether each candidate DOI's venue fits the work, returning `{doi: answer}`.
 
-    Resumable the same way `judge_pairs` is, into the same JSONL and keyed the same way, so one state
-    file holds both kinds of question and a re-run asks neither of them twice.
+    `ledger_dir`, `llm_settings`, `on_progress`: as `judge_pairs` takes them; this question has ledgers of
+    its own beside that one's.
 
     A candidate the model does not answer at all is simply absent from the result, which leaves the DOI
-    where it was — the direction every unanswered question falls in this module.
+    where it was — the direction every unanswered question falls in this module. Raises `JudgeStopped` as
+    `_run_question` does.
     """
-    done = _load_judge_state(maybe_state_path) if maybe_state_path else {}
-    todo = [(base, carrier, doi, venue) for base, carrier, doi, venue in candidates
-            if _doi_id(carrier, doi) not in done]
+    items = {}
+    for base, carrier, doi, venue in candidates:
+        items.setdefault(_doi_id(carrier, doi), (_describe_work_for_judge(base), venue, doi, carrier.key,
+                                                  base.display_title))
 
-    for start in range(0, len(todo), papers_config.judge_batch):
-        chunk = todo[start:start + papers_config.judge_batch]
-        batch = [(_doi_id(carrier, doi), _describe_work_for_judge(base), venue, doi)
-                 for base, carrier, doi, venue in chunk]
-        try:
-            answers = judge_doi_batch(llm_settings, batch)
-        except Exception as exc:  # noqa: BLE001 -- a failed batch is a result: re-running is the retry
-            logger.warning(f"judge_doi_fit: batch at {start} failed, {type(exc)}: {exc}")
-            answers = {}
-        for position, (base, carrier, doi, venue) in enumerate(chunk):
-            if position not in answers:
-                continue
-            answer = dict(answers[position], id=_doi_id(carrier, doi), asked="venue",
-                          key=carrier.key, doi=doi, venue=venue, title=base.display_title)
-            done[answer["id"]] = answer
-            if maybe_state_path is not None:
-                with maybe_state_path.open("a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
-        if on_progress is not None:
-            on_progress(min(start + papers_config.judge_batch, len(todo)), len(todo))
+    def ask_batch(settings, batch, maybe_abort):
+        answers, turns = judge_doi_batch(settings, [(item_id, item[0], item[1], item[2]) for item_id, item in batch],
+                                         maybe_abort)
+        return ({batch[position][0]: dict(answer, asked="venue", key=batch[position][1][3], doi=batch[position][1][2],
+                                          venue=batch[position][1][1], title=batch[position][1][4])
+                 for position, answer in answers.items()}, turns)
 
+    answers = _run_question(llm_settings, name="deduplicate-dois", material=papers_config.judge_doi_instructions,
+                            items=list(items.items()), render=lambda item: f"{item[0]}\n{item[1]}\n{item[2]}",
+                            ask_batch=ask_batch, ledger_dir=ledger_dir, on_progress=on_progress)
     verdicts = {}
     for _base, carrier, doi, _venue in candidates:
-        answer = done.get(_doi_id(carrier, doi))
+        answer = answers.get(_doi_id(carrier, doi))
         if answer is not None and "fits" in answer:
             verdicts[doi] = answer
     return verdicts
@@ -1051,20 +1069,20 @@ def rejected_dois(clusters: list[Cluster], verdicts: dict[str, dict]) -> frozens
     return frozenset(rejected)
 
 
-def _judge_state_path(opts) -> pathlib.Path | None:
+def _ledger_dir(opts) -> pathlib.Path | None:
     """Where to keep the judge's answers, or `None` if there is nowhere sensible.
 
-    `--judge-state` if given; otherwise beside whichever output the run is producing, so that a re-run
-    resumes without the user having had to think about it in advance — which is the only moment at which
-    thinking about it would have helped. A run writing nothing at all keeps nothing.
+    `--ledgers` if given; otherwise a directory beside whichever output the run is producing, so that a
+    re-run resumes without the user having had to think about it in advance — which is the only moment at
+    which thinking about it would have helped. A run writing nothing at all keeps nothing.
     """
-    if opts.judge_state:
-        return pathlib.Path(opts.judge_state).expanduser().resolve()
+    if opts.ledgers:
+        return pathlib.Path(opts.ledgers).expanduser().resolve()
     beside = opts.output or opts.audit
     if not beside:
         return None
     path = pathlib.Path(beside).expanduser().resolve()
-    return path.with_name(f"{path.stem}_judge.jsonl")
+    return path.with_name(f"{path.stem}_ledgers")
 
 
 def _apply_judge(records: list[Record],
@@ -1101,12 +1119,12 @@ def _apply_judge(records: list[Record],
 
     backend_url = opts.backend_url or librarian_config.llm_backend_url
 
-    # Connected at the first question rather than here, so that a re-run whose answers are all in the
-    # saved state asks nothing of a backend and needs none running. Once connecting, it stops at once
-    # rather than at each batch: a precise diagnosis beats the same failure once per batch for the rest of
-    # the corpus. Reachable and reachable-with-a-model are separate questions, and the second is the one
-    # that reads as a bug when it is not checked — the backend answers, so nothing looks wrong until every
-    # verdict is empty. `SystemExit` passes through the per-batch `except Exception` in the judge passes.
+    # Connected at the first question rather than here, so that a re-run whose answers are all in its
+    # ledgers asks nothing of a backend and needs none running. Once connecting, it stops at once rather
+    # than at each batch: a precise diagnosis beats the same failure once per batch for the rest of the
+    # corpus. Reachable and reachable-with-a-model are separate questions, and the second is the one that
+    # reads as a bug when it is not checked — the backend answers, so nothing looks wrong until every
+    # verdict is empty.
     @functools.cache
     def llm_settings():
         if not llmclient.test_connection(backend_url):
@@ -1120,11 +1138,27 @@ def _apply_judge(records: list[Record],
         print(f"judge: {settings.model} at {backend_url}")
         return settings
 
-    state_path = _judge_state_path(opts)
+    maybe_ledger_dir = _ledger_dir(opts)
+    if maybe_ledger_dir is None:  # a run writing nothing keeps nothing, its answers included
+        with tempfile.TemporaryDirectory() as scratch:
+            return _judge_into(records, clusters, pairs, llm_settings, pathlib.Path(scratch))
+    maybe_ledger_dir.mkdir(parents=True, exist_ok=True)
+    result = _judge_into(records, clusters, pairs, llm_settings, maybe_ledger_dir)
+    print(f"judge: answers in {maybe_ledger_dir}")
+    return result
+
+
+def _judge_into(records: list[Record], clusters: list[Cluster], pairs: list[tuple[Record, Record, str]],
+                llm_settings, ledger_dir: pathlib.Path) -> tuple[list[Cluster], frozenset[str]]:
+    """`_apply_judge`'s two questions, their answers kept in `ledger_dir`. Exits, saying why, if the run stops."""
     progress = lambda done, total: print(f"  judged {done}/{total}", flush=True)  # noqa: E731 -- one name, two call sites
 
     if pairs:
-        verdicts = judge_pairs(llm_settings, pairs, state_path, on_progress=progress)
+        try:
+            verdicts = judge_pairs(llm_settings, pairs, ledger_dir=ledger_dir, on_progress=progress)
+        except JudgeStopped as exc:
+            print(f"judge: stopped: {exc} Run again to resume where it stopped.", file=sys.stderr)
+            sys.exit(1)
         was_together = {}
         for position, cluster in enumerate(clusters):
             for record in cluster.records:
@@ -1143,7 +1177,11 @@ def _apply_judge(records: list[Record],
     rejected = frozenset()
     if candidates:
         print(f"judge: {len(candidates)} DOI{textutil.plural_s(len(candidates))} to check against the venue claimed for them")
-        doi_verdicts = judge_doi_fit(llm_settings, candidates, state_path, on_progress=progress)
+        try:
+            doi_verdicts = judge_doi_fit(llm_settings, candidates, ledger_dir=ledger_dir, on_progress=progress)
+        except JudgeStopped as exc:
+            print(f"judge: stopped: {exc} Run again to resume where it stopped.", file=sys.stderr)
+            sys.exit(1)
         rejected = rejected_dois(clusters, doi_verdicts)
         for doi in sorted(rejected):
             why = doi_verdicts[doi].get("why") or "the venue does not fit the work"
@@ -1151,8 +1189,6 @@ def _apply_judge(records: list[Record],
         if not rejected:
             print("judge: every DOI checked fits the work carrying it")
 
-    if state_path is not None:
-        print(f"judge: answers in {state_path}")
     return clusters, rejected
 
 
@@ -1467,8 +1503,8 @@ def main() -> None:  # pragma: no cover
                         help="Do not write the audit. A merge cannot be read back out of the merged file, so this discards the only record of what happened.")
     parser.add_argument("--judge", dest="judge", action="store_true", default=False,
                         help="Also ask an LLM about near-miss titles that no exact key joined. Needs a backend; off by default.")
-    parser.add_argument("--judge-state", dest="judge_state", default=None, type=str, metavar="PATH",
-                        help="Resumable JSONL of the judge's answers. Defaults to sitting beside the output or the audit; a re-run skips what is already there, so a backend that falls over costs the batch in flight rather than the run.")
+    parser.add_argument("--ledgers", dest="ledgers", default=None, type=str, metavar="DIR",
+                        help="Where to keep the judge's answers, one ledger per question and model. Defaults to a directory beside the output or the audit; a re-run asks only what is not there yet, and one whose answers are all there needs no backend.")
     parser.add_argument("--backend-url", dest="backend_url", default=None, type=str, metavar="URL",
                         help="LLM backend to judge with, overriding the configured one.")
     parser.add_argument("--log", metavar="PATH", default=None,

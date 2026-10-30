@@ -82,23 +82,6 @@ swallowed-field repairs, would then use it too. Mixed endings in one file: pick 
 To go in with the next round of bib-tool polish (maintainer, 2026-10-29). Raised the morning of
 2026-10-29, on the geography bib.
 
-## `raven-deduplicate --judge` onto the shared sweep
-
-*Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep`*
-
-`judge_pairs` and `judge_doi_fit` (`raven.papers.deduplicate`) run their own batch loop over the LLM: a
-failed batch is logged and skipped, and its pairs are asked again on the next run, from a JSONL state file.
-What they lack is what `raven-scopebib` and `raven-pdf2bib` get from `raven.librarian.sweep`: a probe after
-each batch that stops the run when the backend has gone (here every remaining batch fails in turn), the wait
-that rides out a short drop, a stop when the model changes under the run, and ledgers named for the
-instrument, so answers from another model or prompt are not mixed in.
-
-Moving them onto `Sweep` gets all of it. The cost is the state file: it becomes a ledger, and state files
-written so far either carry over (`sweep.Ledger` seeded under the instrument that made them, as scopebib's
-converted ledgers were) or are asked again.
-
-Found while surveying the CLI tools for the sweep's retry (2026-10-28).
-
 ## Preparing a `raven-scopebib` definition file, as a manual section
 
 *Cluster: scopebib · Cost: ? · Gate: more studies to generalize from · Filed: 2026-10-28*

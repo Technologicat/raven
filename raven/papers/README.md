@@ -325,7 +325,9 @@ Off by default, since it needs a backend. It asks about near-miss titles that no
 
 **The model proposes and Raven disposes.** A "same work" verdict contradicted by the records themselves is dropped, so a confident wrong answer cannot create a merge the ordinary rules would have refused.
 
-**The run is resumable.** Answers are kept in a JSONL file beside the audit (`--judge-state PATH` to place it), and a re-run skips what is already there.
+**The run is resumable.** Answers are kept in ledgers, in a directory beside the output or the audit (`--ledgers DIR` to place it), one for each question and model, and a re-run asks only what is not there yet. A re-run whose answers are all there needs no backend at all. A record edited since its pair was asked is asked again, an answer counting for the text it was given about.
+
+**A backend that drops out is waited for**: asked again a few times, seconds apart, so a short network drop costs a pause. One that stays away, or has its model swapped, stops the run with a message saying so, and running again resumes where it stopped.
 
 **It also decides which DOI a merged work keeps.** Where the records of one work disagree about the identifier, one of them can simply be wrong, and the merge would otherwise pick by completeness and write that into your bibliography. Each candidate is checked against the venue named by the record carrying it — an astronomy journal on a paper about classroom assessment is visible, where the identifier alone is not — and a rejected DOI is dropped along with that venue, the audit saying which and why.
 
