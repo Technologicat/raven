@@ -23,6 +23,7 @@ What a run writes, into `--out-dir` (default: `llm-grouping/<condition>/` beside
 data, where the condition is the aim file's stem or `no-aim`, followed by `+` and the guidance file's stem
 when there is one):
     `grouping-<fingerprint>.jsonl`, and `-traces.jsonl` beside it: the ledger, one answer per run.
+    And in `<fingerprint>/`, so that a changed prompt cannot overwrite an earlier one's, per run:
     `run-NN.ods`: the grouping as a table shaped like the published ones, a row per theme.
     `run-NN-placements.ods`: a row per placement, with the model's reason.
     `run-NN.pickle`: a Raven-visualizer dataset, laid out by hand (see `layout`), one point per study.
@@ -400,6 +401,8 @@ def main() -> int:
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
 
     answers = ledger.answers()
+    run_dir = out_dir / ledger.fingerprint
+    run_dir.mkdir(parents=True, exist_ok=True)
     for run_id, _ in items:
         if run_id not in answers:
             continue
@@ -407,8 +410,8 @@ def main() -> int:
         comments = [f"{run_id} of an LLM grouping of {bib_path.name}, aim: {condition}, "
                     f"instrument {ledger.fingerprint}, seed {answer['seed']}",
                     f"model: {llm_settings.model}" + (f"; {opts.declare}" if opts.declare else "")]
-        write_tables(out_dir, run_id, answer["themes"], studies, answer["problems"], comments)
-        write_dataset(out_dir / f"{run_id}.pickle", bib_path, answer["themes"], keys)
+        write_tables(run_dir, run_id, answer["themes"], studies, answer["problems"], comments)
+        write_dataset(run_dir / f"{run_id}.pickle", bib_path, answer["themes"], keys)
         n_double = sum(1 for k in keys
                        if sum(1 for t in answer["themes"] for s in t["subthemes"] for p in s["studies"] if p["key"] == k) > 1)
         print(f"{run_id}: {len(answer['themes'])} themes, "

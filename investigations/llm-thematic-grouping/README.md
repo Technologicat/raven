@@ -89,3 +89,31 @@ comparison (`comparison.txt`) and its heatmaps, in `llm-grouping/` beside the `.
     without a primary placement, placed one twice in a sub-theme, or (once) left one out.
 - **The sub-theme level is unstable under every condition**, so a published table would want its sub-themes
   read and named by people, as the earlier studies' were.
+
+**Second batch, the evening of 2026-10-30**: themes only, with the repair turn, ten runs a condition, the
+same model and settings. Ledgers `aim-topic+guidance-programme-continuity/grouping-fa86c56b`,
+`no-aim+guidance-programme-continuity/grouping-c818ef54` and `aim-topic/grouping-0af376c5` (the control);
+comparison in `comparison-batch2.txt`, heatmaps in `batch2-plots/`. About 4 minutes a run.
+
+- **The repair turn fired three times in thirty runs**, once per condition, and each cleared its slips; no
+  run has a problem left. Studies placed twice: 0 to 7 of 40 a run.
+- **Mean omega index at the theme level, within each condition** (ARI within 0.02):
+
+  | condition | runs | omega |
+  |---|---|---|
+  | topic + continuity instruction | 10 | 0.37 |
+  | no aim + continuity instruction | 10 | 0.51 |
+  | topic (control) | 10 | 0.42 |
+  | topic, first batch | 5 | 0.45 |
+  | no aim, first batch | 5 | 0.53 |
+
+  So with ten runs, no aim stays the most stable, and the topic line's figure holds from five runs to ten.
+  The stable-core counts are not comparable across five and ten runs, a core having to hold in every run.
+- **The continuity instruction mostly renames the theme rather than dissolving it.** A theme about
+  implementing programmes appears in 9 of 10 runs with it and the topic line, 8 of 10 with it and no aim,
+  against 10 of 10 without it; under the instruction it is called "implementation" and often drops
+  "sustainability" from its name. The nine studies that sat in it in at least 7 of 10 control runs share a
+  theme at a mean co-membership of 0.68 with the instruction against 0.85 without (topic line), and 0.82
+  against 0.96 (no aim). **So they group on a topic of their own, implementing programmes in schools**, which
+  the word's second sense only labelled; and the instruction costs stability (0.42 to 0.37 with the topic
+  line) for a partial loosening of that group.

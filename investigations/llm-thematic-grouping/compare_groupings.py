@@ -115,7 +115,11 @@ def main() -> int:
         if not runs:
             print(f"{path}: no successful runs")
             continue
-        conditions[path.resolve().parent.name] = runs
+        name = path.resolve().parent.name
+        if name in conditions or any(other.parent == path.parent and other != path for other in
+                                     map(pathlib.Path, opts.ledgers) if not other.name.endswith("-traces.jsonl")):
+            name = f"{name}@{path.stem.rsplit('-', 1)[-1]}"  # two instruments in one folder: tell them apart
+        conditions[name] = runs
     if not conditions:
         return 1
     keys = sorted(next(iter(next(iter(conditions.values())).values()))["order"])
