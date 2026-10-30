@@ -26,11 +26,15 @@ no cluster at all in a set of forty.
 
 ## Running it
 
+One condition per aim file, five runs each, the same seeds in every condition:
+
 ```bash
-python investigations/llm-thematic-grouping/group_studies.py \
-    00_stuff/rawdata/biology_geography_health_education/202610/scopebib-2026-10-28d/04b-final.bib \
-    --questions 00_stuff/rawdata/biology_geography_health_education/202610/research-questions.txt \
-    --runs 5 --declare "reasoning effort xhigh, thinking budget 12k"
+D=00_stuff/rawdata/biology_geography_health_education/202610
+for aim in "--aim $D/aim-research-questions.txt" "--aim $D/aim-topic.txt" ""; do
+    python investigations/llm-thematic-grouping/group_studies.py $D/scopebib-2026-10-28d/04b-final.bib \
+        $aim --runs 5 --declare "reasoning effort xhigh, thinking budget 12k"
+done
+python investigations/llm-thematic-grouping/compare_groupings.py $D/scopebib-2026-10-28d/llm-grouping/*/grouping-*.jsonl
 ```
 
 `--declare` records what the backend does not report — here the chat template's reasoning effort and LM
@@ -39,4 +43,5 @@ ledger.
 
 ## Results
 
-None yet.
+**Pilot, 2026-10-30** (the script at `c4defead`, the research questions as the only guidance, their file's
+provenance header included by mistake; ledger `llm-grouping/grouping-552481c1.jsonl`): in progress.

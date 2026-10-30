@@ -190,3 +190,7 @@ wanted early in the week of 2026-11-02, for the health-education study.
     hand rather than as a t-SNE map. **For the plot, each study gets one place** — the Visualizer's promise
     is that each point is a unique record — so the model marks one placement per study as primary.
   - **Home**: `investigations/llm-thematic-grouping/`; a tool once the method holds on biology and geography.
+  - **Whether the research questions help is one of the things the prototype is to find out** (maintainer,
+    2026-10-30), so they are a condition to ablate, not a fixed input.
+  - **For the general tool: the guidance is a general aim**, a background explanation of how to group, which
+    a set of research questions is one case of (maintainer, 2026-10-30).

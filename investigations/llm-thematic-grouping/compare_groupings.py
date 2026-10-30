@@ -1,6 +1,11 @@
 """How far the runs of `group_studies.py` agree with each other, at the theme and at the sub-theme level.
 
-    python investigations/llm-thematic-grouping/compare_groupings.py LEDGER.jsonl
+    python investigations/llm-thematic-grouping/compare_groupings.py LEDGER.jsonl [LEDGER.jsonl ...]
+
+Given ledgers of several conditions (one aim each), each is named by its directory, and beside each
+condition's own pairwise table comes a condition-by-condition table: the mean agreement between runs of two
+conditions, and on the diagonal, between runs within one. A condition that changes the grouping shows as
+agreeing less with another than either does with itself.
 
 Two measures per pair of runs, at each level, both indifferent to what a group is called:
 
@@ -85,15 +90,29 @@ def ari(a: dict[str, object], b: dict[str, object], keys: list[str]) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("ledger", help="a grouping-<fingerprint>.jsonl written by group_studies.py")
+    parser.add_argument("ledgers", nargs="+", help="grouping-<fingerprint>.jsonl files written by group_studies.py")
     opts = parser.parse_args()
 
-    runs = load_runs(pathlib.Path(opts.ledger))
-    if len(runs) < 1:
-        print("no successful runs in the ledger")
+    conditions = {}
+    for path in map(pathlib.Path, opts.ledgers):
+        runs = load_runs(path)
+        if not runs:
+            print(f"{path}: no successful runs")
+            continue
+        conditions[path.resolve().parent.name] = runs
+    if not conditions:
         return 1
-    keys = sorted(next(iter(runs.values()))["order"])
+    keys = sorted(next(iter(next(iter(conditions.values())).values()))["order"])
+    for condition, runs in conditions.items():
+        print(f"===== {condition}")
+        summarize(runs, keys)
+    if len(conditions) > 1:
+        across(conditions, keys)
+    return 0
 
+
+def summarize(runs: dict[str, dict], keys: list[str]) -> None:
+    """Per run, its shape and its themes; then the runs' pairwise agreement at both levels."""
     for run_id, answer in runs.items():
         placed = memberships(answer["themes"], level="theme")
         multi = sum(1 for k in keys if sum(1 for t in answer["themes"] for s in t["subthemes"]
@@ -112,6 +131,9 @@ def main() -> int:
             print(f"    {t}. {theme['name']}: " + "; ".join(f"{s['name']} ({len(s['studies'])})" for s in theme["subthemes"]))
 
     ids = list(runs)
+    if len(ids) < 2:
+        print()
+        return
     for level in ("theme", "sub-theme"):
         print(f"\n{level} level, pairwise: omega index / ARI on primary placements")
         member = {r: memberships(runs[r]["themes"], level=level) for r in ids}
@@ -132,7 +154,32 @@ def main() -> int:
             print(f"{r1:>8}" + "".join(cells))
         if omegas:
             print(f"mean over {len(omegas)} pairs: omega {sum(omegas) / len(omegas):.2f}, ARI {sum(aris) / len(aris):.2f}")
-    return 0
+    print()
+
+
+def across(conditions: dict[str, dict[str, dict]], keys: list[str]) -> None:
+    """Mean agreement between the runs of each pair of conditions, and within each on the diagonal."""
+    names = list(conditions)
+    width = max(max(len(n) for n in names), len("-0.00 / -0.00")) + 2
+    for level in ("theme", "sub-theme"):
+        print(f"===== across conditions, {level} level: mean omega index / mean ARI on primary placements")
+        member = {(c, r): memberships(a["themes"], level=level) for c in names for r, a in conditions[c].items()}
+        primary = {(c, r): primaries(a["themes"], level=level) for c in names for r, a in conditions[c].items()}
+        print(" " * width + "".join(f"{n:>{width}}" for n in names))
+        for c1 in names:
+            cells = []
+            for c2 in names:
+                pairs = [(x, y) for x in member if x[0] == c1 for y in member if y[0] == c2 and x != y]
+                if c1 == c2:
+                    pairs = [(x, y) for x, y in pairs if x < y]
+                if not pairs:
+                    cells.append(f"{'—':>{width}}")
+                    continue
+                o = sum(omega(member[x], member[y], keys) for x, y in pairs) / len(pairs)
+                a = sum(ari(primary[x], primary[y], keys) for x, y in pairs) / len(pairs)
+                cells.append(f"{f'{o:.2f} / {a:.2f}':>{width}}")
+            print(f"{c1:>{width}}" + "".join(cells))
+        print()
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 """Group a review's accepted studies into themes and sub-themes with an LLM, several times over.
 
-The question: can a model, given a review's research questions and every accepted study's title and
-abstract in one prompt, produce a grouping like the hand-made cluster tables of the earlier studies in the
-series — themes, sub-themes within them, a reason per study, a study allowed under two themes — and how
-stable is it from run to run?
+The question: can a model, given every accepted study's title and abstract in one prompt, produce a grouping
+like the hand-made cluster tables of the earlier studies in the series — themes, sub-themes within them, a
+reason per study, a study allowed under two themes — how stable is it from run to run, and does telling it
+the review's aim (its research questions, or one line) change the grouping?
 
-    python investigations/llm-thematic-grouping/group_studies.py STUDIES.bib --questions RQ.txt \\
+    python investigations/llm-thematic-grouping/group_studies.py STUDIES.bib --aim AIM.txt \\
         --runs 5 --declare "reasoning effort xhigh, thinking budget 12k"
 
 Each run is one item of a resumable `raven.librarian.sweep`, so a run stopped partway is finished by running
@@ -13,14 +13,17 @@ the same command again, and every model call is kept whole in the ledger's trace
 per run, with the run's number as the seed, so that the order they are presented in cannot pass for a
 stable grouping. Each turn streams to `stream.log` as it runs.
 
-What a run writes, into `--out-dir` (default: `llm-grouping/` beside the `.bib`, with the private data):
+What a run writes, into `--out-dir` (default: `llm-grouping/<the aim file's stem, or no-aim>/` beside the
+`.bib`, with the private data):
     `grouping-<fingerprint>.jsonl`, and `-traces.jsonl` beside it: the ledger, one answer per run.
     `run-NN.ods`: the grouping as a table shaped like the published ones, a row per sub-theme.
     `run-NN-placements.ods`: a row per placement, with the model's reason.
     `run-NN.pickle`: a Raven-visualizer dataset, laid out by hand (see `layout`), one point per study.
 
-The research questions are given as context and not as the themes: the published tables group studies by
-what they are about, and one theme per question would be a coding of the studies instead.
+The aim is given as context and not as the themes: the published tables group studies by what they are
+about, and one theme per research question would be a coding of the studies instead. Without `--aim`, the
+model is told nothing about the review but that it is one. The same seeds are used whatever the aim, so a
+run of one condition shows the records in the same order as the same-numbered run of another.
 """
 
 import argparse
@@ -42,13 +45,11 @@ from raven.papers import bibtex
 
 logger = logging.getLogger(__name__)
 
-PROMPT = """You are helping to write a systematic literature review. The review asks these research questions:
-
-{questions}
+PROMPT = """You are helping to write a systematic literature review.{aim}
 
 Below are all {n} studies the review accepted, numbered, each with its citation, title, keywords where the record has them, and abstract.
 
-Group the studies into themes by what they are about, the way a review presents its accepted studies as a table of thematic clusters. The research questions are context: they say what the review is looking for, but do not make one theme per research question. Choose the themes the material itself suggests; how many is up to you.
+Group the studies into themes by what they are about, the way a review presents its accepted studies as a table of thematic clusters.{aim_note} Choose the themes the material itself suggests; how many is up to you.
 
 Within each theme, divide the studies into sub-themes. A theme that has no meaningful division has a single sub-theme.
 
@@ -62,6 +63,11 @@ The studies:
 
 {studies}
 """
+
+#: Filled into the prompt when an aim is given.
+AIM = " The review's aim:\n\n{aim}"
+AIM_NOTE = (" The aim is context: it says what the review is looking for, but do not make one theme per part of"
+            " the aim.")
 
 MAX_TOKENS = 16384
 
@@ -107,8 +113,9 @@ def run_order(n: int, seed: int) -> list[int]:
     return order
 
 
-def prompt_for(questions: str, studies: list[env], order: list[int]) -> str:
-    return PROMPT.format(questions=questions.strip(), n=len(studies),
+def prompt_for(maybe_aim: str | None, studies: list[env], order: list[int]) -> str:
+    return PROMPT.format(aim=AIM.format(aim=maybe_aim.strip()) if maybe_aim else "",
+                         aim_note=AIM_NOTE if maybe_aim else "", n=len(studies),
                          studies="\n\n".join(study_item(i, studies[j]) for i, j in enumerate(order, start=1)))
 
 
@@ -265,9 +272,12 @@ def write_tables(out_dir: pathlib.Path, run_id: str, themes: list[dict], studies
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("bib", help="the accepted studies")
-    parser.add_argument("--questions", required=True, help="a text file holding the research questions")
+    parser.add_argument("--aim", default=None, metavar="FILE",
+                        help="a text file saying what the review is for, e.g. its research questions; without it, "
+                             "the model is told nothing about the review")
     parser.add_argument("--runs", type=int, default=5, help="how many runs (default: 5)")
-    parser.add_argument("--out-dir", default=None, help="where the outputs go (default: llm-grouping/ beside the .bib)")
+    parser.add_argument("--out-dir", default=None,
+                        help="where the outputs go (default: llm-grouping/<aim file's stem, or no-aim>/ beside the .bib)")
     parser.add_argument("--backend-url", default=None,
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--declare", default=None, metavar="TEXT",
@@ -276,15 +286,16 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     bib_path = pathlib.Path(opts.bib).resolve()
-    out_dir = pathlib.Path(opts.out_dir) if opts.out_dir else bib_path.parent / "llm-grouping"
-    questions = pathlib.Path(opts.questions).read_text(encoding="utf-8")
+    maybe_aim = pathlib.Path(opts.aim).read_text(encoding="utf-8") if opts.aim else None
+    condition = pathlib.Path(opts.aim).stem if opts.aim else "no-aim"
+    out_dir = pathlib.Path(opts.out_dir) if opts.out_dir else bib_path.parent / "llm-grouping" / condition
     studies = load_studies(bib_path)
     keys = [s.key for s in studies]
     print(f"{len(studies)} studies from {bib_path.name}")
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["max_tokens"] = MAX_TOKENS
-    material = json.dumps({"prompt": PROMPT, "questions": questions, "max_tokens": MAX_TOKENS,
+    material = json.dumps({"prompt": PROMPT, "aim": maybe_aim, "max_tokens": MAX_TOKENS,
                            "studies": hashlib.sha256(bib_path.read_bytes()).hexdigest(),
                            "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")}},
                           sort_keys=True)
@@ -298,7 +309,7 @@ def main() -> int:
         (run_id, seed), = batch
         order = run_order(len(studies), seed)
         with stream_path.open("a", encoding="utf-8") as stream:
-            record = agent.ask_record(settings, prompt_for(questions, studies, order), max_tokens=None,
+            record = agent.ask_record(settings, prompt_for(maybe_aim, studies, order), max_tokens=None,
                                       maybe_abort=maybe_abort, on_progress=agent.stream_log(stream, label=run_id))
         if record.truncated:
             return {run_id: sweep.Failure("cut off at the token cap; the trace holds what there was")}, [record]
@@ -318,7 +329,8 @@ def main() -> int:
         if run_id not in answers:
             continue
         answer = answers[run_id]
-        comments = [f"{run_id} of an LLM grouping of {bib_path.name}, instrument {ledger.fingerprint}, seed {answer['seed']}",
+        comments = [f"{run_id} of an LLM grouping of {bib_path.name}, aim: {condition}, "
+                    f"instrument {ledger.fingerprint}, seed {answer['seed']}",
                     f"model: {llm_settings.model}" + (f"; {opts.declare}" if opts.declare else "")]
         write_tables(out_dir, run_id, answer["themes"], studies, answer["problems"], comments)
         write_dataset(out_dir / f"{run_id}.pickle", bib_path, answer["themes"], keys)
