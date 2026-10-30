@@ -194,3 +194,17 @@ wanted early in the week of 2026-11-02, for the health-education study.
     2026-10-30), so they are a condition to ablate, not a fixed input.
   - **For the general tool: the guidance is a general aim**, a background explanation of how to group, which
     a set of research questions is one case of (maintainer, 2026-10-30).
+- **2026-10-30**, after the first evening's three conditions (results in `investigations/llm-thematic-grouping/`):
+  - **The topic line stays**: it names the review's scope, setting and population, without handing the model
+    categories to sort by, which the research questions did. Asking the model *not* to make one theme per
+    question did not hold.
+  - **Themes only**: sub-themes agreed at 0.27–0.36 under every condition, so people read and name them, as
+    in the earlier studies. A second pass per theme stays possible.
+  - **Programme continuity** ("sustainability" as a programme lasting) came out as a theme of its own under
+    every condition. Those studies are in scope on the hand screening's reading; an instruction to place them
+    by what else they are about is a hypothesis, measured against a control without it.
+  - **Slips in a reply get a repair turn**, naming each one and asking for the whole corrected JSON, up to
+    two. Considered and set aside: tools for declaring themes and placing studies — about forty tool rounds a
+    run, tool schemas to build, and the model losing the single global view a grouping needs, for a
+    guarantee the repair turn gives too.
+  - **Ten runs a condition** from here on, five having left differences of 0.1 a lead rather than a result.

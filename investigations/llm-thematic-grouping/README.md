@@ -19,6 +19,10 @@ no cluster at all in a set of forty.
   - Resumable: each run is one item of a `raven.librarian.sweep`, and every model call is kept whole in the
     ledger's traces; `stream.log` shows each turn as it streams.
   - Outputs go beside the `.bib` by default (`llm-grouping/`), with the private data, and not here.
+  - Themes only, since 2026-10-30's second batch; the first evening's runs asked for sub-themes too (the
+    script at `66c6cea8`). `--guidance FILE` adds an instruction of the user's own, and a reply with slips
+    gets a repair turn naming each one, up to two, built on the original prompt so the backend's prefix cache
+    covers it.
 - **`compare_groupings.py`** — how far the runs agree, pairwise, at the theme and the sub-theme level: the
   omega index (Collins & Dent 1988) over every placement, and the adjusted Rand index on primary placements.
   The omega index is the ARI generalized to groupings where a study sits in several groups, and equals it
@@ -29,16 +33,24 @@ no cluster at all in a set of forty.
 
 ## Running it
 
-One condition per aim file, five runs each, the same seeds in every condition:
+One condition per combination of aim and guidance file, the same seeds in every condition. The batch queued
+for the night of 2026-10-30, themes only, with the repair turn:
 
 ```bash
 D=00_stuff/rawdata/biology_geography_health_education/202610
-for aim in "--aim $D/aim-research-questions.txt" "--aim $D/aim-topic.txt" ""; do
-    python investigations/llm-thematic-grouping/group_studies.py $D/scopebib-2026-10-28d/04b-final.bib \
-        $aim --runs 5 --declare "reasoning effort xhigh, thinking budget 12k"
+B=$D/scopebib-2026-10-28d/04b-final.bib
+G=$D/guidance-programme-continuity.txt
+for args in "--aim $D/aim-topic.txt --guidance $G" "--guidance $G" "--aim $D/aim-topic.txt"; do
+    python investigations/llm-thematic-grouping/group_studies.py $B $args --runs 10 \
+        --declare "reasoning effort xhigh, thinking budget 12k"
 done
-python investigations/llm-thematic-grouping/compare_groupings.py $D/scopebib-2026-10-28d/llm-grouping/*/grouping-*.jsonl
+python investigations/llm-thematic-grouping/compare_groupings.py $D/scopebib-2026-10-28d/llm-grouping/*/grouping-*.jsonl \
+    --bib $B --plot $D/scopebib-2026-10-28d/llm-grouping
 ```
+
+The third condition is the second's control: the topic line without the instruction about programme
+continuity. The comparison then also reads the first evening's ledgers, made with sub-themes and no repair
+turn; read those against the new ones at the theme level only.
 
 `--declare` records what the backend does not report — here the chat template's reasoning effort and LM
 Studio's thinking budget — in the instrument's fingerprint, so runs under other settings land in another
