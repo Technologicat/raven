@@ -15,6 +15,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 
 | Directory | What it investigated |
 |---|---|
+| `llm-thematic-grouping/` | Whether an LLM, given a review's research questions and every accepted study's abstract in one prompt, groups the studies into themes and sub-themes as the earlier studies' hand-made tables do, and how stable that is across shuffled runs; writes each run as a table and as a Visualizer dataset laid out by hand (2026-10-30) |
 | `context-injects/` | What shape Librarian's temporary context injects should take, measured across four local models; and where the grounding instruction goes (2026-10-05) |
 | `retrieval/` | Retrieval quality against a known corpus — the evaluation set behind brief 09 |
 | `tool_budget/` | Whether the tool-call round cap causes empty replies, and whether telling the model its budget is spent prevents them |

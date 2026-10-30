@@ -170,3 +170,23 @@ wanted early in the week of 2026-11-02, for the health-education study.
   sheet is what `--decisions` carries. Considered and set aside: `finish` reading several sheets, one per
   table marked — more places for a decision to live, for no gain. The sheets' column order and widths are
   still to tune, from the maintainer's notes on marking at 1080p (expected the week of 2026-11-02).
+- **2026-10-30**, item 10's prototype, settled before building (maintainer):
+  - **The research questions are context, not the themes.** The themes are what the studies are about,
+    matching the published tables in spirit; one theme per question would be item 11's coding.
+  - **The number of themes is left open** for the first runs; steering it is for later, if wanted.
+  - **The records are shuffled per run**, with the seed recorded: order effects are a confound. What remains
+    between runs is not only sampling noise — the problem may admit several good groupings, and a run may
+    find any one of them (maintainer).
+  - **Placing a study under two themes is allowed in the grouping**, as the earlier tables do.
+  - **Citations read "Author (2024)", "Author & Another (2024)", "Author et al. (2024)"**, from
+    `raven.common.utils.format_bibtex_authors`, which already does the et-al form.
+  - **Agreement**: pair co-membership over overlapping groups (the omega index, Collins & Dent 1988), with
+    ARI on each study's primary placement beside it; both at the top level and the sub-theme level.
+  - **Effort**: LM Studio caps the thinking at 12k tokens (a server setting, 2026-10-29), so a reply cannot
+    think its way past the 16k output cap. Run at `xhigh` first, and drop to `low` if thinking crowds it.
+  - **The grouping is plottable in the Visualizer**, with made-up 2D coordinates rather than an embedding:
+    one circle per theme, its studies on the perimeter, the circles' centres scattered as Librarian's
+    attachment piles are (a maximin Latin square), so the plot reads at once as an LLM grouping laid out by
+    hand rather than as a t-SNE map. **For the plot, each study gets one place** — the Visualizer's promise
+    is that each point is a unique record — so the model marks one placement per study as primary.
+  - **Home**: `investigations/llm-thematic-grouping/`; a tool once the method holds on biology and geography.
