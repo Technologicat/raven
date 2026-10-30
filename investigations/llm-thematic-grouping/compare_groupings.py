@@ -109,6 +109,8 @@ def main() -> int:
 
     conditions = {}
     for path in map(pathlib.Path, opts.ledgers):
+        if path.name.endswith("-traces.jsonl"):  # what a `grouping-*.jsonl` glob also matches
+            continue
         runs = load_runs(path)
         if not runs:
             print(f"{path}: no successful runs")

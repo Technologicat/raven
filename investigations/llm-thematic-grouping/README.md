@@ -46,5 +46,34 @@ ledger.
 
 ## Results
 
-**Pilot, 2026-10-30** (the script at `c4defead`, the research questions as the only guidance, their file's
-provenance header included by mistake; ledger `llm-grouping/grouping-552481c1.jsonl`): in progress.
+**Health education, run d's final set of 40, 2026-10-30.** Qwen 3.8 27B (`q4_k_xl`) on LM Studio, reasoning
+effort `xhigh`, thinking budget 12k; five runs per condition, about 4 minutes a run. Outputs, with the
+comparison (`comparison.txt`) and its heatmaps, in `llm-grouping/` beside the `.bib`.
+
+- **Pilot** (the script at `c4defead`; the research questions with their file's provenance header, by
+  mistake): theme-level omega 0.35, ARI 0.34; sub-theme 0.28. Five stable cores held 18 studies.
+- **The three conditions**, mean omega index at the theme level (ARI within 0.02 of it throughout):
+
+  |                    | questions | topic | no aim |
+  |---|---|---|---|
+  | **questions**      | 0.43 | 0.41 | 0.33 |
+  | **topic**          | | 0.45 | 0.46 |
+  | **no aim**         | | | 0.53 |
+
+  Sub-themes agree at 0.27–0.36 everywhere. Stable cores: 21, 26 and 28 of the 40 studies.
+- **What it suggests, from five runs a condition** (ten pairs, not independent, so a difference of about
+  0.1 is a lead rather than a result):
+  - **Guidance does not make the grouping more stable**; the unguided runs agree with each other most.
+  - **The research questions move the grouping**, rather than only adding noise: their runs agree less
+    with the unguided ones (0.33) than either condition does with itself. Read by name, their themes
+    follow the questions — curriculum content, teaching and learning methods, competencies and learning
+    objectives — although the prompt says not to make one theme per question. The topic line sits
+    between, and adds a teacher-education theme, the line naming teacher education.
+  - **The unguided themes are the most topical**: environmental education and health outcomes, community
+    engagement, transdisciplinary education.
+  - **Every condition has an implementation-and-sustainability-of-programmes theme**: "sustainability" in
+    the sense of a programme lasting, the second sense the search word has.
+  - **Placing a study twice stayed the exception**: 0 to 6 of 40 per run. A few replies left a study
+    without a primary placement, placed one twice in a sub-theme, or (once) left one out.
+- **The sub-theme level is unstable under every condition**, so a published table would want its sub-themes
+  read and named by people, as the earlier studies' were.
