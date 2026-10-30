@@ -120,6 +120,8 @@
 #### Constellation-wide
 
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
+- **A short network drop no longer fails what was asking Raven-server.** A request that could not reach the server is tried again: twice, a second apart, in the GUI apps and `raven-minichat`, and three times, five seconds apart, in the batch tools (`raven-importer`, `raven-indexer`, `raven-scopebib`, `raven-pdf2bib` and the rest), so an import or an indexing run rides out a Wi-Fi reconnect.
+  - Only a request that never reached the server is retried. One that failed after it was sent may have been acted on, and is reported as before. Both budgets are in `raven/client/config.py`.
 
 ### Changed
 

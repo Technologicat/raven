@@ -1527,6 +1527,7 @@ raven_server_url = opts.server_url if opts.server_url is not None else client_co
 if opts.server_url is not None:
     logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
 api.initialize(raven_server_url=raven_server_url,
+               maybe_network_retry=client_config.network_retry_interactive,
                raven_api_key_file=client_config.raven_api_key_file)
 
 # Probe the server once at startup, so its presence or absence is explicit in the log rather than

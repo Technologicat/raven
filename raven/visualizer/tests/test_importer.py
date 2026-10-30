@@ -1173,6 +1173,7 @@ def initialized_api():
     from raven.client import api
     from raven.client import config as client_config
     api.initialize(raven_server_url=client_config.raven_server_url,
+                   maybe_network_retry=client_config.network_retry_batch,
                    raven_api_key_file=client_config.raven_api_key_file)
 
 

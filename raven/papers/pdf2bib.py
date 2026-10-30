@@ -83,6 +83,7 @@ _NO_TITLE = "NO TITLE"
 def _initialize_client_api(raven_server_url: str) -> None:
     """Bring up `raven.client.api` against `raven_server_url`. Call once, before any `mayberemote` use."""
     api.initialize(raven_server_url=raven_server_url,
+                   maybe_network_retry=client_config.network_retry_batch,
                    raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
 
 _dehyphenator = None  # built on first use; see `_get_dehyphenator`

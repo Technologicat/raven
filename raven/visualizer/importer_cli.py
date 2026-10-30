@@ -73,6 +73,7 @@ def main() -> None:
     if opts.server_url is not None:
         logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
     api.initialize(raven_server_url=raven_server_url,
+                   maybe_network_retry=client_config.network_retry_batch,
                    raven_api_key_file=client_config.raven_api_key_file)
 
     logger.info("Settings (for LOCAL models):")

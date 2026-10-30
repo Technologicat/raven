@@ -36,6 +36,7 @@ def main() -> None:
         opts.filenames = [None]  # `None` -> `maybe_open` will open stdin instead.
 
     api.initialize(raven_server_url=(opts.server_url if opts.server_url is not None else client_config.raven_server_url),
+                   maybe_network_retry=client_config.network_retry_batch,
                    raven_api_key_file=client_config.raven_api_key_file)
 
     dehyphenator = mayberemote.Dehyphenator(allow_local=True,

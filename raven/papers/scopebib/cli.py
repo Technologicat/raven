@@ -483,7 +483,7 @@ def _nlp(*, on_server: bool, server_url: str | None):
     from . import records as scope_records
     url = server_url or client_config.raven_server_url
     if on_server:
-        api.initialize(raven_server_url=url, raven_api_key_file=client_config.raven_api_key_file)
+        api.initialize(raven_server_url=url, maybe_network_retry=client_config.network_retry_batch, raven_api_key_file=client_config.raven_api_key_file)
     nlp = mayberemote.NLP(allow_local=True, allow_remote=on_server, model_name=scope_records.SPACY_MODEL,
                           device_string=client_config.devices["nlp"]["device_string"])
     pipeline = f"{nlp.model_info['model']} {nlp.model_info['version']}"

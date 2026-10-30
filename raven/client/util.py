@@ -5,6 +5,7 @@ __all__ = ["api_config",  # configuration namespace
            "require",
            "ServerRefused", "JobFailed",
            "yell_on_error",
+           "get", "post",
            "post_streamed_job"]
 
 import logging
@@ -31,12 +32,13 @@ from ..common import deviceinfo
 from ..common import netutil
 
 if TYPE_CHECKING:
-    from .config import Timeout
+    from .config import Retry, Timeout
 
 api_initialized = False
 api_config = envcls(raven_default_headers={})
-def initialize_api(raven_server_url: str,
+def initialize_api(*, raven_server_url: str,
                    raven_api_key_file: Optional[Union[pathlib.Path, str]],
+                   maybe_network_retry: "Retry | None",
                    executor: Optional[concurrent.futures.Executor] = None):
     """Set up URLs and API keys, and create the client-side background task manager.
 
@@ -49,6 +51,11 @@ def initialize_api(raven_server_url: str,
                 so they don't block the caller).
 
                 If not provided, an executor is instantiated automatically.
+
+    `maybe_network_retry`: how a request that could not reach Raven-server is tried again, as
+                           `raven.client.config.network_retry_interactive` or `network_retry_batch` gives
+                           it — the first for an app where a person waits on each answer, the second for a
+                           batch run — or `None` not to try again at all.
 
     Note that audio playback and capture are local resources and live outside this init path.
     Apps that need audio should also call `raven.common.audio.initialize(...)`.
@@ -97,6 +104,7 @@ def initialize_api(raven_server_url: str,
     # config namespace rather than importing `client_config` (which would risk the import cycle above).
     api_config.network_timeout = client_config.network_timeout
     api_config.network_timeout_streaming = client_config.network_timeout_streaming
+    api_config.maybe_network_retry = maybe_network_retry
 
     api_initialized = True
 
@@ -133,6 +141,28 @@ def yell_on_error(response: requests.Response) -> None:
         logger.error(_strip_html(response.text))
         raise ServerRefused(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
 
+def get(url: str, **kwargs) -> requests.Response:
+    """`requests.get` to Raven-server, tried again as `initialize_api`'s `maybe_network_retry` says while it cannot
+    connect."""
+    return _send(lambda: requests.get(url, **kwargs), what=f"GET {url}")
+
+
+def post(url: str, **kwargs) -> requests.Response:
+    """`requests.post` to Raven-server, tried again as `initialize_api`'s `maybe_network_retry` says while it cannot
+    connect.
+
+    With `stream=True`, only the request that opens the stream is retried; a stream that breaks partway fails.
+    """
+    return _send(lambda: requests.post(url, **kwargs), what=f"POST {url}")
+
+
+def _send(send: Callable[[], requests.Response], *, what: str) -> requests.Response:
+    maybe_retry = api_config.maybe_network_retry
+    if maybe_retry is None:
+        return send()
+    return netutil.send_with_retry(send, attempts=maybe_retry.attempts, delay=maybe_retry.delay, what=what)
+
+
 def post_streamed_job(url: str,
                       input_data: dict,
                       timeout: "Timeout",
@@ -161,7 +191,7 @@ def post_streamed_job(url: str,
         raise netutil.Aborted("post_streamed_job: aborted before the request was sent")
     headers = dict(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(url, headers=headers, json=input_data, timeout=timeout, stream=True)
+    response = post(url, headers=headers, json=input_data, timeout=timeout, stream=True)
     yell_on_error(response)
 
     # The read timeout is between bytes, and every progress line resets it, so on its own it would no longer

@@ -95,6 +95,7 @@ def main() -> None:
 
     raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
     client_api.initialize(raven_server_url=raven_server_url,
+                          maybe_network_retry=client_config.network_retry_batch,
                           raven_api_key_file=client_config.raven_api_key_file)
 
     try:

@@ -82,23 +82,6 @@ swallowed-field repairs, would then use it too. Mixed endings in one file: pick 
 To go in with the next round of bib-tool polish (maintainer, 2026-10-29). Raised the morning of
 2026-10-29, on the geography bib.
 
-## Retry a dropped connection in the Raven-server client
-
-*Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep` (`reconnect_attempts`), `raven.papers.httpfetch`*
-
-`raven.client.api` makes its requests directly — 36 `requests.get`/`requests.post` call sites, no shared
-helper — and none retries. So a short network drop between a client and Raven-server fails whatever was
-asking: in `raven-importer` (and the Visualizer's import window) the embeddings or NLP stage, which fails
-the whole import; in `raven-indexer`, the run. Only the heartbeat retries, and it only reports.
-
-Route the calls through one helper that retries a connection error a few times, seconds apart, as the
-sweep now does for the LLM backend (2026-10-28) and `httpfetch` does for arXiv and Crossref. Two things to
-settle while doing it: the streaming endpoints (avatar video, TTS audio), where a retry mid-stream is a
-different thing from a retry before it; and which errors count — a refused connection and a timeout, not
-an HTTP error status the server sent on purpose.
-
-Found while surveying the CLI tools for the sweep's retry (2026-10-28).
-
 ## `raven-deduplicate --judge` onto the shared sweep
 
 *Cluster: network-robustness · Cost: M · Gate: none · Filed: 2026-10-28 · See also: `raven.librarian.sweep`*
