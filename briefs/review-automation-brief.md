@@ -208,3 +208,6 @@ wanted early in the week of 2026-11-02, for the health-education study.
     run, tool schemas to build, and the model losing the single global view a grouping needs, for a
     guarantee the repair turn gives too.
   - **Ten runs a condition** from here on, five having left differences of 0.1 a lead rather than a result.
+- **2026-10-31**: **the programme-continuity instruction is dropped.** It renamed the theme more than it
+  dissolved it, and cost stability; the studies in it share a topic of their own, implementing programmes
+  in schools. To confirm with the coauthor in the week of 2026-11-02, as part of the table's themes.
