@@ -64,6 +64,23 @@ class TestLedger:
         assert ledger.answers() == {"a": {"x": 2}, "b": {"x": 1}}
         assert ledger.path.name == "run-abcd1234.jsonl"
 
+    def test_a_line_left_unfinished_by_a_killed_run_is_skipped_and_its_item_asked_again(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", 1)
+        with ledger.path.open("a", encoding="utf-8") as f:
+            f.write('{"id": "b", "v": "abcd1234", "status": "ok", "ans')  # the run died here
+        assert ledger.answers() == {"a": 1}
+
+    def test_the_next_write_after_an_unfinished_line_starts_a_line_of_its_own(self, tmp_path):
+        """Glued onto the unfinished line, the new answer would be lost with it."""
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+        ledger.write_answer("a", 1)
+        with ledger.path.open("a", encoding="utf-8") as f:
+            f.write('{"id": "b", "v": "abc')
+        ledger.write_answer("b", 2)
+        ledger.write_answer("c", 3)
+        assert ledger.answers() == {"a": 1, "b": 2, "c": 3}
+
     def test_a_failure_after_an_answer_leaves_the_item_unanswered(self, tmp_path):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
         ledger.write_answer("a", 1)

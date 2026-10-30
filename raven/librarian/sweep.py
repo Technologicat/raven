@@ -128,8 +128,11 @@ class Ledger:
 
     def _append(self, path: pathlib.Path, payload: dict) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
+        # A run killed mid-write leaves a last line with no newline. Start a fresh line after it, so that
+        # it stays the unfinished last line `_entries` skips, rather than having this one glued on.
+        unfinished = path.exists() and path.stat().st_size > 0 and not path.read_bytes().endswith(b"\n")
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            f.write(("\n" if unfinished else "") + json.dumps(payload, ensure_ascii=False) + "\n")
 
     def write_header(self, header: dict) -> None:
         """Record what a run measured with, at the start of each run."""
@@ -168,16 +171,31 @@ class Ledger:
         self._append(self.traces_path, {"ids": list(item_ids), "v": self.fingerprint,
                                         "turns": [turn.to_dict() for turn in turns]})
 
+    def _entries(self) -> list[dict]:
+        """Every line of the ledger, parsed, this instrument's or not.
+
+        A line that does not parse is skipped, with a warning naming it: a run killed mid-write leaves one, and
+        the answer it held is simply asked again. Later runs append after it, so it need not be the last line.
+        """
+        if not self.path.exists():
+            return []
+        out = []
+        for number, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning(f"Ledger: '{self.path.name}', line {number}: does not parse, skipped "
+                               f"(a run stopped mid-write leaves one); its item, if any, is asked again")
+        return out
+
     def latest(self) -> dict[str, dict]:
         """The latest line for each item, answered or failed, keyed by id."""
         out = {}
-        if self.path.exists():
-            for line in self.path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                entry = json.loads(line)
-                if entry.get("v") == self.fingerprint and "id" in entry:
-                    out[entry["id"]] = entry
+        for entry in self._entries():
+            if entry.get("v") == self.fingerprint and "id" in entry:
+                out[entry["id"]] = entry
         return out
 
     def answers(self, digests: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -212,10 +230,7 @@ class Ledger:
 
     def headers(self) -> list[dict]:
         """The header of each run that wrote to this ledger, oldest first."""
-        if not self.path.exists():
-            return []
-        entries = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip())
-        return [entry for entry in entries if entry.get("v") == self.fingerprint and "header" in entry]
+        return [entry for entry in self._entries() if entry.get("v") == self.fingerprint and "header" in entry]
 
 # --------------------------------------------------------------------------------
 # The run
