@@ -138,3 +138,11 @@ runs, against three in thirty the evening before, each time clearing its slips; 
 Seven stable cores hold 23 of the 40, the largest two of five studies: one on sustaining school programmes, one
 on the conceptual and policy link between health and sustainability. Half the runs split sustaining a programme
 from implementing it as two themes. Studies placed twice: 0 to 13 of 40 a run.
+
+**Applying a draft catalogue, 2026-11-02**: the final set, the topic line, ten runs, under the unedited 10-entry catalogue
+(cut 0.7); ledger `aim-topic+catalogue-draft-cut0.7/grouping-ddf46036`. **ARI on primary placements rises from 0.44 to 0.76**;
+omega from 0.40 to 0.57. Fixing the themes does what it was expected to, for each study's main place. Omega stays lower
+because the second placements do not settle: 9 to 30 of the 40 studies are placed twice in a run, against 0 to 13 when the
+model finds its own themes, despite the same instruction to treat that as the exception. No run used `None of these`, and no
+repair turn fired. Primary placements per theme average 2 to 6 of the 40, the ten together taking 40. Stable cores read high here, at
+38 of 40, being chained through those many second placements.

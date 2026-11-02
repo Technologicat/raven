@@ -327,13 +327,18 @@ def write_dataset(path: pathlib.Path, bib_path: pathlib.Path, themes: list[dict]
     as each cluster's keywords."""
     import numpy as np
     from raven.client import api, config as client_config
-    from raven.visualizer import importer
+    from raven.visualizer import config as visualizer_config, importer
 
     # The importer's dehyphenator runs on Raven-server when one answers, and locally otherwise; either way
     # the client must be set up first, as the importer's own CLI does. A second call is a no-op.
     api.initialize(raven_server_url=client_config.raven_server_url,
                    maybe_network_retry=client_config.network_retry_batch,
                    raven_api_key_file=client_config.raven_api_key_file)
+    # Dehyphenating with no server would load the model here, in the process and on the GPU of whatever else is
+    # running, for a dataset where it only tidies how abstracts read. So without a server, abstracts stay as they are.
+    if not api.raven_server_available():
+        logger.warning("write_dataset: no Raven-server answers, so the dataset's abstracts are not dehyphenated")
+        visualizer_config.dehyphenate = False
     input_data = importer._parse_input_files(bib_path)
     vis_data = [entry for entries in input_data.parsed_data_by_filename.values() for entry in entries]
     if len(vis_data) != len(keys):
@@ -402,7 +407,8 @@ def write_outputs(ledger: sweep.Ledger, bib_path: pathlib.Path, studies: list[en
                       for p in sub["studies"]} - set(keys))
     if missing:
         raise ValueError(f"{bib_path.name} lacks {len(missing)} of the keys the ledger places, e.g. {missing[0]}")
-    header = ledger.headers()[-1] if ledger.headers() else {}
+    headers = ledger.headers()
+    header = headers[-1]["header"] if headers else {}
     model_line = (f"model: {header.get('label', 'not recorded')}; "
                   f"declared: {header.get('declared', 'not recorded')}")
     run_dir = ledger.directory / ledger.fingerprint
