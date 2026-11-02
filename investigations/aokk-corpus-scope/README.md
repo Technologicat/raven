@@ -786,14 +786,17 @@ backend, behind the runs already queued.
    **The probe's first two results, 2026-11-02** (300 records each; `AOKK/confidence-probe/`). Share of title verdicts the
    model's own abstract pass overturned:
 
-   | title confidence, escalated? | 3.8 27B | 3.6 35B-A3B |
-   |---|---|---|
-   | high, no | 4.2% of 96 | 7.2% of 83 |
-   | high, yes | 4.8% of 63 | 3.4% of 29 |
-   | medium, no | 16.5% of 85 | 11.5% of 96 |
-   | medium, yes | 24.2% of 33 | 19.7% of 61 |
-   | low, yes | 34.8% of 23 | 19.4% of 31 |
-   | overturns escalation would catch | 19 of 37 | 19 of 36 |
+   | title confidence, escalated? | 3.8 Flash Next | 3.8 27B | 3.6 35B-A3B |
+   |---|---|---|---|
+   | high, no | 6.1% of 99 | 4.2% of 96 | 7.2% of 83 |
+   | high, yes | 2.6% of 39 | 4.8% of 63 | 3.4% of 29 |
+   | medium, no | 18.8% of 80 | 16.5% of 85 | 11.5% of 96 |
+   | medium, yes | 19.4% of 36 | 24.2% of 33 | 19.7% of 61 |
+   | low, yes | 28.3% of 46 | 34.8% of 23 | 19.4% of 31 |
+   | overturns escalation would catch | 21 of 42 | 19 of 37 | 19 of 36 |
+
+   Flash Next ran on Strata (IQ3_S, `q4_0` KV, 204,800 context, thinking budget 12,288; not in its ledger's header, which
+   predates the probe's `--declare`).
 
    About the same number of overturns, with the 27B's *low* meaning more: on the 3.6, *low* and escalated *medium* are
    overturned alike. Against people, on health education's 81 hand decisions (`score_against_decisions.py`, one run each):
