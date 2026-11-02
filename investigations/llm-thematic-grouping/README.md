@@ -146,3 +146,9 @@ because the second placements do not settle: 9 to 30 of the 40 studies are place
 model finds its own themes, despite the same instruction to treat that as the exception. No run used `None of these`, and no
 repair turn fired. Primary placements per theme average 2 to 6 of the 40, the ten together taking 40. Stable cores read high here, at
 38 of 40, being chained through those many second placements.
+
+**The 7-entry draft (cut 0.8), same settings**; ledger `aim-topic+catalogue-draft-cut0.8/grouping-33e8affd`: ARI on primary
+placements 0.82, omega 0.64, against 0.76 and 0.57 with 10 entries. Fewer themes agree more, which is partly what fewer themes
+do, and is no argument for fewer: the 7 lack the community and non-Western entries of the 10. 10 to 24 of the 40 placed twice in
+the runs listed; `None of these` again unused; three repair turns. Between the two catalogues the runs agree at ARI 0.55, so the
+catalogue a study is sorted under decides much of where it lands.
