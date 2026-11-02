@@ -29,7 +29,8 @@ Usage, once per model:
         --out 00_stuff/rawdata/AOKK/confidence-probe/qwen3.6.tsv
 
 `--model` loads that model through LM Studio for the run and puts the one loaded before back afterwards.
-Without it, whatever is loaded is asked.
+Without it, whatever is loaded is asked, which is how to probe a backend serving one model. For one needing a key,
+`--api-key-file <(command printing the key)` keeps the key off the disk.
 """
 
 import argparse
@@ -39,8 +40,8 @@ import logging
 import pathlib
 import sys
 
-from raven.common import tabular
-from raven.librarian import sweep
+from raven.common import netutil, tabular
+from raven.librarian import llmclient, sweep
 from raven.papers.scopebib import cli as scope_cli
 from raven.papers.scopebib import definition as scope_definition
 from raven.papers.scopebib import judge, pipeline
@@ -91,6 +92,8 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model", default=None, help="LM Studio's key for the model to ask")
     parser.add_argument("--backend-url", default=None)
+    parser.add_argument("--api-key-file", default=None,
+                        help="a file holding the backend's API key, in place of the one Librarian's config names")
     parser.add_argument("--out", required=True, help="per-record table, .tsv/.xlsx/.ods")
     opts = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -105,6 +108,8 @@ def main() -> int:
     records = corpus.records
     print(f"{len(records)} records sampled")
 
+    if opts.api_key_file:
+        llmclient.headers["Authorization"] = netutil.maybe_authorization_value(pathlib.Path(opts.api_key_file).read_text(encoding="utf-8"))
     connect = scope_cli._connector(opts.backend_url)
     settings = connect()
     initial = settings.model_record.model_id
