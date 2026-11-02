@@ -110,8 +110,7 @@ wanted early in the week of 2026-11-02, for the health-education study.
         and `published/biology_content_analysis.bib`, the 131 the appendix does not asterisk — the asterisk
         marks only studies left out of the content analysis, all 165 being in the bibliometric one
         (maintainer). The appendix lists one study more, Sterling (2013), which is in no cluster and has no
-        record: taken to be a slip in the appendix, **to confirm with the coauthor** in the week of
-        2026-11-02. Table 6 dates Baena-Morales et al. 2023, the publisher 2024. The vision model misread six
+        record: likely a slip in the appendix (maintainer, 2026-11-02). Table 6 dates Baena-Morales et al. 2023, the publisher 2024. The vision model misread six
         of Table 6's 165 names, which the text layer corrected: trust the image for structure, the text for
         spelling.
       - **Geography's set is recovered** (2026-10-29): `published/geography_bibliometric.bib`, Table 5's 126
@@ -120,7 +119,7 @@ wanted early in the week of 2026-11-02, for the health-education study.
         that easy to miss is why it was taken for one list. `raven-checkrefs` paired 126 of the 127 with
         records, three of them proposals well clear of their runners-up. The 127th, Yli-Panula et al.
         (2020), is in no cluster and has no record — the same shape as biology's Sterling (2013), and
-        **for the coauthor** likewise. The content analysis reviewed 114: every clustered place but the 13
+        likely a slip too (maintainer, 2026-11-02). The content analysis reviewed 114: every clustered place but the 13
         outliers, rejected by hand (the paper, p. 25). So `published/geography_content_analysis.bib` holds
         113 studies, Boehm et al. being two of the 114 places.
       - **And one slip**: the table cites Boehn & Hamann (2016), where the reference list has 2011, and
@@ -210,4 +209,9 @@ wanted early in the week of 2026-11-02, for the health-education study.
   - **Ten runs a condition** from here on, five having left differences of 0.1 a lead rather than a result.
 - **2026-10-31**: **the programme-continuity instruction is dropped.** It renamed the theme more than it
   dissolved it, and cost stability; the studies in it share a topic of their own, implementing programmes
-  in schools. To confirm with the coauthor in the week of 2026-11-02, as part of the table's themes.
+  in schools.
+- **2026-11-02**, the health-education study's open questions (maintainer):
+  - **The implementation theme stays**: it is a real theme in the dataset, which settles the dropped
+    programme-continuity instruction of 2026-10-31.
+  - **Biology's Sterling (2013) and geography's Yli-Panula et al. (2020) are likely slips in the papers' study
+    lists.** For health education, `raven-checkrefs` is run against the study list, to avoid such slips.
