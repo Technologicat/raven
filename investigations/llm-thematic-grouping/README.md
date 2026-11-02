@@ -123,3 +123,11 @@ comparison in `comparison-batch2.txt`, heatmaps in `batch2-plots/`. About 4 minu
   against 0.96 (no aim). **So they group on a topic of their own, implementing programmes in schools**, which
   the word's second sense only labelled; and the instruction costs stability (0.42 to 0.37 with the topic
   line) for a partial loosening of that group.
+
+**The final set, 2026-11-02**: run e's `04b-final.bib`, 40 studies, the topic line, themes only, ten runs; ledger
+`scopebib-2026-10-29e/llm-grouping/aim-topic/grouping-87e42fa2`. Theme-level omega 0.40, ARI 0.44, against 0.42
+and 0.43 for the topic line on run d's set. Four to seven themes a run. The repair turn fired six times in ten
+runs, against three in thirty the evening before, each time clearing its slips; why more often is not known.
+Seven stable cores hold 23 of the 40, the largest two of five studies: one on sustaining school programmes, one
+on the conceptual and policy link between health and sustainability. Half the runs split sustaining a programme
+from implementing it as two themes. Studies placed twice: 0 to 13 of 40 a run.
