@@ -72,6 +72,31 @@ The studies:
 {studies}
 """
 
+#: The deductive step: placing the studies under themes people have settled on, rather than finding themes.
+APPLY_PROMPT = """You are helping to write a systematic literature review.{aim}
+
+Below are all {n} studies the review accepted, numbered, each with its citation, title, keywords where the record has them, and abstract.
+
+The review uses these themes:
+
+{catalogue}
+
+Place the studies under these themes, using the names exactly as written. Do not add themes and do not rename them. A study that fits none of them goes under "{none_theme}", with the reason it fits none.{guidance}
+
+Place every study at least once. A study that genuinely belongs under two themes may be placed under both, but treat that as the exception. For each placement, give a one-sentence reason why the study belongs there. Mark exactly one placement of each study as its primary one: where it belongs most.
+
+Answer with JSON only, in this shape:
+
+{{"themes": [{{"name": "...", "studies": [{{"item": 1, "primary": true, "reason": "..."}}]}}]}}
+
+The studies:
+
+{studies}
+"""
+
+#: Where `APPLY_PROMPT` tells the model to put a study no theme fits. Studies landing here show what a catalogue lacks.
+NONE_THEME = "None of these"
+
 #: Filled into the prompt when an aim is given.
 AIM = " The review's aim:\n\n{aim}"
 AIM_NOTE = (" The aim is context: it says what the review is looking for, but do not make one theme per part of"
@@ -141,7 +166,22 @@ def run_order(n: int, seed: int) -> list[int]:
     return order
 
 
-def prompt_for(maybe_aim: str | None, maybe_guidance: str | None, studies: list[env], order: list[int]) -> str:
+def load_catalogue(path: pathlib.Path) -> list[dict]:
+    """Themes from the JSON at `path`, a list of objects each with `description` and either `name` or `names`,
+    the first of which is taken, as `build_catalogue.py` writes. Returns `{"name", "description"}` per theme."""
+    entries = json.loads(path.read_text(encoding="utf-8"))
+    return [{"name": entry.get("name") or entry["names"][0], "description": entry.get("description", "")}
+            for entry in entries]
+
+
+def prompt_for(maybe_aim: str | None, maybe_guidance: str | None, studies: list[env], order: list[int], *,
+               maybe_catalogue: list[dict] | None = None) -> str:
+    if maybe_catalogue is not None:
+        return APPLY_PROMPT.format(aim=AIM.format(aim=maybe_aim.strip()) if maybe_aim else "",
+                                   guidance=GUIDANCE.format(guidance=maybe_guidance.strip()) if maybe_guidance else "",
+                                   n=len(studies), none_theme=NONE_THEME,
+                                   catalogue="\n".join(f"- {theme['name']}: {theme['description']}" for theme in maybe_catalogue),
+                                   studies="\n\n".join(study_item(i, studies[j]) for i, j in enumerate(order, start=1)))
     return PROMPT.format(aim=AIM.format(aim=maybe_aim.strip()) if maybe_aim else "",
                          aim_note=AIM_NOTE if maybe_aim else "",
                          guidance=GUIDANCE.format(guidance=maybe_guidance.strip()) if maybe_guidance else "",
@@ -152,7 +192,8 @@ def prompt_for(maybe_aim: str | None, maybe_guidance: str | None, studies: list[
 # --------------------------------------------------------------------------------
 # Reading the answer back
 
-def read_grouping(reply: str, studies: list[env], order: list[int]) -> tuple[list[dict], list[str]]:
+def read_grouping(reply: str, studies: list[env], order: list[int], *,
+                  maybe_catalogue: list[dict] | None = None) -> tuple[list[dict], list[str]]:
     """Parse `reply` into themes whose placements name studies by key; and the problems found.
 
     Returns `(themes, problems)`: `themes` a list of `{"name", "description", "subthemes": [{"name",
@@ -161,7 +202,7 @@ def read_grouping(reply: str, studies: list[env], order: list[int]) -> tuple[lis
     number that names no study is dropped; a study placed nowhere, or with no primary placement or several,
     is reported. Several primaries keep the first; none makes the first placement primary. Each problem names
     the study by its item number in this run and its citation, being worded for the model as much as for a
-    person.
+    person. With `maybe_catalogue`, a theme it does not name is reported too.
 
     Raises `ValueError` when the reply is not JSON of the asked shape.
     """
@@ -178,6 +219,8 @@ def read_grouping(reply: str, studies: list[env], order: list[int]) -> tuple[lis
     for theme in parsed["themes"]:
         if not isinstance(theme, dict):
             raise ValueError(f"expected each theme to be an object, got {type(theme).__name__}")
+        if maybe_catalogue is not None and theme.get("name") not in {t["name"] for t in maybe_catalogue} | {NONE_THEME}:
+            problems.append(f"theme '{theme.get('name')}' is not one of the review's themes; use their names exactly")
         subthemes = []
         given = theme["subthemes"] if "subthemes" in theme else [{"name": "", "studies": theme.get("studies", [])}]
         for subtheme in given:
@@ -213,8 +256,8 @@ def read_grouping(reply: str, studies: list[env], order: list[int]) -> tuple[lis
 
 
 def ask_with_repairs(settings: env, prompt: str, studies: list[env], order: list[int], *,
-                     maybe_abort: netutil.Abort | None, stream: TextIO,
-                     label: str) -> tuple[dict | str, list[agent.TurnRecord]]:
+                     maybe_abort: netutil.Abort | None, stream: TextIO, label: str,
+                     maybe_catalogue: list[dict] | None = None) -> tuple[dict | str, list[agent.TurnRecord]]:
     """Ask `prompt`, and while the reply has slips, ask again naming them, up to `MAX_REPAIRS` times.
 
     `stream`: where each turn streams as it runs, under `label` (and `label, repair N` for the repairs).
@@ -234,7 +277,7 @@ def ask_with_repairs(settings: env, prompt: str, studies: list[env], order: list
         if record.truncated:
             return "cut off at the token cap; the trace holds what there was", records
         try:
-            themes, problems = read_grouping(record.reply or "", studies, order)
+            themes, problems = read_grouping(record.reply or "", studies, order, maybe_catalogue=maybe_catalogue)
         except ValueError as exc:
             themes, problems = None, [f"the answer is not JSON of the asked shape: {exc}"]
         if not problems or len(repaired) == MAX_REPAIRS:
@@ -387,6 +430,9 @@ def main() -> int:
                              "the model is told nothing about the review")
     parser.add_argument("--guidance", default=None, metavar="FILE",
                         help="a text file holding an instruction of your own, added after the one to group by theme")
+    parser.add_argument("--catalogue", default=None, metavar="FILE",
+                        help="place the studies under these fixed themes instead of finding themes: JSON, as "
+                             "build_catalogue.py writes")
     parser.add_argument("--runs", type=int, default=5, help="how many runs (default: 5)")
     parser.add_argument("--out-dir", default=None,
                         help="where the outputs go (default: llm-grouping/<condition>/ beside the .bib)")
@@ -405,7 +451,9 @@ def main() -> int:
     maybe_aim = pathlib.Path(opts.aim).read_text(encoding="utf-8") if opts.aim else None
     maybe_guidance = pathlib.Path(opts.guidance).read_text(encoding="utf-8") if opts.guidance else None
     condition = ((pathlib.Path(opts.aim).stem if opts.aim else "no-aim") +
-                 (f"+{pathlib.Path(opts.guidance).stem}" if opts.guidance else ""))
+                 (f"+{pathlib.Path(opts.guidance).stem}" if opts.guidance else "") +
+                 (f"+{pathlib.Path(opts.catalogue).stem}" if opts.catalogue else ""))
+    maybe_catalogue = load_catalogue(pathlib.Path(opts.catalogue)) if opts.catalogue else None
     out_dir = pathlib.Path(opts.out_dir) if opts.out_dir else bib_path.parent / "llm-grouping" / condition
     studies = load_studies(bib_path)
     keys = [s.key for s in studies]
@@ -421,10 +469,12 @@ def main() -> int:
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["max_tokens"] = MAX_TOKENS
+    # The catalogue's two keys are present only with a catalogue, which leaves every earlier ledger's fingerprint as it was.
     material = json.dumps({"prompt": PROMPT, "aim": maybe_aim, "guidance": maybe_guidance,
                            "repair": REPAIR, "max_repairs": MAX_REPAIRS, "max_tokens": MAX_TOKENS,
                            "studies": hashlib.sha256(bib_path.read_bytes()).hexdigest(),
-                           "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")}},
+                           "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")},
+                           **({"apply_prompt": APPLY_PROMPT, "catalogue": maybe_catalogue} if maybe_catalogue else {})},
                           sort_keys=True)
     ledger = sweep.Ledger(out_dir, "grouping", sweep.fingerprint(llm_settings, material, declared=opts.declare))
     print(f"instrument {ledger.fingerprint} -> {ledger.path}")
@@ -435,10 +485,10 @@ def main() -> int:
                   maybe_abort: netutil.Abort | None) -> tuple[dict, list[agent.TurnRecord]]:
         (run_id, seed), = batch
         order = run_order(len(studies), seed)
-        prompt = prompt_for(maybe_aim, maybe_guidance, studies, order)
+        prompt = prompt_for(maybe_aim, maybe_guidance, studies, order, maybe_catalogue=maybe_catalogue)
         with stream_path.open("a", encoding="utf-8") as stream:
             outcome, records = ask_with_repairs(settings, prompt, studies, order, maybe_abort=maybe_abort,
-                                                stream=stream, label=run_id)
+                                                stream=stream, label=run_id, maybe_catalogue=maybe_catalogue)
         if isinstance(outcome, str):
             return {run_id: sweep.Failure(outcome)}, records
         return {run_id: {"seed": seed, "order": [keys[j] for j in order], **outcome}}, records

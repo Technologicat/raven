@@ -8,6 +8,8 @@ This is item 10 of `briefs/review-automation-brief.md`, where the design decisio
 and 2026-10-30). For the health-education study it replaces the Visualizer's HDBSCAN clusters, which found
 no cluster at all in a set of forty.
 
+**`METHOD.md` is the method as a whole**, inductive then deductive, and what is and is not known about it.
+
 ## Scripts
 
 - **`group_studies.py`** — runs the grouping several times over one `.bib`, shuffling the records per run
@@ -36,6 +38,11 @@ no cluster at all in a set of forty.
   Then, per condition, a per-study view from how often each pair of studies shares a theme across the runs:
   the stable cores (together in every run), the studies that drift most, and with `--plot DIR` a heatmap
   of that co-membership ordered by average linkage. `--bib` names the studies by citation.
+
+- **`build_catalogue.py`** — pools the themes of several runs into one catalogue for people to edit, by the overlap of
+  their studies: each entry's support, its names, its core and occasional studies; plus the entries that nearly merged
+  and a saturation check. Its JSON is what `group_studies.py --catalogue FILE` applies, placing the studies under fixed
+  themes in place of finding them, with `None of these` for a study no theme fits.
 
 ## Running it
 
