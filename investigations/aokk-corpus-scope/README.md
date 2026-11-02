@@ -776,6 +776,13 @@ backend, behind the runs already queued.
    ```
 
 2. Choose the full run's model from the pilots' comparison and the probe.
+
+   **Revised 2026-11-02 (maintainer)**: Qwen 3.6 35B-A3B is out, being the oldest of the three and the smallest
+   in context (128 Ki). Qwen 3.8 Flash Next (over 100B, 200 Ki, about 50 tok/s, against the 3.8 27B's 190 Ki and
+   about 30 tok/s) is the choice unless the probe says otherwise, served by Strata from the work machine, which
+   can run the tool too or be only the backend. It waits on tuning that machine's fan noise under inference, and
+   Raven's client has not yet been tried against Strata. The probe runs on the 3.8 27B first. Beyond that, no
+   more time goes into choosing a model: the study itself is what has been waiting, on GPU time.
 3. The full run, below, with `--model judge=M --model review=M --model extract=M` for the chosen `M`; its
    pilot's answers and its probe's title answers count toward it. **The converted ledgers are read-only to the tool, for every
 stage**: their instruments are the prototype's, and the definition and model of today make others (checked
