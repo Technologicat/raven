@@ -166,7 +166,10 @@ classifiers = [
 # The NVIDIA packages will be installed into `.venv/lib/python3.10/site-packages/nvidia*`.
 [dependency-groups]
 dev = [
-    "pytest>=9.1.1",
+    # Not 9.2.0: undoing its `monkeypatch.setattr` deletes an attribute that `__getattr__` serves, so patching
+    # an `unpythonic.env` breaks at teardown, or silently removes the binding. pytest-dev/pytest#15287. Drop
+    # the exclusion when a release with the fix is out.
+    "pytest>=9.1.1,!=9.2.0",
     # Coverage instrumentation, used by .github/workflows/coverage.yml.
     # NOTE: raven's CI workflows deliberately do NOT use `pdm install` —
     # the full dependency tree pulls in torch/torchvision (multi-GB) and
