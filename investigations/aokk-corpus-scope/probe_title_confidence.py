@@ -64,10 +64,10 @@ def _stance(answer: dict) -> str:
     return "unknown" if None in tests else "in"
 
 
-def _sweep(settings, ask, records, ledger, *, definition, batch_size, digest) -> None:
+def _sweep(settings, ask, records, ledger, *, definition, batch_size, digest, declared) -> None:
     result = sweep.Sweep(settings, functools.partial(ask, definition=definition),
                          [(record.key, record) for record in records], ledger, batch_size=batch_size,
-                         header=sweep.instrument_header(settings), digest=digest).run()
+                         header=sweep.instrument_header(settings, declared=declared), digest=digest).run()
     if result.outcome is not sweep.completed:
         raise SystemExit(f"probe_title_confidence: stopped: {result.message or result.outcome}")
     if result.failed:
@@ -94,6 +94,9 @@ def main() -> int:
     parser.add_argument("--backend-url", default=None)
     parser.add_argument("--api-key-file", default=None,
                         help="a file holding the backend's API key, in place of the one Librarian's config names")
+    parser.add_argument("--declare", default=None, metavar="TEXT",
+                        help="backend settings the backend does not report, e.g. 'IQ3_S, q4_0 KV, thinking budget 12288', "
+                             "recorded in the ledger's header")
     parser.add_argument("--out", required=True, help="per-record table, .tsv/.xlsx/.ods")
     opts = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -120,14 +123,17 @@ def main() -> int:
             raise SystemExit("probe_title_confidence: --model needs an LM Studio backend")
         settings = maybe_switcher.load(opts.model)
     try:
+        # The declaration stays out of the fingerprint: the answers count toward a full run only under the instrument
+        # the tool itself computes, from the definition and the model.
         fingerprint = sweep.fingerprint(settings, pipeline.materials(definition)["judge"])
         print(f"model {settings.model_record.model_id}, judge instrument {fingerprint}")
         titles, abstracts = judge.ledgers(ledger_dir, fingerprint)
         _sweep(settings, judge.ask_titles, judge.todo_titles(records, titles=titles), titles,
-               definition=definition, batch_size=pipeline.TITLE_BATCH, digest=judge.title_digest)
+               definition=definition, batch_size=pipeline.TITLE_BATCH, digest=judge.title_digest, declared=opts.declare)
         by_abstract = abstracts.answers({record.key: judge.abstract_digest(record) for record in records})
         _sweep(settings, judge.ask_abstracts, [record for record in records if record.key not in by_abstract],
-               abstracts, definition=definition, batch_size=pipeline.ABSTRACT_BATCH, digest=judge.abstract_digest)
+               abstracts, definition=definition, batch_size=pipeline.ABSTRACT_BATCH, digest=judge.abstract_digest,
+               declared=opts.declare)
     finally:
         if maybe_switcher is not None:
             maybe_switcher.load(initial)
