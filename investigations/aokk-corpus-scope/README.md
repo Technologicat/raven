@@ -783,6 +783,24 @@ backend, behind the runs already queued.
    can run the tool too or be only the backend. It waits on tuning that machine's fan noise under inference, and
    Raven's client has not yet been tried against Strata. The probe runs on the 3.8 27B first. Beyond that, no
    more time goes into choosing a model: the study itself is what has been waiting, on GPU time.
+   **The probe's first two results, 2026-11-02** (300 records each; `AOKK/confidence-probe/`). Share of title verdicts the
+   model's own abstract pass overturned:
+
+   | title confidence, escalated? | 3.8 27B | 3.6 35B-A3B |
+   |---|---|---|
+   | high, no | 4.2% of 96 | 7.2% of 83 |
+   | high, yes | 4.8% of 63 | 3.4% of 29 |
+   | medium, no | 16.5% of 85 | 11.5% of 96 |
+   | medium, yes | 24.2% of 33 | 19.7% of 61 |
+   | low, yes | 34.8% of 23 | 19.4% of 31 |
+   | overturns escalation would catch | 19 of 37 | 19 of 36 |
+
+   About the same number of overturns, with the 27B's *low* meaning more: on the 3.6, *low* and escalated *medium* are
+   overturned alike. Against people, on health education's 81 hand decisions (`score_against_decisions.py`, one run each):
+   the 27B agrees outright on 63, sends 8 to a person and disagrees on 10; the 3.6 agrees on 55, sends 9 and disagrees on
+   17, removing 12 records the authors kept against the 27B's 6. Those decisions were made on lists a 27B run had sorted, so
+   this reference leans toward the 27B; the AOKK team's labels are the fairer test.
+
 3. The full run, below, with `--model judge=M --model review=M --model extract=M` for the chosen `M`; its
    pilot's answers and its probe's title answers count toward it. **The converted ledgers are read-only to the tool, for every
 stage**: their instruments are the prototype's, and the definition and model of today make others (checked
