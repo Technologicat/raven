@@ -4,9 +4,9 @@ How to get from a review's accepted studies to a table of themes, with an LLM do
 the decisions. For a set small enough that every abstract fits in one prompt, where clustering by embedding finds
 little. The scripts are in this bundle, and `README.md` holds the measurements.
 
-**Status, 2026-11-02**: steps 1 and 2 are built and have run on one set. Step 3 is built and its first measurement
-is queued; step 4, and the check against published tables, are not done yet. So this describes the method as
-designed, and the sentences under *What was measured* are the only ones resting on data.
+**Status, 2026-11-02**: steps 1 and 2 have run on one set. Step 4 is built and its first measurement is queued. Steps
+3 and 5, and the check against published tables, are not done yet. So this describes the method as designed, and the
+sentences under *What was measured* are the only ones resting on data.
 
 ## The problem it answers
 
@@ -88,8 +88,8 @@ made.
 
 On one health-education set of 40 studies, with one model; `README.md` has the detail.
 
-- **Run-to-run agreement is moderate**: omega 0.37 to 0.53 at the theme level, depending on the guidance, and about half
-  of that spread is within what five to ten runs can tell apart.
+- **Run-to-run agreement is moderate**: omega 0.35 to 0.53 at the theme level across the conditions tried, from five to ten
+  runs each, so a difference of about 0.1 is a lead rather than a result.
 - **The guidance moves the grouping.** Research questions pull the themes toward themselves despite an instruction
   against it. With no aim the runs agree most, and name the most topical themes.
 - **Sub-themes agree less than themes**, at 0.27 to 0.36, so this method asks for themes only.
