@@ -230,6 +230,9 @@
   - The apps sent the API key in a form the server could not read, so a secure server refused every request from them.
 - **Closing an app while a file dialog is open no longer risks a crash on the way out.**
   - Rare, and not reproducible on demand: the dialog's background thread had to check on the app at the moment it was closing.
+- **A fresh install no longer fails with `ModuleNotFoundError: No module named 'flair'`.**
+  - Hits anything loading `raven.common.nlptools`, which includes Raven-server, Raven-librarian and the Raven-visualizer importer.
+  - An install made after `dehyphen` 0.6.0 came out (27 October 2026) gets that version, which no longer brings in `flair`. `dehyphen` is now capped below 0.4; to repair such an install, run `pdm install` again.
 
 ## 0.2.10 (6 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition
 
