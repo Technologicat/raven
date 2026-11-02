@@ -40,7 +40,7 @@ __all__ = ["FILL_AUDIT", "SIFT_AUDIT", "PREPROCESSED_BIB", "JUDGE_AUDIT", "REVIE
            "Outcome", "outcomes",
            "SiftResult", "select",
            "FinishedRunError", "finished_outputs", "refuse_if_finished", "move_finished_aside", "write_reports",
-           "KEEP", "DROP", "FinishError", "EarlierDecision", "read_decisions", "contradicted", "finish",
+           "KEEP", "DROP", "SENT_BY_EARLIER_DECISION", "FinishError", "EarlierDecision", "read_decisions", "contradicted", "finish",
            "PILOT_REPORT", "KEEP_SAMPLE", "title_bounds_note", "write_pilot_report"]
 
 import dataclasses
@@ -496,7 +496,7 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
         outcome = result[key]
         return (f"you decided '{decisions[key].decision}' earlier; this run {outcome.action} it, by the "
                 f"{outcome.stage} stage ({outcome.decided_by}): {outcome.reason}")
-    rows = [(key, "your earlier decision", result[key].decided_by, why_against(key), decisions[key].decision,
+    rows = [(key, SENT_BY_EARLIER_DECISION, result[key].decided_by, why_against(key), decisions[key].decision,
              decisions[key].decision, decisions[key].note, *_record_cells(by_key[key]))
             for key in against]
     rows += [(key, result[key].stage, result[key].decided_by, result[key].reason,
@@ -544,6 +544,10 @@ def _outcome_tables(table, *, result: dict[str, Outcome], by_key: dict[str, scop
 #: The decisions a person writes in the worklist's `decision` column, in any case. A blank cell drops too.
 KEEP = "keep"
 DROP = "drop"
+
+#: In the worklist's "sent by" column: a row the run decided outright, there because a person's earlier decision
+#: contradicts it. Its outcome is in the removed or kept table.
+SENT_BY_EARLIER_DECISION = "your earlier decision"
 
 
 class FinishError(ValueError):

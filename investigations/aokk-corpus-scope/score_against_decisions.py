@@ -19,6 +19,7 @@ import pathlib
 import sys
 
 from raven.common import tabular
+from raven.papers.scopebib import report
 
 OUTCOMES = ("removed", "to a person", "kept")
 
@@ -35,11 +36,9 @@ def read_table_any(run_dir: pathlib.Path, stem: str) -> list[dict[str, str]]:
 def outcomes_of(run_dir: pathlib.Path) -> tuple[dict[str, str], dict[str, str]]:
     """The run's outcome and a citation-like label for every record, by key."""
     outcomes, labels = {}, {}
-    for stem, outcome in (("03b-removed", "removed"), ("03a-CHECK-BY-HAND", "to a person"), ("03c-kept", "kept")):
+    for stem, outcome in ((report.REMOVED_AUDIT, "removed"), (report.CHECK_BY_HAND, "to a person"), (report.KEPT_AUDIT, "kept")):
         for row in read_table_any(run_dir, stem):
-            # A worklist carrying earlier decisions also lists the ones the run contradicts, which the run itself
-            # decided outright: their outcome is in the removed or kept table.
-            if row.get("sent by") == "your earlier decision":
+            if row.get("sent by") == report.SENT_BY_EARLIER_DECISION:
                 continue
             outcomes[row["key"]] = outcome
             labels[row["key"]] = f"{row.get('authors', '')[:24]} {row.get('year', '')}: {row.get('title', '')[:70]}"
