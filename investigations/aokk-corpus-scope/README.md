@@ -777,12 +777,11 @@ backend, behind the runs already queued.
 
 2. Choose the full run's model from the pilots' comparison and the probe.
 
-   **Revised 2026-11-02 (maintainer)**: Qwen 3.6 35B-A3B is out, being the oldest of the three and the smallest
-   in context (128 Ki). Qwen 3.8 Flash Next (over 100B, 200 Ki, about 50 tok/s, against the 3.8 27B's 190 Ki and
-   about 30 tok/s) is the choice unless the probe says otherwise, served by Strata from the work machine, which
-   can run the tool too or be only the backend. It waits on tuning that machine's fan noise under inference, and
-   Raven's client has not yet been tried against Strata. The probe runs on the 3.8 27B first. Beyond that, no
-   more time goes into choosing a model: the study itself is what has been waiting, on GPU time.
+   **Decided 2026-11-02 (maintainer): the full run uses Qwen 3.8 27B**, after the probe below. Against Flash Next it
+   agrees on 290 of 300 abstract verdicts, is calibrated about alike, and runs about twice as fast here: 4.2 and 6.0 s
+   a record for the title and abstract passes, against 6.8 and 15.8 s. Flash Next had been the expected choice, being
+   the newest and largest. The team's hand labels score the three models when they arrive. Beyond that, no more time
+   goes into choosing a model: the study itself is what has been waiting, on GPU time.
    **The probe's first two results, 2026-11-02** (300 records each; `AOKK/confidence-probe/`). Share of title verdicts the
    model's own abstract pass overturned:
 
