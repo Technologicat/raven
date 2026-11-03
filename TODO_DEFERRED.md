@@ -27,6 +27,49 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Take pytest past 9.2.0 once its monkeypatch regression is fixed
+
+*Cluster: dependency-holds · Cost: S · Gate: a pytest release fixing pytest-dev/pytest#15287 · Filed: 2026-11-03*
+
+pytest 9.2.0's `monkeypatch.setattr` takes the old value from the instance `__dict__`, while `unpythonic.env`
+keeps its bindings in `_env`, so undo deletes the binding instead of restoring it. A finalized env raises at
+teardown, a name patched twice raises, and a binding on an unfinalized env silently disappears. An exception
+stops `undo` partway, which leaks the remaining patches into later tests: 5 failures and 25 errors in
+`raven/visualizer/tests/`, reproduced locally.
+
+Held back in two places: `pytest>=9.1.1,!=9.2.0` in `pyproject.toml`, and the pin in
+`.github/workflows/requirements-ci.txt`. Dependabot's #51 is still open for 9.2.0.
+
+Upstream PRs #15288 and #15323 both aim to fix `__getattr__`-backed containers; neither has been run against
+`env`. When a release lands, try it on Dependabot's PR, then drop the exclusion and the comment at the pin.
+
+If upstream goes another way, the fallback is `monkeypatch.setitem` on an `env`, which round-trips correctly
+under both versions (probed 2026-11-02). It means reviewing up to 77 candidate call sites in 12 test files.
+
+## Port to dehyphen 0.6 if upstream gets fast enough
+
+*Cluster: dehyphenation · Cost: S–M, mostly deciding what `device_string` means · Gate: upstream speed, or a decision that CPU is fast enough · Filed: 2026-11-03 · See also: "Dehyphenate a word broken mid-line, where the line break was already lost"*
+
+`dehyphen` is capped below 0.4 in `pyproject.toml`, and nothing automatic will say when that should change:
+Dependabot watches the CI list, and `dehyphen` is not on it. So check upstream (<https://github.com/pd3f/dehyphen>)
+at each dependency pass. It went dormant in 2020 and came back on 2026-10-26 with four releases in two days.
+
+What 0.6.0 changes for us:
+
+- **It breaks the import as Raven stands.** It no longer depends on `pd3f-flair`, the only thing supplying the
+  `flair` module that `raven.common.nlptools` imports directly, to set `flair.device`.
+- **It runs on numpy, on the CPU only**, so `FlairScorer` has no device and `device_string` would mean nothing for
+  this subsystem. This is what is holding the port back: `visualizer.importer` and `papers.pdf2bib` dehyphenate
+  abstracts in bulk. Measured on 12 paragraphs of README prose, through `nlptools.dehyphenate`: 0.2 s for 0.3.4 on
+  the GPU, 4.1 s for 0.3.4 on the CPU, 3.4 s for 0.6.0. The maintainer's call on 2026-11-02: 17x is not acceptable.
+- **In its favour**: checkpoints go through an allowlisting unpickler, so `load_dehyphenator`'s temporary
+  `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` could go, and `pd3f-flair` and `clean-text` leave the tree. On that one sample
+  it also kept the `→` characters 0.3.4 drops (1 word-level difference from the original against 6).
+
+Not checked: whether 0.5.0's line-end handling affects the item named in *See also*. The release looks like the
+real author's (same account and repo as 2020), but there is no signature or PyPI provenance to confirm it; I read
+the loader rather than auditing all of it, so review the diff before adopting it.
+
 ## Report the DPG bugs we know of upstream, together
 
 *Cluster: dpg · Cost: M? · Gate: none · Filed: 2026-10-30 · See also: `dpg-notes.md`; `investigations/dpg-focus/focus_after_move_item_probe.py`*
