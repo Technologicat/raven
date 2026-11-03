@@ -150,6 +150,8 @@ wanted early in the week of 2026-11-02, for the health-education study.
       published papers record the method and the results (archived in
       `00_stuff/rawdata/biology_geography_health_education/published/`). Run it on those two first,
       compare, and only then on the health-education set.
+    - **Compare the 3.8 27B with Flash Next here** (maintainer, 2026-11-03). On the short judge batches the two nearly
+      coincide; reading whole documents with looser categories is a longer task, where a gap may open.
     - **It reads fulltexts**, one at a time, which ties it to item 8's fetching. The maintainer expects at
       least a representative set from the coauthor in the week of 2026-11-02.
     - **Related reading, beside the Elo & Kyngäs PDF**: Elo et al. (2014) on the trustworthiness of
@@ -215,3 +217,10 @@ wanted early in the week of 2026-11-02, for the health-education study.
     programme-continuity instruction of 2026-10-31.
   - **Biology's Sterling (2013) and geography's Yli-Panula et al. (2020) are likely slips in the papers' study
     lists.** For health education, `raven-checkrefs` is run against the study list, to avoid such slips.
+- **2026-11-03** (maintainer):
+  - **Item 10's approach is to become a tool in the near future**: the method in
+    `investigations/llm-thematic-grouping/METHOD.md`, finding themes, pooling them into a catalogue, people editing it, and
+    applying it. Its shape waits on how the catalogue worked with the coauthor.
+  - **Noted, with no expectation of doing it: whether a larger model's general knowledge changes what it does.** A larger model
+    would be expected to store more trivia, and recall is easy to test; what counts is a case where knowing an obscure fact
+    leads to a better approach to a problem, and designing good cases for that is hard.
