@@ -205,5 +205,5 @@ def test_the_aokk_definition_stays_valid():
         pytest.skip(f"{path} is not here; it ships with the repository, not the package")
     definition = d.load_definition(path)
     assert [test.name for test in definition.tests] == ["no_ai", "not_education", "wrong_level", "teachers_as_learners",
-                                                     "learner_agent"]
+                                                        "learner_agent"]
     assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "hold", "hold"]
