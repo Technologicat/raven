@@ -26,14 +26,14 @@ TITLE = 13
 HEADER_MARK = "Tarkastajan nimi"
 
 
-def read_flags(path: pathlib.Path) -> dict[str, tuple[str, str]]:
-    """The rows needing a note, from the table at `path`: key -> (`check` or `pasted`, what is wrong).
+def read_flags(path: pathlib.Path) -> dict[str, tuple[str, str, str]]:
+    """The rows needing a note, from the table at `path`: key -> (kind, note, proposed decision).
 
-    `check` means the decision cannot be taken at face value until the team has looked, so it comes out empty. `pasted`
-    means the reason is an AI assistant's text rather than the reviewer's own, so the decision stands and the reason
-    does not explain it. Kept in a table of its own, the keys being the private corpus's.
+    A kind of `check` means the decision cannot be taken at face value until the team has looked, so it comes out empty
+    with the proposal beside it. Any other kind only adds the note: the decision stands. Kept in a table of its own, the
+    keys being the private corpus's.
     """
-    return {row["key"]: (row["kind"], row["note"]) for row in tabular.read_table(path)}
+    return {row["key"]: (row["kind"], row["note"], row.get("proposed", "")) for row in tabular.read_table(path)}
 
 
 def decision_of(answer: str) -> str:
@@ -59,18 +59,18 @@ def main() -> int:
         key = cell(KEY)
         # One reviewer's later rows carry the reason in the AI column, with the reason column empty.
         reason, ai_use = (cell(REASON), cell(AI_USE)) if cell(REASON) else (cell(AI_USE), "")
-        kind, note = flags.get(key, ("", ""))
+        kind, note, proposed = flags.get(key, ("", "", ""))
         decision = "" if kind == "check" else decision_of(cell(ANSWER))
-        rows.append([key, decision, reason, cell(ANSWER), cell(REVIEWER), cell(ABSTRACT_ENOUGH), ai_use, note,
+        rows.append([key, decision, reason, cell(ANSWER), cell(REVIEWER), cell(ABSTRACT_ENOUGH), ai_use, kind, note, proposed,
                      cell(TIER), cell(LEVEL), cell(POPULATION), cell(TITLE)])
     tabular.write_table(opts.out, ["The AOKK team's decisions on the held-for-review tier, converted from their sheet."],
-                        ["key", "decision", "reason", "answer as written", "reviewer", "abstract enough", "AI use", "note",
+                        ["key", "decision", "reason", "answer as written", "reviewer", "abstract enough", "AI use", "flag", "note", "proposed",
                          "tier", "level (prototype)", "population (prototype)", "title"], rows)
     keys = [r[0] for r in rows]
     print(f"{len(rows)} rows, {len(set(keys))} distinct keys: {dict(collections.Counter(r[1] or 'unsettled' for r in rows))}")
     for r in rows:
         if not r[1]:
-            print(f"    unsettled: {r[0]} | {r[3]} | {r[7][:80]}")
+            print(f"    unsettled: {r[0]} | {r[3]} | proposed: {r[9] or '-'}")
     print("wrote", opts.out)
     return 0
 
