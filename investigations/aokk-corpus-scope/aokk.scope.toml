@@ -5,6 +5,10 @@
 
 scope = "studies of AI agents as students' interactive learning partners, in vocational and higher education institutions"
 
+# Every title-only keep at medium confidence is read again with its abstract: on the probe, the abstract pass overturned about
+# one in six of them, and the full run happens once.
+escalate_on = ["low", "medium"]
+
 hints = """
 A phrase can match in a sense the search did not mean, and this is the main thing to look for. "Learning
 assistant" names an AI tool, and it is ALSO the established term in STEM education research for a HUMAN
@@ -208,4 +212,9 @@ action = "hold"
 [[rule]]
 label = "learning outside an institution, e.g. workplace training"
 when = { level = ["professional_training", "informal"] }
+action = "hold"
+
+[[rule]]
+label = "no AI that learners use, by the extractor's reading"
+when = { agent_kind = ["none"] }
 action = "hold"

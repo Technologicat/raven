@@ -123,6 +123,27 @@ class TestFiresOn:
             self.load(tmp_path, 'fires_on = "false"')
 
 
+class TestEscalateOn:
+    def load(self, tmp_path, line):
+        path = tmp_path / "x.scope.toml"
+        path.write_text(f'scope = "s"\n{line}\n[[test]]\nname = "t"\nasks = "a"\n', encoding="utf-8")
+        return d.load_definition(path)
+
+    def test_low_is_the_default_and_medium_is_asked_for(self, tmp_path):
+        assert self.load(tmp_path, "").escalate_on == {"low"}
+        assert self.load(tmp_path, 'escalate_on = ["low", "medium"]').escalate_on == {"low", "medium"}
+
+    def test_it_stays_out_of_the_instrument(self, tmp_path):
+        """It decides which records are asked, and not what they are asked, so saved answers still count."""
+        assert (d.judge_material(self.load(tmp_path, ""))
+                == d.judge_material(self.load(tmp_path, 'escalate_on = ["low", "medium"]')))
+
+    @pytest.mark.parametrize("line", ['escalate_on = "medium"', 'escalate_on = ["medium"]', 'escalate_on = ["low", "maybe"]'])
+    def test_a_bad_value_is_refused(self, tmp_path, line):
+        with pytest.raises(d.DefinitionError, match="escalate_on"):
+            self.load(tmp_path, line)
+
+
 class TestScopeNotes:
     NOTES = 'scope_notes = """\nCorvus corax only.\n\nCrows are out.\n"""\n'
 
@@ -206,4 +227,4 @@ def test_the_aokk_definition_stays_valid():
     definition = d.load_definition(path)
     assert [test.name for test in definition.tests] == ["no_ai", "not_education", "wrong_level", "teachers_as_learners",
                                                         "learner_agent"]
-    assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "hold", "hold"]
+    assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "hold", "hold", "hold"]
