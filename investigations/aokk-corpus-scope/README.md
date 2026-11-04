@@ -771,6 +771,15 @@ A changed definition makes new instruments, so the probes' title answers do not 
 labels on the held-for-review tier applied this scope in practice, and read as narrower than the definition in other
 ways too, literature reviews among them; those are still to confirm.
 
+**Whether a newer model reads the level better** (2026-11-04, `rerun_extract_on.py`, the unrevised definition): the sheet's
+tier came from Qwen 3.6's extraction, where 8 of the 9 studies the team included read `professional_training`. On the 3.8
+27B, all 72 records re-asked, 2 of those move to `higher_education`, and so do 2 students the team dropped for other reasons,
+with practitioners staying put, so it is not simply calling everything higher education. The other cases are mostly not
+misreadings. Most of those abstracts do not say the learners are students: some name a corporate or industrial setting,
+which a reviewer settled from the fulltext or the authors' affiliations. Two more follow the definition's own wording,
+"psychotherapist training" among its examples. So those records staying *held for a person* is the tool working, and
+removing that tier outright would lose them.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
