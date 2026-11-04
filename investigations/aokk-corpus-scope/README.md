@@ -780,6 +780,14 @@ which a reviewer settled from the fulltext or the authors' affiliations. Two mor
 "psychotherapist training" among its examples. So those records staying *held for a person* is the tool working, and
 removing that tier outright would lose them.
 
+**The revised definition on the team's 72** (2026-11-04, the 3.8 27B, the tool end to end; outputs in
+`AOKK/scopebib-2026-11-04-held72/`). Against the 68 settled decisions: removed 35 of the 60 the team dropped, sent 21 to a
+person, kept 4; of the 8 the team kept, kept 2, sent 4 to a person, removed 2. The workload falls from 72 hand checks to 28.
+Both removals of a kept record are ones the team's own rules question: one abstract says employee training, the other
+informal learning. The kept drops are two reviews, a conceptual paper, and a truncated abstract where silence keeps. **This
+is partly fitted**: the definition was written after reading these records, and they are one hard tier, so it says the
+definition reads as intended rather than how well it works. The fresh blind sample is the test.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
