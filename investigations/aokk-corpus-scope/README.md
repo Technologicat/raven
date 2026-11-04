@@ -789,6 +789,13 @@ judge never reading its abstract; the extractor then says it has no agent. **Thi
 is partly fitted**: the definition was written after reading these records, and they are one hard tier, so it says the
 definition reads as intended rather than how well it works. The fresh blind sample is the test.
 
+**With medium-confidence title keeps escalated** (`escalate_on`, the same day): 17 more abstracts asked of the 72, and hand checks
+fall to 19. Removed 44 of the 60 the team dropped, sent 13 to a person, kept 3; of the 8 the team kept, kept 2, sent 3 to a
+person, removed 3. The study with no AI is now removed on reading its abstract. The third removal of a kept record is
+another whose abstract names a corporate setting, among those the team is asked about. The three kept drops are the reviews
+and the conceptual paper the tags are there to show. The new hold on no learner's agent caught nothing here. The same caveat
+holds: partly fitted, and one hard tier, where escalation asks a larger share than it would on a whole corpus.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
