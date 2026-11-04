@@ -1,9 +1,9 @@
 # The AOKK corpus's definition for `raven-scopebib`: the prototype in this directory, written in the tool's
-# format. The tests and hints are `judge_scope.py`'s rubric, minus what the tool's own frame says for any
-# corpus (silence keeps, a generic title gives no evidence, use the venue, judge the work rather than the
-# phrase). The fields are `extract_fields.py`'s, and the rules are `filter_keeps.py`'s four tiers.
+# format, and revised for the scope the team set on 2026-11-03: `README.md` → *The scope, as the team revised it*.
+# The tests and hints began as `judge_scope.py`'s rubric, minus what the tool's own frame says for any corpus (silence
+# keeps, a generic title gives no evidence, use the venue, judge the work rather than the phrase).
 
-scope = "studies on different aspects of the use of AI agents in higher education"
+scope = "studies of AI agents as students' interactive learning partners, in vocational and higher education institutions"
 
 hints = """
 A phrase can match in a sense the search did not mean, and this is the main thing to look for. "Learning
@@ -12,10 +12,10 @@ undergraduate who helps teach a course - that second sense has no AI in it and i
 "Conversational agent" and "intelligent agent" appear in fields with nothing to do with education.
 
 "Teaching", "training" and "learning" have the same problem, and it is the one most likely to mislead you
-here, because those words are ALSO how the machine-learning field describes what is done to a model. A
-"teachable agent" that crowdworkers correct, a system "trained" on a dataset, a paper about "learning" a
-policy - the thing being taught is software, and no person is being educated. That is NOT an educational
-dimension. The words count as education only when a PERSON is the one learning.
+here, because those words are ALSO how the machine-learning field describes training a model. A "teachable
+agent" that crowdworkers correct, a system "trained" on a dataset, a paper about "learning" a policy - the
+learner there is a model, and this search is about human learners. That is NOT an educational dimension here.
+The words count as education for this search only when a HUMAN is the one learning.
 
 A venue rarely says the LEVEL - an education journal covers schools and universities alike - so it is weak
 evidence for "wrong_level".
@@ -53,12 +53,33 @@ much AI is in it.
 [[test]]
 name = "wrong_level"
 asks = """
-true ONLY if the work is positively set at a level other than higher education - preschool, primary or
-secondary school, K-12, workplace or professional training outside a university, or the general public.
-False when the setting is a university, college or polytechnic, or its students, teachers or courses, AND
-false when the work does not say what level it is set at: these records all matched a higher-education
-search term already, so a record that does not say its level is NOT "wrong_level"; answer false and lower
-your confidence.
+true ONLY if the work is positively set outside vocational and higher education institutions - preschool,
+primary or secondary school, K-12, workplace or professional training outside an educational institution, or
+informal learning by the general public, even where some of those learners happen to be students. False when
+the setting is a university, college, polytechnic or vocational school, or a course or work placement of
+theirs, AND false when the work does not say what level it is set at: these records all matched a
+higher-education search term already, so a record that does not say its level is NOT "wrong_level"; answer
+false and lower your confidence.
+"""
+
+[[test]]
+name = "teachers_as_learners"
+asks = """
+true ONLY if the people learning in the work are teachers: practising teachers, their professional
+development, or student teachers in teacher education. False when teachers appear only as those who teach,
+or as one group among several learners, AND false when the work does not say who is learning.
+"""
+
+[[test]]
+name = "learner_agent"
+fires_on = false
+asks = """
+false ONLY if the work positively has no AI that learners use or interact with: AI is the subject of the
+teaching, as in AI literacy; the work is about policy, ethics or institutions; AI serves only teachers or
+administrators; or the agent does not exist yet, as in a needs assessment or a proposal for a future system.
+True for any system a learner uses, whatever the authors call it and however simple, including adaptive
+tutors; true for a study of learners' perceptions of one; true for a review of such systems; AND true when the
+work does not say.
 """
 
 # ---- The extractor: what a kept record says. Every vocabulary also has `not_stated`.
@@ -68,12 +89,14 @@ name = "population"
 asks = "who the work studies"
 [field.values]
 university_students = "students in higher education"
+vocational_students = "students in vocational education"
 school_pupils = "pupils in primary or secondary school"
 preservice_teachers = "people studying to become teachers"
 inservice_teachers = "practising teachers"
 researchers = "researchers, as the subjects of the work"
 professionals = "practitioners in a profession other than teaching"
 general_public = "the public at large"
+mixed = "students together with others, such as practitioners or the public"
 none = "the work studies no human population - a method, a system, a dataset"
 
 [[field]]
@@ -81,7 +104,9 @@ name = "level"
 asks = """
 the educational level the work is set at. The distinction between these is the SETTING, not the subject
 matter or the age of the learner. A course taught to university students is "higher_education" however
-professional its subject; medicine, law and teacher preparation are degree study. A review, survey or
+professional its subject; medicine, law and teacher preparation are degree study. People training for a
+profession are "higher_education" or "vocational" when the work names their programme, and not_stated when it
+names none: "trainees" alone does not make them practitioners. A review, survey or
 meta-analysis has no setting of its own: give it the level its own scope names, and answer not_stated when
 it names none, which is the common case. Many studies never say their level; answer not_stated rather than
 inferring it from the topic, the venue or what would be usual.
@@ -94,7 +119,7 @@ school = "primary or secondary schooling, K-12, pupils"
 vocational = "formal vocational or trade education leading to a qualification"
 professional_training = """
 workplace and professional development: practitioners already qualified, being coached, upskilled or trained
-on the job. Psychotherapist training, teacher CPD, staff onboarding
+on the job. Teacher CPD, staff onboarding
 """
 informal = """
 learning outside any institution - self-directed learners, the general public, lifelong learning, patient
@@ -110,25 +135,64 @@ learning something, the work IS set in education and another value applies
 [[field]]
 name = "human_learning"
 asks = """
-whether a PERSON is taught or is learning in this work, as against a model being trained. "Teaching",
-"training" and "learning" are the machine-learning field's own words for what is done to software: a
-"teachable agent" corrected by crowdworkers, a system "trained" on a corpus, a paper about "learning" a
-control policy - in all of those the thing being taught is software.
+whether a HUMAN is taught or is learning in this work, as against a model being trained. "Teaching",
+"training" and "learning" are also the machine-learning field's words for training a model: a "teachable
+agent" corrected by crowdworkers, a system "trained" on a corpus, a paper about "learning" a control policy -
+in all of those the learner is a model.
 """
 [field.values]
-yes = "a person is taught or is learning"
-no = "the only thing being taught or trained is software"
+yes = "a human is taught or is learning"
+no = "no human is taught or learning: the learner is a model"
+
+# ---- Tags: questions the team decides on the whole set at once. No rule reads these, so they remove nothing.
+
+[[field]]
+name = "study_kind"
+asks = "what kind of work this is"
+[field.values]
+empirical = "reports data collected from people: an experiment, a user study, a survey, interviews, a case study"
+computational = "no participants: a benchmark, a simulation, or an analysis of existing data or logs"
+theoretical = "a theory, model or framework, argued or derived"
+review = "a literature review, systematic review or meta-analysis"
+position = "an argument, opinion or essay"
+design_proposal = "proposes or describes a system or an intervention, with no evaluation of it"
+other = "none of these"
+
+[[field]]
+name = "agent_kind"
+asks = "how the AI and the learner interact, whatever the authors call it"
+[field.values]
+conversational = "they exchange messages or speech: a chatbot, a virtual patient, a conversational tutor"
+feedback = "it responds to what the learner does, without conversation: hints, corrections, assessment"
+adaptive = "it selects or sequences material by the learner's performance"
+generative_tool = "the learner asks it to produce something, with no sustained exchange"
+other = "they interact in some other way"
+none = "no AI that learners use"
+
+[[field]]
+name = "focus"
+asks = "what the work actually examines about the AI and its learners"
+[field.values]
+learning = "learners using it: the learning process or its outcomes"
+perceptions = "only attitudes, perceptions, acceptance or intention to use"
+system = "the system itself: its design, or an evaluation of how well it works"
+other = "something else"
 
 [[field]]
 name = "ai_role"
 asks = "what the AI does in this work, or 'none' if there is no AI in it"
 max_words = 8
 
-# ---- The rules: `filter_keeps.py`'s tiers. First match wins.
+# ---- The rules. First match wins.
 
 [[rule]]
-label = "school or vocational level, stated in the text"
-when = { level = ["school", "vocational"] }
+label = "school level, stated in the text"
+when = { level = ["school"] }
+action = "remove"
+
+[[rule]]
+label = "the learners are teachers"
+when = { population = ["inservice_teachers", "preservice_teachers"] }
 action = "remove"
 
 [[rule]]
