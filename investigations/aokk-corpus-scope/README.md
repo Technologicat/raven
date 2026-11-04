@@ -760,7 +760,9 @@ can write one, so the manual does not describe it.
 **To carry into `aokk.scope.toml` before the full run, which is why the run waits on it.** Decided by the team:
 
 - **Vocational training at an educational institution counts**, which the definition's first rule currently removes.
-- **Teacher training and teacher education do not.**
+- **Teacher training and teacher education do not**, student teachers in a university degree included (Juha's
+  understanding of the meeting, 2026-11-04). The definition currently names teacher preparation as degree study, so it
+  needs an explicit line to the contrary.
 - **The focus is the AI agent as the student's interactive learning partner**, in vocational and higher education,
   whatever the authors call it. An agent still only being designed is out.
 - **A work placement that is part of a course counts**, if AI is used; staff training in a company does not.
