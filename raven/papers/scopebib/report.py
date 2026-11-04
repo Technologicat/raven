@@ -58,6 +58,7 @@ from .. import fillbib
 from .. import siftbib
 from . import definition as scope_definition
 from . import extract as scope_extract
+from . import judge as scope_judge
 from . import records as scope_records
 from . import review as scope_review
 from . import rules as scope_rules
@@ -109,14 +110,10 @@ class Outcome:
     reason: str
 
 
-def _tests_true(answer: dict) -> list[str]:
-    return [name for name, value in answer["tests"].items() if value is True]
-
-
 def _judge_reason(answer: dict) -> str:
-    true = _tests_true(answer)
+    fired = [f"{name} {'true' if answer['tests'][name] else 'false'}" for name in scope_judge.fired_tests(answer)]
     unanswered = [name for name, value in answer["tests"].items() if value is None]
-    said = (f"{', '.join(true)} true" if true else "") + (f"; {', '.join(unanswered)} unanswered" if unanswered else "")
+    said = ", ".join(fired) + (f"; {', '.join(unanswered)} unanswered" if unanswered else "")
     return f"{said.lstrip('; ')}, {answer['confidence']} confidence from the {answer['source']}: {answer['why']}"
 
 
@@ -143,7 +140,7 @@ def outcomes(records: Iterable[scope_records.Record], *,
             out[record.key] = Outcome(PENDING, "judge", "", "not yet judged")
             continue
         verdict = answer["verdict"]
-        first_test = next(iter(_tests_true(answer)), "")
+        first_test = next(iter(scope_judge.fired_tests(answer)), "")
         if verdict == "drop":
             if record.key not in reviews:
                 out[record.key] = Outcome(PENDING, "review", first_test, "dropped by the judge, not yet reviewed")
@@ -372,7 +369,7 @@ def _judge_table(table, *, final: dict[str, dict], by_key: dict[str, scope_recor
     tests = [test.name for test in definition.tests]
     counts = {verdict: sum(1 for answer in final.values() if answer["verdict"] == verdict) for verdict in _VERDICT_ORDER}
     keys = sorted(final, key=lambda key: (_VERDICT_ORDER[final[key]["verdict"]],
-                                          ",".join(_tests_true(final[key])),
+                                          ",".join(scope_judge.fired_tests(final[key])),
                                           *_reading_order(by_key[key])))
     tally = "; ".join(f"{verdict}: {_share(count, len(final))}" for verdict, count in counts.items())
     table(JUDGE_AUDIT,
@@ -381,7 +378,7 @@ def _judge_table(table, *, final: dict[str, dict], by_key: dict[str, scope_recor
            f"{CHECK_BY_HAND}"],
           ("key", "verdict", "confidence", "pass", "tests true", *tests, "why", "truncated", *_RECORD_COLUMNS),
           [(key, final[key]["verdict"], final[key]["confidence"], final[key]["source"],
-            ", ".join(_tests_true(final[key])),
+            ", ".join(scope_judge.fired_tests(final[key])),
             *(_cell(final[key]["tests"].get(name)) for name in tests),
             final[key]["why"],
             {True: "yes", False: "no"}.get(final[key].get("truncated"), ""),
@@ -405,11 +402,11 @@ def _review_table(table, *, final: dict[str, dict], reviews: dict[str, dict], co
     rows = []
     for group, keys in (("drop", drops), ("control", controls)):
         for key in sorted(keys, key=lambda key: (reviews[key]["belongs"] is not True,
-                                                 ",".join(_tests_true(final[key])),
+                                                 ",".join(scope_judge.fired_tests(final[key])),
                                                  *_reading_order(by_key[key]))):
             answer = final[key]
             rows.append((group, key, _yes_no(reviews[key]["belongs"]), reviews[key]["case"],
-                         answer["verdict"], answer["confidence"], ", ".join(_tests_true(answer)), answer["why"],
+                         answer["verdict"], answer["confidence"], ", ".join(scope_judge.fired_tests(answer)), answer["why"],
                          *_record_cells(by_key[key])))
     table(REVIEW_AUDIT,
           [f"the reviewer found a case for {_share(cases(drops), len(drops))} drops"
@@ -815,7 +812,7 @@ def write_pilot_report(out_dir: str | pathlib.Path, *,
         maybe_review = reviews.get(key)
         maybe_extraction = extractions.get(key)
         decision = scope_rules.decide(maybe_extraction, definition) if maybe_extraction else None
-        decided_by = (", ".join(_tests_true(answer)) if answer and answer["verdict"] != "keep"
+        decided_by = (", ".join(scope_judge.fired_tests(answer)) if answer and answer["verdict"] != "keep"
                       else (decision.label or "") if decision else "")
         return (section, key, decided_by,
                 answer["verdict"] if answer else "not judged", answer["confidence"] if answer else "",

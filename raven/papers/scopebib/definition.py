@@ -60,9 +60,14 @@ ACTIONS = ("remove", "hold")
 
 @dataclasses.dataclass(frozen=True)
 class Test:
-    """One way of being off topic. `asks` is the description the judge is given."""
+    """One way of being off topic. `asks` is the description the judge is given.
+
+    `fires_on`: which answer counts against a record. True for a test named for what is wrong (`no_ai`), and False
+    for one named for what a record on topic has (`learner_agent`).
+    """
     name: str
     asks: str
+    fires_on: bool = True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,7 +113,7 @@ class DefinitionError(ValueError):
 
 
 _TOP_KEYS = {"scope", "scope_notes", "hints", "frame", "test", "field", "rule"}
-_TEST_KEYS = {"name", "asks"}
+_TEST_KEYS = {"name", "asks", "fires_on"}
 _FIELD_KEYS = {"name", "asks", "values", "quote", "max_words"}
 _RULE_KEYS = {"label", "when", "action"}
 
@@ -178,8 +183,11 @@ def load_definition(path: str | pathlib.Path) -> Definition:
     seen: set[str] = set()
     for i, entry in enumerate(entries("test"), start=1):
         where = label("test", i, entry)
-        check_keys(where, entry, _TEST_KEYS, _TEST_KEYS)
-        tests.append(Test(name(where, entry["name"], seen), text(f"{where}, asks", entry["asks"])))
+        check_keys(where, entry, _TEST_KEYS, {"name", "asks"})
+        fires_on = entry.get("fires_on", True)
+        if not isinstance(fires_on, bool):
+            fail(where, "`fires_on` must be true or false: which answer counts against a record")
+        tests.append(Test(name(where, entry["name"], seen), text(f"{where}, asks", entry["asks"]), fires_on))
     if not tests:
         fail("test", "at least one [[test]] is needed: the judge has nothing to ask otherwise")
 
@@ -284,7 +292,9 @@ def judge_material(definition: Definition) -> str:
     wrapped leaves it as it was, and any change to what the judge is asked does not.
     """
     return json.dumps({"scope": definition.scope, "hints": definition.hints, "frame": definition.frame,
-                       "tests": [[test.name, test.asks] for test in definition.tests]}
+                       # `fires_on` only where it is not the default, so that a definition not using it keeps its
+                       # instrument, and the answers saved under it.
+                       "tests": [[test.name, test.asks, *([] if test.fires_on else [False])] for test in definition.tests]}
                       | scope_notes_material(definition),
                       ensure_ascii=False, sort_keys=True)
 

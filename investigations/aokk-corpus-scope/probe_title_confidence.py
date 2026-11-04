@@ -52,16 +52,15 @@ COLUMNS = ("key", "title confidence", "title says", "escalated", "why escalated"
 
 
 def _stance(answer: dict) -> str:
-    """What an answer says about scope: `"out"` if a test came back true, `"in"` if every one came back false,
+    """What an answer says about scope: `"out"` if a test fired, `"in"` if every one came back clear,
     `"unknown"` if one was left unanswered.
 
     Compared rather than `judge.verdict_of`, whose `"review"` for a title-pass true at medium confidence is
     the tool's routing — ask again with the abstract — and so never equals what the abstract pass says.
     """
-    tests = answer["tests"].values()
-    if True in tests:
+    if judge.fired_tests(answer):
         return "out"
-    return "unknown" if None in tests else "in"
+    return "unknown" if None in answer["tests"].values() else "in"
 
 
 def _sweep(settings, ask, records, ledger, *, definition, batch_size, digest, declared) -> None:
@@ -77,7 +76,7 @@ def _sweep(settings, ask, records, ledger, *, definition, batch_size, digest, de
 def _why_escalated(answer: dict, measure) -> str:
     reasons = [name for name, fired in (("low confidence", answer["confidence"] == "low"),
                                         ("thin title", measure.uninformative),
-                                        ("a test true", True in answer["tests"].values())) if fired]
+                                        ("a test firing", bool(judge.fired_tests(answer)))) if fired]
     return ", ".join(reasons)
 
 

@@ -150,7 +150,7 @@ class TestReadingTheReply:
     def test_normalize(self, definition):
         out = judge.normalize({"not_birds": "yes", "wrong_bird": False, "confidence": "Very", "why": " a\n b "},
                               definition, "abstract")
-        assert out == {"tests": {"not_birds": None, "wrong_bird": False}, "confidence": "low", "why": "a b",
+        assert out == {"tests": {"not_birds": None, "wrong_bird": False}, "fired": [], "confidence": "low", "why": "a b",
                        "source": "abstract", "truncated": False}
 
 
@@ -193,6 +193,52 @@ class TestVerdict:
     ])
     def test_escalation(self, given, measure, escalates):
         assert judge.needs_escalation(given, measure) is escalates
+
+
+class TestAskedTheOtherWayRound:
+    """A test may fire on false, for one named for what a record on topic has."""
+
+    TEXT = DEFINITION_TEXT + '''
+[[test]]
+name = "has_feathers"
+asks = "false ONLY if the work is positively about something featherless"
+fires_on = false
+'''
+
+    @pytest.fixture
+    def inverted(self, tmp_path):
+        path = tmp_path / "inverted.scope.toml"
+        path.write_text(self.TEXT, encoding="utf-8")
+        return scope_definition.load_definition(path)
+
+    def reply(self, definition, **tests):
+        return judge.normalize({"not_birds": False, "wrong_bird": False, "has_feathers": True, "confidence": "high",
+                                **tests}, definition, "abstract")
+
+    def test_false_fires_and_true_does_not(self, inverted):
+        assert judge.fired_tests(self.reply(inverted, has_feathers=False)) == ["has_feathers"]
+        assert judge.fired_tests(self.reply(inverted)) == []
+
+    def test_the_verdict_and_escalation_follow_what_fired(self, inverted):
+        clear, fired = self.reply(inverted), self.reply(inverted, has_feathers=False)
+        assert judge.verdict_of(clear) == "keep" and judge.verdict_of(fired) == "drop"
+        assert not judge.needs_escalation(clear, INFORMATIVE) and judge.needs_escalation(fired, INFORMATIVE)
+
+    def test_an_unanswered_one_goes_to_review_rather_than_firing(self, inverted):
+        gap = self.reply(inverted, has_feathers=None)
+        assert judge.fired_tests(gap) == [] and judge.verdict_of(gap) == "review"
+
+    def test_a_test_firing_on_true_is_unchanged_beside_it(self, inverted):
+        assert judge.fired_tests(self.reply(inverted, not_birds=True)) == ["not_birds"]
+
+    def test_the_prompt_turns_the_advice_on_silence_round_for_it(self, inverted, definition):
+        said = judge.rubric(inverted)
+        assert "asked the other way round: has_feathers" in said and "answer true to these" in said
+        assert "other way round" not in judge.rubric(definition), "a definition not using it keeps its prompt"
+
+    def test_an_answer_saved_before_it_existed_still_reads(self):
+        assert judge.fired_tests(answer(not_birds=True)) == ["not_birds"] and judge.fired_tests(answer()) == []
+        assert judge.verdict_of(answer(not_birds=True)) == "drop"
 
 
 class TestThePasses:

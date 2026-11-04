@@ -102,6 +102,27 @@ class TestTheInstrument:
         assert self.materials(tmp_path, changed) == self.materials(tmp_path, FULL)
 
 
+class TestFiresOn:
+    def load(self, tmp_path, line):
+        path = tmp_path / "x.scope.toml"
+        path.write_text(f'scope = "s"\n[[test]]\nname = "t"\nasks = "a"\n{line}\n', encoding="utf-8")
+        return d.load_definition(path)
+
+    def test_a_test_fires_on_true_unless_told(self, tmp_path):
+        assert self.load(tmp_path, "").tests[0].fires_on is True
+        assert self.load(tmp_path, "fires_on = false").tests[0].fires_on is False
+
+    def test_not_using_it_leaves_the_instrument_as_it_was(self, tmp_path):
+        plain = d.judge_material(self.load(tmp_path, ""))
+        assert '"tests": [["t", "a"]]' in plain, "a change here would ask every saved answer again"
+        assert plain == d.judge_material(self.load(tmp_path, "fires_on = true"))
+        assert plain != d.judge_material(self.load(tmp_path, "fires_on = false"))
+
+    def test_it_must_be_a_boolean(self, tmp_path):
+        with pytest.raises(d.DefinitionError, match="fires_on"):
+            self.load(tmp_path, 'fires_on = "false"')
+
+
 class TestScopeNotes:
     NOTES = 'scope_notes = """\nCorvus corax only.\n\nCrows are out.\n"""\n'
 

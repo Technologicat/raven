@@ -7,9 +7,9 @@ Two passes, each a `raven.librarian.sweep` with a ledger of its own:
     low confidence, a title too thin to judge from, or any test answered true at all.
 
 A record's final answer is the abstract pass's where it had one, and the title pass's otherwise
-(`final_answers`). Its verdict (`verdict_of`) is a drop for a test answered true at high confidence, or at
-medium after reading the abstract; any other true, or a test left unanswered, sends it to review, and a
-record with no test true is kept.
+(`final_answers`). A test fires on the answer its `fires_on` names, true unless the definition says otherwise. A
+record's verdict (`verdict_of`) is a drop for a test firing at high confidence, or at medium after reading the abstract;
+any other firing, or a test left unanswered, sends it to review, and a record with no test firing is kept.
 
 The prompt is the tool's frame (`FRAME`, or the definition's own), the definition's tests, and its hints.
 The instrument (`instrument_material`) covers all of it, so a change to any of them asks again; the two
@@ -20,7 +20,7 @@ __all__ = ["FRAME", "ABSTRACT_CHARS", "CONFIDENCES",
            "rubric", "instrument_material", "ledgers",
            "title_item", "abstract_item", "title_digest", "abstract_digest",
            "ask_titles", "ask_abstracts",
-           "normalize", "temper_for_truncation", "verdict_of", "needs_escalation",
+           "normalize", "temper_for_truncation", "fired_tests", "verdict_of", "needs_escalation",
            "todo_titles", "todo_abstracts", "final_answers"]
 
 import json
@@ -127,6 +127,12 @@ def rubric(definition: scope_definition.Definition) -> str:
     frame = definition.frame if definition.frame is not None else FRAME.format(scope=definition.scope)
     tests = "\n".join(f'  "{test.name}"  {test.asks}' for test in definition.tests)
     parts = [frame, f"The tests:\n{tests}"]
+    # The frame's advice is written for tests where false is the answer that keeps a record, so a test firing on false
+    # needs telling apart: taken literally, "answer false to every test" would fire it on every thin title.
+    if asked_the_other_way := [test.name for test in definition.tests if not test.fires_on]:
+        parts.append(f"These tests are asked the other way round: {', '.join(asked_the_other_way)}. For them, true is "
+                     "what a record on topic gets, and only false counts against it. So where the above says to answer "
+                     "false because a record is silent or says too little, answer true to these instead.")
     if definition.hints:
         parts.append(f"About this search in particular:\n{definition.hints}")
     return scope_definition.with_scope_notes("\n\n".join(parts), definition)
@@ -238,12 +244,15 @@ def normalize(answer: dict, definition: scope_definition.Definition, source: str
     """One answer with its fields in the shapes the rest relies on.
 
     Each test is `True`, `False`, or `None` where the reply gave something else; a confidence outside
-    `CONFIDENCES` reads as `"low"`; `source` is the pass that answered, `"title"` or `"abstract"`.
+    `CONFIDENCES` reads as `"low"`; `source` is the pass that answered, `"title"` or `"abstract"`. `fired` lists the
+    tests whose answer counts against the record (`fired_tests`).
     """
     def boolean(value):
         return value if value in (True, False) else None
     confidence = str(answer.get("confidence") or "").strip().lower()
-    out = {"tests": {test.name: boolean(answer.get(test.name)) for test in definition.tests},
+    tests = {test.name: boolean(answer.get(test.name)) for test in definition.tests}
+    out = {"tests": tests,
+           "fired": [test.name for test in definition.tests if tests[test.name] is test.fires_on],
            "confidence": confidence if confidence in CONFIDENCES else "low",
            "why": " ".join(str(answer.get("why") or "").split())[:200],
            "source": source}
@@ -255,7 +264,7 @@ def normalize(answer: dict, definition: scope_definition.Definition, source: str
 def temper_for_truncation(answer: dict, record: scope_records.Record) -> dict:
     """An answer resting on a publisher's teaser, at low confidence whatever the model said.
 
-    By `verdict_of`, that sends any test answered true to review rather than out. Either signal suffices:
+    By `verdict_of`, that sends any test firing to review rather than out. Either signal suffices:
     the abstract visibly ends in an ellipsis (`raven.papers.utils.looks_truncated`), or the model said it stops.
     """
     # Decided here rather than left to the model, which reads the TRUNCATED marker and concludes from the
@@ -266,27 +275,34 @@ def temper_for_truncation(answer: dict, record: scope_records.Record) -> dict:
     return {**answer, "confidence": "low", "why": f"abstract is a truncated preview: {answer['why']}"}
 
 
+def fired_tests(answer: dict) -> list[str]:
+    """The tests whose answer counts against the record, by name. An answer saved before tests could fire on false has no
+    `fired`, and all its tests fire on true."""
+    if "fired" in answer:
+        return answer["fired"]
+    return [name for name, value in answer["tests"].items() if value is True]
+
+
 def verdict_of(answer: dict) -> str:
     """`"drop"`, `"review"` or `"keep"` for one answer.
 
-    A test answered true drops the record at high confidence, and at medium confidence when the abstract
-    pass gave it, having read the fuller text; any other true sends it to review. A test left unanswered
-    sends it to review too, a gap being something for a person rather than a keep.
+    A test firing drops the record at high confidence, and at medium confidence when the abstract pass gave
+    it, having read the fuller text; any other firing sends it to review. A test left unanswered sends it to
+    review too, a gap being something for a person rather than a keep.
     """
     # Medium drops from the abstract pass are trusted because the reviewer goes over every drop and sends
     # the ones it can make a case for to review. Measured on the prototype's corpus: it contested 0.8% of
     # the high-confidence drops and 2.8% of the medium ones, so sending every medium drop to a person would
     # have spent about 250 hand checks to find 7 records with a case.
-    tests = answer["tests"].values()
-    if True in tests:
+    if fired_tests(answer):
         trusted = answer["confidence"] == "high" or (answer["confidence"] == "medium" and answer["source"] == "abstract")
         return "drop" if trusted else "review"
-    return "review" if None in tests else "keep"
+    return "review" if None in answer["tests"].values() else "keep"
 
 
 def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
     """Whether a title pass's answer is asked again with the abstract: low confidence, a title too thin to
-    judge from, or any test answered true."""
+    judge from, or any test firing."""
     # The third trigger is the asymmetry rather than a second guess at the confidence. A false keep costs a
     # reader one line; a false drop removes a record and leaves nothing behind to notice it by. In the
     # prototype, confidence from a title alone carried no information about whether a drop was right: the
@@ -294,7 +310,7 @@ def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
     # against 0.3% of those made confidently after the abstract.
     return (answer["confidence"] == "low"
             or measure.uninformative
-            or True in answer["tests"].values())
+            or bool(fired_tests(answer)))
 
 
 # --------------------------------------------------------------------------------
