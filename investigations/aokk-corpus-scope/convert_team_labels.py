@@ -30,8 +30,9 @@ def read_flags(path: pathlib.Path) -> dict[str, tuple[str, str, str]]:
     """The rows needing a note, from the table at `path`: key -> (kind, note, proposed decision).
 
     A kind of `check` means the decision cannot be taken at face value until the team has looked, so it comes out empty
-    with the proposal beside it. Any other kind only adds the note: the decision stands. Kept in a table of its own, the
-    keys being the private corpus's.
+    with the proposal beside it. `ruled` means a rule the team set explicitly settles the row, so the proposal becomes the
+    decision. Any other kind only adds the note: the decision stands. Kept in a table of its own, the keys being the
+    private corpus's.
     """
     return {row["key"]: (row["kind"], row["note"], row.get("proposed", "")) for row in tabular.read_table(path)}
 
@@ -60,7 +61,7 @@ def main() -> int:
         # One reviewer's later rows carry the reason in the AI column, with the reason column empty.
         reason, ai_use = (cell(REASON), cell(AI_USE)) if cell(REASON) else (cell(AI_USE), "")
         kind, note, proposed = flags.get(key, ("", "", ""))
-        decision = "" if kind == "check" else decision_of(cell(ANSWER))
+        decision = {"check": "", "ruled": proposed}.get(kind, decision_of(cell(ANSWER)))
         rows.append([key, decision, reason, cell(ANSWER), cell(REVIEWER), cell(ABSTRACT_ENOUGH), ai_use, kind, note, proposed,
                      cell(TIER), cell(LEVEL), cell(POPULATION), cell(TITLE)])
     tabular.write_table(opts.out, ["The AOKK team's decisions on the held-for-review tier, converted from their sheet."],
