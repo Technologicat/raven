@@ -784,7 +784,8 @@ removing that tier outright would lose them.
 `AOKK/scopebib-2026-11-04-held72/`). Against the 68 settled decisions: removed 35 of the 60 the team dropped, sent 21 to a
 person, kept 4; of the 8 the team kept, kept 2, sent 4 to a person, removed 2. The workload falls from 72 hand checks to 28.
 Both removals of a kept record are ones the team's own rules question: one abstract says employee training, the other
-informal learning. The kept drops are two reviews, a conceptual paper, and a truncated abstract where silence keeps. **This
+informal learning. The kept drops are two reviews, a conceptual paper, and a study with no AI, kept from its title at medium confidence, the
+judge never reading its abstract; the extractor then says it has no agent. **This
 is partly fitted**: the definition was written after reading these records, and they are one hard tier, so it says the
 definition reads as intended rather than how well it works. The fresh blind sample is the test.
 
