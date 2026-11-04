@@ -212,9 +212,10 @@ def read_state(corpus: Corpus, definition: scope_definition.Definition, *,
     records, measures = corpus.records, corpus.measures
     todo = {"titles": scope_judge.todo_titles(records, titles=ledgers.titles),
             "abstracts": scope_judge.todo_abstracts(records, titles=ledgers.titles, abstracts=ledgers.abstracts,
-                                                     measures=measures),
+                                                     measures=measures, escalate_on=definition.escalate_on),
             "review": None, "extract": None}
-    final = scope_judge.final_answers(records, titles=ledgers.titles, abstracts=ledgers.abstracts, measures=measures)
+    final = scope_judge.final_answers(records, titles=ledgers.titles, abstracts=ledgers.abstracts, measures=measures,
+                                      escalate_on=definition.escalate_on)
     in_corpus = {record.key for record in records}
     # Read as the records are now: an answer about text that has been edited since is not one, and the
     # record is asked again.

@@ -97,7 +97,8 @@ class Rule:
 @dataclasses.dataclass(frozen=True)
 class Definition:
     """A loaded definition file. `scope_notes` and `hints` are `""` when the file has none; `frame` is `None`
-    unless the file replaces the tool's own."""
+    unless the file replaces the tool's own. `escalate_on`: the confidences at which the judge's title pass is asked
+    again with the abstract, for a record that no test fires on."""
     path: pathlib.Path
     scope: str
     scope_notes: str
@@ -106,13 +107,14 @@ class Definition:
     tests: tuple[Test, ...]
     fields: tuple[Field, ...]
     rules: tuple[Rule, ...]
+    escalate_on: frozenset[str] = frozenset({"low"})
 
 
 class DefinitionError(ValueError):
     """The definition file cannot be used. The message names the file and the entry."""
 
 
-_TOP_KEYS = {"scope", "scope_notes", "hints", "frame", "test", "field", "rule"}
+_TOP_KEYS = {"scope", "scope_notes", "hints", "frame", "escalate_on", "test", "field", "rule"}
 _TEST_KEYS = {"name", "asks", "fires_on"}
 _FIELD_KEYS = {"name", "asks", "values", "quote", "max_words"}
 _RULE_KEYS = {"label", "when", "action"}
@@ -259,7 +261,10 @@ def load_definition(path: str | pathlib.Path) -> Definition:
             matched[field_name] = frozenset(wanted)
         rules.append(Rule(text(f"{where}, label", entry["label"]), matched, entry["action"]))
 
-    return Definition(path=path, scope=scope, scope_notes=scope_notes, hints=hints, frame=frame,
+    escalate_on = raw.get("escalate_on", ["low"])
+    if not (isinstance(escalate_on, list) and "low" in escalate_on and set(escalate_on) <= {"low", "medium", "high"}):
+        fail("escalate_on", 'must be a list of confidences including "low", such as ["low", "medium"]')
+    return Definition(path=path, scope=scope, scope_notes=scope_notes, hints=hints, frame=frame, escalate_on=frozenset(escalate_on),
                       tests=tuple(tests), fields=tuple(fields), rules=tuple(rules))
 
 

@@ -300,15 +300,16 @@ def verdict_of(answer: dict) -> str:
     return "review" if None in answer["tests"].values() else "keep"
 
 
-def needs_escalation(answer: dict, measure: scope_records.TitleMeasure) -> bool:
-    """Whether a title pass's answer is asked again with the abstract: low confidence, a title too thin to
-    judge from, or any test firing."""
+def needs_escalation(answer: dict, measure: scope_records.TitleMeasure, *,
+                     escalate_on: Iterable[str] = ("low",)) -> bool:
+    """Whether a title pass's answer is asked again with the abstract: a confidence in `escalate_on`, a title too
+    thin to judge from, or any test firing."""
     # The third trigger is the asymmetry rather than a second guess at the confidence. A false keep costs a
     # reader one line; a false drop removes a record and leaves nothing behind to notice it by. In the
     # prototype, confidence from a title alone carried no information about whether a drop was right: the
     # reviewer found a case that the record belongs for 3.9% of the drops made confidently from a title,
     # against 0.3% of those made confidently after the abstract.
-    return (answer["confidence"] == "low"
+    return (answer["confidence"] in escalate_on
             or measure.uninformative
             or bool(fired_tests(answer)))
 
@@ -340,17 +341,19 @@ def todo_titles(records: Iterable[scope_records.Record], *, titles: sweep.Ledger
 
 
 def todo_abstracts(records: Iterable[scope_records.Record], *, titles: sweep.Ledger, abstracts: sweep.Ledger,
-                   measures: dict[str, scope_records.TitleMeasure]) -> list[scope_records.Record]:
+                   measures: dict[str, scope_records.TitleMeasure],
+                   escalate_on: Iterable[str] = ("low",)) -> list[scope_records.Record]:
     """The records whose title answer escalates and that the abstract pass has not answered, as they read now."""
     records = list(records)
     by_title, by_abstract = _answers(records, titles=titles, abstracts=abstracts)
     return [record for record in records
             if record.key in by_title and record.key not in by_abstract
-            and needs_escalation(by_title[record.key], measures[record.key])]
+            and needs_escalation(by_title[record.key], measures[record.key], escalate_on=escalate_on)]
 
 
 def final_answers(records: Iterable[scope_records.Record], *, titles: sweep.Ledger, abstracts: sweep.Ledger,
-                  measures: dict[str, scope_records.TitleMeasure]) -> dict[str, dict]:
+                  measures: dict[str, scope_records.TitleMeasure],
+                  escalate_on: Iterable[str] = ("low",)) -> dict[str, dict]:
     """Each settled record's final answer, with its `verdict`, by key.
 
     The abstract pass's where the record escalated and it has answered; the title pass's where the record
@@ -364,7 +367,7 @@ def final_answers(records: Iterable[scope_records.Record], *, titles: sweep.Ledg
         if record.key not in by_title:
             continue
         answer = by_title[record.key]
-        if needs_escalation(answer, measures[record.key]):
+        if needs_escalation(answer, measures[record.key], escalate_on=escalate_on):
             if record.key not in by_abstract:
                 continue
             answer = by_abstract[record.key]

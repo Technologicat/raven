@@ -195,6 +195,14 @@ class TestVerdict:
         assert judge.needs_escalation(given, measure) is escalates
 
 
+class TestEscalateOn:
+    def test_medium_confidence_escalates_only_when_asked(self):
+        medium = answer(confidence="medium")
+        assert not judge.needs_escalation(medium, INFORMATIVE)
+        assert judge.needs_escalation(medium, INFORMATIVE, escalate_on=("low", "medium"))
+        assert not judge.needs_escalation(answer(confidence="high"), INFORMATIVE, escalate_on=("low", "medium"))
+
+
 class TestAskedTheOtherWayRound:
     """A test may fire on false, for one named for what a record on topic has."""
 

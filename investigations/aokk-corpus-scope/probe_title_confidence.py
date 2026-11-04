@@ -73,8 +73,8 @@ def _sweep(settings, ask, records, ledger, *, definition, batch_size, digest, de
         print(f"note: {result.failed} records failed and are asked again on the next run of this probe")
 
 
-def _why_escalated(answer: dict, measure) -> str:
-    reasons = [name for name, fired in (("low confidence", answer["confidence"] == "low"),
+def _why_escalated(answer: dict, measure, *, escalate_on) -> str:
+    reasons = [name for name, fired in ((f"{answer['confidence']} confidence", answer["confidence"] in escalate_on),
                                         ("thin title", measure.uninformative),
                                         ("a test firing", bool(judge.fired_tests(answer)))) if fired]
     return ", ".join(reasons)
@@ -145,10 +145,10 @@ def main() -> int:
             continue  # failed this run; asked again on the next
         title_answer, abstract_answer = by_title[record.key], by_abstract[record.key]
         title_verdict, abstract_verdict = _stance(title_answer), _stance(abstract_answer)
-        escalated = judge.needs_escalation(title_answer, corpus.measures[record.key])
+        escalated = judge.needs_escalation(title_answer, corpus.measures[record.key], escalate_on=definition.escalate_on)
         overturned = title_verdict != abstract_verdict
         rows.append((record.key, title_answer["confidence"], title_verdict, "yes" if escalated else "no",
-                     _why_escalated(title_answer, corpus.measures[record.key]), abstract_answer["confidence"],
+                     _why_escalated(title_answer, corpus.measures[record.key], escalate_on=definition.escalate_on), abstract_answer["confidence"],
                      abstract_verdict, "yes" if overturned else "no", record.title))
         cell = cells[(title_answer["confidence"], escalated)]
         cell["records"] += 1
