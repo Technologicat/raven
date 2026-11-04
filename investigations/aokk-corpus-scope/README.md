@@ -755,6 +755,20 @@ every answer would have been asked again.
 The command stays in `raven-scopebib` for any other ledger written before digests, but no released Raven
 can write one, so the manual does not describe it.
 
+### The scope, as the team revised it (meeting of 2026-11-03)
+
+**To carry into `aokk.scope.toml` before the full run, which is why the run waits on it.** Decided by the team:
+
+- **Vocational training at an educational institution counts**, which the definition's first rule currently removes.
+- **Teacher training and teacher education do not.**
+- **The focus is the AI agent as the student's interactive learning partner**, in vocational and higher education,
+  whatever the authors call it. An agent still only being designed is out.
+- **A work placement that is part of a course counts**, if AI is used; staff training in a company does not.
+
+A changed definition makes new instruments, so the probes' title answers do not count toward that run. The team's
+labels on the held-for-review tier applied this scope in practice, and read as narrower than the definition in other
+ways too, literature reviews among them; those are still to confirm.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
