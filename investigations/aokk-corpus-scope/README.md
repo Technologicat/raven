@@ -930,7 +930,8 @@ wrong keep from passing on a title alone. Measured in two parts, the second chec
    model said what, oversampling the cells where the models disagree; on the order of 40–60 records.
    This is ground truth for part 1's reference, after which part 1 alone can be trusted on the next corpus
    or model. **First, ask the AOKK team (meeting the week of 2026-11-02) whether they screened any records by
-   hand**: those are labels already made.
+   hand**: those are labels already made. They had: the held-for-review tier. **The design for the sample itself is in
+   `blind-sample-design.md`.**
 
 ## Files
 
@@ -939,6 +940,7 @@ wrong keep from passing on a title alone. Measured in two parts, the second chec
 | `judge_scope.py` | The classifier. `--pilot N` and `--thin` are the two calibration runs; a plain run does both passes and writes the outputs. Re-running resumes |
 | `review_drops.py` | The second reader over `dropped.tsv`, asked whether a case can be made *for* each record, with kept records mixed in unlabelled as the control. `--skip`/`--limit` take a slice, `--control-strata` draws the control per confidence level |
 | `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output. `--contested` also writes the hand-check list |
+| `blind-sample-design.md` | The planned test of the revised definition against people: a stratified sample rated without seeing the tool's answers. A draft; nothing has run |
 | `convert_team_labels.py` | Turns the team's marked held-for-review sheet into a table of decisions by record. The sheet stays gitignored, as does its table of rows to check (`--flags`) |
 | `rerun_extract_on.py` | Asks a model the extractor's questions over the records a decisions table names, through the tool's own stage and ledger, and sets the answers beside what was decided |
 | `score_against_decisions.py` | How far a run's outcomes agree with a person's decisions, per run: decision against removed, sent to a person or kept, and each outright disagreement listed. Run e's ten known contradictions are its check. For comparing models against people |
