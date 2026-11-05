@@ -765,7 +765,9 @@ can write one, so the manual does not describe it.
   needs an explicit line to the contrary.
 - **The focus is the AI agent as the student's interactive learning partner**, in vocational and higher education,
   whatever the authors call it. An agent still only being designed is out.
-- **A work placement that is part of a course counts**, if AI is used; staff training in a company does not.
+- **A work placement that is part of a course counts**, if AI is used; staff training in a company does not. Whether that
+  excludes only training an employer runs is being asked: the team's labels keep some studies in other professional
+  settings, which matches Juha's understanding of the meeting. If it does, `wrong_level`'s wording narrows.
 
 A changed definition makes new instruments, so the probes' title answers do not count toward that run. The team's
 labels on the held-for-review tier applied this scope in practice, and read as narrower than the definition in other
