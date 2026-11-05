@@ -233,3 +233,28 @@ wanted early in the week of 2026-11-02, for the health-education study.
   every substitution shown, as `VISION.md`'s *How to read such a number* now does for its Bayes calculation. It makes it hard for a
   math bug to hide. Also to do then: check whether PRISMA has an extension for AI-assisted reviews, get a statistician's read if we
   can find one, and have a model from another family review the method before submission.
+- **2026-11-04/05, working with a team that meets every two weeks** (maintainer):
+  - **Batch rather than block.** Do whatever can be done independently, and collect questions for one reply, so that an issue in 5% of
+    the work does not hold up the other 95%. Coordinating with a team that meets rarely is chess by mail; a stream of questions is a
+    GUI full of modal dialogs.
+  - **So an open scope question is included and tagged, not decided.** The team then decides a whole tagged set at once, seeing what it
+    holds. With 200 tagged records or fewer, they can go in the review sheet as one continuous run. If nearly every record carries a
+    tag, it becomes a custom field in the output `.bib`, with a filter step after the decision. Not built yet: extraction gives the
+    tags, and writing them into the `.bib` and filtering on them are small additions.
+  - **The maintainer's reads on the open questions, not checked with the team:** perceptions out, reviews in (useful on building such
+    systems), informal out. The first two are tagged and asked.
+  - **Messages to the team start from the maintainer's register.** Edits to a draft softened assertions into the conditional, broke up
+    dense paragraphs, and put thanks and context before any request: colleagues at the next meeting, rather than findings presented.
+- **2026-11-05, the review sheet's UX** (maintainer): the team replaced `mark` with their own columns: decision, whether the abstract was
+  enough, how AI was used, and a reason. Those become the sheet's columns. Column order and widths still to tune, starting from what
+  causes the most friction in practice. Get the tool working first.
+- **From the AOKK meeting of 2026-11-03, for the paper; the notes themselves are gitignored:** cite the 3–5 most relevant articles per
+  cluster, with the whole clustering in an appendix of links or references. Publish the clusters as an interactive artifact, without
+  abstracts, since the bibliography cannot be published (technology open; check the journal's practice). A per-country table, from the
+  fulltext tool that health education needs anyway (item 8). "PRISMA-inspired", and check how the biology and geography papers worded
+  this. A case study asking the material about two research questions. Present the review system as a methodological strength without
+  displacing the pedagogical contribution.
+- **2026-11-05, small things for later:** `VISION.md` gets concrete numbers once the two studies are published. When sample sizing reaches
+  code, its docstring may cite Daniels (US Air Force, about 1952), who found no average pilot: a note on sizing pilots, in a straight
+  face. `raven-scopebib` has no `--declare`, so a run on a backend not reporting quantization leaves it out of the methods line; low
+  priority, the 27B reporting its own.
