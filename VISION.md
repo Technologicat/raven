@@ -137,7 +137,7 @@ f(*p*, clean) = f(*p* | clean) P(clean) = P(clean | *p*) f(*p*), and knowing thr
 
 - **f(*p*) = 1**, the prior.
 - **P(clean | *p*) = (1 − *p*)³⁰**, the likelihood.
-- **P(clean) = ∫₀¹ P(clean | *p*) f(*p*) d*p* = ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31**, the evidence: the likelihood averaged over the prior.
+- **P(clean) = ∫₀¹ P(clean | *p*) f(*p*) d*p* = ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31**, the evidence: the likelihood marginalized over *p*, which is its average under the prior.
 - **f(*p* | clean) = P(clean | *p*) f(*p*) / P(clean) = 31 (1 − *p*)³⁰**, the posterior.
 
 Integrating it, the chance that the rate is below *x* is 1 − (1 − *x*)³¹. At *x* = 9.5% that is
