@@ -185,13 +185,14 @@ a mean of 1/32, about 3%, and a median of about 2%.
    | Fraction found | 30 records | 60 | 150 | 300 |
    |---|---|---|---|---|
    | 0% | 9.5% | 4.9% | 2.0% | 1.0% |
-   | 1% | — | — | — | 2.6% |
-   | 2% | — | — | 5.1% | 3.9% |
-   | 5% | — | 12.4% | — | 7.6% |
+   | 1% | — | — | *3.6%* | 2.6% |
+   | 2% | — | *8.2%* | 5.1% | 3.9% |
+   | 5% | *17.3%* | 12.4% | *9.0%* | 7.6% |
    | 10% | 23.9% | 18.8% | 15.0% | 13.3% |
    | 20% | 35.7% | 30.4% | 26.1% | 24.2% |
 
-   A dash is a fraction that size of sample cannot show. As *n* grows the bound falls toward the fraction found, and there 3/*n* + 1.5 *f* runs high: past a
+   A value in italics is interpolated, at a fractional number of mistakes, to show the trend. A dash would be fewer than one mistake, which that size of sample
+   cannot show. As *n* grows the bound falls toward the fraction found, and there 3/*n* + 1.5 *f* runs high: past a
    few mistakes, the normal approximation *f* + 1.645 √(*f*(1 − *f*)/*n*) + 1/*n* is the closer one, within about a point here.
 
 4. **It rests on two assumptions.** The sample is random, and the person rating it is right. Where people disagree among themselves, the
