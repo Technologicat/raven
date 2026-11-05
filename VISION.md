@@ -83,6 +83,87 @@ So the review has three parts, each carrying what it carries best:
 
 The map is part of the review, not a step before it.
 
+## What it asks you to accept
+
+A review made this way will contain mistakes. At one wrong decision in a hundred, five thousand records hold about fifty, and the
+chance of none is about 10⁻²². At this scale no person checks them all, so some will never be caught.
+
+**That is no new loss, because the alternative never had the property it is credited with.** A review done by hand cannot read
+the first ten thousand matches, and it applies its own criteria inconsistently. People do, and rarely measure or admit it. An
+exact, exhaustive review was always a fiction; what changes at this scale is that it can no longer pass for anything else.
+
+**The trade is to see the whole picture, with artifacts in it, in place of being sure of a few pixels.** Engineering made a
+similar move when [uncertainty quantification](https://en.wikipedia.org/wiki/Uncertainty_quantification) replaced point values
+with distributions, following the lead of [ensemble weather forecasting](https://en.wikipedia.org/wiki/Ensemble_forecasting).
+Scientific knowledge outside mathematics has always worked this way, tentative and updated on evidence. A hundred-percent
+standard is a strange one to hold a method to, when nothing else in science meets it.
+
+**What made that move a gain was measuring the error, and tolerating it was only the price.** So the trade comes with obligations:
+
+- **Measure the rate, and report it with the result.** People rate a sample without seeing the tool's answers, and that gives a
+  posterior on the error rate rather than a pass or a fail. The precision wanted sets the size of the sample: with no mistakes among
+  the rated records, 15 of them bound the error rate in what was sampled at 20%, 30 at 10%, 60 at 5%, 150 at 2% and 300 at 1%, with
+  one-sided 95% confidence ([Hanley & Lippman-Hand 1983](https://doi.org/10.1001/jama.1983.03330370053031)). Then convert it to the share of
+  relevant work missed, which is what a review's reader needs. *How to read such a number*, below, spells this out. This much is
+  already a strict upgrade: a review by hand has an error rate too, and does not know it.
+- **Look for errors with a structure.** Random mistakes blur the picture. A misread criterion removes a whole kind of work at once,
+  and that looks like a real gap in the literature. So the check is stratified by what made each decision.
+- **Put the error bars on the claim, not the record.** "Most of this work is on X" survives a few percent of errors. "Nobody has
+  studied Y" does not, since one wrongly removed record refutes it, so a claim of absence gets a check by hand. Careful qualifiers
+  were always part of scientific writing; here they have numbers behind them.
+- **Say what is stable.** A grouping run several times shows what holds and what moves, as an ensemble forecast does.
+
+**In return, it can be audited as no manual review can be.** Every decision keeps its reason, the model and the prompt that made it,
+and it can be run again. A person's reasoning on the four-hundredth abstract of the afternoon cannot be replayed. That is a
+different kind of rigour from a fixed protocol such as [PRISMA](https://en.wikipedia.org/wiki/Preferred_Reporting_Items_for_Systematic_Reviews_and_Meta-Analyses),
+and we think it is the kind that scales.
+
+### How to read such a number
+
+Written for scientists who are not statisticians. The example: 30 removed records rated by hand, and no mistakes
+found. In plain words:
+
+> Unlikely (95%) that more than about 10% of the removals are wrong. The likeliest figure is a few percent.
+
+**Where the 95% comes from.** Call the true error rate *p*. Each record is then right with probability 1 − *p*, so a clean sample of 30 has
+probability (1 − *p*)³⁰. That falls as *p* rises: about 74% at *p* = 1%, 4% at 10%, and 0.1% at 20%. The bound is the rate at which it reaches
+5%, by solving (1 − *p*)³⁰ = 0.05, which gives *p* = 9.5%. So the "95%" means: above that rate, a sample this clean would turn up less than 5%
+of the time. Note this is a statement about the sample, for each possible *p*. And it is one-sided, because the question is only how high the
+rate can be. Note too that a clean sample cannot tell 1% from 0%.
+
+**What people want to say instead** is "the rate is probably under 10%", a statement about *p*, and that takes Bayes's formula. *p* is the unknown,
+so the prior is on *p*: before looking, take every rate from 0 to 1 as equally plausible, a density of 1. The three terms are then:
+
+- **Prior:** f(*p*) = 1.
+- **Likelihood of a clean sample:** (1 − *p*)³⁰.
+- **Evidence**, the likelihood averaged over the prior: ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31.
+
+Their combination is the posterior, f(*p* | clean) = 31 (1 − *p*)³⁰. Integrating it, the chance that the rate is below *x* is 1 − (1 − *x*)³¹. At *x* = 9.5% that is
+95.5%. The two readings nearly agree because the only difference is an exponent of 31 in place of 30. The same posterior gives the best single guesses:
+a mean of 1/32, about 3%, and a median of about 2%.
+
+**What the 10% says**, with four cautions:
+
+1. **It is a ceiling, not an estimate.** After a clean sample the best single guess is about 2–3%, as above. So: probably a few percent, and very
+   likely under 10%.
+2. **It covers only what was sampled.** Rate 30 removed records, and the bound is on the removals: at most 10% of what was removed is
+   actually in scope. It says nothing about the kept records. Each group needs a check of its own, which is why the sample is stratified.
+3. **It is the case of no mistakes found.** Finding some moves the ceiling quickly:
+
+   | Mistakes in 30 | 95% upper bound |
+   |---|---|
+   | 0 | 9.5% |
+   | 1 | 14.9% |
+   | 2 | 19.5% |
+   | 3 | 23.9% |
+
+4. **It rests on two assumptions.** The sample is random, and the person rating it is right. Where people disagree among themselves, the
+   "error rate" partly measures that, which is what rating some records twice is for.
+
+**And the trap: 10% of removals is not 10% of the relevant work.** Say the tool removed 2,000 records and kept 1,000 relevant ones. At
+the ceiling, 200 of the removed ones are relevant, so 200 of 1,200 relevant studies are missed: 17%. Removal is the larger pile, so a
+small rate on it weighs more than it sounds. The share of relevant work missed is the number for a review to report.
+
 ## The pipeline, and where it actually stands
 
 The pipeline has four stages. Their honest status:
