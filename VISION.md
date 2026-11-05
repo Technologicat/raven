@@ -163,8 +163,10 @@ a mean of 1/32, about 3%, and a median of about 2%.
    people agree.
 
 **And the trap: 10% of removals is not 10% of the relevant work.** Say the tool removed 2,000 records and kept 1,000 relevant ones. At
-the ceiling, 200 of the removed ones are relevant, so 200 of 1,200 relevant studies are missed: 17%. Removal is the larger pile, so a
-small rate on it weighs more than it sounds. The share of relevant work missed is the number for a review to report.
+the ceiling, 200 of the removed ones are relevant, so 200 of 1,200 relevant studies are missed: 17%. Removal is the larger pile here, as it
+often is in a search that casts a wide net, and then a small rate on it weighs more than it sounds. With 500 removed, the same rate misses
+50 of 1,050: 5%. So convert with the actual counts: the share missed is *rR* / (*rR* + *K*), for an error rate *r* on *R* removed records and
+*K* relevant ones kept. That share is the number for a review to report.
 
 ## The pipeline, and where it actually stands
 
