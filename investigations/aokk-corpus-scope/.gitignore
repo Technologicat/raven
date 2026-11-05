@@ -6,6 +6,6 @@
 *.tsv
 *.bib
 # The team's marked sheet and the meeting notes: a person's names beside a private corpus's records.
-held-for-review_tarkastetut.xlsx
+held-for-review_tarkastetut*.xlsx
 meeting_notes_*.md
 team-questions*
