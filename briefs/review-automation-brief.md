@@ -224,3 +224,7 @@ wanted early in the week of 2026-11-02, for the health-education study.
   - **Noted, with no expectation of doing it: whether a larger model's general knowledge changes what it does.** A larger model
     would be expected to store more trivia, and recall is easy to test; what counts is a case where knowing an obscure fact
     leads to a better approach to a problem, and designing good cases for that is hard.
+- **2026-11-05** (maintainer), for the tool, unscheduled:
+  - **An ensembled pilot**: several runs, so that a result can say what is stable, as item 10's runs do.
+  - **Recommending a sample size**: invert the bound, so that a person names the precision wanted and gets the number of records to
+    rate. Part of `VISION.md`'s obligation to measure the error rate.
