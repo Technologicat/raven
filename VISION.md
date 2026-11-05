@@ -159,15 +159,24 @@ a mean of 1/32, about 3%, and a median of about 2%.
    | 2 | 19.5% |
    | 3 | 23.9% |
 
-   To remember: **three, plus one and a half per mistake, all over *n***, which is close enough for the first few mistakes. At 30 records, that
-   starts at 10% and adds about 5 points per mistake; at 60, it starts at 5% and adds about 2.5.
-
    These come from the same reasoning as the clean case. The number of mistakes among *n* records follows a binomial distribution, so the
    chance of exactly *i* mistakes is C(*n*, *i*) *p*^*i* (1 − *p*)^(*n* − *i*). With *k* mistakes found, the bound is the rate at which a result *this good or better*
    has probability 5%: the *p* solving Σᵢ₌₀ᵏ C(*n*, *i*) *p*^*i* (1 − *p*)^(*n* − *i*) = 0.05, by numerical root-finding where *k* > 0. With *k* = 0 the sum is one term, the
    (1 − *p*)³⁰ = 0.05 from above. With *k* = 1 and *n* = 30 it is (1 − *p*)³⁰ + 30 *p* (1 − *p*)²⁹ = 0.05, which gives 14.9%. This is the
    [Clopper–Pearson](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Clopper%E2%80%93Pearson_interval) bound. The Bayesian
    version runs as before, with likelihood C(*n*, *k*) *p*^*k* (1 − *p*)^(*n* − *k*), and evidence still 1/(*n* + 1) whatever *k* is; for one mistake in 30 its 95% point is 14.4%.
+
+   To remember: **three, plus one and a half per mistake, all over *n***, which is close enough for the first few mistakes. How close, as percent
+   for 0 to 3 mistakes:
+
+   | Records | Exact | Rule of thumb |
+   |---|---|---|
+   | 30 | 9.5, 14.9, 19.5, 23.9 | 10, 15, 20, 25 |
+   | 60 | 4.9, 7.7, 10.1, 12.4 | 5, 7.5, 10, 12.5 |
+   | 150 | 2.0, 3.1, 4.1, 5.1 | 2, 3, 4, 5 |
+   | 300 | 1.0, 1.6, 2.1, 2.6 | 1, 1.5, 2, 2.5 |
+
+   Use it for planning, and the exact number in a report.
 
 4. **It rests on two assumptions.** The sample is random, and the person rating it is right. Where people disagree among themselves, the
    "error rate" partly measures that, which is what rating some records twice is for: two human opinions, preferably from different
