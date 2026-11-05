@@ -133,7 +133,7 @@ rate can be. A clean sample of this size cannot tell 1% from 0%, and no finite s
 
 **What people want to say instead** is "the rate is probably under 10%", a statement about *p*, and that takes Bayes's formula. *p* is the unknown,
 so the prior is on *p*: before looking, take every rate from 0 to 1 as equally plausible. Bayes's formula is the joint probability written both ways,
-f(*p* | clean) P(clean) = P(clean | *p*) f(*p*), and knowing three of the terms gives the fourth:
+f(*p*, clean) = f(*p* | clean) P(clean) = P(clean | *p*) f(*p*), and knowing three of the terms gives the fourth:
 
 - **f(*p*) = 1**, the prior.
 - **P(clean | *p*) = (1 − *p*)³⁰**, the likelihood.
