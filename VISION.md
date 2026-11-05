@@ -132,13 +132,15 @@ of the time. Note this is a statement about the sample, for each possible *p*. A
 rate can be. A clean sample of this size cannot tell 1% from 0%, and no finite sample can establish 0%.
 
 **What people want to say instead** is "the rate is probably under 10%", a statement about *p*, and that takes Bayes's formula. *p* is the unknown,
-so the prior is on *p*: before looking, take every rate from 0 to 1 as equally plausible, a density of 1. The three terms are then:
+so the prior is on *p*: before looking, take every rate from 0 to 1 as equally plausible. Bayes's formula is the joint probability written both ways,
+f(*p* | clean) P(clean) = P(clean | *p*) f(*p*), and knowing three of the terms gives the fourth:
 
-- **Prior:** f(*p*) = 1.
-- **Likelihood of a clean sample:** (1 − *p*)³⁰.
-- **Evidence**, the likelihood averaged over the prior: ∫₀¹ f(*p*) (1 − *p*)³⁰ d*p* = ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31.
+- **f(*p*) = 1**, the prior.
+- **P(clean | *p*) = (1 − *p*)³⁰**, the likelihood.
+- **P(clean) = ∫₀¹ P(clean | *p*) f(*p*) d*p* = ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31**, the evidence: the likelihood averaged over the prior.
+- **f(*p* | clean) = P(clean | *p*) f(*p*) / P(clean) = 31 (1 − *p*)³⁰**, the posterior.
 
-Their combination is the posterior, f(*p* | clean) = 31 (1 − *p*)³⁰. Integrating it, the chance that the rate is below *x* is 1 − (1 − *x*)³¹. At *x* = 9.5% that is
+Integrating it, the chance that the rate is below *x* is 1 − (1 − *x*)³¹. At *x* = 9.5% that is
 95.5%. The two readings nearly agree because the only difference is an exponent of 31 in place of 30. The same posterior gives the best single guesses:
 a mean of 1/32, about 3%, and a median of about 2%.
 
