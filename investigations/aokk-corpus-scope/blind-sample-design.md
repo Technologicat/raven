@@ -35,7 +35,8 @@ it counting toward the full run.
 Draws are seeded and recorded. Each stratum's share of the pool is kept, so that rates can be weighted back to the corpus:
 oversampling removals changes the precision of the estimate, and must not change what it estimates.
 
-**Double rating:** about 15 of the 50 go to two reviewers. Two people's agreement is the yardstick for the tool's: a tool agreeing
+**Double rating:** about 15 of the 50 go to two reviewers (or, failing a second one, to the same reviewer again after enough time for
+a fresh look, which measures consistency rather than agreement). Two people's agreement is the yardstick for the tool's: a tool agreeing
 with people about as often as people agree with each other has reached what labels can show.
 
 **What reviewers see:** a shuffled list with title, abstract, venue and link, and no trace of the stratum or the tool's answer. The

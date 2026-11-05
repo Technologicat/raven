@@ -129,7 +129,7 @@ found. In plain words:
 probability (1 − *p*)³⁰. That falls as *p* rises: about 74% at *p* = 1%, 4% at 10%, and 0.1% at 20%. The bound is the rate at which it reaches
 5%, by solving (1 − *p*)³⁰ = 0.05, which gives *p* = 9.5%. So the "95%" means: above that rate, a sample this clean would turn up less than 5%
 of the time. Note this is a statement about the sample, for each possible *p*. And it is one-sided, because the question is only how high the
-rate can be. Note too that a clean sample cannot tell 1% from 0%.
+rate can be. A clean sample of this size cannot tell 1% from 0%, and no finite sample can establish 0%.
 
 **What people want to say instead** is "the rate is probably under 10%", a statement about *p*, and that takes Bayes's formula. *p* is the unknown,
 so the prior is on *p*: before looking, take every rate from 0 to 1 as equally plausible, a density of 1. The three terms are then:
@@ -158,7 +158,9 @@ a mean of 1/32, about 3%, and a median of about 2%.
    | 3 | 23.9% |
 
 4. **It rests on two assumptions.** The sample is random, and the person rating it is right. Where people disagree among themselves, the
-   "error rate" partly measures that, which is what rating some records twice is for.
+   "error rate" partly measures that, which is what rating some records twice is for: two human opinions, preferably from different
+   people. Failing that, the same person after enough time for a fresh look, which shows how consistent they are rather than how far
+   people agree.
 
 **And the trap: 10% of removals is not 10% of the relevant work.** Say the tool removed 2,000 records and kept 1,000 relevant ones. At
 the ceiling, 200 of the removed ones are relevant, so 200 of 1,200 relevant studies are missed: 17%. Removal is the larger pile, so a
