@@ -166,7 +166,7 @@ a mean of 1/32, about 3%, and a median of about 2%.
    [Clopper–Pearson](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Clopper%E2%80%93Pearson_interval) bound. The Bayesian
    version runs as before, with likelihood C(*n*, *k*) *p*^*k* (1 − *p*)^(*n* − *k*), and evidence still 1/(*n* + 1) whatever *k* is; for one mistake in 30 its 95% point is 14.4%.
 
-   To remember: **three, plus one and a half per mistake, all over *n***, which is close enough for the first few mistakes. How close, as percent
+   To remember: **three, plus one and a half per mistake, all over *n***, which is close enough for the first few mistakes, from about 30 records up. Below that it overstates the bound, by up to 6 points at 15 records. How close, as percent
    for 0 to 3 mistakes:
 
    | Records | Exact | Rule of thumb |
