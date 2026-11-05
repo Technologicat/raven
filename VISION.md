@@ -136,7 +136,7 @@ so the prior is on *p*: before looking, take every rate from 0 to 1 as equally p
 
 - **Prior:** f(*p*) = 1.
 - **Likelihood of a clean sample:** (1 − *p*)³⁰.
-- **Evidence**, the likelihood averaged over the prior: ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31.
+- **Evidence**, the likelihood averaged over the prior: ∫₀¹ f(*p*) (1 − *p*)³⁰ d*p* = ∫₀¹ (1 − *p*)³⁰ d*p* = 1/31.
 
 Their combination is the posterior, f(*p* | clean) = 31 (1 − *p*)³⁰. Integrating it, the chance that the rate is below *x* is 1 − (1 − *x*)³¹. At *x* = 9.5% that is
 95.5%. The two readings nearly agree because the only difference is an exponent of 31 in place of 30. The same posterior gives the best single guesses:
