@@ -227,4 +227,9 @@ wanted early in the week of 2026-11-02, for the health-education study.
 - **2026-11-05** (maintainer), for the tool, unscheduled:
   - **An ensembled pilot**: several runs, so that a result can say what is stable, as item 10's runs do.
   - **Recommending a sample size**: invert the bound, so that a person names the precision wanted and gets the number of records to
-    rate. Part of `VISION.md`'s obligation to measure the error rate.
+    rate. Part of `VISION.md`'s obligation to measure the error rate. Advice in round numbers, which are easy to remember and
+    cost a record of extra work at most: 15, 30, 60, 150, 300 records for 20, 10, 5, 2, 1 percent (maintainer).
+- **2026-11-05, for the papers' methodology sections** (maintainer): write the mathematics at step-by-step detail, every term and
+  every substitution shown, as `VISION.md`'s *How to read such a number* now does for its Bayes calculation. It makes it hard for a
+  math bug to hide. Also to do then: check whether PRISMA has an extension for AI-assisted reviews, get a statistician's read if we
+  can find one, and have a model from another family review the method before submission.
