@@ -830,6 +830,10 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
 - **The human-operated agent changed nothing**, because the judge kept that record from its title at high confidence and
   so never read the abstract, which says the educators role-play the patient in real time. A high-confidence title keep is
   not escalated, so a definition change that only the abstract can show does not reach it.
+- **So it is an extractor field instead** (`agent_operator`, with a hold rule until the team decides), extraction
+  reading the abstract of every kept record. On the 72 (the base run, re-extracted) it marks that record `human` and no
+  other; the record goes to a person, though here by the earlier rule on professional training, which matches first.
+  Against the team: removed 49 of 60 drops, 11 to a person, none kept; hand checks 17, disagreements 3.
 
 ### The run queued next (2026-10-27): a full run with `--fill`
 

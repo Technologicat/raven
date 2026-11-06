@@ -187,6 +187,19 @@ system = "the system itself: its design, or an evaluation of how well it works"
 other = "something else"
 
 [[field]]
+name = "agent_operator"
+asks = """
+who drives the agent the learners interact with. An embodied or virtual character is not AI by itself being on
+a screen: when a teacher or researcher speaks or acts through it in real time, as in a Wizard-of-Oz study or a
+simulation where an educator role-plays the patient, a person is the one responding
+"""
+quote = ["human"]
+[field.values]
+ai = "the AI responds to the learner on its own"
+human = "a person operates it in real time, so no AI is acting on its own"
+none = "no agent that learners interact with"
+
+[[field]]
 name = "ai_role"
 asks = "what the AI does in this work, or 'none' if there is no AI in it"
 max_words = 8
@@ -241,4 +254,9 @@ action = "hold"
 [[rule]]
 label = "students together with others: whether the results apply to students"
 when = { population = ["mixed"] }
+action = "hold"
+
+[[rule]]
+label = "an agent a person operates in real time: whether it counts as AI"
+when = { agent_operator = ["human"] }
 action = "hold"
