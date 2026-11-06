@@ -228,7 +228,11 @@ def rate(settings: env, user: str, reply: str,
     return rating, records
 
 
-CONDITIONS = ("card_on", "card_off", "plain")
+def conditions_of(answers: dict[str, dict]) -> list[str]:
+    """The probe's conditions, in the order it ran them: step 1's three, or step 2's four."""
+    return list(dict.fromkeys(answer["condition"] for answer in answers.values()))
+
+
 AIMED_SHARE = 0.7  # of an aimed sample, the share drawn from what the judge marked
 PER_PROMPT = 2     # at most this many replies per prompt, per condition and per stratum
 
@@ -274,8 +278,9 @@ def write_blind_sample(answers: dict[str, dict], users: dict[str, str], n: int, 
         n_marked = round(n * AIMED_SHARE)
         chosen = []
         for stratum_n, grades in ((n_marked, ("clear",)), (n - n_marked, ("borderline", "none"))):
-            for i, condition in enumerate(CONDITIONS):
-                per_condition = stratum_n // len(CONDITIONS) + (i < stratum_n % len(CONDITIONS))
+            conditions = conditions_of(answers)
+            for i, condition in enumerate(conditions):
+                per_condition = stratum_n // len(conditions) + (i < stratum_n % len(conditions))
                 for grade in grades:
                     pool = [item_id for item_id in candidates
                             if item_id.startswith(condition + "/") and maybe_marks.get(item_id) == grade
@@ -355,7 +360,7 @@ def summarize(answers: dict[str, dict], ratings: dict[str, dict]) -> None:
             for name in FEATURES:
                 cells[key][name] += rating[name]
     print(f"\n{'':<30}{'clear':>12}{'borderline':>12}  " + "".join(f"{name:>16}" for name in FEATURES))
-    for condition in CONDITIONS:
+    for condition in conditions_of(answers):
         print(f"\n{condition}")
         keys = sorted(what for c, what in cells if c == condition)
         for what in [k for k in keys if k in ("elicitor", "neutral")] + [k for k in keys if k not in ("elicitor", "neutral")]:
@@ -371,8 +376,8 @@ def summarize(answers: dict[str, dict], ratings: dict[str, dict]) -> None:
           f"a quote not found in its reply in {missing}")
     funny = collections.Counter((answers[i]["condition"], r["funny"]) for i, r in ratings.items())
     print("\nfunny, for information:")
-    for condition in CONDITIONS:
-        print(f"  {condition:<10}" + "  ".join(f"{f}: {funny[(condition, f)]}" for f in FUNNY))
+    for condition in conditions_of(answers):
+        print(f"  {condition:<16}" + "  ".join(f"{f}: {funny[(condition, f)]}" for f in FUNNY))
 
 
 def main() -> int:

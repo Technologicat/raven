@@ -1,6 +1,7 @@
-"""Step 1 of the register investigation: does the voice go with the user card?
+"""Steps 1 and 2 of the register investigation: does the voice go with the user card, and with which part of it?
 
-Three conditions, which differ only in the system text the chat is rooted at:
+Step 1 (`--step 1`, the default) has three conditions, which differ only in the system text the chat is
+rooted at:
 
   - `card_on`   Aria's card and the interaction block as shipped, plus the maintainer's user card. What
                 produced the October examples.
@@ -8,7 +9,11 @@ Three conditions, which differ only in the system text the chat is rooted at:
   - `plain`     a one-line character card, no user card. The base rate: a voice that appears here too
                 belongs to the model rather than to anything we wrote.
 
-Everything else is held fixed across the three: the greeting, the persona prefixes, the per-turn system
+Step 2 (`--step 2`) keeps `card_on` and cuts one part of the user card at a time, as `CARD_CUTS` names them:
+`no_tone` the tone paragraph, `no_interaction` the interaction-style paragraph, `no_candid` only its sentence
+asking for critical or unprompted candour. Its ledger is `register-step2-<prompt set>`.
+
+Everything else is held fixed across the conditions: the greeting, the persona prefixes, the per-turn system
 postamble (date, loaded model), the tools offered, the sampler. So whatever differs between the rates is
 the system text.
 
@@ -116,7 +121,33 @@ def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:6]
 
 
-def condition_texts(llm_settings: env) -> dict[str, dict[str, str]]:
+# Step 2's cuts from the user card, by the text they remove. A cut that matches nothing stops the probe, so a card
+# edited since is reported rather than measured uncut.
+CARD_CUTS = {"no_tone": "paragraph:Tone:",
+             "no_interaction": "paragraph:Interaction style:",
+             "no_candid": ("Be a candid collaborator: say what you actually think, including when it's critical or "
+                           "unprompted, and flag when you're not sure. ")}
+
+
+def cut_card(card: str, cut: str) -> str:
+    """`card` without `cut`: a whole paragraph when `cut` is `paragraph:PREFIX`, else that exact text."""
+    if cut.startswith("paragraph:"):
+        prefix = cut.removeprefix("paragraph:")
+        paragraphs = card.split("\n\n")
+        kept = [para for para in paragraphs if not para.lstrip().startswith(prefix)]
+        if len(kept) != len(paragraphs) - 1:
+            raise RuntimeError(f"cut_card: {len(paragraphs) - len(kept)} paragraphs start with {prefix!r}, not one")
+        result = "\n\n".join(kept)
+        # The last paragraph carries the closing tag, which a removed last paragraph must not take with it.
+        if "[/USER_PROFILE]" in card and "[/USER_PROFILE]" not in result:
+            result += "\n[/USER_PROFILE]"
+        return result
+    if card.count(cut) != 1:
+        raise RuntimeError(f"cut_card: {cut[:40]!r}... occurs {card.count(cut)} times in the card, not once")
+    return card.replace(cut, "")
+
+
+def condition_texts(llm_settings: env, step: int = 1) -> dict[str, dict[str, str]]:
     """The system text of each condition, as overrides on `llm_settings`. Read from the settings as built,
     so `card_on` is exactly what Librarian sends."""
     shipped = {"system_prompt": llm_settings.system_prompt,
@@ -126,6 +157,9 @@ def condition_texts(llm_settings: env) -> dict[str, dict[str, str]]:
         raise RuntimeError("no user card in the settings, so `card_on` and `card_off` would be the same "
                            "condition; check `llm_user_name` and the profile under "
                            "~/.config/raven/librarian/users/")
+    if step == 2:
+        return {"card_on": shipped,
+                **{name: {**shipped, "user_card": cut_card(shipped["user_card"], cut)} for name, cut in CARD_CUTS.items()}}
     char = llm_settings.personas["assistant"]
     return {"card_on": shipped,
             "card_off": {**shipped, "user_card": ""},
@@ -164,7 +198,8 @@ def build_replay(llm_settings: env, payloads: list[dict]) -> tuple[chattree.Fore
     return datastore, head
 
 
-def make_items(prompt_set: env, n_samples: int, n_neutral_samples: int | None = None) -> list[tuple[str, dict]]:
+def make_items(prompt_set: env, conditions: list[str], n_samples: int,
+               n_neutral_samples: int | None = None) -> list[tuple[str, dict]]:
     """`condition/prompt/sample`, sample-major, so an early stop leaves every cell with the same count
     give or take one. The neutral prompts stop at `n_neutral_samples`, when given."""
     prompts = ([(f"{name}-{short_hash(text)}", "elicitor", {"text": text})
@@ -174,7 +209,7 @@ def make_items(prompt_set: env, n_samples: int, n_neutral_samples: int | None = 
                [(f"{name}-{short_hash(text)}", "neutral", {"text": text}) for name, text in prompt_set.neutral.items()])
     items = []
     for sample in range(n_samples):
-        for condition in ("card_on", "card_off", "plain"):
+        for condition in conditions:
             for prompt_id, kind, stimulus in prompts:
                 if kind == "neutral" and n_neutral_samples is not None and sample >= n_neutral_samples:
                     continue
@@ -187,6 +222,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--prompts", default=LATEST, choices=sorted(PROMPT_SETS),
                         help="which prompt set, by the date it was written")
+    parser.add_argument("--step", type=int, default=1, choices=(1, 2),
+                        help="1: the user card on and off, and a plain prompt; 2: the card with one part cut at a "
+                             "time, beside it whole")
     parser.add_argument("--samples", type=int, default=5, help="replies per condition and prompt")
     parser.add_argument("--neutral-samples", type=int, default=None, metavar="N",
                         help="replies per condition for the neutral prompts, when fewer than --samples: the "
@@ -203,7 +241,7 @@ def main() -> int:
 
     llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url, quiet=True)
     llm_settings.request_data["max_tokens"] = MAX_TOKENS
-    conditions = condition_texts(llm_settings)
+    conditions = condition_texts(llm_settings, opts.step)
     prompt_set = PROMPT_SETS[opts.prompts]
     replays = {node_id: load_replay(node_id) for node_id in prompt_set.replays.values()}
 
@@ -211,7 +249,8 @@ def main() -> int:
                            "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")},
                            "retain_thinking": llm_settings.retain_thinking},
                           sort_keys=True)
-    ledger = sweep.Ledger(out_dir, prompt_set.ledger, sweep.fingerprint(llm_settings, material, declared=opts.declare))
+    ledger_name = prompt_set.ledger if opts.step == 1 else f"register-step2-{opts.prompts}"
+    ledger = sweep.Ledger(out_dir, ledger_name, sweep.fingerprint(llm_settings, material, declared=opts.declare))
     print(f"instrument {ledger.fingerprint} -> {ledger.path.name}")
 
     stream_path = out_dir / "stream.log"
@@ -236,7 +275,8 @@ def main() -> int:
                           "reasoning": list(record.reasoning),
                           "tool_calls": dict(record.tool_calls)}}, [record]
 
-    result = sweep.Sweep(llm_settings, ask_batch, make_items(prompt_set, opts.samples, opts.neutral_samples), ledger,
+    items = make_items(prompt_set, list(conditions), opts.samples, opts.neutral_samples)
+    result = sweep.Sweep(llm_settings, ask_batch, items, ledger,
                          header=sweep.instrument_header(llm_settings, declared=opts.declare)).run()
     if result.outcome is not sweep.completed:
         print(f"\nstopped ({result.outcome}): {result.message or 'cancelled'}\nrun again to resume")

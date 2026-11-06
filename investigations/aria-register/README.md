@@ -456,6 +456,27 @@ Written 2026-10-28: `blind-sample-17.md` (30 replies, `--seed 17 --aim register-
 in `blind-key-17.json`, both local). Once rated, `judge_register.py register-prompts2-7e8dd60a.jsonl
 --blind-check blind-sample-17.md` compares v6 with the ratings.
 
+### Step 2, generated ahead of the judge (2026-11-06)
+
+**Decided 2026-11-06 (maintainer): generate step 2's replies now**, while blind sample 17 waits to be rated, since the
+replies do not depend on the judge; they are graded once v6 has been checked. Step 1 put the voice with the user card, so
+step 2 cuts one part of it at a time, beside the whole card in the same run (`probe_register.py --step 2`, `CARD_CUTS`):
+
+| condition | the user card |
+|---|---|
+| `card_on` | whole |
+| `no_tone` | without the tone paragraph |
+| `no_interaction` | without the interaction-style paragraph |
+| `no_candid` | without only its sentence asking for candour, "including when it's critical or unprompted" |
+
+A cut that matches nothing in the card stops the probe, so an edited card is reported rather than measured uncut. The
+second prompt set at step 1's sample counts, 300 replies; `judge_register.py` takes its conditions from the ledger, so it
+grades and reports this one as it does step 1's.
+
+```bash
+python investigations/aria-register/probe_register.py --step 2 --prompts 2026-10-28 --samples 10 --neutral-samples 5
+```
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
