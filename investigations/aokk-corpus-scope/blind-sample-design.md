@@ -65,8 +65,8 @@ Labels from people's reading remain a reference and not ground truth: the double
 - **Double rating**: left out of the first request to keep it small, to raise when they agree to the rest.
 - **Mixed tags**: a stratum smaller than its share of draws takes what there is, and the rest go to the other tags.
 
-## To build, when agreed
+## The script
 
-One script here, about the size of `rerun_extract_on.py`: run the tool over the pool, draw the strata, write the shuffled sheet and
-a separate gitignored key, and score returned decisions against the key with the weights. `score_against_decisions.py` covers the
-unweighted half.
+Built 2026-11-06: `draw_blind_sample.py`. The pool is the run of `raven-scopebib run ... --sample 300 --seed 42`, which
+rebuilds the probe's sample exactly; `draw` leaves out the records the team rated (`--exclude`), and `score` reads the filled
+sheet back against the key, with the weights.
