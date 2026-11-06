@@ -817,7 +817,7 @@ kept, kept 1, sent 6 to a person, removed 3. Hand checks fall from 19 to 16, and
   of these come back.
 - **The one kept drop is a new kind**: an embodied agent that a teacher operates in real time, so no AI is acting on its
   own. Nothing in the definition says so yet.
-- **The perceptions rule costs nothing here**: of 19 records extracted, 5 are perceptions after use and none leave the use
+- **The perceptions rule costs nothing here**: of 16 records extracted, 5 are perceptions after use and none leave the use
   unstated.
 
 ### The run queued next (2026-10-27): a full run with `--fill`
