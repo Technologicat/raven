@@ -1,5 +1,6 @@
 # The AOKK corpus's definition for `raven-scopebib`: the prototype in this directory, written in the tool's
-# format, and revised for the scope the team set on 2026-11-03: `README.md` → *The scope, as the team revised it*.
+# format, and revised for the scope the team set on 2026-11-03 and their answers of 2026-11-05: `README.md` → *The scope, as
+# the team revised it*.
 # The tests and hints began as `judge_scope.py`'s rubric, minus what the tool's own frame says for any corpus (silence
 # keeps, a generic title gives no evidence, use the venue, judge the work rather than the phrase).
 
@@ -69,9 +70,10 @@ false and lower your confidence.
 [[test]]
 name = "teachers_as_learners"
 asks = """
-true ONLY if the people learning in the work are teachers: practising teachers, their professional
-development, or student teachers in teacher education. False when teachers appear only as those who teach,
-or as one group among several learners, AND false when the work does not say who is learning.
+true ONLY if the people learning in the work are practising teachers: in-service teachers, or their
+professional development. Student teachers in teacher education are students, so false for them. False when
+teachers appear only as those who teach, or as one group among several learners, AND false when the work does
+not say who is learning.
 """
 
 [[test]]
@@ -82,8 +84,7 @@ false ONLY if the work positively has no AI that learners use or interact with: 
 teaching, as in AI literacy; the work is about policy, ethics or institutions; AI serves only teachers or
 administrators; or the agent does not exist yet, as in a needs assessment or a proposal for a future system.
 True for any system a learner uses, whatever the authors call it and however simple, including adaptive
-tutors; true for a study of learners' perceptions of one; true for a review of such systems; AND true when the
-work does not say.
+tutors; true for a study of learners' perceptions of one; AND true when the work does not say.
 """
 
 # ---- The extractor: what a kept record says. Every vocabulary also has `not_stated`.
@@ -148,7 +149,8 @@ in all of those the learner is a model.
 yes = "a human is taught or is learning"
 no = "no human is taught or learning: the learner is a model"
 
-# ---- Tags: questions the team decides on the whole set at once. No rule reads these, so they remove nothing.
+# ---- Tags: questions the team decides on the whole set at once. The team has since settled `study_kind`'s reviews and
+# part of `focus`, so the rules below read those values; `agent_kind`'s adaptive tutors are still open.
 
 [[field]]
 name = "study_kind"
@@ -178,7 +180,9 @@ name = "focus"
 asks = "what the work actually examines about the AI and its learners"
 [field.values]
 learning = "learners using it: the learning process or its outcomes"
-perceptions = "only attitudes, perceptions, acceptance or intention to use"
+perceptions_after_use = "only attitudes or perceptions, of an AI the learners used in the study or say they have used"
+attitudes_without_use = "only attitudes, acceptance or intention to use, and the work says the learners have not used it"
+perceptions_use_unstated = "only attitudes, perceptions, acceptance or intention to use, and the work does not say whether the learners used it"
 system = "the system itself: its design, or an evaluation of how well it works"
 other = "something else"
 
@@ -195,8 +199,18 @@ when = { level = ["school"] }
 action = "remove"
 
 [[rule]]
-label = "the learners are teachers"
-when = { population = ["inservice_teachers", "preservice_teachers"] }
+label = "the learners are practising teachers"
+when = { population = ["inservice_teachers"] }
+action = "remove"
+
+[[rule]]
+label = "a literature review, with no learner-AI interaction of its own"
+when = { study_kind = ["review"] }
+action = "remove"
+
+[[rule]]
+label = "attitudes only, from learners who have not used the AI"
+when = { focus = ["attitudes_without_use"] }
 action = "remove"
 
 [[rule]]
@@ -217,4 +231,14 @@ action = "hold"
 [[rule]]
 label = "no AI that learners use, by the extractor's reading"
 when = { agent_kind = ["none"] }
+action = "hold"
+
+[[rule]]
+label = "attitudes only, and whether the learners used the AI is not stated"
+when = { focus = ["perceptions_use_unstated"] }
+action = "hold"
+
+[[rule]]
+label = "students together with others: whether the results apply to students"
+when = { population = ["mixed"] }
 action = "hold"

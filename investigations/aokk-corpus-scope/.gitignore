@@ -9,3 +9,5 @@
 held-for-review_tarkastetut*.xlsx
 meeting_notes_*.md
 team-questions*
+# The team's answers to them, which quote records by citekey.
+team-answers*
