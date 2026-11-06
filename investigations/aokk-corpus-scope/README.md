@@ -841,6 +841,8 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
   stays in.
 - **Therapists in training are in**: people training for a profession are students.
 - **Student teachers' practice period at a company is in**, being part of their programme.
+- **Practising teachers taking a teaching qualification or continuing education are out**, as in vocational teacher
+  education for people already working as teachers: that is not a degree programme (the maintainer, the same day).
 - **An agent a person operates in real time is out**: `agent_operator = human` now removes, among the removal rules so
   that no hold matches it first.
 - **A new check: records the abstract cannot settle**, needing the full text, go to a person (`abstract_enough`). It

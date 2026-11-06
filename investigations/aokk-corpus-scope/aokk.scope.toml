@@ -72,8 +72,10 @@ false and lower your confidence.
 [[test]]
 name = "teachers_as_learners"
 asks = """
-true ONLY if the people learning in the work are practising teachers: in-service teachers, or their
-professional development. Student teachers in teacher education are students, so false for them. False when
+true ONLY if the people learning in the work are practising teachers: in-service teachers, their professional
+development or continuing education, including a teaching qualification taken by people already working as
+teachers, as in vocational teacher education - that is not a degree programme. Student teachers in a degree
+programme are students, so false for them. False when
 teachers appear only as those who teach, or as one group among several learners, AND false when the work does
 not say who is learning.
 """
@@ -99,8 +101,8 @@ asks = "who the work studies"
 university_students = "students in higher education"
 vocational_students = "students in vocational education"
 school_pupils = "pupils in primary or secondary school"
-preservice_teachers = "people studying to become teachers"
-inservice_teachers = "practising teachers"
+preservice_teachers = "people studying to become teachers, in a degree programme"
+inservice_teachers = "practising teachers, including those taking a teaching qualification or continuing education while working as teachers"
 researchers = "researchers, as the subjects of the work"
 professionals = "practitioners in a profession other than teaching"
 general_public = "the public at large"
