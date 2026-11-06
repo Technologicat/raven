@@ -477,6 +477,29 @@ grades and reports this one as it does step 1's.
 python investigations/aria-register/probe_register.py --step 2 --prompts 2026-10-28 --samples 10 --neutral-samples 5
 ```
 
+**Run 2026-11-06** (probe ledger `register-step2-2026-10-28-31da4b64`, judge `register-judged-964bbae0`, rubric v6), graded
+before blind sample 17 has checked v6, so provisional:
+
+| condition | elicitors `clear` | neutral `clear` |
+|---|---:|---:|
+| `card_on` | 29 / 60 (48%) | 0 / 15 |
+| `no_tone` | 15 / 60 (25%) | 0 / 15 |
+| `no_interaction` | 28 / 60 (47%) | 0 / 15 |
+| `no_candid` | 29 / 60 (48%) | 0 / 15 |
+
+- **The tone paragraph carries most of it**: without it the rate halves (Fisher's exact test against `card_on`, p = 0.013),
+  mostly on `absurd` (9 to 3 of 10) and `everyday_technical` (6 to 3). Cutting the interaction-style paragraph or the
+  candour sentence changes nothing (p = 1.0 for both).
+- **But not all of it**: `no_tone`'s 25% sits above the 13% with no user card at all (step 1 on this prompt set), though
+  that difference is within noise at this size (p = 0.16, and across two runs). What else in the card adds to it is
+  not yet separated.
+- **The run reproduces step 1's `card_on`** (48% against 42% on the same prompts, a different run).
+- No neutral prompt drew the voice in any condition, no self-description in 300 replies.
+
+**For the rewrite, provisionally**: the register comes from the tone paragraph's description of the wit, while
+"be candid, including when critical or unprompted" adds nothing measurable to it. Step 4's candidate card should carry the
+tone paragraph's content. Waiting on blind sample 17 before any of this is relied on.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
