@@ -5,20 +5,18 @@
 
 `draw` takes the run's three outcome tables (`03b-removed`, `03c-kept`, `03a-CHECK-BY-HAND`) and its rule table
 (`02b-ruled`, for the kept records' tags), leaves out every record in `--exclude` (a table with a `key` column: what
-people have rated already), and draws by the tool's outcome:
+people have rated already) and every record the sift removed (no abstract to decide from, and not the tool's judgement),
+and draws by the tool's outcome, at random within each stratum: 30 removed, 20 kept, 10 sent to a person. Each record's
+group is recorded in the key for reading the result: what decided a removal, a kept record's tags, a hold's reason.
 
-  - removed: 30, spread evenly across what decided each removal (the judge's tests that fired, or the rule);
-  - kept: 20, spread across the tags `study_kind` and `agent_kind`;
-  - sent to a person: 10, spread across the reasons.
-
-A group smaller than its share gives what it has, and the rest go round the others. It writes the sheet people fill in
+It writes the sheet people fill in, with `--rules` on a second sheet of it,
 (`blind-sample.xlsx`: shuffled, with title, abstract, venue and link and nothing of the stratum or the tool's answer, and
 the columns the team added themselves to their own sheet) and the key (`blind-key.tsv`: each record's stratum, group and
 the tool's outcome, plus each stratum's size in the pool, so that rates can be weighted back to it).
 
 `score` reads a filled-in copy of the sheet against the key: per stratum, how often people agree with the tool, the
 one-sided 95% upper bound on the share it got wrong (Clopper-Pearson), and the weighted share of in-scope records
-removed across the pool. The sheet's `decision` takes keep or drop, in English or Finnish (kyllä/ei, mukaan/pois).
+removed across the pool. The sheet's `päätös` takes kyllä/ei or mukaan/pois, or keep/drop.
 """
 
 import argparse
@@ -32,8 +30,10 @@ from raven.common import tabular
 from raven.papers.scopebib import report
 
 QUOTAS = {"removed": 30, "kept": 20, "to a person": 10}
-SHEET_COLUMNS = ["key", "decision", "abstract enough", "AI use", "reason", "title", "authors", "year", "venue", "link",
-                 "abstract"]
+# The rater's four columns carry the names the team gave them in their own sheet.
+SHEET_COLUMNS = ["key", "päätös", "riittikö abstrakti", "tekoälyn käyttö", "perustelu", "title", "authors", "year", "venue",
+                 "link", "abstract"]
+BLANK_COLUMNS = {"päätös", "riittikö abstrakti", "tekoälyn käyttö", "perustelu"}  # the rater's to fill
 KEY_COLUMNS = ["key", "stratum", "group", "tool outcome", "stratum size in pool"]
 KEEP_WORDS = {"keep", "kyllä", "kylla", "mukaan", "yes", "k"}
 DROP_WORDS = {"drop", "ei", "pois", "no", "e"}
@@ -49,27 +49,27 @@ def read_table_any(run_dir: pathlib.Path, stem: str) -> list[dict[str, str]]:
 
 
 def removal_group(row: dict[str, str]) -> str:
-    """What decided a removal: the judge's tests that fired, or the rule."""
+    """What decided a removal: the judge's tests that fired (a test asked the other way round fires on false), or the
+    rule."""
     if row["removed by"] == "judge":
-        tests = re.findall(r"(\w+) true", row["why"])
+        tests = re.findall(r"(\w+) (?:true|false)", row["why"].split(" confidence")[0])
         return "judge: " + (" + ".join(tests) if tests else "?")
     return f"{row['removed by']}: {row['why'].split(' (')[0]}"
 
 
-def spread(rng: random.Random, groups: dict[str, list[str]], n: int) -> list[tuple[str, str]]:
-    """`n` keys taken round-robin across `groups`, each group shuffled, in a seeded order of groups; a group that runs out
-    drops out of the round. Returns (key, group) pairs."""
-    pools = {name: rng.sample(keys, len(keys)) for name, keys in sorted(groups.items())}
-    order = rng.sample(sorted(pools), len(pools))
-    chosen = []
-    while len(chosen) < n and any(pools.values()):
-        for name in order:
-            if pools[name] and len(chosen) < n:
-                chosen.append((pools[name].pop(), name))
-    return chosen
+def add_rules_sheet(path: pathlib.Path, rules: pathlib.Path) -> None:
+    """Put the scope rules raters decide by on a second sheet of `path`, one line of `rules` per row."""
+    import openpyxl
+    book = openpyxl.load_workbook(path)
+    sheet = book.create_sheet(rules.stem)
+    for line in rules.read_text(encoding="utf-8").splitlines():
+        sheet.append([line])
+    sheet.column_dimensions["A"].width = 140
+    book.save(path)
 
 
-def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, seed: int) -> int:
+def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, seed: int,
+         maybe_rules: pathlib.Path | None = None) -> int:
     excluded = {row["key"] for row in tabular.read_table(exclude)}
     tags = {row["key"]: row for row in read_table_any(run_dir, report.EXTRACT_AUDIT)}
     strata: dict[str, dict[str, list[str]]] = {name: collections.defaultdict(list) for name in QUOTAS}
@@ -77,7 +77,7 @@ def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, se
     for stem, stratum in ((report.REMOVED_AUDIT, "removed"), (report.KEPT_AUDIT, "kept"),
                           (report.CHECK_BY_HAND, "to a person")):
         for row in read_table_any(run_dir, stem):
-            if row["key"] in excluded:
+            if row["key"] in excluded or row.get("removed by") == "sift":
                 continue
             rows_by_key[row["key"]] = row
             if stratum == "removed":
@@ -93,13 +93,14 @@ def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, se
     key_rows, sheet_rows = [], []
     for stratum, quota in QUOTAS.items():
         size = sum(len(keys) for keys in strata[stratum].values())
-        chosen = spread(rng, strata[stratum], quota)
+        everyone = sorted((key, group) for group, keys in strata[stratum].items() for key in keys)
+        chosen = rng.sample(everyone, min(quota, len(everyone)))
         print(f"{stratum}: {len(chosen)} drawn of {size}, from {len(strata[stratum])} groups")
         for key, group in chosen:
             key_rows.append({"key": key, "stratum": stratum, "group": group, "tool outcome": stratum,
                              "stratum size in pool": str(size)})
             row = rows_by_key[key]
-            sheet_rows.append({column: row.get(column, "") for column in SHEET_COLUMNS})
+            sheet_rows.append({column: ("" if column in BLANK_COLUMNS else row.get(column, "")) for column in SHEET_COLUMNS})
     rng.shuffle(sheet_rows)
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -107,6 +108,8 @@ def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, se
                         [[row[column] for column in SHEET_COLUMNS] for row in sheet_rows])
     tabular.write_table(out_dir / "blind-key.tsv", [f"seed {seed}, from {run_dir}, excluding {exclude.name}"],
                         KEY_COLUMNS, [[row[column] for column in KEY_COLUMNS] for row in key_rows])
+    if maybe_rules is not None:
+        add_rules_sheet(out_dir / "blind-sample.xlsx", maybe_rules)
     print(f"wrote {out_dir / 'blind-sample.xlsx'} ({len(sheet_rows)} records) and {out_dir / 'blind-key.tsv'}")
     return 0
 
@@ -121,7 +124,7 @@ def score(out_dir: pathlib.Path, rated: pathlib.Path) -> int:
     key = {row["key"]: row for row in tabular.read_table(out_dir / "blind-key.tsv")}
     decisions = {}
     for row in tabular.read_table(rated):
-        word = row.get("decision", "").strip().lower()
+        word = row.get("päätös", row.get("decision", "")).strip().lower()
         if word in KEEP_WORDS:
             decisions[row["key"]] = "keep"
         elif word in DROP_WORDS:
@@ -160,12 +163,14 @@ def main() -> int:
     p_draw.add_argument("out_dir")
     p_draw.add_argument("--exclude", required=True, help="a table whose 'key' column lists records already rated")
     p_draw.add_argument("--seed", type=int, default=17)
+    p_draw.add_argument("--rules", default=None, help="a text file of the scope rules, put on a second sheet for raters")
     p_score = commands.add_parser("score", help="score a filled-in sheet against the key")
     p_score.add_argument("out_dir")
     p_score.add_argument("rated")
     opts = parser.parse_args()
     if opts.command == "draw":
-        return draw(pathlib.Path(opts.run_dir), pathlib.Path(opts.out_dir), pathlib.Path(opts.exclude), opts.seed)
+        return draw(pathlib.Path(opts.run_dir), pathlib.Path(opts.out_dir), pathlib.Path(opts.exclude), opts.seed,
+                    pathlib.Path(opts.rules) if opts.rules else None)
     return score(pathlib.Path(opts.out_dir), pathlib.Path(opts.rated))
 
 

@@ -28,11 +28,14 @@ it counting toward the full run.
 
 | Stratum | Records | Why this many |
 |---|---|---|
-| Removed, split evenly across the tests that decided it | 30 | The costliest mistake, and the largest group, so the most; a clean 30 bounds it at about 10% |
-| Kept, split across `study_kind`, `agent_kind` and `focus` as far as they go | 20 | The tags are what the team decides on; this shows what each holds |
+| Removed | 30 | The costliest mistake, and the largest group, so the most; a clean 30 bounds it at about 10% |
+| Kept | 20 | The tags are what the team decides on; this shows what they hold |
 | Sent to a person | 10 | A check that holding is worth a person's time |
 
-Draws are seeded and recorded. Each stratum's share of the pool is kept, so that rates can be weighted back to the corpus:
+**Draws are random within each stratum** (changed 2026-11-06, at the draw): spreading a stratum evenly across its tests
+or tags oversamples the rare ones, so the share of mistakes in the sample would stop estimating the share in the stratum,
+and the bound above holds only for a simple random draw. Each record's test, rule or tags go in the key, for reading the
+result; better coverage of a rare test is a second round's job. Draws are seeded and recorded. Each stratum's share of the pool is kept, so that rates can be weighted back to the corpus:
 oversampling removals changes the precision of the estimate, and must not change what it estimates.
 
 **Double rating:** about 15 of the 60 go to two reviewers (or, failing a second one, to the same reviewer again after enough time for

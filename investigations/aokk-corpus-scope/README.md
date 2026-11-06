@@ -862,6 +862,20 @@ rule.
   says about 7 did, in their words "had to check the whole text", one with no access to the article. They agree on one.
   Part of the gap is the team reading on out of care rather than need, which a rater on the blind sample will show more
   plainly. So far the field is a weak signal, and it reaches only the records the judge kept.
+
+**The blind sample, drawn 2026-11-06** (`draw_blind_sample.py draw ... --seed 17 --rules Rajaus.txt`; the pool run and the
+sheet in `AOKK/scopebib-2026-11-full/`, the run's answers counting toward the full run). The pool of 300: removed 144 by
+the tool (and 4 already in the team's 72), kept 98, sent to a person 52. Drawn at random within each: 30 removed, 20 kept,
+10 to a person, none of them already rated. The sheet carries the team's own four columns and, on a second tab, the
+decided rules in Finnish (`Rajaus.txt`), which raters are asked to follow where they and their own reading disagree.
+Unlike on the 72, the full-text check is the commonest reason for a hold here: 33 of the 52.
+
+- **What it means for the full run**, scaled from the pool to the corpus's 4489 sifted records: about 2200 removed, 1480
+  kept and 790 to a person, about 490 of those by the full-text check alone; without it, about 300. That is near the
+  thousand the maintainer named as the point to reconsider (2026-11-06). The team asked for those records to be flagged;
+  holding them is one reading of that and a tag is the other, which would leave the column for a person to filter
+  without putting each record in the hand checks. For the team to choose, with the sample's "to a person" stratum, which
+  shows whether those holds were worth reading.
 - **An agent a person operates in real time is out**: `agent_operator = human` now removes, among the removal rules so
   that no hold matches it first.
 - **A new check: records the abstract cannot settle**, needing the full text, go to a person (`abstract_enough`). It

@@ -1,0 +1,34 @@
+Rajaus: mitä aineistoon otetaan (sovittu 6.11.2026)
+
+Päätä otsikon ja abstraktin perusteella. Jos ne eivät riitä päätökseen, merkitse se sarakkeeseen "riittikö abstrakti".
+Sovitut säännöt ratkaisevat, jos ne ja oma vaikutelma ovat ristiriidassa.
+
+Sarakkeet:
+- päätös: kyllä (mukaan) tai ei (pois)
+- riittikö abstrakti: kyllä tai ei
+- tekoälyn käyttö: käytitkö tekoälyä apuna tämän rivin päätöksessä (kyllä/ei)
+- perustelu: lyhyesti; kirjoita "epäselvä", jos päätös oli vaikea
+
+MUKAAN
+- Tekoälyagentti opiskelijan vuorovaikutteisena oppimiskumppanina ammatillisessa tai korkeakoulutuksessa, riippumatta kirjoittajien käyttämästä termistä.
+- Opiskelijat riippumatta siitä, mitä he opiskelevat. Myös opettajankoulutus oppilaitoksessa: opettajaksi opiskelevat ja oppilaitoksessa opettajan pätevyyttä hankkivat. Myös terapeuteiksi opiskelevat.
+- Opintoihin kuuluva työharjoittelu, myös opettajaksi opiskelevien harjoittelujakso yrityksessä.
+- Ammattilaisille suunnattu kurssi, jonka järjestää joku muu kuin heidän oma työnantajansa.
+- Käsitys- ja asennetutkimukset, jos oppijat ovat käyttäneet tekoälyä.
+
+EI MUKAAN
+- Peruskoulu, lukio ja muu K-12-taso.
+- Työnantajan omalle henkilöstölleen järjestämä koulutus.
+- Työssä olevien opettajien täydennyskoulutus oppilaitoksen ohjelman ulkopuolella: työpajat, työnantajan koulutus.
+- Informaali oppiminen, vaikka osallistujat olisivat opiskelijoita.
+- Kirjallisuuskatsaukset.
+- Asennetutkimukset, joissa oppijat eivät ole käyttäneet tekoälyä.
+- Agentti, jota ihminen ohjaa reaaliajassa (Wizard of Oz).
+- Agentti, joka tekee opettajan toimistotyötä, esimerkiksi opetussuunnitelman täyttämistä.
+- Agentti, joka on vasta suunnitteluvaiheessa.
+- Tutkimukset, joissa oppija ei käytä tekoälyä.
+
+EPÄSELVÄT: tee päätös ja kirjoita perusteluun "epäselvä"
+- Työssä olevien opettajien täydennyskoulutus oppilaitoksen järjestämällä kurssilla.
+- Sekaotokset, joissa on opiskelijoiden lisäksi muita.
+- Mukautuva tutor, joka mukauttaa sisältöä mutta ei keskustele (vielä päättämättä).
