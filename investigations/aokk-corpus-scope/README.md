@@ -849,6 +849,17 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
   first reading that put qualification and continuing education out.
 - **An agent doing a teacher's office work is out** (filling in a curriculum, planning documents, administration), even
   when a student teacher uses it: it is not helping anyone learn.
+
+**The 72 under the settled definition** (2026-11-06, outputs in `AOKK/scopebib-2026-11-06c-held72/`). Against the 70
+decisions: removed 52 of the 60 the team dropped, sent 8 to a person, kept none; of the 10 the team kept, kept 4, sent 4
+to a person, removed 2. Hand checks 13, outright disagreements 2, both removals of records whose abstracts name a
+workplace or corporate setting, which the scope excludes and the team kept. The human-operated agent is removed by its
+rule.
+
+- **The full-text check rarely fires**: of 17 records extracted, it says 2 need the full text, and the team's own column
+  says about 7 did, in their words "had to check the whole text", one with no access to the article. They agree on one.
+  Part of the gap is the team reading on out of care rather than need, which a rater on the blind sample will show more
+  plainly. So far the field is a weak signal, and it reaches only the records the judge kept.
 - **An agent a person operates in real time is out**: `agent_operator = human` now removes, among the removal rules so
   that no hold matches it first.
 - **A new check: records the abstract cannot settle**, needing the full text, go to a person (`abstract_enough`). It
