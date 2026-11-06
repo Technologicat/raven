@@ -1,6 +1,6 @@
 # The AOKK corpus's definition for `raven-scopebib`: the prototype in this directory, written in the tool's
-# format, and revised for the scope the team set on 2026-11-03 and their answers of 2026-11-05: `README.md` → *The scope, as
-# the team revised it*.
+# format, and revised for the scope the team set on 2026-11-03, their answers of 2026-11-05 and the meeting of 2026-11-06:
+# `README.md` → *The scope, as the team revised it*.
 # The tests and hints began as `judge_scope.py`'s rubric, minus what the tool's own frame says for any corpus (silence
 # keeps, a generic title gives no evidence, use the venue, judge the work rather than the phrase).
 
@@ -59,10 +59,12 @@ much AI is in it.
 name = "wrong_level"
 asks = """
 true ONLY if the work is positively set outside vocational and higher education institutions - preschool,
-primary or secondary school, K-12, workplace or professional training outside an educational institution, or
-informal learning by the general public, even where some of those learners happen to be students. False when
-the setting is a university, college, polytechnic or vocational school, or a course or work placement of
-theirs, AND false when the work does not say what level it is set at: these records all matched a
+primary or secondary school, K-12, training an employer gives its own staff, or informal learning by the
+general public, even where some of those learners happen to be students. False when the setting is a
+university, college, polytechnic or vocational school, or a course or work placement of theirs - including
+student teachers' practice period at a company - or people training for a profession, such as therapists in
+training, or a course for practitioners from a centre, association or school that is not their employer, AND
+false when the work does not say what level it is set at: these records all matched a
 higher-education search term already, so a record that does not say its level is NOT "wrong_level"; answer
 false and lower your confidence.
 """
@@ -82,7 +84,8 @@ fires_on = false
 asks = """
 false ONLY if the work positively has no AI that learners use or interact with: AI is the subject of the
 teaching, as in AI literacy; the work is about policy, ethics or institutions; AI serves only teachers or
-administrators; or the agent does not exist yet, as in a needs assessment or a proposal for a future system.
+administrators; the agent does not exist yet, as in a needs assessment or a proposal for a future system; or the agent is
+operated by a person in real time, as in a Wizard-of-Oz setup, so that no AI acts on its own.
 True for any system a learner uses, whatever the authors call it and however simple, including adaptive
 tutors; true for a study of learners' perceptions of one; AND true when the work does not say.
 """
@@ -117,14 +120,19 @@ it names none, which is the common case. Many studies never say their level; ans
 inferring it from the topic, the venue or what would be usual.
 """
 # Every level a record states is quoted; "not_applicable" asserts an absence, which has no words to quote.
-quote = ["higher_education", "school", "vocational", "professional_training", "informal", "mixed"]
+quote = ["higher_education", "school", "vocational", "professional_training", "professional_course", "informal", "mixed"]
 [field.values]
 higher_education = "a university, college, polytechnic or their students and faculty - degree study"
 school = "primary or secondary schooling, K-12, pupils"
 vocational = "formal vocational or trade education leading to a qualification"
 professional_training = """
-workplace and professional development: practitioners already qualified, being coached, upskilled or trained
-on the job. Teacher CPD, staff onboarding
+training an employer gives its own staff: on-the-job training, staff onboarding, corporate courses. Teacher CPD
+run by the school. NOT a student's work placement or practice period, which belongs to their programme's level
+"""
+professional_course = """
+a course for practitioners from a centre, association or school that is not their employer: a professional
+development centre's courses, training for working performers. People still training for a profession, such as
+therapists in training, are students: their programme's level applies, or not_stated
 """
 informal = """
 learning outside any institution - self-directed learners, the general public, lifelong learning, patient
@@ -200,6 +208,17 @@ human = "a person operates it in real time, so no AI is acting on its own"
 none = "no agent that learners interact with"
 
 [[field]]
+name = "abstract_enough"
+asks = """
+whether the title and abstract say enough to decide whether this work belongs in the scope, or a person would
+need the full text. Answer "no" when what decides it is missing or ambiguous: who the learners are, the setting,
+whether an AI is actually used by learners, or what the AI does
+"""
+[field.values]
+yes = "the title and abstract settle it"
+no = "deciding needs the full text"
+
+[[field]]
 name = "ai_role"
 asks = "what the AI does in this work, or 'none' if there is no AI in it"
 max_words = 8
@@ -224,6 +243,11 @@ action = "remove"
 [[rule]]
 label = "attitudes only, from learners who have not used the AI"
 when = { focus = ["attitudes_without_use"] }
+action = "remove"
+
+[[rule]]
+label = "an agent a person operates in real time, which does not count as AI"
+when = { agent_operator = ["human"] }
 action = "remove"
 
 [[rule]]
@@ -257,6 +281,6 @@ when = { population = ["mixed"] }
 action = "hold"
 
 [[rule]]
-label = "an agent a person operates in real time: whether it counts as AI"
-when = { agent_operator = ["human"] }
+label = "the abstract does not settle it: deciding needs the full text"
+when = { abstract_enough = ["no"] }
 action = "hold"

@@ -835,6 +835,17 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
   other; the record goes to a person, though here by the earlier rule on professional training, which matches first.
   Against the team: removed 49 of 60 drops, 11 to a person, none kept; hand checks 17, disagreements 3.
 
+**The meeting of 2026-11-06** (the maintainer and the team leader), settling the what-if's questions:
+
+- **Employer-run training is out**, as the what-if had it: a practitioners' course from someone other than their employer
+  stays in.
+- **Therapists in training are in**: people training for a profession are students.
+- **Student teachers' practice period at a company is in**, being part of their programme.
+- **An agent a person operates in real time is out**: `agent_operator = human` now removes, among the removal rules so
+  that no hold matches it first.
+- **A new check: records the abstract cannot settle**, needing the full text, go to a person (`abstract_enough`). It
+  mirrors the team's own "was the abstract enough" column in their sheet, which makes that column its first check.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM

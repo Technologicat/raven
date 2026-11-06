@@ -227,5 +227,5 @@ def test_the_aokk_definition_stays_valid():
     definition = d.load_definition(path)
     assert [test.name for test in definition.tests] == ["no_ai", "not_education", "wrong_level", "teachers_as_learners",
                                                         "learner_agent"]
-    assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "remove", "remove",
+    assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "remove", "remove", "remove",
                                                           "hold", "hold", "hold", "hold", "hold", "hold"]
