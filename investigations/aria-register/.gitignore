@@ -3,3 +3,4 @@
 *.jsonl
 stream.log
 blind-*
+*.stdout
