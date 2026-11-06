@@ -844,8 +844,8 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
 - **Teacher education at an educational institution is in, whoever takes it**: student teachers, and practising
   teachers taking a teaching qualification there, as in vocational teacher education. **Practising teachers'
   professional development outside an institution's programme is out** (`teacher_learning = professional_development`
-  removes). **Practising teachers on an institution's continuing-education course** (täydennyskoulutus) are tagged
-  `continuing_education`, with no rule, for a person to spot-check. The maintainer clarified this the same day, after a
+  removes). **Practising teachers on an institution's continuing-education course** (täydennyskoulutus) go to a person
+  (`teacher_learning = continuing_education`). The maintainer clarified this the same day, after a
   first reading that put qualification and continuing education out.
 - **An agent doing a teacher's office work is out** (filling in a curriculum, planning documents, administration), even
   when a student teacher uses it: it is not helping anyone learn.

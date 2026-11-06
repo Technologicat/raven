@@ -295,6 +295,11 @@ when = { population = ["mixed"] }
 action = "hold"
 
 [[rule]]
+label = "practising teachers on an institution's continuing-education course: a person spot-checks"
+when = { teacher_learning = ["continuing_education"] }
+action = "hold"
+
+[[rule]]
 label = "the abstract does not settle it: deciding needs the full text"
 when = { abstract_enough = ["no"] }
 action = "hold"
