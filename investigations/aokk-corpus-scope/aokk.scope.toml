@@ -72,10 +72,11 @@ false and lower your confidence.
 [[test]]
 name = "teachers_as_learners"
 asks = """
-true ONLY if the people learning in the work are practising teachers: in-service teachers, their professional
-development or continuing education, including a teaching qualification taken by people already working as
-teachers, as in vocational teacher education - that is not a degree programme. Student teachers in a degree
-programme are students, so false for them. False when
+true ONLY if the people learning in the work are practising teachers learning OUTSIDE a programme of an
+educational institution: in-service professional development, workshops, training their employer provides.
+False for anyone in teacher education at a university, college or other educational institution - student
+teachers, and practising teachers taking a teaching qualification there alike - and false for practising
+teachers on a continuing-education course an educational institution runs. False when
 teachers appear only as those who teach, or as one group among several learners, AND false when the work does
 not say who is learning.
 """
@@ -86,7 +87,8 @@ fires_on = false
 asks = """
 false ONLY if the work positively has no AI that learners use or interact with: AI is the subject of the
 teaching, as in AI literacy; the work is about policy, ethics or institutions; AI serves only teachers or
-administrators; the agent does not exist yet, as in a needs assessment or a proposal for a future system; or the agent is
+administrators, or does a teacher's office work - filling in a curriculum, planning documents, administration -
+even when a student teacher is the one using it; the agent does not exist yet, as in a needs assessment or a proposal for a future system; or the agent is
 operated by a person in real time, as in a Wizard-of-Oz setup, so that no AI acts on its own.
 True for any system a learner uses, whatever the authors call it and however simple, including adaptive
 tutors; true for a study of learners' perceptions of one; AND true when the work does not say.
@@ -101,8 +103,8 @@ asks = "who the work studies"
 university_students = "students in higher education"
 vocational_students = "students in vocational education"
 school_pupils = "pupils in primary or secondary school"
-preservice_teachers = "people studying to become teachers, in a degree programme"
-inservice_teachers = "practising teachers, including those taking a teaching qualification or continuing education while working as teachers"
+preservice_teachers = "people studying to become teachers"
+inservice_teachers = "practising teachers"
 researchers = "researchers, as the subjects of the work"
 professionals = "practitioners in a profession other than teaching"
 general_public = "the public at large"
@@ -210,6 +212,16 @@ human = "a person operates it in real time, so no AI is acting on its own"
 none = "no agent that learners interact with"
 
 [[field]]
+name = "teacher_learning"
+asks = "when the learners are teachers or future teachers: where and how they learn"
+[field.values]
+teacher_education = "student teachers in a teacher-education programme of an educational institution"
+qualification = "practising teachers taking a teaching qualification at an educational institution, as in vocational teacher education"
+continuing_education = "practising teachers on a continuing-education course run by an educational institution, not a qualification"
+professional_development = "practising teachers' professional development outside an institution's programme: employer training, workshops, CPD"
+not_applicable = "the learners are not teachers or future teachers"
+
+[[field]]
 name = "abstract_enough"
 asks = """
 whether the title and abstract say enough to decide whether this work belongs in the scope, or a person would
@@ -233,8 +245,8 @@ when = { level = ["school"] }
 action = "remove"
 
 [[rule]]
-label = "the learners are practising teachers"
-when = { population = ["inservice_teachers"] }
+label = "practising teachers' professional development, outside an institution's programme"
+when = { teacher_learning = ["professional_development"] }
 action = "remove"
 
 [[rule]]

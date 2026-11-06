@@ -841,8 +841,14 @@ to 6, one of them a borderline conceptual paper that the judge kept this time an
   stays in.
 - **Therapists in training are in**: people training for a profession are students.
 - **Student teachers' practice period at a company is in**, being part of their programme.
-- **Practising teachers taking a teaching qualification or continuing education are out**, as in vocational teacher
-  education for people already working as teachers: that is not a degree programme (the maintainer, the same day).
+- **Teacher education at an educational institution is in, whoever takes it**: student teachers, and practising
+  teachers taking a teaching qualification there, as in vocational teacher education. **Practising teachers'
+  professional development outside an institution's programme is out** (`teacher_learning = professional_development`
+  removes). **Practising teachers on an institution's continuing-education course** (täydennyskoulutus) are tagged
+  `continuing_education`, with no rule, for a person to spot-check. The maintainer clarified this the same day, after a
+  first reading that put qualification and continuing education out.
+- **An agent doing a teacher's office work is out** (filling in a curriculum, planning documents, administration), even
+  when a student teacher uses it: it is not helping anyone learn.
 - **An agent a person operates in real time is out**: `agent_operator = human` now removes, among the removal rules so
   that no hold matches it first.
 - **A new check: records the abstract cannot settle**, needing the full text, go to a person (`abstract_enough`). It
