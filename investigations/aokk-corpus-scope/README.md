@@ -867,7 +867,7 @@ rule.
 sheet in `AOKK/scopebib-2026-11-full/`, the run's answers counting toward the full run). The pool of 300: removed 144 by
 the tool (and 4 already in the team's 72), kept 98, sent to a person 52. Drawn at random within each: 30 removed, 20 kept,
 10 to a person, none of them already rated. The sheet carries the team's own four columns, only the decision required and the other three marked optional, and, on a second tab, the
-decided rules in Finnish (`Rajaus.txt`), which raters are asked to follow where they and their own reading disagree.
+decided rules in Finnish (`Rajaus.txt`), which raters are asked to follow where they and their own reading disagree. Sent to the team the same day; their ratings are expected by 2026-11-11.
 Unlike on the 72, the full-text check is the commonest reason for a hold here: 33 of the 52.
 
 - **What it means for the full run**, scaled from the pool to the corpus's 4489 sifted records: about 2200 removed, 1480
