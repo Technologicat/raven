@@ -820,6 +820,17 @@ kept, kept 1, sent 6 to a person, removed 3. Hand checks fall from 19 to 16, and
 - **The perceptions rule costs nothing here**: of 16 records extracted, 5 are perceptions after use and none leave the use
   unstated.
 
+**A what-if for the open questions** (2026-11-06, the same 72; outputs and the variant definition in
+`AOKK/scopebib-2026-11-06-held72-whatif/`, nothing tracked changed): only training an employer gives its own staff is out,
+a practitioners' course from a centre, association or school that is not their employer is in, and an agent a person
+operates in real time counts as no AI. Hand checks fall from 16 to 10; of the 10 the team kept, 5 are kept (from 1), 1 goes
+to a person (from 6), and 4 are removed (from 3: the corporate-context one now goes by the judge). Disagreements rise from 4
+to 6, one of them a borderline conceptual paper that the judge kept this time and removed the last.
+
+- **The human-operated agent changed nothing**, because the judge kept that record from its title at high confidence and
+  so never read the abstract, which says the educators role-play the patient in real time. A high-confidence title keep is
+  not escalated, so a definition change that only the abstract can show does not reach it.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
