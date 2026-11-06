@@ -30,10 +30,12 @@ from raven.common import tabular
 from raven.papers.scopebib import report
 
 QUOTAS = {"removed": 30, "kept": 20, "to a person": 10}
-# The rater's four columns carry the names the team gave them in their own sheet.
-SHEET_COLUMNS = ["key", "päätös", "riittikö abstrakti", "tekoälyn käyttö", "perustelu", "title", "authors", "year", "venue",
-                 "link", "abstract"]
-BLANK_COLUMNS = {"päätös", "riittikö abstrakti", "tekoälyn käyttö", "perustelu"}  # the rater's to fill
+# The rater's four columns carry the names the team gave them in their own sheet. Only the decision is needed; the
+# check was promised to be fast, so the other three say they are optional.
+OPTIONAL = " (valinnainen)"
+SHEET_COLUMNS = ["key", "päätös", "riittikö abstrakti" + OPTIONAL, "tekoälyn käyttö" + OPTIONAL, "perustelu" + OPTIONAL,
+                 "title", "authors", "year", "venue", "link", "abstract"]
+BLANK_COLUMNS = set(SHEET_COLUMNS[1:5])  # the rater's to fill
 KEY_COLUMNS = ["key", "stratum", "group", "tool outcome", "stratum size in pool"]
 KEEP_WORDS = {"keep", "kyllä", "kylla", "mukaan", "yes", "k"}
 DROP_WORDS = {"drop", "ei", "pois", "no", "e"}

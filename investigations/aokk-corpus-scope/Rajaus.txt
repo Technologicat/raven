@@ -1,13 +1,13 @@
 Rajaus: mitä aineistoon otetaan (sovittu 6.11.2026)
 
-Päätä otsikon ja abstraktin perusteella. Jos ne eivät riitä päätökseen, merkitse se sarakkeeseen "riittikö abstrakti".
-Sovitut säännöt ratkaisevat, jos ne ja oma vaikutelma ovat ristiriidassa.
+Päätä otsikon ja abstraktin perusteella. Sovitut säännöt ratkaisevat, jos ne ja oma vaikutelma ovat ristiriidassa.
 
 Sarakkeet:
-- päätös: kyllä (mukaan) tai ei (pois)
-- riittikö abstrakti: kyllä tai ei
-- tekoälyn käyttö: käytitkö tekoälyä apuna tämän rivin päätöksessä (kyllä/ei)
-- perustelu: lyhyesti; kirjoita "epäselvä", jos päätös oli vaikea
+- päätös: kyllä (mukaan) tai ei (pois). Tämä riittää.
+- Valinnaiset, jos haluat:
+  - riittikö abstrakti: kyllä tai ei
+  - tekoälyn käyttö: käytitkö tekoälyä apuna tämän rivin päätöksessä (kyllä/ei)
+  - perustelu: lyhyesti, esimerkiksi "epäselvä", jos päätös oli vaikea
 
 MUKAAN
 - Tekoälyagentti opiskelijan vuorovaikutteisena oppimiskumppanina ammatillisessa tai korkeakoulutuksessa, riippumatta kirjoittajien käyttämästä termistä.
@@ -28,7 +28,7 @@ EI MUKAAN
 - Agentti, joka on vasta suunnitteluvaiheessa.
 - Tutkimukset, joissa oppija ei käytä tekoälyä.
 
-EPÄSELVÄT: tee päätös ja kirjoita perusteluun "epäselvä"
+EPÄSELVÄT: tee päätös parhaan arviosi mukaan
 - Työssä olevien opettajien täydennyskoulutus oppilaitoksen järjestämällä kurssilla.
 - Sekaotokset, joissa on opiskelijoiden lisäksi muita.
 - Mukautuva tutor, joka mukauttaa sisältöä mutta ei keskustele (vielä päättämättä).
