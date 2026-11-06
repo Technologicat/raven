@@ -798,6 +798,28 @@ another whose abstract names a corporate setting, among those the team is asked 
 and the conceptual paper the tags are there to show. The new hold on no learner's agent caught nothing here. The same caveat
 holds: partly fitted, and one hard tier, where escalation asks a larger share than it would on a whole corpus.
 
+**After the team's answers of 2026-11-05** (2026-11-06, same model; outputs in `AOKK/scopebib-2026-11-06-held72/`). The team
+answered five of the questions: student teachers are students and stay in, whatever they study; literature reviews are out,
+having no empirical learner-AI interaction; a perceptions study is in if its learners interacted with an AI; a mixed sample
+is out where its results cannot be said to apply to students; whether an adaptive tutor that does not converse counts is
+still open. The definition follows: only practising teachers are removed, reviews are removed by rule, attitude studies
+whose learners have not used the AI are removed and those that do not say go to a person, and a mixed sample goes to a
+person. Against the 70 decisions: removed 49 of the 60 the team dropped, sent 10 to a person, kept 1; of the 10 the team
+kept, kept 1, sent 6 to a person, removed 3. Hand checks fall from 19 to 16, and outright disagreements from 6 to 4.
+
+- **The reviews are now removed, by the rule**, and the conceptual paper by the judge: the three kept drops of the run
+  before.
+- **All three removals of a kept record are ones the team's answers have not reached yet**: two whose abstracts name
+  workplace training and one naming informal learning. They follow the scope as written; whether the team's keeps or the
+  scope wins is on the question list.
+- **Five of the six kept records sent to a person are held as professional training** (performers, a professional
+  development centre, a corporate setting, therapists in training). If only employer-run training is out, as asked, most
+  of these come back.
+- **The one kept drop is a new kind**: an embodied agent that a teacher operates in real time, so no AI is acting on its
+  own. Nothing in the definition says so yet.
+- **The perceptions rule costs nothing here**: of 19 records extracted, 5 are perceptions after use and none leave the use
+  unstated.
+
 ### The run queued next (2026-10-27): a full run with `--fill`
 
 **Decided 2026-10-27: option 1 below**, a full run under the tool's own instruments. Waiting on the LLM
