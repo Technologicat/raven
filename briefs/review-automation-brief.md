@@ -258,3 +258,8 @@ wanted early in the week of 2026-11-02, for the health-education study.
   code, its docstring may cite Daniels (US Air Force, about 1952), who found no average pilot: a note on sizing pilots, in a straight
   face. `raven-scopebib` has no `--declare`, so a run on a backend not reporting quantization leaves it out of the methods line; low
   priority, the 27B reporting its own.
+- **2026-11-09, the PRISMA extension check for the papers' methodology** (from the note of 2026-11-05): PRISMA-trAIce (Holst et al., JMIR AI
+  2025;4:e80247) is **not endorsed by the PRISMA Executive**, who say it did not follow their process (Moher et al., "PRISMA-trAIce: A Name
+  Without Endorsement", letter to the editor, JMIR AI 2026;5:e104210, doi:10.2196/104210). The same letter says official consensus-based
+  guidance on AI tools is being developed and will be hosted on the PRISMA website, so check <https://www.prisma-statement.org/extensions>
+  again before submission.
