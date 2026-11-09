@@ -263,3 +263,6 @@ wanted early in the week of 2026-11-02, for the health-education study.
   Without Endorsement", letter to the editor, JMIR AI 2026;5:e104210, doi:10.2196/104210). The same letter says official consensus-based
   guidance on AI tools is being developed and will be hosted on the PRISMA website, so check <https://www.prisma-statement.org/extensions>
   again before submission.
+  L-PRISMA (Shailendra et al., arXiv:2603.19236, accepted at ICMET 2025) is a proposal from one use case with no measure of what it misses,
+  and does not fit our method, but its flow diagram counts records screened and studies included by GenAI apart from the manual ones,
+  which is the box PRISMA 2020 lacks for records a tool keeps.
