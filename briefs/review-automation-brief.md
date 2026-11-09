@@ -266,3 +266,8 @@ wanted early in the week of 2026-11-02, for the health-education study.
   L-PRISMA (Shailendra et al., arXiv:2603.19236, accepted at ICMET 2025) is a proposal from one use case with no measure of what it misses,
   and does not fit our method, but its flow diagram counts records screened and studies included by GenAI apart from the manual ones,
   which is the box PRISMA 2020 lacks for records a tool keeps.
+  **AOKK's study is a scoping review, so its reporting guideline is PRISMA-ScR** (Tricco et al., Ann Intern Med 2018;169(7):467–473). It
+  prescribes no diagram boxes: item 17 asks for the numbers screened, assessed and included, "with reasons for exclusions at each stage,
+  ideally using a flow diagram", item 9 for the selection process, and item 5 for a protocol and its registration only if they exist. It
+  does not mention automation. Levac et al. (Implement Sci 2010;5:69) recommend at least two researchers each independently reviewing
+  abstracts, meeting at the beginning, midpoint and end, and refining the search if needed.
