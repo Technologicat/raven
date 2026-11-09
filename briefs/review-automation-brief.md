@@ -271,3 +271,9 @@ wanted early in the week of 2026-11-02, for the health-education study.
   ideally using a flow diagram", item 9 for the selection process, and item 5 for a protocol and its registration only if they exist. It
   does not mention automation. Levac et al. (Implement Sci 2010;5:69) recommend at least two researchers each independently reviewing
   abstracts, meeting at the beginning, midpoint and end, and refining the search if needed.
+- **2026-11-09, a second family over the removals** (maintainer agreed, to do after AOKK's blind sample): a judge from another model family reads
+  only the records the tool removed, and any disagreement goes to a person, the part of Levac et al.'s "third reviewer" a tool can play. What a
+  second reviewer buys is independent errors, so two runs of one model, or our judge and reviewer stages, do not count as two; the paper says
+  "LLM screener" and leaves the ontology alone. One more judge pass over the removals. It can only take records out of the removed pile, so the
+  number of in-scope records wrongly removed can only fall, but the bound on the removal rate then describes the earlier pile, and a second
+  round re-measures it.
