@@ -2535,7 +2535,6 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
                env(key_indent=0, key="Alt+S", action_indent=0, action="Speech", notes="Whether the avatar speaks replies"),
                env(key_indent=1, key="Alt+C", action_indent=1, action="Subtitles", notes="Used when Speech is on"),
-               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
