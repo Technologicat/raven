@@ -508,6 +508,36 @@ The LLM also gets `fetch_document`, to read a document in full once a search mat
 
 There is a reason to switch **Documents** off, too. The automatic search injects its best matches whether or not they are any good, so a question the database has nothing to say about still costs the prompt-processing time for a batch of irrelevant matches — noticeable as a delay before the reply begins. When the conversation has moved to a topic your corpus does not cover, turning the toggle off is the cheaper mode.
 
+### MCP servers
+
+*Librarian* can also use tools from [MCP](https://modelcontextprotocol.io/docs/getting-started/intro) servers, which are separate programs that publish tools for an LLM. This is how to give the AI a capability *Librarian* does not ship.
+
+List your servers in `~/.config/raven/librarian/mcp.json`. The format is the one other MCP clients use, so an entry can be copied from one of them as it is:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcp-filesystem-server",
+      "args": ["/home/me/somewhere/the/ai/may/look"],
+      "allowed_tools": ["list_directory", "read_file", "search_files"]
+    },
+    "lab": {
+      "url": "http://localhost:8788/mcp",
+      "headers": {"Authorization": "Bearer ..."}
+    }
+  }
+}
+```
+
+A server with a `command` is started by *Librarian* and stopped when it exits. A server with a `url` is already running somewhere, and is reached over streamable HTTP, or over SSE with `"type": "sse"`. Add `"disabled": true` to skip a server without removing its entry.
+
+The **MCP** toggle (`Alt+M`) switches all of their tools on or off. In the chat they appear as `<server>__<tool>`. If a server cannot be started, the app says so in its terminal and in its log, and carries on without it. What a started server writes to its stderr is in `~/.config/raven/librarian/mcp_logs/`.
+
+**The AI calls these tools without asking you first.** An MCP server is third-party code, acting on whatever the LLM decides, and what the LLM decides can be influenced by what it reads; see the security warning below. Offer it only what you are comfortable with. `allowed_tools` is how to withhold a server's other tools, and it is worth using for a second reason: the descriptions of every offered tool are sent with each message, and a server publishing many large ones can take a substantial part of the context window.
+
+From a script, tools are available inside a `with mcpclient.connected(llm_settings):` block, and `agent.turn` offers them when given `mcp_enabled=True`.
+
 ### Security warning
 
 To keep tool use safe, there are [certain important considerations](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). In short, giving an LLM access to all three of:
@@ -533,11 +563,11 @@ These techniques are well known, and even trivial, so spelling them out here is 
 
 ### Notes
 
-Currently, *Librarian* only provides a set of hardcoded tools, and does **not** support MCP or skills.
+*Librarian* does **not** support skills yet.
 
-As of v0.2.8, *Librarian* provides web search, web fetch, and document database search. We intend to expand this later.
+Besides anything from MCP servers, *Librarian* provides web search, web fetch, document database search, a clock and a calculator.
 
-If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
+If interested in the details, see [`raven.librarian.llmtools`](llmtools.py) for the built-in tools, [`raven.librarian.mcpclient`](mcpclient.py) for the MCP ones, the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
 
 ## Scripting
 
@@ -873,6 +903,7 @@ Each has a hotkey, mnemonic on its label, and they work while you are typing —
 | `Alt+T` | Thinking | | `Alt+G` | Chat graph |
 | `Alt+Shift+T` | Show thinking | | `Alt+S` | Speech |
 | `Alt+I` | Internet | | `Alt+C` | Subtitles (**c**aptions) |
+| `Alt+M` | MCP | | | |
 | `Alt+D` | Documents | | | |
 | `Alt+A` | Auto-search | | | |
 
@@ -1047,6 +1078,7 @@ mid-sentence, on noticing that the answer wants the web or the documents.
 | `Alt+T` | Thinking |
 | `Alt+Shift+T` | Show thinking |
 | `Alt+I` | Internet |
+| `Alt+M` | MCP |
 | `Alt+D` | Documents |
 | `Alt+A` | Auto-search |
 | `Alt+G` | Chat graph |

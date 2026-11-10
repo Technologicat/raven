@@ -21,6 +21,12 @@
 
 #### Raven-librarian
 
+- **Tools from MCP servers**, beside the built-in ones.
+  - List servers in `mcp.json`, in the format other MCP clients use. Both a server *Librarian* starts itself and one reached over HTTP or SSE.
+  - The **MCP** toggle (`Alt+M`) and `!mcp` in `raven-minichat` switch them on and off; `allowed_tools` and `disabled` choose per server.
+  - A script has them inside `with mcpclient.connected(llm_settings):`, with `agent.turn(..., mcp_enabled=True)`.
+  - A server that cannot start, stops or stalls is reported, and the chat carries on.
+  - The AI calls these tools without asking first; per-call approval is planned.
 - **An edited message can be saved as a new branch**, beside the original rather than over it: **Shift** with the send key (**Ctrl+Shift+Enter** by default), or **Shift+click** on **Save**. The original and everything below it are kept, and the new branch has nothing below it — for asking a different question in place of one already asked.
 - **`raven.librarian.sweep`, for asking the same question of every item in a set**, from a script.
   - Each answer goes to a ledger as it arrives, so an interrupted run resumes where it stopped, and failed items are tried again.

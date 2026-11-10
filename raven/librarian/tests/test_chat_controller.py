@@ -493,7 +493,7 @@ class TestThinkingRetentionMismatch:
         controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
         controller.datastore = forest
         controller.llm_settings = llm_settings
-        controller.app_state = {"HEAD": head, "docs_enabled": False, "internet_enabled": False}
+        controller.app_state = {"HEAD": head, "docs_enabled": False, "internet_enabled": False, "mcp_enabled": False}
         controller.retriever = None
         controller.gui_updates_safe = True
         controller.is_generating = lambda: False

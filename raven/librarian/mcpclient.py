@@ -40,7 +40,7 @@ from typing import Any, TextIO
 
 import anyio
 import mcp
-import mcp_types
+from mcp import types as mcp_types
 from mcpyrate import colorizer
 from unpythonic import dyn
 from unpythonic.env import env
