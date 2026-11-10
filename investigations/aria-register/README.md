@@ -500,6 +500,14 @@ before blind sample 17 has checked v6, so provisional:
 "be candid, including when critical or unprompted" adds nothing measurable to it. Step 4's candidate card should carry the
 tone paragraph's content. Waiting on blind sample 17 before any of this is relied on.
 
+### What this probe's fingerprint covers (2026-11-10)
+
+The probe offers the model tools, restricted to `calculate` and `get_current_time` by `agent.turn`'s defaults for a chat with
+no documents and no internet. `sweep.fingerprint` can now hash the tool specifications a run offers (`tools=`, from
+`llmclient.offered_tools`), and **this probe does not pass them**, so its ledgers keep the fingerprints they ran under and a
+change to those two tools' descriptions would not start a new one. Passing them would, once, for every prompt set. New
+tools, MCP ones included, do not reach these runs while that restriction stands.
+
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
 Not part of the measurement, and recorded here because the rewrite this investigation gates is where they
