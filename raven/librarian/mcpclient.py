@@ -337,6 +337,11 @@ class MCPClient:
         return [server.config.name for server in self._servers if server.left_stopped]
     stopped_servers = property(fget=_get_stopped_servers, doc="The names of the servers left stopped after failing too often. `retry_stopped` tries them again.")
 
+    def _get_all_running(self) -> bool:
+        """Whether every server has an open session; `False` if there are no servers."""
+        return bool(self._servers) and all(server.maybe_session is not None for server in self._servers)
+    all_running = property(fget=_get_all_running, doc="Whether there are servers, and every one of them is connected right now.")
+
     def report_to_console(self) -> None:
         """Print how the start went, for a frontend with a terminal. Prints nothing if no servers are configured."""
         if self.tool_names:

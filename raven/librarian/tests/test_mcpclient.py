@@ -459,10 +459,12 @@ class TestRetryStopped:
 
     def test_a_server_whose_problem_was_solved_comes_back(self, stopped, settings):
         client, flag, _status_calls = stopped
+        assert not client.all_running, "the server is running already, so this fixture cannot tell a recovery from nothing happening"
         flag.touch()
         client.retry_stopped()
         assert TestLiveReload._wait_until(lambda: "flaky__echo" in client.tool_names)
         assert _call(settings, "flaky__echo", text="back")[0] == "back"
+        assert client.all_running
         assert client.stopped_servers == []
         assert client.problems == {}
 
@@ -481,7 +483,9 @@ class TestRetryStopped:
         assert _call(settings, "steady__pid")[0] == pid
 
     def test_before_start_it_does_nothing(self, tmp_path, settings):
-        mcpclient.MCPClient(settings, config_file=tmp_path / "nope.json").retry_stopped()
+        client = mcpclient.MCPClient(settings, config_file=tmp_path / "nope.json")
+        client.retry_stopped()
+        assert not client.all_running, "no servers is not the same as all of them running"
 
 
 class TestLiveReload:

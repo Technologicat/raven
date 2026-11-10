@@ -451,12 +451,26 @@ print()
 # before its tools arrive.
 def _refresh_mcp_status() -> None:
     """Bring the GUI up to date with the MCP client: the toggle, the retry pill and the tools' token costs."""
+    global _mcp_retry_pending
     if not dpg.does_item_exist("mcp_status_pill") or guiutils.is_shutting_down():  # tag
         return  # the GUI is not built yet, and `_finish_startup` calls this once it is; or it is going away
     dpg.configure_item("mcp_enabled_checkbox", enabled=librarian_config.mcp_config_file.exists())  # tag
     _refresh_mcp_status_pill()
+    # This runs at each step of a retry, including before anything has connected, when nothing is stopped
+    # and nothing is running either. Only those two outcomes end the wait.
+    if _mcp_retry_pending and (mcp_client.all_running or mcp_client.stopped_servers):
+        _mcp_retry_pending = False
+        if mcp_client.all_running:
+            _show_composer_notice("MCP: all servers running.")
     _refresh_tool_cost_tooltips()
     chat_controller.update_context_fill_indicator()  # the tools on offer may be different now
+
+_mcp_retry_pending = False  # the user clicked the pill, and the outcome has not been told yet
+
+def _retry_stopped_mcp_servers() -> None:
+    global _mcp_retry_pending
+    _mcp_retry_pending = True
+    mcp_client.retry_stopped()
 
 def _announce_mcp_reload() -> None:
     n_tools = len(mcp_client.tool_names)
@@ -466,9 +480,13 @@ mcp_client = mcpclient.MCPClient(llm_settings, on_status_changed=_refresh_mcp_st
 mcp_task_manager = bgtask.TaskManager(name="librarian_mcp_start",
                                       mode="sequential",
                                       executor=bg)
+_MCP_SLOW_START_S = 10.0  # a start this long is worth a notice; a normal one says nothing
 def _mcp_start_task(task_env: env) -> None:
+    t0 = time.monotonic()
     mcp_client.start(watch=True)
     mcp_client.report_to_console()
+    if mcp_client.tool_names and time.monotonic() - t0 > _MCP_SLOW_START_S:
+        _show_composer_notice(f"MCP tools ready: {len(mcp_client.tool_names)}.")
 mcp_task_manager.submit(_mcp_start_task, env())
 
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
@@ -687,7 +705,7 @@ composer_notice_task_manager = bgtask.TaskManager(name="librarian_composer_notic
 def _show_composer_notice(text: str) -> None:
     """Show `text` for a few seconds in the status row above the composer."""
     global _composer_notice_shown
-    if guiutils.is_shutting_down():
+    if guiutils.is_shutting_down() or not dpg.does_item_exist("composer_notice_button"):  # tag
         return
     dpg.configure_item("composer_notice_button", label=text)  # tag
     _composer_notice_shown = True
@@ -1682,7 +1700,7 @@ with timer() as tim:
                                 dpg.bind_item_font("mcp_status_icon", themes_and_fonts.icon_font_solid)  # tag
                                 dpg.bind_item_theme("mcp_status_icon", "my_pulsating_caution_backend_theme")  # tag
                                 dpg.add_button(label="",
-                                               callback=lambda: mcp_client.retry_stopped(),
+                                               callback=lambda: _retry_stopped_mcp_servers(),
                                                tag="mcp_status_button")
                                 dpg.bind_item_theme("mcp_status_button", "my_steady_caution_backend_theme")  # tag
                                 mcp_status_tooltip = gui_tooltip.Tooltip("mcp_status_button", "")  # tag
