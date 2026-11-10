@@ -61,7 +61,7 @@ Pillow==13.0.0
 # collect at all — the tests themselves are pure-function and touch nothing psutil provides.
 psutil==7.2.2
 pypdf==6.21.4
-pytest==9.1.1  # not 9.2.0, which is held back: see the exclusion and its reason in pyproject.toml
+pytest==9.2.0  # not 9.2.0, which is held back: see the exclusion and its reason in pyproject.toml
 pytest-cov==7.1.0
 python-docx==1.2.0
 python-pptx==1.0.2
