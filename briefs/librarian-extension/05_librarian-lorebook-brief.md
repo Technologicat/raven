@@ -22,6 +22,8 @@ would be knowledge left on the floor. So this clears the bar the project already
   just before the latest user message, so that a firing entry leaves the cached prefix alone. The *Context
   assembler* section's first version is that list as candidate records under one budget. Read the comments
   there before changing it, as its order is load-bearing.
+- **Second frontends: a Pi-dev plugin first, then LM Studio's.** The *LM Studio plugin* section below predates
+  the first. Both follow the native lorebook, as ports of its settled logic.
 
 ---
 
