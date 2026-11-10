@@ -417,8 +417,7 @@ class MCPClient:
                     plural_s = "s" if n_deaths != 1 else ""
                     server.restarting = False
                     server.left_stopped = True
-                    server.maybe_failure = (f"stopped {n_deaths} time{plural_s} within {librarian_config.mcp_restart_window:g} seconds, "
-                                            "so it was left stopped for the rest of this session")
+                    server.maybe_failure = f"failed {n_deaths} time{plural_s}, so it was left stopped for the rest of this session"
                     self._problems[name] = server.maybe_failure
                     logger.error(f"MCPClient: server '{name}': {server.maybe_failure}.")
                     self._call_handler(self.on_status_changed)
