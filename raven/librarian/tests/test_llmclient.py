@@ -1093,7 +1093,6 @@ class TestToolNamesFiltersTheRequest:
         llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, tool_names=None)
         assert "tools" not in sent["json"]
 
-
     @pytest.mark.parametrize("kwargs", [{"tools_enabled": True, "tool_names": None},
                                         {"tools_enabled": True, "tool_names": ()},
                                         {"tools_enabled": True, "tool_names": ("search_documents",)},
