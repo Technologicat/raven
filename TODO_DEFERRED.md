@@ -27,6 +27,22 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Avatar face cels from an image edit model, by difference
+
+*Cluster: avatar-assets · Cost: ? · Gate: try one cel first; a licence check before anything is committed · Filed: 2026-11-10*
+
+The face cels (blush, data eyes, face shadow, sweatdrops, tears, the eye waver) are per-character, so only one character has a full set. Sharing face parts across characters would be a Live2D clone, which misses the point of THA3 (maintainer, 2026-11-10), so the cost of making them per character is what wants lowering.
+
+**The idea: edit the character's image to show the effect, and take the cel from the difference.** That needs no RGBA from the model. The compositor is alpha-over with strength scaling alpha, so per pixel and channel, with B the base, R the edit, and (α, F) the cel, R − B = α(F − B) and the composite at strength s is B + s·α(F − B) = B + s(R − B). The split into α and F drops out: every pair that reproduces the edit composites identically over this base at every strength, so the colour does not need to be known. Pick the smallest α keeping F in [0, 1] per pixel, as GIMP's "colour to alpha" does (checked numerically; not yet tried on an image).
+
+- **Noise is the open question.** Edit models pass the image through a VAE, so untouched pixels drift, and all of it becomes faint alpha. It needs a mask (the base's alpha removes everything outside the silhouette), a threshold or light smoothing. The cels only have to work when composited, and need not look clean on their own.
+- **Outside the silhouette there is no B**, so a sweatdrop hanging off the face is not covered. Rendering on two backgrounds would give α there, if the edit came out the same twice.
+- **Several cels active at once.** Each is made over the clean base, and at run time one may land on another's pixels, where the identity is no longer exact. The smallest α limits it.
+
+**Models, as of 2026-11:** Qwen-Image 2.1 has RGBA and an edit mode, and a non-commercial licence. Flux.2 Klein 9B has an edit mode and no RGBA, which this idea would not need. [Anima-RGBA](https://huggingface.co/localai0301/Anima-RGBA) has RGBA and no edit mode. A layered Qwen-Image was a research prototype with no later checkpoints.
+
+**Licence:** the repository has to run as cloned, so committed character assets must be publishable. Read the terms of whichever model is used, on what they say about outputs, before committing any cel.
+
 ## Take pytest past 9.2.0 once its monkeypatch regression is fixed
 
 *Cluster: dependency-holds · Cost: S · Gate: a pytest release fixing pytest-dev/pytest#15287 · Filed: 2026-11-03*
