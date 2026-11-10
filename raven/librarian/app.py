@@ -689,7 +689,7 @@ def _show_composer_notice(text: str) -> None:
     global _composer_notice_shown
     if guiutils.is_shutting_down():
         return
-    dpg.set_value("composer_notice_text", text)  # tag
+    dpg.configure_item("composer_notice_button", label=text)  # tag
     _composer_notice_shown = True
     _refresh_composer_layout()
     def linger(task_env: env) -> None:
@@ -702,6 +702,13 @@ def _show_composer_notice(text: str) -> None:
         _composer_notice_shown = False
         _refresh_composer_layout()
     composer_notice_task_manager.submit(linger, env())
+
+def _dismiss_composer_notice() -> None:
+    """Take the notice down now."""
+    global _composer_notice_shown
+    composer_notice_task_manager.clear(wait=False)
+    _composer_notice_shown = False
+    _refresh_composer_layout()
 
 def _refresh_tool_cost_tooltips() -> None:
     """Say in each toggle's tooltip how much of the context window that group of tools takes up."""
@@ -976,7 +983,7 @@ def _refresh_composer_layout() -> None:
     field_h = gui_config.chat_field_h
     for flag, widget in ((_backend_pill_shown, "backend_status_pill"),  # tag
                          (_mcp_pill_shown, "mcp_status_pill"),  # tag
-                         (_composer_notice_shown, "composer_notice_text")):  # tag
+                         (_composer_notice_shown, "composer_notice_button")):  # tag
         dpg.configure_item(widget, show=flag)
     if _backend_pill_shown or _mcp_pill_shown or _composer_notice_shown:
         dpg.show_item("composer_status_row")  # tag
@@ -1680,8 +1687,10 @@ with timer() as tim:
                                 dpg.bind_item_theme("mcp_status_button", "my_steady_caution_backend_theme")  # tag
                                 mcp_status_tooltip = gui_tooltip.Tooltip("mcp_status_button", "")  # tag
 
-                            dpg.add_text("", tag="composer_notice_text", show=False)
-                            dpg.bind_item_theme("composer_notice_text", "my_steady_green_backend_theme")  # tag
+                            # A button for its rounded background, matching the pills beside it. As a button
+                            # looks clickable, clicking it takes the notice down early.
+                            dpg.add_button(label="", callback=lambda: _dismiss_composer_notice(), tag="composer_notice_button", show=False)
+                            dpg.bind_item_theme("composer_notice_button", "my_steady_green_backend_theme")  # tag
 
                         def send_message_to_ai_callback() -> None:
                             # Grab and strip the message. The trailing newline the multiline widget inserts on the
