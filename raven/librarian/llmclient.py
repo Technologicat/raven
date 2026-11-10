@@ -507,6 +507,18 @@ def setup(backend_url: str,
     #
     # These two calls are the whole of what `setup` needs a live backend for; everything after them is
     # `configure`, which is pure. That is the split, and it is why it is drawn here.
+    backend_flavor, model_info = _probe_backend(backend_url, quiet=quiet)
+    return configure(model_info=model_info,
+                     backend_flavor=backend_flavor,
+                     backend_url=backend_url,
+                     quiet=quiet)
+
+
+def _probe_backend(backend_url: str, *, quiet: bool) -> tuple[str, env]:
+    """Ask the backend at `backend_url` what it is and what it has loaded. Returns `(backend_flavor, model_info)`.
+
+    Raises `requests.exceptions.RequestException` if it does not answer.
+    """
     backend_flavor = librarian_config.llm_backend_flavor or detect_backend_flavor(backend_url)
     model_info = resolve_model_info(backend_url, backend_flavor)
     if backend_flavor == "lmstudio" and model_info.loaded and not quiet:
@@ -514,10 +526,7 @@ def setup(backend_url: str,
         if getattr(model_info, "n_loaded", 1) > 1 and not librarian_config.llm_model:
             logger.warning(f"setup: the backend has {model_info.n_loaded} models loaded; using '{model_info.label}', the first it lists. "
                            f"Set '{librarian_config.__name__}.llm_model' to choose, or unload the others.")
-    return configure(model_info=model_info,
-                     backend_flavor=backend_flavor,
-                     backend_url=backend_url,
-                     quiet=quiet)
+    return backend_flavor, model_info
 
 
 # What a backend that cannot be reached has told us about itself: nothing.
@@ -555,24 +564,32 @@ def connect(backend_url: str, quiet: bool = False) -> env:
         settings = setup(backend_url, quiet=quiet)
     except requests.exceptions.RequestException as exc:
         if not quiet:
-            headline, advice = describe_backend_status(backend_unreachable, backend_url)
-            logger.warning(f"connect: {headline} Continuing without one. Reason {type(exc)}: {exc}")
-            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {advice}")
+            _announce_backend_status(backend_unreachable, backend_url, maybe_exc=exc)
         return configure(model_info=_UNREACHABLE_MODEL_INFO,
                          backend_flavor=librarian_config.llm_backend_flavor or "generic",
                          backend_url=backend_url,
                          quiet=quiet,
                          backend_is_reachable=False)
     if not quiet:
-        status = backend_status(settings)
-        headline, advice = describe_backend_status(status, backend_url)
-        if status is backend_has_no_model:
-            logger.warning(f"connect: {headline}")
-            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + f" {advice}")
-        else:
-            logger.info(f"connect: {headline} Model is '{settings.model}'.")
-            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        _announce_backend_status(backend_status(settings), backend_url, maybe_model=settings.model)
     return settings
+
+def _announce_backend_status(status: sym,
+                             backend_url: str,
+                             *,
+                             maybe_exc: Exception | None = None,
+                             maybe_model: str | None = None) -> None:
+    """Report the verdict on a backend, to the console and to the log. See `connect`."""
+    headline, advice = describe_backend_status(status, backend_url)
+    if status is backend_unreachable:
+        logger.warning(f"connect: {headline} Continuing without one. Reason {type(maybe_exc)}: {maybe_exc}")
+        print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {advice}")
+    elif status is backend_has_no_model:
+        logger.warning(f"connect: {headline}")
+        print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + f" {advice}")
+    else:
+        logger.info(f"connect: {headline} Model is '{maybe_model}'.")
+        print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
 
 def describe_backend_status(status: sym, backend_url: str) -> tuple[str, str]:
     """Return `(headline, advice)` for `status` — what is true, and what the user can do about it.
@@ -622,23 +639,35 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
     state, whatever a script is holding — already has this one, and handing back a replacement would leave
     them all on the old.
 
-    What changes is everything the backend has a say in: which model is loaded, its context window, and
-    whether it can see images. Nothing stored has to be repaired afterwards, because none of that is written
-    into the stored system prompt — a card's text comes from the configuration alone, and the model's
-    identity and the context length are stated per turn as injects. That is what makes reconnecting a
-    change of settings and nothing else.
+    What changes is what the backend has a say in, which is `_apply_backend_facts`' list: which model is
+    loaded, its context window, whether it can see images. Everything else in `settings` is left alone,
+    including any per-run overrides a caller has set and any MCP tools. Nothing stored has to be repaired
+    afterwards, because none of that is written into the stored system prompt — the model's identity and
+    the context length are stated per turn as injects.
 
-    The token-per-character calibration `invoke` accumulates is reset along with the rest, which is what a
-    changed model wants: the old figure describes a tokenizer that is no longer in the picture.
+    `quiet`: As `connect`.
     """
-    fresh = connect(settings.backend_url, quiet=quiet)
-    # The tool tables are not the backend's to replace: an `mcpclient` may have extended them since.
-    for name in ("tools", "tool_entrypoints", "mcp_tool_servers"):
-        fresh[name] = settings[name]
-    fresh.request_data["tools"] = settings.request_data["tools"]
-    for name in fresh:
-        settings[name] = fresh[name]
-    return backend_status(settings)
+    backend_url = settings.backend_url
+    try:
+        backend_flavor, model_info = _probe_backend(backend_url, quiet=quiet)
+    except requests.exceptions.RequestException as exc:
+        _apply_backend_facts(settings,
+                             model_info=_UNREACHABLE_MODEL_INFO,
+                             backend_flavor=librarian_config.llm_backend_flavor or "generic",
+                             backend_is_reachable=False,
+                             quiet=quiet)
+        if not quiet:
+            _announce_backend_status(backend_unreachable, backend_url, maybe_exc=exc)
+        return backend_unreachable
+    _apply_backend_facts(settings,
+                         model_info=model_info,
+                         backend_flavor=backend_flavor,
+                         backend_is_reachable=True,
+                         quiet=quiet)
+    status = backend_status(settings)
+    if not quiet:
+        _announce_backend_status(status, backend_url, maybe_model=settings.model)
+    return status
 
 def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
     """Bring `settings` up to date if the backend has loaded a different model since. Return whether it had.
@@ -677,26 +706,13 @@ def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
     if getattr(info, "n_loaded", 1) > 1:
         logger.warning(f"follow_model_swap: the backend has {info.n_loaded} models loaded; using '{info.label}', the first it lists. "
                        f"Set '{librarian_config.__name__}.llm_model' to choose, or unload the others.")
-    settings.model = info.label
-    if not librarian_config.llm_model:  # a configured model stays the one named
-        settings.model_id = info.model_id
-        if info.model_id is not None:
-            settings.request_data["model"] = info.model_id
-        else:
-            settings.request_data.pop("model", None)
-    settings.context_length = info.context_length if info.context_length is not None else _DEFAULT_CONTEXT_LENGTH
-    settings.model_is_vlm = info.is_vlm
-    settings.model_is_loaded = info.loaded
-    settings.model_record = info
-    settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
-    settings.tokenizer = None
     if settings.backend_flavor == "lmstudio" and info.loaded:
         _warn_if_lmstudio_parallel(settings.backend_url)
-    tokenizer_sources = []
-    if librarian_config.llm_tokenizer_path:
-        tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
-                                                       [settings.model, settings.model_id])
-    _start_tokenizer_load(settings, tokenizer_sources)
+    _apply_backend_facts(settings,
+                         model_info=info,
+                         backend_flavor=settings.backend_flavor,
+                         backend_is_reachable=True,
+                         quiet=True)
     return True
 
 
@@ -914,22 +930,6 @@ def configure(model_info: env,
     Returns the same `env` as `setup`; see its docstring for the fields.
     """
     model_info = _model_info(**model_info)  # every field present, so a reader of `model_record` needs no `getattr`
-    model = model_info.label  # human-facing identity for the character card (never a guess)
-    # The configured model if there is one, else the one loaded now. A name is needed either way: LM Studio
-    # refuses a request that names none while two models are loaded. The loaded one is re-read before every
-    # turn (`follow_model_swap`), so a swap in the backend is followed rather than undone — a name fixed at
-    # startup made LM Studio load the old model back, or fail where it no longer fit.
-    request_model = librarian_config.llm_model or model_info.model_id
-
-    # Context window: report the *loaded* length, never the model's theoretical max. When the backend doesn't
-    # expose it (ooba doesn't here; a generic backend can't), default conservatively to 64k and warn — smaller
-    # than that isn't useful for discussing a scientific fulltext, so we can assume at least that much.
-    context_length = model_info.context_length
-    if context_length is None:
-        context_length = _DEFAULT_CONTEXT_LENGTH
-        if not quiet:
-            logger.warning(f"configure: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
-
     user = librarian_config.llm_user_name
     char = librarian_config.llm_char_name
 
@@ -969,23 +969,9 @@ def configure(model_info: env,
         "messages": [],  # chat transcript including system messages; populated per-call by `invoke`
         "tools": TOOLS,  # tools available for tool-calling, for models that support it
     }
-    if request_model is not None:
-        request_data["model"] = request_model  # names the model (LM Studio JIT loads it on demand); harmless elsewhere
-    if backend_flavor == "oobabooga":
-        # ooba's API default mode is already "instruct" (verified), but other installs/versions can default to
-        # "chat-instruct" (which adds roleplay framing), so send it explicitly. lmstudio/generic have no `mode`
-        # field — there, messages -> the baked-in chat template is the only behaviour.
-        request_data["mode"] = "instruct"
     # Merge the sampler settings. A `None` value drops the field — the Pythonic "use the backend default" signal,
     # rather than literally sending `null` (which some backends reject).
     request_data.update({key: value for key, value in librarian_config.llm_sampler_config.items() if value is not None})
-    # Per-turn output cap. `None` (or an absent key) in the sampler config means "no cap": let the model generate
-    # up to the full context window, the backend clamping to whatever the prompt leaves free. We send this as an
-    # explicit ceiling rather than omitting the field, because omission is NOT backend-uniform — LM Studio treats
-    # an absent `max_tokens` as unbounded, but ooba's OpenAI layer falls back to its own small default. `prefill`
-    # overrides this per-call (see `invoke`'s `max_tokens`), so it doesn't affect token counting.
-    if request_data.get("max_tokens") is None:
-        request_data["max_tokens"] = context_length
 
     # See `raven.librarian.chatutil.create_chat_message`.
     personas = {"user": user,
@@ -997,24 +983,9 @@ def configure(model_info: env,
     # Useful mainly with older models that tend to speak on behalf of the user.
     stopping_strings = [f"\n{user}:"]
 
-    # Token counting: find the optional local tokenizer for exact counts, and seed the tokens-per-character ratio used
-    # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
-    tokenizer_sources = []
-    if librarian_config.llm_tokenizer_path:
-        tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
-                                                       [model, request_model])
-
-    settings = env(user=user, char=char, model=model,
-                   model_id=request_model,  # model id sent in requests; see the docstring
-                   backend_flavor=backend_flavor,
-                   context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
-                   model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
-                   model_is_loaded=model_info.loaded,  # whether the backend has a model resident: True/False, or None if unknown (drives the backend-status readout)
-                   model_record=model_info,  # the whole record `resolve_model_info` returned; see the docstring
-                   backend_is_reachable=backend_is_reachable,  # whether anything answered at `backend_url`; see `backend_status`
-                   backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
+    settings = env(user=user, char=char,
                    retain_thinking=librarian_config.llm_retain_thinking,  # send earlier turns' thinking traces; see `keeps_reasoning`
-                   tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background below
+                   tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
                    system_prompt=system_prompt,
                    character_card=character_card,
@@ -1029,7 +1000,7 @@ def configure(model_info: env,
                    mcp_tool_servers={},  # the tools from external MCP servers, name -> server, gated on their own switch; `mcpclient` fills this in
                    backend_url=backend_url,
                    request_data=request_data,
-                   configured_max_tokens=request_data["max_tokens"],  # the cap the configuration gives; see `invoke`'s `max_tokens_configured`
+                   configured_max_tokens=None,  # the cap the configuration gives; see `invoke`'s `max_tokens_configured`
                    personas=personas,
                    formatters=chatutil.default_formatters())  # per-run overridable; see its docstring
 
@@ -1044,8 +1015,86 @@ def configure(model_info: env,
             print("Do NOT send credentials over an unencrypted http:// connection!")
             print()
 
-    _start_tokenizer_load(settings, tokenizer_sources)
+    _apply_backend_facts(settings,
+                         model_info=model_info,
+                         backend_flavor=backend_flavor,
+                         backend_is_reachable=backend_is_reachable,
+                         quiet=quiet)
     return settings
+
+
+def _apply_backend_facts(settings: env,
+                         *,
+                         model_info: env,
+                         backend_flavor: str,
+                         backend_is_reachable: bool,
+                         quiet: bool) -> None:
+    """Write into `settings` everything the backend determines, and nothing else.
+
+    The one definition of that list, shared by `configure`, `reconnect` and `follow_model_swap`.
+
+    `model_info`, `backend_flavor`, `backend_is_reachable`: As `configure`.
+
+    `quiet`: As `setup`.
+    """
+    model_info = _model_info(**model_info)  # every field present, so a reader of `model_record` needs no `getattr`
+    request_data = settings.request_data
+
+    settings.model = model_info.label  # human-facing identity (never a guess)
+    # The configured model if there is one, else the one loaded now. A name is needed either way: LM Studio
+    # refuses a request that names none while two models are loaded. The loaded one is re-read before every
+    # turn (`follow_model_swap`), so a swap in the backend is followed rather than undone — a name fixed at
+    # startup made LM Studio load the old model back, or fail where it no longer fit.
+    settings.model_id = librarian_config.llm_model or model_info.model_id  # model id sent in requests
+    if settings.model_id is not None:
+        request_data["model"] = settings.model_id  # names the model (LM Studio JIT loads it on demand); harmless elsewhere
+    else:
+        request_data.pop("model", None)
+
+    # Context window: report the *loaded* length, never the model's theoretical max. When the backend doesn't
+    # expose it (ooba doesn't here; a generic backend can't), default conservatively to 64k and warn — smaller
+    # than that isn't useful for discussing a scientific fulltext, so we can assume at least that much.
+    settings.context_length = model_info.context_length
+    if settings.context_length is None:
+        settings.context_length = _DEFAULT_CONTEXT_LENGTH
+        if not quiet:
+            logger.warning(f"_apply_backend_facts: backend '{backend_flavor}' at {settings.backend_url} did not report a loaded context length; defaulting to {settings.context_length} tokens.")
+
+    settings.model_is_vlm = model_info.is_vlm  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
+    settings.model_is_loaded = model_info.loaded  # whether the backend has a model resident: True/False, or None if unknown (drives the backend-status readout)
+    settings.model_record = model_info  # the whole record `resolve_model_info` returned
+    settings.backend_is_reachable = backend_is_reachable  # whether anything answered at `backend_url`; see `backend_status`
+    settings.backend_flavor = backend_flavor
+    settings.backend_supports_continue = (backend_flavor == "oobabooga")  # ooba has an explicit continue flag; others don't
+
+    if backend_flavor == "oobabooga":
+        # ooba's API default mode is already "instruct" (verified), but other installs/versions can default to
+        # "chat-instruct" (which adds roleplay framing), so send it explicitly. lmstudio/generic have no `mode`
+        # field — there, messages -> the baked-in chat template is the only behaviour.
+        request_data["mode"] = "instruct"
+    else:
+        request_data.pop("mode", None)
+
+    # Per-turn output cap. `None` (or an absent key) in the sampler config means "no cap": let the model generate
+    # up to the full context window, the backend clamping to whatever the prompt leaves free. We send this as an
+    # explicit ceiling rather than omitting the field, because omission is NOT backend-uniform — LM Studio treats
+    # an absent `max_tokens` as unbounded, but ooba's OpenAI layer falls back to its own small default. `prefill`
+    # overrides this per-call (see `invoke`'s `max_tokens`), so it doesn't affect token counting.
+    maybe_configured = librarian_config.llm_sampler_config.get("max_tokens")
+    max_tokens = maybe_configured if maybe_configured is not None else settings.context_length
+    if request_data.get("max_tokens") in (None, settings.configured_max_tokens):  # or a caller has set one of its own
+        request_data["max_tokens"] = max_tokens
+    settings.configured_max_tokens = max_tokens
+
+    # Token counting: find the optional local tokenizer for exact counts, and seed the tokens-per-character ratio used
+    # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
+    settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
+    settings.tokenizer = None
+    tokenizer_sources = []
+    if librarian_config.llm_tokenizer_path:
+        tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
+                                                       [settings.model, settings.model_id])
+    _start_tokenizer_load(settings, tokenizer_sources)
 
 
 def _start_tokenizer_load(settings: env, tokenizer_sources: list[str]) -> None:

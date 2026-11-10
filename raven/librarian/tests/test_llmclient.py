@@ -397,6 +397,7 @@ class TestPerformToolCallsMetadata:
     @staticmethod
     def _settings(entrypoint):
         return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   mcp_tool_servers={},
                    tool_entrypoints={"mytool": entrypoint})
 
     @staticmethod
@@ -442,6 +443,7 @@ class TestPerformToolCallsRefusal:
     @staticmethod
     def _settings(entrypoint):
         return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   mcp_tool_servers={},
                    tool_entrypoints={"mytool": entrypoint})
 
     @staticmethod
@@ -493,6 +495,7 @@ class TestMalformedToolCallRequests:
     @staticmethod
     def _settings():
         return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   mcp_tool_servers={},
                    tool_entrypoints={"mytool": lambda: "x"})
 
     @pytest.mark.parametrize("tool_call, expected", [
@@ -523,6 +526,7 @@ def _tool_call_message(*names):
 def _tool_settings(**entrypoints):
     """Settings offering exactly `entrypoints`, as `name=callable`."""
     return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+               mcp_tool_servers={},
                tool_entrypoints=entrypoints)
 
 
@@ -1873,8 +1877,7 @@ class TestConnectAndReconnect:
         monkeypatch.setattr(llmclient, "setup", _refuse)
         settings = llmclient.connect("http://x", quiet=True)
 
-        good = self._good_settings()
-        monkeypatch.setattr(llmclient, "setup", lambda backend_url, quiet=False: good)
+        monkeypatch.setattr(llmclient, "_probe_backend", lambda backend_url, quiet: ("generic", self._good_settings().model_record))
 
         status = llmclient.reconnect(settings, quiet=True)
         assert status is llmclient.backend_ready
@@ -3671,6 +3674,94 @@ class TestContinuingAMessageKeepsWhatItAlreadySaid:
                              seed="The seasons: \nUser: name them")
         text = chatutil.content_to_text(out.data["content"])
         assert text == "The seasons: \nUser: name them then", text
+
+
+class TestBackendFacts:
+    """`reconnect` and `follow_model_swap` write what the backend determines, and nothing else."""
+    _FIRST = env(label="small", model_id="small", context_length=4096, is_vlm=False, loaded=True)
+    _SECOND = env(label="big", model_id="big", context_length=131072, is_vlm=True, loaded=True)
+
+    @pytest.fixture(autouse=True)
+    def _no_model_configured(self, monkeypatch):
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+        monkeypatch.setitem(llmclient.librarian_config.llm_sampler_config, "max_tokens", None)
+
+    def _settings(self, model_info, flavor="lmstudio"):
+        return llmclient.configure(model_info=model_info, backend_flavor=flavor, backend_url="http://x", quiet=True)
+
+    def _backend_is(self, monkeypatch, model_info, flavor="lmstudio"):
+        monkeypatch.setattr(llmclient, "detect_backend_flavor", lambda backend_url: flavor)
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, backend_flavor: model_info)
+
+    def test_reconnecting_gives_what_configuring_against_that_backend_gives(self, monkeypatch):
+        # The guard on the list of fields: anything `configure` derives from the backend, and `reconnect` does
+        # not write, shows up here as a difference.
+        settings = self._settings(self._FIRST, flavor="oobabooga")
+        self._backend_is(monkeypatch, self._SECOND, flavor="lmstudio")
+        llmclient.reconnect(settings)
+        expected = self._settings(self._SECOND, flavor="lmstudio")
+        assert any(settings[name] != self._settings(self._FIRST, flavor="oobabooga")[name] for name in settings), "the two backends do not differ, so this fixture cannot tell a written field from a missed one"
+        differing = {name for name in expected if name != "formatters" and settings[name] != expected[name]}
+        assert differing == set()
+
+    def test_a_per_run_override_survives_a_reconnect(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        sentinel = object()
+        settings.formatters = sentinel
+        self._backend_is(monkeypatch, self._SECOND)
+        llmclient.reconnect(settings)
+        assert settings.formatters is sentinel
+
+    def test_the_prompts_are_not_read_again(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        monkeypatch.setattr(llmclient, "_load_prompt", lambda name: pytest.fail(f"read the prompt '{name}'"))
+        self._backend_is(monkeypatch, self._SECOND)
+        llmclient.reconnect(settings)
+        assert settings.model == "big", "the reconnect did not take"
+
+    def test_a_tokenizer_loaded_after_a_reconnect_arrives_in_the_settings(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        tokenizer = object()
+        reconnected = threading.Event()
+        def load_after_the_reconnect_has_returned(source, counter):  # as loading a GGUF takes seconds
+            assert reconnected.wait(timeout=5.0)
+            return tokenizer
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", "somewhere")
+        monkeypatch.setattr(llmclient, "_resolve_tokenizer_sources", lambda path, names: ["a-source"])
+        monkeypatch.setattr(llmclient, "_load_local_tokenizer", load_after_the_reconnect_has_returned)
+        self._backend_is(monkeypatch, self._SECOND)
+        llmclient.reconnect(settings)
+        reconnected.set()
+        deadline = time.monotonic() + 5.0
+        while settings.tokenizer is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert settings.tokenizer is tokenizer
+
+    def test_an_unreachable_backend_says_so_and_keeps_the_rest(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        def refuse(backend_url):
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "detect_backend_flavor", refuse)
+        sentinel = object()
+        settings.formatters = sentinel
+        assert llmclient.reconnect(settings) is llmclient.backend_unreachable
+        assert settings.backend_is_reachable is False
+        assert settings.formatters is sentinel
+
+    def test_a_swap_to_a_larger_window_raises_the_output_ceiling(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        assert settings.request_data["max_tokens"] == 4096
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, backend_flavor: self._SECOND)
+        assert llmclient.follow_model_swap(settings) is True
+        assert settings.request_data["max_tokens"] == 131072
+
+    def test_a_ceiling_a_caller_set_is_left_alone(self, monkeypatch):
+        settings = self._settings(self._FIRST)
+        settings.request_data["max_tokens"] = 77
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, backend_flavor: self._SECOND)
+        llmclient.follow_model_swap(settings)
+        assert settings.request_data["max_tokens"] == 77
 
 
 class TestBackendErrorMessage:

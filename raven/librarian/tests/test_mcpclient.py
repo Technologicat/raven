@@ -181,7 +181,8 @@ class TestRegistration:
 
     def test_they_survive_a_reconnect(self, connected_settings, monkeypatch):
         the_settings, client = connected_settings
-        monkeypatch.setattr(llmclient, "connect", lambda backend_url, quiet=True: _make_settings())
+        monkeypatch.setattr(llmclient, "detect_backend_flavor", lambda backend_url: "generic")
+        monkeypatch.setattr(llmclient, "resolve_model_info", lambda backend_url, backend_flavor: _make_settings().model_record)
         llmclient.reconnect(the_settings)
         assert client.tool_names <= _offered_names(the_settings)
         assert set(the_settings.mcp_tool_servers) == client.tool_names
