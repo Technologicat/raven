@@ -2079,7 +2079,7 @@ with timer() as tim:
                                          enabled=librarian_config.mcp_config_file.exists(), tag="mcp_enabled_checkbox")
                         dpg.bind_item_theme("mcp_enabled_checkbox", "disablable_widget_theme")  # tag
                         dpg.add_tooltip("mcp_enabled_checkbox", tag="mcp_enabled_tooltip")  # tag
-                        dpg.add_text(f"Let the AI use the tools offered by the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nTo use this, create the following file, listing your servers:\n{librarian_config.mcp_config_file}\n\nSee the Librarian README, section MCP servers, for an example.\n\nChanges to the file are picked up live, and take effect at the AI's\nnext turn.", parent="mcp_enabled_tooltip")  # tag
+                        dpg.add_text(f"Let the AI use the tools offered by the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nTo use this, create the following file, listing your servers:\n{librarian_config.mcp_config_file}\n\nSee the Librarian README, section MCP servers, for an example.\n\nChanges to the file are picked up live, and take effect at the AI's next turn.", parent="mcp_enabled_tooltip")  # tag
                         dpg.add_text("", tag="mcp_tool_cost_text", parent="mcp_enabled_tooltip", show=False)
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
