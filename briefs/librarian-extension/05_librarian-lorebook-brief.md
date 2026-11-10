@@ -45,10 +45,12 @@ would be knowledge left on the floor. So this clears the bar the project already
   there before changing it, as its order is load-bearing.
 - **Second frontends: a [Pi](https://pi.dev/docs/latest) ([repository](https://github.com/earendil-works/pi))
   plugin first, then LM Studio's.** The *LM Studio plugin* section below predates the first. Both follow the
-  native lorebook, as ports of its settled logic. Pi's extension interface has not been read yet.
-
-**Open:** what editing an old user message does. A message edited in place is a revision of a node that may
-have replies under it, so definitions cannot be inserted ahead of it without restructuring the branch.
+  native lorebook, as ports of its settled logic. Pi's extension interface has not been read yet;
+  [pi-tps](https://github.com/monotykamary/pi-tps) is an example of a plugin hooking its AI turns.
+- **Editing an old user message fires nothing by itself.** An in-place edit is a revision of a node that may have
+  replies under it, so definitions cannot be inserted ahead of it without restructuring the branch. The edited
+  text stays in the scan window, so a new term fires at the next user message; an edit followed directly by a
+  reroll answers without the definition. "Save as a new branch" makes a fresh node, and that path scans.
 
 ---
 
