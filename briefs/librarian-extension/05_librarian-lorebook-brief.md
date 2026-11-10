@@ -16,14 +16,39 @@ would be knowledge left on the floor. So this clears the bar the project already
   search do in `scaffold.build_turn_prompt`. So the lorebook needs a tool of its own to name, on offer whenever
   there are entries, and a model can also look a term up with it. Like the clock, the inject is withheld on a
   turn with no tools on offer.
-- **Position: the farthest of the data injects from the user's latest message**, ahead of the consulted
-  documents and this turn's search results. Whatever sits closest reads as the answer to the message.
+- **A definition is stored as an actual chat round, not an ephemeral inject**, since a user who brings up a term
+  is likely to go on using it. The document search stays ephemeral because it is large; a few short definitions
+  matched to the term are not.
+  - **`user_turn` scans**, and stores any new definitions as a synthetic exchange *before* the user's message
+    node. No LLM call is involved, and a reroll keeps them.
+  - **Each entry fires once per linearized branch.** Which have fired is read off the branch, from the entry IDs
+    each exchange records in its metadata rather than from its text.
+  - **Position:** being stored ahead of the user's message, it is farther from that message than every
+    ephemeral inject in `data_injects`. Whatever sits closest reads as the answer to the message.
+  - **A per-chat cap** on top of the per-firing budget, since stored definitions are never evicted.
+  - **The synthetic assistant message has no text and no reasoning**, as `_synthetic_tool_exchange` already
+    builds it. A think block saying "I'll look that up in the lorebook" would teach the model that the
+    lorebook holds anything at all. Its metadata marks it as automatic, so the log does not credit a model with it.
+  - **The tool's description says what it holds**: only the terms the user has defined, so most words are not in
+    it. A real call for an unknown term answers with exactly that.
+  - **Nodes show in the chat log and the graph**, as everything else does. A visibility toggle can come later,
+    together with one for the system prompt.
+- **Humans mix up word order, and the match has to allow it.** "different bath, same shampoo" should fire the
+  entry "same bath, different shampoo". A multi-word key also matches its words in any order, within a span of
+  its own length; still deterministic, with the smart-case rule applying per word. No edit distance in v0. The
+  synthetic call's argument carries the user's wording and the result carries the entry's title, so the model
+  can see the difference and correct it. Check false positives against the real glossary and real chat logs,
+  rather than against invented examples.
 - **The shared injection path already exists**: the ordered `data_injects` list in `build_turn_prompt`, placed
   just before the latest user message, so that a firing entry leaves the cached prefix alone. The *Context
   assembler* section's first version is that list as candidate records under one budget. Read the comments
   there before changing it, as its order is load-bearing.
-- **Second frontends: a Pi-dev plugin first, then LM Studio's.** The *LM Studio plugin* section below predates
-  the first. Both follow the native lorebook, as ports of its settled logic.
+- **Second frontends: a [Pi](https://pi.dev/docs/latest) ([repository](https://github.com/earendil-works/pi))
+  plugin first, then LM Studio's.** The *LM Studio plugin* section below predates the first. Both follow the
+  native lorebook, as ports of its settled logic. Pi's extension interface has not been read yet.
+
+**Open:** what editing an old user message does. A message edited in place is a revision of a node that may
+have replies under it, so definitions cannot be inserted ahead of it without restructuring the branch.
 
 ---
 
