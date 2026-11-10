@@ -483,8 +483,9 @@ def setup(backend_url: str,
                                               user's "Internet" switch. A tool in neither set answers to no
                                               switch and is always offered.
 
-        `mcp_tool_names: frozenset[str]`: The tools from external MCP servers, gated on the user's "MCP" switch.
-                                          Empty until an `mcpclient.MCPClient` has started.
+        `mcp_tool_servers: dict[str, str]`: The tools from external MCP servers, gated on the user's "MCP" switch,
+                                            mapped to the server each is from. Empty until an
+                                            `mcpclient.MCPClient` has started.
 
         `backend_url: str`: The `backend_url` argument, as-is.
 
@@ -632,7 +633,7 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
     """
     fresh = connect(settings.backend_url, quiet=quiet)
     # The tool tables are not the backend's to replace: an `mcpclient` may have extended them since.
-    for name in ("tools", "tool_entrypoints", "mcp_tool_names"):
+    for name in ("tools", "tool_entrypoints", "mcp_tool_servers"):
         fresh[name] = settings[name]
     fresh.request_data["tools"] = settings.request_data["tools"]
     for name in fresh:
@@ -1025,7 +1026,7 @@ def configure(model_info: env,
                    tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
                    document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database
                    network_tool_names=NETWORK_TOOL_NAMES,  # subset of `TOOLS` gated on the "Internet" switch
-                   mcp_tool_names=frozenset(),  # the tools from external MCP servers, gated on their own switch; `mcpclient` fills this in
+                   mcp_tool_servers={},  # the tools from external MCP servers, name -> server, gated on their own switch; `mcpclient` fills this in
                    backend_url=backend_url,
                    request_data=request_data,
                    configured_max_tokens=request_data["max_tokens"],  # the cap the configuration gives; see `invoke`'s `max_tokens_configured`

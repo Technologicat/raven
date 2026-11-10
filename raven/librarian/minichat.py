@@ -179,7 +179,7 @@ def minimal_chat_client(backend_url) -> None:
 
         # Before the first turn, so that the tools are there for it. Only blocks if servers are configured.
         mcp_client = mcpclient.MCPClient(llm_settings)
-        mcp_client.start()
+        mcp_client.start(watch=True)
         atexit.register(mcp_client.shutdown)
         mcp_client.report_to_console()
 

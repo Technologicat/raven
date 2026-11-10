@@ -35,12 +35,14 @@ import math
 import pathlib
 import re
 import sys
+import time
 from collections.abc import Callable, Iterator
 from typing import Any, TextIO
 
 import anyio
 import mcp
 from mcp import types as mcp_types
+from mcp.shared.exceptions import MCPError
 from mcpyrate import colorizer
 from unpythonic import dyn
 from unpythonic.env import env
@@ -218,8 +220,10 @@ def _stderr_log_path(server_name: str) -> pathlib.Path:
     return pathlib.Path(librarian_config.mcp_log_dir).expanduser() / f"{re.sub(r'[^a-zA-Z0-9_-]', '_', server_name)}.log"
 
 @contextlib.contextmanager
-def _stderr_log(config: ServerConfig) -> Iterator[TextIO | None]:
+def _stderr_log(config: ServerConfig, *, append: bool) -> Iterator[TextIO | None]:
     """Open the file receiving a stdio server's stderr, which would otherwise interleave with a terminal app's output.
+
+    `append`: keep what is in the file. A restarted server's log is how to find out why it died.
 
     Yields `None` for a server with no stderr of ours to capture, and `sys.stderr` if the file cannot be opened.
     """
@@ -229,7 +233,7 @@ def _stderr_log(config: ServerConfig) -> Iterator[TextIO | None]:
     path = _stderr_log_path(config.name)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        file = open(path, "w", encoding="utf-8")  # noqa: SIM115 -- closed by the `with` below, which must not span the handler
+        file = open(path, "a" if append else "w", encoding="utf-8")  # noqa: SIM115 -- closed by the `with` below, which must not span the handler
     except OSError as exc:
         logger.warning(f"MCPClient: server '{config.name}': cannot write '{path}', so its output goes to stderr. Reason {type(exc)}: {exc}")
         yield sys.stderr
@@ -259,6 +263,17 @@ def _open_session(config: ServerConfig, errlog: TextIO | None) -> mcp.Client:
 # --------------------------------------------------------------------------------
 # The client
 
+# A server that died gets a moment before it is started again, and a caller meanwhile waits this long for it.
+_RESTART_WAIT = 15.0
+
+def _is_connection_failure(exc: BaseException) -> bool:
+    """Whether `exc` says the connection to a server is gone, as opposed to a server answering badly or slowly."""
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        exc = exc.exceptions[0]
+    if isinstance(exc, MCPError):
+        return exc.code == mcp_types.CONNECTION_CLOSED
+    return not isinstance(exc, TimeoutError)
+
 class _Server:
     """One configured server, and what became of it."""
     def __init__(self, config: ServerConfig) -> None:
@@ -268,23 +283,37 @@ class _Server:
         self.maybe_failure: str | None = None
         self.maybe_task: asyncio.Task | None = None
         self.maybe_scope: anyio.CancelScope | None = None
+        self.connection_lost = asyncio.Event()
+        self.has_connected = False
+        self.restarting = False
         self.stopping = False
+        self.deaths: list[float] = []  # `time.monotonic` of each, within the restart window
 
 class MCPClient:
     """Connections to the configured MCP servers, and the tools they publish.
+
+    A server that dies is started again, as long as it does not keep dying; see `start`.
 
     `settings`: from `llmclient.setup` or `llmclient.connect`. `start` adds the tools to it, and `shutdown`
                 removes them.
 
     `config_file`: the `mcp.json` to read. Default is `librarian_config.mcp_config_file`.
+
+    `on_tools_changed`: 0-argument callable, called on a background thread after the set of tools may have
+                        changed: at the end of `start`, when a server has been restarted, and on a live reload.
     """
-    def __init__(self, settings: env, *, config_file: str | pathlib.Path | None = None) -> None:
+    def __init__(self,
+                 settings: env,
+                 *,
+                 config_file: str | pathlib.Path | None = None,
+                 on_tools_changed: Callable[[], None] | None = None) -> None:
         self.settings = settings
         self.config_file = pathlib.Path(config_file if config_file is not None else librarian_config.mcp_config_file)
+        self.on_tools_changed = on_tools_changed
         self._maybe_bridge: AsyncBridge | None = None
+        self._maybe_watcher: asyncio.Task | None = None
         self._servers: list[_Server] = []
         self._problems: dict[str, str] = {}
-        self._specs: list[dict[str, Any]] = []
         self._entrypoints: dict[str, Callable] = {}
 
     def _get_tool_names(self) -> frozenset[str]:
@@ -295,7 +324,7 @@ class MCPClient:
     def _get_problems(self) -> dict[str, str]:
         """Copy, so that a caller cannot edit the client's record."""
         return dict(self._problems)
-    problems = property(fget=_get_problems, doc="What went wrong, by server name: a bad entry, or a server that did not start. "
+    problems = property(fget=_get_problems, doc="What went wrong, by server name: a bad entry, or a server that did not start or keeps dying. "
                                                 "A problem with the file as a whole is under the key `\"\"`.")
 
     def report_to_console(self) -> None:
@@ -309,59 +338,97 @@ class MCPClient:
     # ----------------------------------------
     # Lifecycle
 
-    def start(self, *, timeout: float | None = None) -> None:
+    def start(self, *, timeout: float | None = None, watch: bool = False) -> None:
         """Connect to the configured servers, and add their tools to the settings.
 
         Blocks until every server has connected or failed; a GUI app calls this from a background task. A
         server that fails is logged and recorded in `problems`, and the others carry on.
 
+        A server that connected and then dies is started again and the error logged. If it dies more than
+        `librarian_config.mcp_max_restarts` times within `librarian_config.mcp_restart_window` seconds, it is
+        left stopped for the rest of the session, and its tools answer that it is not running.
+
         `timeout`: seconds to allow each server to connect. Default is `librarian_config.mcp_connect_timeout`.
+
+        `watch`: follow changes to the config file, stopping and starting servers to match. For a long-lived
+                 frontend. A script leaves this off, so that what it offers cannot change during a run.
         """
         if self._maybe_bridge is not None:
             raise RuntimeError("MCPClient.start: already started")
         timeout = timeout if timeout is not None else librarian_config.mcp_connect_timeout
 
+        signature = self._config_signature()  # before reading, so that an edit right after the read is seen
         configs, self._problems = load_config(self.config_file)
         for name, problem in self._problems.items():
             logger.error(f"MCPClient.start: server '{name}': {problem}")
         if not configs:
             logger.info(f"MCPClient.start: no MCP servers configured in '{self.config_file}'.")
-            return
+            if not watch:
+                return
 
         self._servers = [_Server(config) for config in configs]
         self._maybe_bridge = AsyncBridge(name="mcp_client")
         try:
-            self._maybe_bridge.submit(self._connect_all(timeout))
+            self._maybe_bridge.submit(self._begin(timeout, signature if watch else None))
         except (concurrent.futures.CancelledError, RuntimeError):  # `shutdown` got here first
             logger.info("MCPClient.start: interrupted by shutdown.")
-            return
-        if self._maybe_bridge is not None:  # or `shutdown` ran just as the servers finished connecting
-            self._register_tools()
 
-    async def _connect_all(self, timeout: float) -> None:
-        await asyncio.gather(*(self._connect(server, timeout) for server in self._servers))
+    async def _begin(self, timeout: float, maybe_signature: bytes | None) -> None:
+        await self._connect_servers(self._servers, timeout)
+        self._refresh_tools()
+        if maybe_signature is not None:
+            self._maybe_watcher = asyncio.get_running_loop().create_task(self._watch_config(maybe_signature))
+
+    async def _connect_servers(self, servers: list[_Server], timeout: float) -> None:
+        await asyncio.gather(*(self._connect(server, timeout) for server in servers))
 
     async def _connect(self, server: _Server, timeout: float) -> None:
         loop = asyncio.get_running_loop()
-        server.stop = asyncio.Event()
         ready = loop.create_future()
-        server.maybe_task = loop.create_task(self._hold_session(server, timeout, ready))
+        server.maybe_task = loop.create_task(self._run_server(server, timeout, ready))
         await ready
 
-    async def _hold_session(self, server: _Server, timeout: float, ready: asyncio.Future) -> None:
-        """Open the server's session, and keep it open until told to stop.
+    async def _run_server(self, server: _Server, timeout: float, ready: asyncio.Future) -> None:
+        """Keep the server's session open until told to stop, starting the server again if it dies."""
+        name = server.config.name
+        try:
+            while await self._hold_session(server, timeout, ready):
+                now = time.monotonic()
+                server.deaths = [t for t in server.deaths if now - t < librarian_config.mcp_restart_window] + [now]
+                n_deaths = len(server.deaths)
+                if n_deaths > librarian_config.mcp_max_restarts:
+                    plural_s = "s" if n_deaths != 1 else ""
+                    server.restarting = False
+                    server.maybe_failure = (f"stopped {n_deaths} time{plural_s} within {librarian_config.mcp_restart_window:g} seconds, "
+                                            "so it was left stopped for the rest of this session")
+                    self._problems[name] = server.maybe_failure
+                    logger.error(f"MCPClient: server '{name}': {server.maybe_failure}.")
+                    return
+                server.restarting = True
+                logger.error(f"MCPClient: server '{name}': the connection was lost; restarting it ({n_deaths} of at most {librarian_config.mcp_max_restarts}).")
+                await asyncio.sleep(librarian_config.mcp_restart_delay)
+        finally:
+            server.restarting = False
+            if not ready.done():
+                ready.set_result(None)
+
+    async def _hold_session(self, server: _Server, timeout: float, ready: asyncio.Future) -> bool:
+        """Open the server's session, and keep it open until told to stop or the connection is lost.
 
         One long-lived task per server, because the SDK's sessions are anyio cancel scopes, which must be
         exited by the task that entered them. Calls from other tasks are fine.
 
         Stopped by cancelling this scope, which ends the wait at once. The SDK shields its bounded teardown of
         a server from anyio's cancellation; its source warns that a native `Task.cancel` can defeat that.
+
+        Returns whether to try again: that is, the server had been running, and has been lost.
         """
         name = server.config.name
+        server.connection_lost = asyncio.Event()
         try:
             with anyio.CancelScope(deadline=anyio.current_time() + timeout) as scope:
                 server.maybe_scope = scope
-                with _stderr_log(server.config) as errlog:
+                with _stderr_log(server.config, append=server.has_connected) as errlog:
                     async with _open_session(server.config, errlog) as session:
                         listed = await self._list_tools(session)
                         server.tools = self._allowed(server, listed)
@@ -369,9 +436,14 @@ class MCPClient:
                         scope.deadline = math.inf  # the deadline was the connection's allowance, and this is connected
                         plural_s = "s" if len(server.tools) != 1 else ""
                         logger.info(f"MCPClient: server '{name}': connected, {len(server.tools)} tool{plural_s}.")
+                        if server.has_connected:
+                            server.restarting = False
+                            self._refresh_tools()
+                        server.has_connected = True
+                        server.maybe_failure = None
                         if not ready.done():
                             ready.set_result(None)
-                        await anyio.sleep_forever()
+                        await self._watch_connection(server, session)
             if scope.cancelled_caught and server.maybe_session is None and not server.stopping:
                 server.maybe_failure = f"no answer in {timeout:g} seconds"
                 logger.error(f"MCPClient: server '{name}': {server.maybe_failure}")
@@ -382,8 +454,31 @@ class MCPClient:
             logger.error(f"MCPClient: server '{name}': {server.maybe_failure}")
         finally:
             server.maybe_session = None
-            if not ready.done():
-                ready.set_result(None)
+        if server.stopping:
+            return False
+        if server.maybe_failure is not None and not server.has_connected:
+            self._problems[name] = server.maybe_failure
+        return server.has_connected
+
+    @staticmethod
+    async def _watch_connection(server: _Server, session: mcp.Client) -> None:
+        """Return when the connection to the server has gone.
+
+        A failed tool call reports that at once. Asking for the tool list finds a server that dies between
+        calls; it is the cheapest request every server answers, the protocol's `ping` having been removed as of
+        its 2026-07-28 revision. A question that goes unanswered proves nothing, as a server may be busy.
+        """
+        interval = librarian_config.mcp_liveness_interval
+        while True:
+            with anyio.move_on_after(interval):
+                await server.connection_lost.wait()
+                return
+            try:
+                with anyio.move_on_after(interval):
+                    await session.list_tools()
+            except Exception as exc:  # noqa: BLE001 -- inspected right below
+                if _is_connection_failure(exc):
+                    return
 
     @staticmethod
     async def _list_tools(session: mcp.Client) -> list[mcp_types.Tool]:
@@ -412,43 +507,48 @@ class MCPClient:
                 for tool in listed
                 if allowed_tools is None or tool.name in allowed_tools}
 
-    def _register_tools(self) -> None:
-        """Build the tool tables from what the servers published, and add them to the settings."""
+    def _refresh_tools(self) -> None:
+        """Rebuild the tool tables from what the servers publish now, and put them in the settings.
+
+        Runs on the bridge's thread, or before it has anything else to do, so these never overlap.
+        """
+        specs: list[dict[str, Any]] = []
+        entrypoints: dict[str, Callable] = {}
+        tool_servers: dict[str, str] = {}
+        taken = set(self.settings.tool_entrypoints) - set(self._entrypoints)
         for server in self._servers:
-            if server.maybe_failure is not None:
-                self._problems[server.config.name] = server.maybe_failure
             for public_name, tool in server.tools.items():
-                if public_name in self._entrypoints or public_name in self.settings.tool_entrypoints:
+                if public_name in entrypoints or public_name in taken:
                     logger.warning(f"MCPClient: server '{server.config.name}': the name '{public_name}' is already taken; not offering this tool.")
                     continue
-                self._specs.append(_tool_spec(public_name, tool))
-                self._entrypoints[public_name] = self._make_entrypoint(server, tool.name)
-        self._install()
+                specs.append(_tool_spec(public_name, tool))
+                entrypoints[public_name] = self._make_entrypoint(server, tool.name)
+                tool_servers[public_name] = server.config.name
+        self._install(specs, entrypoints, tool_servers)
+        if self.on_tools_changed is not None:
+            try:
+                self.on_tools_changed()
+            except Exception as exc:  # noqa: BLE001 -- a frontend's handler must not stop the servers
+                logger.warning(f"MCPClient: ignoring exception from `on_tools_changed`: {_describe_exception(exc)}")
 
-    def _install(self) -> None:
+    def _install(self, specs: list[dict[str, Any]], entrypoints: dict[str, Callable], tool_servers: dict[str, str]) -> None:
+        """Replace the MCP tools in the settings with these.
+
+        New objects throughout, as `tools` and `tool_entrypoints` start out as `llmtools`' module-level
+        tables, which other settings in this process share.
+        """
         settings = self.settings
-        # In this order, for a turn starting during `start`: a name in `mcp_tool_names` that is not yet
-        # registered is harmless, whereas one registered and not yet gated would be offered with the
+        previous = self._entrypoints
+        # Gated first and ungated last, for a turn starting meanwhile: a name in `mcp_tool_servers` that is
+        # not registered yet is harmless, whereas one registered and not yet gated would be offered with the
         # toggle off.
-        #
-        # New objects throughout, as `tools` and `tool_entrypoints` start out as `llmtools`' module-level
-        # tables and other settings in this process share them.
-        settings.mcp_tool_names = frozenset(self._entrypoints)
-        settings.tool_entrypoints = {**settings.tool_entrypoints, **self._entrypoints}
-        specs = [*settings.tools, *self._specs]
-        settings.tools = specs
-        settings.request_data["tools"] = specs
-
-    def _uninstall(self) -> None:
-        settings = self.settings
-        def ours(spec: dict[str, Any]) -> bool:
-            return spec["function"]["name"] in self._entrypoints
-        specs = [spec for spec in settings.tools if not ours(spec)]
-        settings.tools = specs
-        settings.request_data["tools"] = specs
-        settings.tool_entrypoints = {name: function for name, function in settings.tool_entrypoints.items()
-                                     if name not in self._entrypoints}
-        settings.mcp_tool_names = frozenset()
+        settings.mcp_tool_servers = {**settings.mcp_tool_servers, **tool_servers}
+        settings.tool_entrypoints = {**{name: function for name, function in settings.tool_entrypoints.items() if name not in previous}, **entrypoints}
+        all_specs = [*(spec for spec in settings.tools if spec["function"]["name"] not in previous), *specs]
+        settings.tools = all_specs
+        settings.request_data["tools"] = all_specs
+        settings.mcp_tool_servers = tool_servers
+        self._entrypoints = entrypoints
 
     def shutdown(self, *, timeout: float | None = None) -> None:
         """Remove the tools from the settings and close the connections. Safe to call more than once.
@@ -458,21 +558,25 @@ class MCPClient:
         `timeout`: seconds to allow. Default is `librarian_config.mcp_shutdown_timeout`.
         """
         timeout = timeout if timeout is not None else librarian_config.mcp_shutdown_timeout
-        self._uninstall()
-        self._specs, self._entrypoints = [], {}
         bridge, self._maybe_bridge = self._maybe_bridge, None
-        if bridge is None:
-            return
-        try:
-            bridge.submit(self._stop_all(timeout), timeout=timeout + 1.0)
-        except Exception as exc:  # noqa: BLE001 -- at exit, there is nothing more to do about it
-            logger.warning(f"MCPClient.shutdown: {_describe_exception(exc)}")
-        bridge.shutdown(timeout=timeout)
-        logger.info("MCPClient.shutdown: done.")
+        if bridge is not None:
+            try:
+                bridge.submit(self._stop_all(timeout), timeout=timeout + 1.0)
+            except Exception as exc:  # noqa: BLE001 -- at exit, there is nothing more to do about it
+                logger.warning(f"MCPClient.shutdown: {_describe_exception(exc)}")
+            bridge.shutdown(timeout=timeout)
+            logger.info("MCPClient.shutdown: done.")
+        self._install([], {}, {})
 
     async def _stop_all(self, timeout: float) -> None:
+        if self._maybe_watcher is not None:
+            self._maybe_watcher.cancel()
+        await self._stop_servers(self._servers, timeout)
+
+    @staticmethod
+    async def _stop_servers(servers: list[_Server], timeout: float) -> None:
         tasks = []
-        for server in self._servers:
+        for server in servers:
             server.stopping = True
             if server.maybe_scope is not None:
                 server.maybe_scope.cancel()
@@ -480,6 +584,51 @@ class MCPClient:
                 tasks.append(server.maybe_task)
         if tasks:
             await asyncio.wait(tasks, timeout=timeout)
+
+    # ----------------------------------------
+    # Following the config file
+
+    def _config_signature(self) -> bytes:
+        """The content of the config file; empty if it does not exist."""
+        try:
+            return self.config_file.expanduser().read_bytes()
+        except OSError:
+            return b""
+
+    async def _watch_config(self, signature: bytes) -> None:
+        while True:
+            await asyncio.sleep(librarian_config.mcp_config_poll_interval)
+            current = self._config_signature()
+            if current != signature:
+                signature = current
+                await self._reload()
+
+    async def _reload(self) -> None:
+        """Bring the servers in line with the config file.
+
+        A server whose entry did not change, and which is running, is left alone. An unreadable file is
+        reported and otherwise ignored: an editor's half-finished save should not stop everything.
+        """
+        configs, problems = load_config(self.config_file)
+        if "" in problems:
+            self._problems[""] = problems[""]
+            logger.error(f"MCPClient: the config file changed, and cannot be used; keeping the servers as they are. {problems['']}")
+            return
+        logger.info(f"MCPClient: '{self.config_file}' changed; reloading the MCP servers.")
+        for name, problem in problems.items():
+            logger.error(f"MCPClient: server '{name}': {problem}")
+
+        wanted = {config.name: config for config in configs}
+        kept = [server for server in self._servers
+                if wanted.get(server.config.name) == server.config and server.maybe_session is not None]
+        kept_names = {server.config.name for server in kept}
+        await self._stop_servers([server for server in self._servers if server.config.name not in kept_names],
+                                 librarian_config.mcp_shutdown_timeout)
+        started = [_Server(config) for name, config in wanted.items() if name not in kept_names]
+        self._servers = kept + started
+        self._problems = problems
+        await self._connect_servers(started, librarian_config.mcp_connect_timeout)
+        self._refresh_tools()
 
     # ----------------------------------------
     # Calling a tool
@@ -493,13 +642,21 @@ class MCPClient:
         """Call one tool, and return its result in the form `perform_tool_calls` takes."""
         name = server.config.name
         metadata: dict[str, Any] = {"mcp_server": name}
+        maybe_abort = getattr(dyn.tool_context, "maybe_abort", None)
+
+        deadline = time.monotonic() + _RESTART_WAIT
+        while server.restarting and server.maybe_session is None and time.monotonic() < deadline:
+            if maybe_abort is not None and maybe_abort.aborted:
+                raise netutil.Aborted
+            time.sleep(0.1)
+
         bridge = self._maybe_bridge
-        if bridge is None or server.maybe_session is None:
+        maybe_session = server.maybe_session
+        if bridge is None or maybe_session is None:
             return CANONICAL_MCP_SERVER_UNAVAILABLE.format(tool=tool_name, server=name), metadata
 
-        maybe_abort = getattr(dyn.tool_context, "maybe_abort", None)
-        future = bridge.spawn(server.maybe_session.call_tool(tool_name, arguments,
-                                                             read_timeout_seconds=librarian_config.mcp_call_timeout))
+        future = bridge.spawn(maybe_session.call_tool(tool_name, arguments,
+                                                      read_timeout_seconds=librarian_config.mcp_call_timeout))
         # Polled, as there is no single wait for both the call finishing and the handle firing.
         while not concurrent.futures.wait([future], timeout=0.1).done:
             if maybe_abort is not None and maybe_abort.aborted:
@@ -513,6 +670,16 @@ class MCPClient:
         except Exception as exc:  # noqa: BLE001 -- reported to the model, which can tell the user
             reason = _describe_exception(exc)
             logger.warning(f"MCPClient: server '{name}': tool '{tool_name}': {reason}")
+            if _is_connection_failure(exc):
+                # Right here, so that a call right after this one waits for the restart instead of using
+                # this session. Only if the session is still this one, as a restart may have finished by now.
+                if server.maybe_session is maybe_session:
+                    server.restarting = True
+                    server.maybe_session = None
+                async def report_lost() -> None:
+                    server.connection_lost.set()
+                with contextlib.suppress(RuntimeError):  # the bridge has been shut down, and the question with it
+                    bridge.spawn(report_lost())
             return CANONICAL_MCP_CALL_FAILED.format(tool=tool_name, server=name, reason=reason), metadata
 
         text = _result_text(result)

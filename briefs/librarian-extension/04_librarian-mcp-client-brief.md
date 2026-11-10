@@ -33,12 +33,13 @@ win.**
 - **Per-call approval is deferred, and wanted soon after**: `TODO_DEFERRED.md`, "Per-call approval for MCP
   tools". It is an inline button beside the tool call, like web access has, and not a modal; it needs UX
   design. The December demo does not need the shell server, so **shell and Playwright stay out of the
-  configuration until it exists**. Open-meteo and the sandboxed filesystem server are the test targets.
+  configuration until it exists**. Open-meteo and the filesystem server, which is given one allowed top-level directory, are the test targets.
 - **One GUI toggle**: a checkbox and an app-state flag for MCP as a whole, gating a third tool group.
   Per-server control stays in the configuration, as `disabled` and `allowed_tools`.
 - **The prompt viewer no longer comes first.** It is orthogonal to MCP.
 - **Agent skills**: both MCP and skills are needed for the lab demo. The skills brief is written once tools
-  work end to end.
+  work end to end. **v1 is prose-only**; bundled scripts are filed in `TODO_DEFERRED.md`, "Agent skills for
+  Librarian".
 - **Servers are started by whoever wants them, through one lifecycle** in `raven.librarian.mcpclient`: the
   apps, `minichat`, and any script on `raven.librarian.agent`. Never from inside `llmclient.setup`, which every
   batch tool calls.

@@ -914,7 +914,7 @@ def maybe_tool_names_for_turn(settings: env,
                           `settings.network_tool_names`.
 
     `mcp_available`: whether the tools from external MCP servers are in play this turn. Gates
-                     `settings.mcp_tool_names`, which `mcpclient` fills in.
+                     `settings.mcp_tool_servers`, which `mcpclient` fills in.
 
     With all of them `False` the ungated tools are still on offer — `get_current_time` and `calculate` today — so
     the result is that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
@@ -932,7 +932,7 @@ def maybe_tool_names_for_turn(settings: env,
     if not internet_available:
         withheld |= set(settings.network_tool_names)
     if not mcp_available:
-        withheld |= set(settings.mcp_tool_names)
+        withheld |= set(settings.mcp_tool_servers)
     if not withheld:
         return None
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
@@ -1284,15 +1284,16 @@ def perform_tool_calls(settings: env,
                     tool_output_value, tool_metadata = tool_output, None
                 add_tool_response_record(index, tool_output_value, status="success", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
 
-    # Calls of different kinds run in parallel, and calls of one kind in turn. The kinds are the ones a
-    # frontend has an indicator for, since it lights one per call: two web calls overlapping would have the
+    # Calls of different kinds run in parallel, and calls of one kind in turn. The built-in kinds are the ones
+    # a frontend has an indicator for, since it lights one per call: two web calls overlapping would have the
     # first to finish put the light out while the second still ran. Raven-server makes same-kind web calls
-    # queue anyway, so running them in turn costs little.
+    # queue anyway, so running them in turn costs little. Each MCP server is a kind of its own.
     groups: dict[str, list[tuple]] = {}
     for call in planned:
         function_name = call[2]
         kind = ("network" if function_name in NETWORK_TOOL_NAMES
                 else "documents" if function_name in DOCUMENT_TOOL_NAMES
+                else f"mcp:{settings.mcp_tool_servers[function_name]}" if function_name in settings.mcp_tool_servers
                 else "other")
         groups.setdefault(kind, []).append(call)
 

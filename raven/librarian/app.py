@@ -449,12 +449,16 @@ print()
 
 # In the background: a server launched through `npx` may have to be downloaded first, and the app is useful
 # before its tools arrive.
-mcp_client = mcpclient.MCPClient(llm_settings)
+def _refresh_mcp_checkbox() -> None:
+    """Make the MCP toggle available exactly when there is a configuration for it to govern."""
+    if dpg.does_item_exist("mcp_enabled_checkbox") and not guiutils.is_shutting_down():  # tag
+        dpg.configure_item("mcp_enabled_checkbox", enabled=librarian_config.mcp_config_file.exists())  # tag
+mcp_client = mcpclient.MCPClient(llm_settings, on_tools_changed=_refresh_mcp_checkbox)
 mcp_task_manager = bgtask.TaskManager(name="librarian_mcp_start",
                                       mode="sequential",
                                       executor=bg)
 def _mcp_start_task(task_env: env) -> None:
-    mcp_client.start()
+    mcp_client.start(watch=True)
     mcp_client.report_to_console()
 mcp_task_manager.submit(_mcp_start_task, env())
 
@@ -2001,7 +2005,7 @@ with timer() as tim:
                                          enabled=librarian_config.mcp_config_file.exists(), tag="mcp_enabled_checkbox")
                         dpg.bind_item_theme("mcp_enabled_checkbox", "disablable_widget_theme")  # tag
                         dpg.add_tooltip("mcp_enabled_checkbox", tag="mcp_enabled_tooltip")  # tag
-                        dpg.add_text(f"Let the AI use the tools of the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nServers are set up in the file\n{librarian_config.mcp_config_file}\nand this switch is available when that file exists.", parent="mcp_enabled_tooltip")  # tag
+                        dpg.add_text(f"Let the AI use the tools of the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nTo use this, create the file\n{librarian_config.mcp_config_file}\nlisting your servers. The section MCP servers in the Librarian README has an example.\nChanges to that file are picked up by themselves.", parent="mcp_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag

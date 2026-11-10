@@ -165,6 +165,18 @@ mcp_connect_timeout = 120.0
 # How long to wait for one MCP tool call, in seconds. A call that takes longer is reported to the AI as failed.
 mcp_call_timeout = 120.0
 
+# How often to check that a connected MCP server is still there, in seconds.
+mcp_liveness_interval = 15.0
+
+# A server that dies is started again, up to this many times within this many seconds. Past that it is left
+# stopped for the rest of the session. `mcp_restart_delay` is the wait before each restart, in seconds.
+mcp_max_restarts = 3
+mcp_restart_window = 300.0
+mcp_restart_delay = 2.0
+
+# How often to look for changes in `mcp_config_file`, in seconds, for the apps that follow it.
+mcp_config_poll_interval = 2.0
+
 # How long the MCP servers get to exit when the app does, in seconds. One that takes longer is abandoned, and
 # its process may outlive the app. The SDK gives a stuck server 2 s to notice its stdin closing and 2 s more to
 # answer SIGTERM before it sends SIGKILL, so anything under 4 s can cut that short.

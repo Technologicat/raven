@@ -184,7 +184,7 @@ class TestRegistration:
         monkeypatch.setattr(llmclient, "connect", lambda backend_url, quiet=True: _make_settings())
         llmclient.reconnect(the_settings)
         assert client.tool_names <= _offered_names(the_settings)
-        assert the_settings.mcp_tool_names == client.tool_names
+        assert set(the_settings.mcp_tool_servers) == client.tool_names
 
     def test_allowed_tools_restricts_what_is_offered(self, tmp_path, settings):
         config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry(allowed_tools=["echo", "add"])})
@@ -298,8 +298,7 @@ class TestFailures:
         with mcpclient.connected(settings, config_file=config):
             text, _metadata = _call(settings, "fixture__die")
             assert text.startswith("The call to die failed")
-            text, _metadata = _call(settings, "fixture__echo", text="anyone there?")
-            assert "failed" in text or "not available" in text
+            assert _call(settings, "fixture__echo", text="anyone there?")[0] == "anyone there?"
 
 
 class TestServerOutput:
@@ -318,6 +317,187 @@ class TestServerOutput:
         assert "missing licence file" in log_path.read_text(encoding="utf-8")
 
 
+class TestConcurrency:
+    def _timed_round(self, settings, *tool_names) -> float:
+        calls = [{"type": "function", "id": f"call_{i}", "function": {"name": name, "arguments": '{"seconds": 1.0}'}}
+                 for i, name in enumerate(tool_names)]
+        t0 = time.monotonic()
+        records = llmtools.perform_tool_calls(settings, {"role": "assistant", "tool_calls": calls}, on_call_start=None, on_call_done=None)
+        assert [record.status for record in records] == ["success"] * len(calls)
+        return time.monotonic() - t0
+
+    def test_each_server_is_its_own_group(self, tmp_path, settings):
+        config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry(), "two": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config):
+            assert self._timed_round(settings, "one__slow", "one__slow") >= 2.0, "two calls to one server overlapped"
+            assert self._timed_round(settings, "one__slow", "two__slow") < 1.8, "two servers ran one after the other"
+
+
+class TestRestart:
+    @pytest.fixture
+    def quick_restarts(self, monkeypatch):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_restart_delay", 0.05)
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_liveness_interval", 0.2)
+
+    def test_a_server_that_dies_mid_call_comes_back(self, tmp_path, settings, quick_restarts, caplog):
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config):
+            first_pid = int(_call(settings, "fixture__pid")[0])
+            assert _call(settings, "fixture__die")[0].startswith("The call to die failed")
+            assert int(_call(settings, "fixture__pid")[0]) != first_pid  # `int`, or a failure's text would pass too
+        assert "restarting" in caplog.text
+
+    def test_a_server_killed_between_calls_is_noticed(self, tmp_path, settings, quick_restarts):
+        psutil = pytest.importorskip("psutil")
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config) as client:
+            first_pid = int(_call(settings, "fixture__pid")[0])
+            psutil.Process(first_pid).kill()
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and not client._servers[0].deaths:
+                time.sleep(0.05)
+            assert client._servers[0].deaths, "no restart was noticed without a call failing"
+            assert int(_call(settings, "fixture__pid")[0]) != first_pid
+
+    def test_a_restart_leaves_what_is_offered_unchanged(self, tmp_path, settings, quick_restarts):
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config):
+            before = json.dumps(settings.request_data["tools"], sort_keys=True)
+            _call(settings, "fixture__die")
+            assert _call(settings, "fixture__echo", text="back")[0] == "back"
+            assert json.dumps(settings.request_data["tools"], sort_keys=True) == before
+
+    def test_the_log_of_the_run_that_died_is_kept(self, tmp_path, settings, quick_restarts):
+        config = _write_config(tmp_path / "mcp.json", {"logged": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config):
+            _call(settings, "logged__complain", text="famous last words")
+            _call(settings, "logged__die")
+            assert _call(settings, "logged__echo", text="back")[0] == "back"
+        assert "famous last words" in mcpclient._stderr_log_path("logged").read_text(encoding="utf-8")
+
+    def test_a_server_that_keeps_dying_is_left_stopped(self, tmp_path, settings, quick_restarts, monkeypatch, caplog):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_max_restarts", 1)
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config) as client:
+            _call(settings, "fixture__die")
+            assert _call(settings, "fixture__echo", text="back")[0] == "back", "the first restart did not happen"
+            _call(settings, "fixture__die")
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and "fixture" not in client.problems:
+                time.sleep(0.05)
+            assert "left stopped" in client.problems["fixture"]
+            assert _call(settings, "fixture__echo", text="anyone?")[0] == "The tool echo is not available right now, because its server fixture is not running."
+            assert "fixture__echo" in client.tool_names
+        assert "left stopped" in caplog.text
+
+    def test_a_slow_call_does_not_count_as_a_death(self, tmp_path, settings, quick_restarts, monkeypatch):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_call_timeout", 0.2)
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config) as client:
+            assert _call(settings, "fixture__slow", seconds=1.0)[0].startswith("The call to slow failed")
+            time.sleep(1.5)
+            assert client._servers[0].deaths == []
+
+    def test_a_server_that_never_started_is_not_retried(self, tmp_path, settings, quick_restarts):
+        config = _write_config(tmp_path / "mcp.json", {"broken": {"command": "/nonexistent/mcp-server"}})
+        with mcpclient.connected(settings, config_file=config) as client:
+            time.sleep(0.5)
+            assert client._servers[0].deaths == []
+
+
+class TestLiveReload:
+    @pytest.fixture
+    def quick_polls(self, monkeypatch):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_config_poll_interval", 0.05)
+
+    @staticmethod
+    def _wait_until(predicate, timeout=15.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.05)
+        return False
+
+    @pytest.fixture
+    def watching(self, settings, tmp_path, quick_polls):
+        def start(servers=None):
+            config = tmp_path / "mcp.json"
+            if servers is not None:
+                _write_config(config, servers)
+            client = mcpclient.MCPClient(settings, config_file=config)
+            client.start(watch=True)
+            started.append(client)
+            return client, config
+        started = []
+        yield start
+        for client in started:
+            client.shutdown()
+
+    def test_a_server_added_to_the_file_appears(self, watching, settings):
+        client, config = watching({"one": _stdio_entry()})
+        _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})
+        assert self._wait_until(lambda: "two__echo" in client.tool_names)
+        assert _call(settings, "two__echo", text="new")[0] == "new"
+        assert "two__echo" in _offered_names(settings)
+
+    def test_a_server_removed_from_the_file_goes(self, watching, settings):
+        client, config = watching({"one": _stdio_entry(), "two": _stdio_entry()})
+        _write_config(config, {"one": _stdio_entry()})
+        assert self._wait_until(lambda: "two__echo" not in client.tool_names)
+        assert "two__echo" not in _offered_names(settings)
+        assert "one__echo" in _offered_names(settings)
+
+    def test_an_unchanged_server_keeps_running(self, watching, settings):
+        client, config = watching({"one": _stdio_entry(), "two": _stdio_entry()})
+        pid = _call(settings, "one__pid")[0]
+        _write_config(config, {"one": _stdio_entry()})
+        assert self._wait_until(lambda: "two__echo" not in client.tool_names), "the reload did not happen, so this fixture cannot tell a kept server from an untouched one"
+        assert _call(settings, "one__pid")[0] == pid
+
+    def test_a_changed_entry_is_restarted_with_its_new_settings(self, watching, settings):
+        client, config = watching({"one": _stdio_entry(env={"RAVEN_MCP_TEST": "old"})})
+        assert _call(settings, "one__getenv", name="RAVEN_MCP_TEST")[0] == "old"
+        _write_config(config, {"one": _stdio_entry(env={"RAVEN_MCP_TEST": "new"})})
+        assert self._wait_until(lambda: _call(settings, "one__getenv", name="RAVEN_MCP_TEST")[0] == "new")
+
+    def test_the_file_appearing_starts_servers(self, watching, settings):
+        client, config = watching(None)
+        assert client.tool_names == frozenset()
+        _write_config(config, {"one": _stdio_entry()})
+        assert self._wait_until(lambda: "one__echo" in client.tool_names)
+
+    def test_the_file_going_away_stops_them(self, watching, settings):
+        client, config = watching({"one": _stdio_entry()})
+        config.unlink()
+        assert self._wait_until(lambda: client.tool_names == frozenset())
+
+    def test_a_half_written_file_is_ignored(self, watching, settings):
+        client, config = watching({"one": _stdio_entry()})
+        config.write_text("{not json", encoding="utf-8")
+        assert self._wait_until(lambda: "" in client.problems)
+        assert _call(settings, "one__echo", text="still here")[0] == "still here"
+
+    def test_on_tools_changed_is_called(self, tmp_path, settings, quick_polls):
+        config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
+        calls = []
+        client = mcpclient.MCPClient(settings, config_file=config, on_tools_changed=lambda: calls.append(1))
+        client.start(watch=True)
+        try:
+            assert len(calls) == 1
+            _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})
+            assert self._wait_until(lambda: len(calls) == 2)
+        finally:
+            client.shutdown()
+
+    def test_a_script_does_not_follow_the_file(self, tmp_path, settings, quick_polls):
+        config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config) as client:
+            _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})
+            time.sleep(0.5)
+            assert "two__echo" not in client.tool_names
+
+
 class TestLifecycle:
     def test_leaving_the_block_removes_the_tools(self, tmp_path, settings):
         before_tools, before_entrypoints = list(settings.tools), dict(settings.tool_entrypoints)
@@ -327,7 +507,7 @@ class TestLifecycle:
         assert settings.tools == before_tools
         assert settings.request_data["tools"] == before_tools
         assert settings.tool_entrypoints == before_entrypoints
-        assert settings.mcp_tool_names == frozenset()
+        assert settings.mcp_tool_servers == {}
 
     def test_the_server_process_is_gone_afterwards(self, tmp_path, settings):
         psutil = pytest.importorskip("psutil")

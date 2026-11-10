@@ -2408,10 +2408,11 @@ Decided in the corpus-interrogation sketch (2026-08-11), recorded there and nowh
 gives the tools, and skills tell Librarian how to use them — the material that does not belong in a tool's
 docstring. The lab's MCP demo needs both.
 
-Not designed yet. **The brief is drafted when the MCP build starts** (maintainer, 2026-10-19); this records
-the idea and what is already established about it. Two leads from that day: **v1 is leaning prose-only**,
-with bundled scripts still to be weighed when it is specced (see stage three below); and **the lorebook is
-the other auto-trigger**, so how the two relate is a first question rather than a detail.
+Not designed yet. **The brief is drafted once MCP tools work end to end** (maintainer, 2026-11-10); this
+records the idea and what is already established about it. **v1 is prose-only** (maintainer, 2026-11-10).
+Bundled scripts wait until per-call approval exists, since a script is code the model runs on your machine
+(see stage three below). And **the lorebook is the other auto-trigger**, so how the two relate is a first
+question rather than a detail.
 
 The Agent Skills open standard (https://agentskills.io) — originally Anthropic's, now adopted across a range
 of agent products. A skill is a folder with a `SKILL.md` carrying metadata (`name`, `description`) plus

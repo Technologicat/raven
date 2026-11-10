@@ -2903,7 +2903,7 @@ class DPGChatController:
                 def _reaches_outside(tool_calls: list[dict]) -> bool:
                     """Whether any of these tools consults something beyond this conversation."""
                     names = {call.get("function", {}).get("name") for call in tool_calls}
-                    return bool(names & llmclient.EXTERNAL_SOURCE_TOOL_NAMES)
+                    return bool(names & (llmclient.EXTERNAL_SOURCE_TOOL_NAMES | set(self.llm_settings.mcp_tool_servers)))
 
                 def on_tools_start(tool_calls: list[dict]) -> None:
                     task_env.in_tool_round = True  # a Stop now abandons the calls; see `abort_if_nothing_to_lose`
