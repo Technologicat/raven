@@ -937,6 +937,7 @@ llm_sampler_config = {
 #: edits, not code. Keeping it in a `textwrap.dedent` also had a trap in it: the dedent runs *after* an
 #: f-string interpolates, so a block that splices in text of its own leaves no common leading prefix, and
 #: nothing is stripped. The result reached the model as a four-space-indented Markdown *code block*.
+prompt_files_poll_interval = 2.0  # how often the apps look for edited prompt files, in seconds
 prompts_dir = pathlib.Path(__file__).parent / "prompts"
 user_prompts_dir = librarian_userdata_dir / "prompts"
 

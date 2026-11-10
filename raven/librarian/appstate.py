@@ -8,6 +8,7 @@ This module is shared between `minichat` (command-line app) and `app` (Raven-lib
 __all__ = ["configured_defaults",
            "sidecar_refs_in_payload",
            "refresh_system_prompt",
+           "refresh_new_chat_nodes",
            "load",
            "backfill_sidecar_metadata",
            "save", "persist", "start_autosave"]
@@ -240,6 +241,19 @@ def refresh_system_prompt(llm_settings: env,
         # refuse deleting the card currently in use.
         state["system_prompt_node_id"] = system_prompt_node_id
 
+def refresh_new_chat_nodes(llm_settings: env,
+                           datastore: chattree.Forest,
+                           state: Dict) -> None:
+    """Point the state at the current system prompt and its greeting, creating those nodes if they are new.
+
+    What a *new* chat starts under. An existing chat keeps the system prompt it was held under, so `HEAD` is
+    not touched. A text that matches an existing root goes back to that root.
+
+    Arguments as for `refresh_system_prompt`, and the same notes apply.
+    """
+    refresh_system_prompt(llm_settings, datastore, state)
+    _refresh_greeting(llm_settings, datastore, state)
+
 def _refresh_greeting(llm_settings: env,
                       datastore: chattree.Forest,
                       state: Dict) -> None:
@@ -445,13 +459,7 @@ def load(llm_settings: env,
     #     per the OAI-compatible chatlog format).
     #     - Sets `state["new_chat_HEAD"]` (always to a valid node, so we don't need to validate it here).
     #
-    refresh_system_prompt(llm_settings,
-                          datastore,
-                          state)
-
-    _refresh_greeting(llm_settings,
-                      datastore,
-                      state)
+    refresh_new_chat_nodes(llm_settings, datastore, state)
 
     if "HEAD" not in state:  # Current chat node ID missing -> start at new chat
         state["HEAD"] = state["new_chat_HEAD"]

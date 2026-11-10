@@ -27,7 +27,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            # For frontends that open a window whether or not a backend answers
            "backend_unreachable", "backend_has_no_model", "backend_ready",
            "connect", "describe_backend_status", "backend_status", "reconnect", "follow_model_swap",
-           "configure",
+           "make_prompt_reloader", "configure",
 
            # Counting what a prompt costs
            "count_tokens",
@@ -892,6 +892,63 @@ def _setup_character_card(template_vars: env) -> str:
                     interaction=_setup_interaction_style(template_vars)).strip()
 
 
+def _prompt_texts(user: str, char: str) -> dict[str, str]:
+    """The settings that come from prompt files, filled in for `user` and `char`.
+
+    Includes `search_query_instruction`, what the automatic search's query is written from; see `scaffold.ai_turn`.
+    """
+    template_vars = env(user=user, char=char)
+    return {"system_prompt": _setup_system_prompt(template_vars),
+            "character_card": _setup_character_card(template_vars),
+            "user_card": _setup_user_card(template_vars),
+            "search_query_instruction": _format_prompt("search_query", template_vars)}
+
+def make_prompt_reloader(settings: env) -> Callable[[], bool]:
+    """Return a function that brings `settings` up to date with the prompt files, if they have changed on disk.
+
+    The returned function takes no arguments, is cheap enough to poll, and returns whether any of the texts
+    changed. A prompt that cannot be used, such as one half-way through an edit, is logged and otherwise
+    ignored, keeping the previous text until the file changes again.
+
+    This changes `settings` only. For what a changed text means to the chat datastore, see
+    `appstate.refresh_new_chat_nodes`.
+    """
+    def signature() -> tuple:
+        paths = [*librarian_config.prompts_dir.glob("*.md"), *librarian_config.user_prompts_dir.glob("*.md")]
+        character = avatar_characters.find(settings.char)
+        if character is not None and character.card_path is not None:
+            paths.append(character.card_path)
+        profile = userprofile.find(settings.user)
+        if profile is not None and profile.card_path is not None:
+            paths.append(profile.card_path)
+        def stamp(path: pathlib.Path) -> tuple:
+            try:
+                info = path.stat()
+                return (str(path), info.st_mtime_ns, info.st_size)
+            except OSError:  # deleted between the listing and now
+                return (str(path), None, None)
+        return tuple(sorted(stamp(path) for path in paths))
+
+    previous = signature()
+    def reload_if_changed() -> bool:
+        nonlocal previous
+        current = signature()
+        if current == previous:
+            return False
+        previous = current
+        try:
+            texts = _prompt_texts(settings.user, settings.char)
+        except Exception as exc:  # noqa: BLE001 -- a typo in a prompt must not stop whoever is polling
+            logger.error(f"reload_if_changed: a prompt file changed, and cannot be used; keeping the previous text. {type(exc)}: {exc}")
+            return False
+        changed = [name for name, text in texts.items() if settings[name] != text]
+        for name in changed:
+            settings[name] = texts[name]
+        if changed:
+            logger.info(f"reload_if_changed: prompt files changed on disk; reloaded {changed}.")
+        return bool(changed)
+    return reload_if_changed
+
 def configure(model_info: env,
               backend_flavor: str,
               backend_url: str,
@@ -953,12 +1010,6 @@ def configure(model_info: env,
     #
     # They are absent rather than documented-as-unwise, so that a prompt reaching for one fails at startup
     # with a `KeyError` naming it, instead of quietly freezing a sentence nobody can see is stale.
-    template_vars = env(user=user,
-                        char=char)
-    system_prompt = _setup_system_prompt(template_vars)
-    character_card = _setup_character_card(template_vars)
-    user_card = _setup_user_card(template_vars)
-    search_query_instruction = _format_prompt("search_query", template_vars)
     greeting = librarian_config.llm_greeting
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
@@ -987,12 +1038,9 @@ def configure(model_info: env,
                    retain_thinking=librarian_config.llm_retain_thinking,  # send earlier turns' thinking traces; see `keeps_reasoning`
                    tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
-                   system_prompt=system_prompt,
-                   character_card=character_card,
-                   user_card=user_card,
+                   **_prompt_texts(user, char),
                    stopping_strings=stopping_strings,
                    greeting=greeting,
-                   search_query_instruction=search_query_instruction,  # what the automatic search's query is written from; see `scaffold.ai_turn`
                    tools=TOOLS,  # for inspection
                    tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
                    document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database

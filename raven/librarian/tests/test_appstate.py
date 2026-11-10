@@ -331,6 +331,32 @@ class TestSystemPromptRefresh:
             datastore.get_payload(state2["system_prompt_node_id"])["message"]["content"])
         assert old_root in datastore.get_all_root_nodes(), "the card an existing chat is rooted at must survive"
 
+    def test_an_edit_during_a_session_moves_new_chats_and_leaves_the_current_one(self, tmp_path, llm_settings):
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        old_root, old_new_chat, head = state["system_prompt_node_id"], state["new_chat_HEAD"], state["HEAD"]
+
+        llm_settings.system_prompt = "You are an updated assistant."
+        appstate.refresh_new_chat_nodes(llm_settings, datastore, state)
+
+        assert state["HEAD"] == head
+        assert state["system_prompt_node_id"] != old_root
+        assert state["new_chat_HEAD"] != old_new_chat
+        assert datastore.get_parent(state["new_chat_HEAD"]) == state["system_prompt_node_id"], "a new chat needs its greeting under the new root"
+        assert old_root in datastore.get_all_root_nodes()
+
+    def test_going_back_to_an_earlier_text_goes_back_to_its_root(self, tmp_path, llm_settings):
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        old_root, original = state["system_prompt_node_id"], llm_settings.system_prompt
+
+        llm_settings.system_prompt = "You are an updated assistant."
+        appstate.refresh_new_chat_nodes(llm_settings, datastore, state)
+        assert state["system_prompt_node_id"] != old_root, "the edit made no new root, so this fixture cannot tell a return from staying put"
+
+        llm_settings.system_prompt = original
+        appstate.refresh_new_chat_nodes(llm_settings, datastore, state)
+        assert state["system_prompt_node_id"] == old_root
+        assert len(datastore.get_all_root_nodes()) == 2
+
     def test_a_chat_stays_under_the_card_it_was_held_under(self, tmp_path, llm_settings):
         # The whole point of keeping one card per variety: editing the prompt must not silently re-root an
         # existing conversation under text it was never written against.

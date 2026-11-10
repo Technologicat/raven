@@ -534,7 +534,9 @@ A server with a `command` is started by *Librarian* and stopped when it exits. A
 
 The **MCP** toggle (`Alt+M`) switches all of their tools on or off. In the chat they appear as `<server>__<tool>`. If a server cannot be started, the app says so in its terminal and in its log, and carries on without it. What a started server writes to its stderr is in `~/.config/raven/librarian/mcp_logs/`.
 
-**The AI calls these tools without asking you first.** An MCP server is third-party code, acting on whatever the LLM decides, and what the LLM decides can be influenced by what it reads; see the security warning below. Offer it only what you are comfortable with. `allowed_tools` is how to withhold a server's other tools, and it is worth using for a second reason: the descriptions of every offered tool are sent with each message, and a server publishing many large ones can take a substantial part of the context window.
+**The AI calls these tools without asking you first.** An MCP server is third-party code, acting on whatever the LLM decides, and what the LLM decides can be influenced by what it reads; see the security warning below. Offer it only what you are comfortable with. `allowed_tools` is how to withhold a server's other tools, and it is worth using for a second reason: the descriptions of every offered tool sit at the front of the prompt for the whole session, and a server publishing many large ones can take a substantial part of the context window.
+
+Changes to `mcp.json` are picked up while the app runs; a server whose entry did not change keeps running. A server that dies is started again, and one that keeps dying is left stopped until the app restarts or the file changes.
 
 From a script, tools are available inside a `with mcpclient.connected(llm_settings):` block, and `agent.turn` offers them when given `mcp_enabled=True`.
 
@@ -1228,6 +1230,7 @@ any of them from `~/.config/raven/librarian/prompts/` without editing the instal
   out-of-the-box configuration does.
 - A **character's own personality** is not in that folder: it travels with the character. See below.
 - **Neither is yours.** See the next section.
+- **Edits are picked up while the app runs.** A changed prompt or card becomes a new system prompt in the chat graph, and a new chat starts under it. An existing chat keeps the prompt it was held under.
 
 ## Telling the AI who *you* are
 

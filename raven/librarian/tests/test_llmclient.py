@@ -6,6 +6,7 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 """
 
 import http.server
+import os
 import json
 import re
 import logging
@@ -3674,6 +3675,48 @@ class TestContinuingAMessageKeepsWhatItAlreadySaid:
                              seed="The seasons: \nUser: name them")
         text = chatutil.content_to_text(out.data["content"])
         assert text == "The seasons: \nUser: name them then", text
+
+
+class TestPromptReloader:
+    @pytest.fixture
+    def settings(self, tmp_path, monkeypatch):
+        prompts = tmp_path / "user_prompts"
+        prompts.mkdir()
+        monkeypatch.setattr(llmclient.librarian_config, "user_prompts_dir", prompts)
+        return llmclient.configure(model_info=env(label="m", model_id="m", context_length=4096, is_vlm=False, loaded=True),
+                                   backend_flavor="generic", backend_url="http://x", quiet=True)
+
+    @staticmethod
+    def _override(name: str, text: str) -> None:
+        (llmclient.librarian_config.user_prompts_dir / f"{name}.md").write_text(text, encoding="utf-8")
+
+    def test_no_change_is_no_change(self, settings):
+        reload_if_changed = llmclient.make_prompt_reloader(settings)
+        assert reload_if_changed() is False
+
+    def test_an_edit_reaches_the_settings(self, settings):
+        reload_if_changed = llmclient.make_prompt_reloader(settings)
+        self._override("system", "You are a test.")
+        assert reload_if_changed() is True
+        assert settings.system_prompt == "You are a test."
+        assert reload_if_changed() is False
+
+    def test_a_file_rewritten_with_the_same_text_is_no_change(self, settings):
+        self._override("system", "Same.")
+        settings.system_prompt = "Same."
+        reload_if_changed = llmclient.make_prompt_reloader(settings)
+        os.utime(llmclient.librarian_config.user_prompts_dir / "system.md", (1, 1))
+        assert reload_if_changed() is False
+
+    def test_a_prompt_that_cannot_be_used_keeps_the_previous_text(self, settings):
+        reload_if_changed = llmclient.make_prompt_reloader(settings)
+        before = settings.system_prompt
+        self._override("system", "Hello {no_such_variable}")
+        assert reload_if_changed() is False
+        assert settings.system_prompt == before
+        self._override("system", "Fixed now.")
+        assert reload_if_changed() is True
+        assert settings.system_prompt == "Fixed now."
 
 
 class TestBackendFacts:

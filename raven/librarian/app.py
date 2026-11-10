@@ -724,12 +724,6 @@ def _backend_status_poll_task(task_env: env) -> None:
     logger.info(f"_backend_status_poll_task: {task_env.task_name}: backend is ready, model is '{llm_settings.model}'.")
     # Nothing stored needs repairing, which is the point of stating the backend's facts as per-turn injects:
     # the card's text is determined by the configuration alone, so connecting cannot have made it wrong.
-    #
-    # Deliberately not calling `appstate.refresh_system_prompt` here. It is now match-or-create rather than
-    # rewrite-in-place, so on a card that did not change it does nothing — and on one that did, it would
-    # create a root mid-run with no greeting under it while `new_chat_HEAD` still pointed under the old one.
-    # A card *can* change here, but only in a deployment whose own prose writes `{model}` or
-    # `{context_length}` into it; that one picks up the new text at the next start.
     _refresh_backend_status_pill(llmclient.backend_ready)
     if not keep_waiting(_BACKEND_CONNECTED_LINGER_S):
         return
@@ -3656,6 +3650,7 @@ def _gui_cancel_tasks() -> None:
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
+    prompt_reload_task_manager.clear(wait=False)  # stop watching the prompt files (it writes to the datastore)
     panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
     server_status_task_manager.clear(wait=False)  # stop watching Raven-server (it writes into the utility panel's row)
     stop_autosave(wait=False)  # stop saving periodically; the saves at exit take over
@@ -3698,6 +3693,7 @@ def _gui_release() -> None:
     # After the chat, so that a turn in flight keeps its tools; before the wait, as it interrupts a start in progress.
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)
+    prompt_reload_task_manager.clear(wait=True)
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
     # Before the animator is cleared, since the dialog cancels its cursor pulsation through it — and well
@@ -3914,6 +3910,17 @@ else:
     def stop_autosave(wait: bool = True) -> None:
         pass
 
+prompt_reload_task_manager = bgtask.TaskManager(name="librarian_prompt_reload",
+                                                mode="sequential",
+                                                executor=bg)
+def _prompt_reload_task(task_env: env) -> None:
+    """Follow edits to the prompt files. Existing chats keep their prompt; a new chat starts under the new one."""
+    reload_if_changed = llmclient.make_prompt_reloader(llm_settings)
+    while not (task_env.cancelled or guiutils.is_shutting_down()):
+        time.sleep(librarian_config.prompt_files_poll_interval)
+        if reload_if_changed():
+            appstate.refresh_new_chat_nodes(llm_settings, datastore, app_state)
+
 def _start_panel_occupancy_watch() -> None:
     """Start watching who should hold the avatar's panel. Supersedes a watch already running."""
     if guiutils.is_shutting_down():
@@ -3948,6 +3955,7 @@ def _finish_startup(sender, app_data) -> None:
     # Raven-server was reachable at startup or the app would have exited, so the watch starts believing that
     # and waits an interval before its first probe.
     _start_server_status_poll(delay_first_probe=True)
+    prompt_reload_task_manager.submit(_prompt_reload_task, env())
 
     # The blue that says where the keyboard is, on the composer and on the search field. A *caret* follower,
     # not a focus one: ImGui gives nav focus to the first navigable item of a window by itself, so the composer

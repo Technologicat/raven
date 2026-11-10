@@ -554,10 +554,6 @@ def minimal_chat_client(backend_url) -> None:
             elif user_message_text == "!reconnect":
                 # `reconnect` prints the verdict itself, in the same words the startup probe used.
                 llmclient.reconnect(llm_settings, quiet=False)
-                # The stored system prompt may state what the backend just told us — Raven's own prose no
-                # longer names the model or the context length, but those template variables are there for
-                # a user writing their own (see `config.py`).
-                appstate.refresh_system_prompt(llm_settings, datastore, app_state)
                 print()
                 chat_show_model_info()
                 return Values(action=action_next_exchange)
@@ -757,7 +753,11 @@ def minimal_chat_client(backend_url) -> None:
         chat_print_history(datastore.linearize_up(app_state["HEAD"]))
 
         # Main loop
+        reload_prompts_if_changed = llmclient.make_prompt_reloader(llm_settings)
         while True:
+            if reload_prompts_if_changed():
+                appstate.refresh_new_chat_nodes(llm_settings, datastore, app_state)
+                print(colorizer.colorize("Prompt files changed. A new chat (`!clear`) will start under the new system prompt.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
             user_result = user_turn()
             if user_result["action"] is action_next_exchange:
                 continue
