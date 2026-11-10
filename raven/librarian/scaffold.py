@@ -887,7 +887,7 @@ def _attachmentify_tool_result(datastore: chattree.Forest,
                                                      # (a page title may contain anything at all).
                                                      name=f"{name}.md",
                                                      provenance_url=document["url"],
-                                                     provenance_source="tool_result",
+                                                     provenance_source=document.get("source", "tool_result"),
                                                      content_type="text/markdown")
     except Exception as exc:  # noqa: BLE001 -- a failed store must not lose the tool result
         logger.warning(f"_attachmentify_tool_result: could not store '{name}' as a sidecar, leaving it inline: {type(exc)}: {exc}")
@@ -1042,6 +1042,7 @@ def ai_turn(llm_settings: env,
             tools_enabled: bool = True,
             thinking_enabled: bool = True,
             maybe_abort: netutil.Abort | None = None,
+            mcp_enabled: bool = False,
             use_character_card: bool = True,
             write_docs_query: bool = False,
             max_tokens: int | None = None) -> str:
@@ -1064,6 +1065,10 @@ def ai_turn(llm_settings: env,
                         It and `docs_enabled` each own one group of tools outright, so the four combinations
                         all mean something. A tool answering to neither switch — `get_current_time` — is
                         always offered.
+
+    `mcp_enabled`: Whether the tools from external MCP servers are offered — the user-facing "MCP" switch.
+                   Gates `llm_settings.mcp_tool_names` and nothing else. `False` by default, so a caller
+                   does not reach third-party tools without having asked to.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  A new chat node is created.
@@ -1334,7 +1339,8 @@ def ai_turn(llm_settings: env,
     # permissive one). Shared with the GUI's context prefill, which must warm the same list.
     maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings,
                                                            documents_available=documents_available,
-                                                           internet_available=internet_enabled)
+                                                           internet_available=internet_enabled,
+                                                           mcp_available=mcp_enabled)
     # `None` means every tool, so an empty tuple is the only "nothing on offer" case. There is none today —
     # `get_current_time` answers to neither switch — but the budget machinery below asks "are there tools at
     # all", and asking the list is the answer that stays true if the ungated group ever empties.
@@ -1682,6 +1688,7 @@ def retry_tool_calls(llm_settings: env,
                      docs_num_results: int | None,
                      thinking_enabled: bool = True,
                      maybe_abort: netutil.Abort | None = None,
+                     mcp_enabled: bool = False,
                      on_docs_start: Callable | None = None,
                      on_docs_progress: Callable | None = None,
                      on_docs_query: Callable | None = None,
@@ -1792,6 +1799,7 @@ def retry_tool_calls(llm_settings: env,
 
     # 4. Continue the AI turn from the rebuilt tool head.
     return ai_turn(llm_settings=llm_settings,
+                   mcp_enabled=mcp_enabled,
                    datastore=datastore,
                    retriever=retriever,
                    head_node_id=head_node_id,

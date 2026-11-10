@@ -38,6 +38,7 @@ dearpygui==2.3.1
 feedparser==6.0.14
 # Needed *because* of `dearpygui` above, not on its own account: the GUI tests import
 # `raven.common.gui.utils`, which reaches the vendored `DearPyGui_Markdown`, whose parser imports this.
+mcp==2.3.0  # librarian.mcpclient; its tests run a real server over stdio
 mistletoe==1.6.0
 # Also needed because of the GUI tests: `raven.common.gui.qroverlay` imports it to build the exhibit
 # overlay's QR matrix, and `test_qroverlay.py` exercises that without a window.

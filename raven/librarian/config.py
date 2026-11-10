@@ -45,6 +45,10 @@ llm_autosave_interval = 60.0
 llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
 llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used if it exists, ignored if not.
 
+# The MCP servers whose tools the LLM may use, in the `mcpServers` format other MCP clients use.
+# See `raven.librarian.mcpclient.load_config`.
+mcp_config_file = librarian_userdata_dir / "mcp.json"  # will be used if it exists, ignored if not.
+
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
 # Separate from `raven.client.config.network_timeout` because the LLM backend is a distinct service
 # (oobabooga / LM Studio / llama.cpp) with its own latency profile and its own `llm_backend_url`.
@@ -152,6 +156,16 @@ web_num_results = 10
 # Raven-server itself, which knows what went wrong, after its own `web_page_load_timeout` and the waits that
 # follow it. Those add up to about 45 s for a search at worst, so the read timeout here must stay above that.
 web_tool_timeout = Timeout(connect=10.0, read=60.0)
+
+# How long to wait for an MCP server to come up, in seconds. Long, because a server launched through `npx`
+# may have to be downloaded the first time.
+mcp_connect_timeout = 120.0
+
+# How long to wait for one MCP tool call, in seconds. A call that takes longer is reported to the AI as failed.
+mcp_call_timeout = 120.0
+
+# How long the MCP servers get to exit when the app does, in seconds. One that takes longer is abandoned.
+mcp_shutdown_timeout = 5.0
 
 # How many rounds of tool calls the LLM may make within a single AI turn, before it has to answer.
 #

@@ -41,6 +41,8 @@ _DEFAULT_FLAGS = {  # Whether a thinking model may reason before it answers. On 
                   # model's own default: a model that reasons was chosen for its reasoning.
                   "thinking_enabled": True,
                   "internet_enabled": True,
+                  # Whether the LLM may use the tools from external MCP servers, if any are configured.
+                  "mcp_enabled": True,
                   "docs_enabled": True,
                   # Whether each turn begins with a search of the documents for the user's message. Only
                   # meaningful while `docs_enabled`; off, the AI can still search them with its own tools.

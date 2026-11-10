@@ -298,6 +298,7 @@ def turn(llm_settings: env,
          tools_enabled: bool = True,
          thinking_enabled: bool = True,
          internet_enabled: bool = False,
+         mcp_enabled: bool = False,
          docs_enabled: bool = True,
          on_progress: Callable | None = None,
          docs_query: str | None | sym = from_user_message,
@@ -463,6 +464,9 @@ def turn(llm_settings: env,
                         apps — a run with tools enabled performs *real* calls, and a probe that reaches the
                         network without having asked to is the more expensive mistake.
 
+    `mcp_enabled`: Whether the tools from external MCP servers are offered. **`False` by default**, likewise.
+                   They exist in `llm_settings` only inside `with mcpclient.connected(llm_settings):`.
+
     `docs_enabled`: Whether the documents are in play at all. `False` withdraws the document tools and
                     suppresses the automatic search whatever `docs_query` says.
 
@@ -566,6 +570,7 @@ def turn(llm_settings: env,
                                      thinking_enabled=thinking_enabled,
                                      use_character_card=use_character_card,
                                      internet_enabled=internet_enabled,
+                                     mcp_enabled=mcp_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,
                                      docs_query=docs_query,

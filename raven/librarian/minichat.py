@@ -67,6 +67,7 @@ with timer() as tim:
     from . import config as librarian_config
     from . import hybridir
     from . import llmclient
+    from . import mcpclient
     from . import scaffold
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 print()
@@ -93,6 +94,11 @@ _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
                                             subject="Internet access",
                                             gloss=" (web search and page fetching)",
                                             summary="Web search and page fetching"),
+                  "!mcp": _FlagCommand(flag="mcp_enabled",
+                                       subject="MCP tools",
+                                       gloss=" (tools from the MCP servers in the configuration)",
+                                       summary="MCP tools",
+                                       detail=f"; servers configured in '{librarian_config.mcp_config_file}'"),
                   "!docs": _FlagCommand(flag="docs_enabled",
                                         subject="Document database",
                                         gloss=" (retrieval-augmented generation, RAG)",
@@ -170,6 +176,16 @@ def minimal_chat_client(backend_url) -> None:
         llm_settings = llmclient.connect(backend_url=backend_url)
 
         print()
+
+        # Before the first turn, so that the tools are there for it. Only blocks if servers are configured.
+        mcp_client = mcpclient.MCPClient(llm_settings)
+        mcp_client.start()
+        atexit.register(mcp_client.shutdown)
+        if mcp_client.tool_names:
+            plural_s = "s" if len(mcp_client.tool_names) != 1 else ""
+            print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}MCP: {len(mcp_client.tool_names)} tool{plural_s} available.{colorizer.Style.RESET_ALL}")
+        for name, problem in mcp_client.problems.items():
+            print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}MCP: server '{name}': {problem}{colorizer.Style.RESET_ALL}")
 
         chat_show_model_info()
 
@@ -712,6 +728,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 head_node_id=app_state["HEAD"],
                                                 continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
                                                 internet_enabled=app_state["internet_enabled"],
+                                                mcp_enabled=app_state["mcp_enabled"],
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=(docs_query if app_state["autosearch_enabled"] else None),
                                                 write_docs_query=librarian_config.docs_query_written_by_model,

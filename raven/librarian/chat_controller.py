@@ -2285,7 +2285,8 @@ class DPGChatController:
         maybe_tool_names = llmclient.maybe_tool_names_for_turn(
             self.llm_settings,
             documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
-            internet_available=self.app_state["internet_enabled"])
+            internet_available=self.app_state["internet_enabled"],
+            mcp_available=self.app_state["mcp_enabled"])
         # SYSTEM means "the backend is reading a prompt and has emitted nothing yet" — that is what the turn
         # path uses it for (`on_llm_start` raises it, the first content chunk drops it). A prefill is the same
         # activity on a different trigger, so it says so too (Juha, 2026-08-25). Only around the request: the
@@ -3004,6 +3005,7 @@ class DPGChatController:
                                                             retriever=self.retriever,
                                                             head_node_id=self.app_state["HEAD"],
                                                             internet_enabled=self.app_state["internet_enabled"],
+                                                            mcp_enabled=self.app_state["mcp_enabled"],
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=(docs_query if self.app_state["autosearch_enabled"] else None),
@@ -3019,6 +3021,7 @@ class DPGChatController:
                                                                      retriever=self.retriever,
                                                                      tool_node_id=_retry_tool_node_id,
                                                                      internet_enabled=self.app_state["internet_enabled"],
+                                                                     mcp_enabled=self.app_state["mcp_enabled"],
                                                                      docs_enabled=self.app_state["docs_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,

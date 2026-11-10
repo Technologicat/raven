@@ -890,7 +890,8 @@ TOOL_ENTRYPOINTS = {"websearch": websearch,
 
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool,
-                              internet_available: bool) -> tuple[str, ...] | None:
+                              internet_available: bool,
+                              mcp_available: bool) -> tuple[str, ...] | None:
     """Which tools to offer on one AI turn, as a `tool_names` value for `invoke` (or `prefill`).
 
     Returns `None` when every registered tool is on offer. Note that `None` is the *permissive* value here,
@@ -912,7 +913,10 @@ def maybe_tool_names_for_turn(settings: env,
     `internet_available`: whether the network-reaching tools are in play this turn. Gates
                           `settings.network_tool_names`.
 
-    With both `False` the ungated tools are still on offer — `get_current_time` and `calculate` today — so
+    `mcp_available`: whether the tools from external MCP servers are in play this turn. Gates
+                     `settings.mcp_tool_names`, which `mcpclient` fills in.
+
+    With all of them `False` the ungated tools are still on offer — `get_current_time` and `calculate` today — so
     the result is that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
     `tools` field rather than sending one, since some backends reject an empty list.)
 
@@ -922,13 +926,15 @@ def maybe_tool_names_for_turn(settings: env,
     warms a different tool list warms a prefix the real turn never sends, so the full prompt is reprocessed
     anyway, and the warm-up has cost time to achieve nothing.
     """
-    if documents_available and internet_available:
-        return None
     withheld = set()
     if not documents_available:
         withheld |= set(settings.document_tool_names)
     if not internet_available:
         withheld |= set(settings.network_tool_names)
+    if not mcp_available:
+        withheld |= set(settings.mcp_tool_names)
+    if not withheld:
+        return None
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
 
 def offered_tools(settings: env,
