@@ -422,16 +422,9 @@ class TestRestart:
 
     def test_a_server_that_starts_on_the_second_try_offers_its_tools(self, tmp_path, settings, quick_restarts):
         flag = tmp_path / "tried_once"
-        script = (f"import pathlib, runpy, sys\n"
-                  f"flag = pathlib.Path({str(flag)!r})\n"
-                  f"if not flag.exists():\n"
-                  f"    flag.touch()\n"
-                  f"    sys.exit(3)\n"
-                  f"sys.argv = ['server', 'stdio']\n"
-                  f"runpy.run_path({_FIXTURE_SERVER!r}, run_name='__main__')\n")
         calls = []
-        config = _write_config(tmp_path / "mcp.json", {"late": {"command": sys.executable, "args": ["-c", script]}})
-        client = mcpclient.MCPClient(settings, config_file=config, on_tools_changed=lambda: calls.append(1))
+        config = _write_config(tmp_path / "mcp.json", {"late": {"command": sys.executable, "args": [_FIXTURE_SERVER, "fail-once", str(flag)]}})
+        client = mcpclient.MCPClient(settings, config_file=config, on_status_changed=lambda: calls.append(1))
         client.start()
         try:
             assert "late" in client.problems, "the first attempt succeeded, so this fixture cannot tell a retry from a first start"
@@ -442,6 +435,53 @@ class TestRestart:
             assert client.problems == {}
         finally:
             client.shutdown()
+
+
+class TestRetryStopped:
+    @pytest.fixture
+    def stopped(self, tmp_path, settings, monkeypatch):
+        """A server that was left stopped because a file it needs is missing, and that file's path."""
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_restart_delay", 0.05)
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_max_restarts", 1)
+        flag = tmp_path / "ready"
+        config = _write_config(tmp_path / "mcp.json", {"flaky": {"command": sys.executable, "args": [_FIXTURE_SERVER, "fail-unless-exists", str(flag)]},
+                                                       "steady": _stdio_entry()})
+        status_calls = []
+        client = mcpclient.MCPClient(settings, config_file=config, on_status_changed=lambda: status_calls.append(1))
+        client.start()
+        assert TestLiveReload._wait_until(lambda: client.stopped_servers == ["flaky"])
+        yield client, flag, status_calls
+        client.shutdown()
+
+    def test_giving_up_is_reported(self, stopped):
+        _client, _flag, status_calls = stopped
+        assert status_calls
+
+    def test_a_server_whose_problem_was_solved_comes_back(self, stopped, settings):
+        client, flag, _status_calls = stopped
+        flag.touch()
+        client.retry_stopped()
+        assert TestLiveReload._wait_until(lambda: "flaky__echo" in client.tool_names)
+        assert _call(settings, "flaky__echo", text="back")[0] == "back"
+        assert client.stopped_servers == []
+        assert client.problems == {}
+
+    def test_a_server_still_broken_is_left_stopped_again(self, stopped):
+        client, _flag, _status_calls = stopped
+        before = client._servers[0]
+        client.retry_stopped()
+        assert TestLiveReload._wait_until(lambda: client._servers[-1] is not before and client.stopped_servers == ["flaky"])
+
+    def test_a_running_server_is_left_alone(self, stopped, settings):
+        client, flag, _status_calls = stopped
+        pid = _call(settings, "steady__pid")[0]
+        flag.touch()
+        client.retry_stopped()
+        assert TestLiveReload._wait_until(lambda: "flaky__echo" in client.tool_names), "the retry did not happen, so this fixture cannot tell a kept server from an untouched one"
+        assert _call(settings, "steady__pid")[0] == pid
+
+    def test_before_start_it_does_nothing(self, tmp_path, settings):
+        mcpclient.MCPClient(settings, config_file=tmp_path / "nope.json").retry_stopped()
 
 
 class TestLiveReload:
@@ -517,15 +557,18 @@ class TestLiveReload:
         assert self._wait_until(lambda: "" in client.problems)
         assert _call(settings, "one__echo", text="still here")[0] == "still here"
 
-    def test_on_tools_changed_is_called(self, tmp_path, settings, quick_polls):
+    def test_the_handlers_are_told_of_a_reload(self, tmp_path, settings, quick_polls):
         config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
-        calls = []
-        client = mcpclient.MCPClient(settings, config_file=config, on_tools_changed=lambda: calls.append(1))
+        status_calls, reload_calls = [], []
+        client = mcpclient.MCPClient(settings, config_file=config,
+                                     on_status_changed=lambda: status_calls.append(1),
+                                     on_reloaded=lambda: reload_calls.append(1))
         client.start(watch=True)
         try:
-            assert len(calls) == 1
+            assert status_calls and not reload_calls
             _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})
-            assert self._wait_until(lambda: len(calls) == 2)
+            assert self._wait_until(lambda: len(reload_calls) == 1)
+            assert "two__echo" in client.tool_names
         finally:
             client.shutdown()
 

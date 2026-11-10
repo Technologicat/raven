@@ -3677,6 +3677,26 @@ class TestContinuingAMessageKeepsWhatItAlreadySaid:
         assert text == "The seasons: \nUser: name them then", text
 
 
+class TestToolCost:
+    @pytest.fixture
+    def settings(self):
+        return llmclient.configure(model_info=env(label="m", model_id="m", context_length=4096, is_vlm=False, loaded=True),
+                                   backend_flavor="generic", backend_url="http://x", quiet=True)
+
+    def test_no_tools_cost_nothing(self, settings):
+        assert llmclient.count_tools_tokens(settings, []) == (0, True)
+
+    def test_the_groups_are_counted_separately(self, settings):
+        costs = llmclient.tool_cost_by_group(settings)
+        assert costs["documents"] > 0 and costs["internet"] > 0
+        assert costs["documents"] != costs["internet"], "the same figure twice suggests the groups are not being told apart"
+        assert costs["mcp"] == 0
+
+    def test_the_groups_add_up_to_no_more_than_all_the_tools(self, settings):
+        everything = llmclient.count_tools_tokens(settings, settings.tools)[0]
+        assert sum(llmclient.tool_cost_by_group(settings).values()) <= everything
+
+
 class TestPromptReloader:
     @pytest.fixture
     def settings(self, tmp_path, monkeypatch):

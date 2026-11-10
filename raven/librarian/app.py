@@ -449,11 +449,20 @@ print()
 
 # In the background: a server launched through `npx` may have to be downloaded first, and the app is useful
 # before its tools arrive.
-def _refresh_mcp_checkbox() -> None:
-    """Make the MCP toggle available exactly when there is a configuration for it to govern."""
-    if dpg.does_item_exist("mcp_enabled_checkbox") and not guiutils.is_shutting_down():  # tag
-        dpg.configure_item("mcp_enabled_checkbox", enabled=librarian_config.mcp_config_file.exists())  # tag
-mcp_client = mcpclient.MCPClient(llm_settings, on_tools_changed=_refresh_mcp_checkbox)
+def _refresh_mcp_status() -> None:
+    """Bring the GUI up to date with the MCP client: the toggle, the retry pill and the tools' token costs."""
+    if not dpg.does_item_exist("mcp_status_pill") or guiutils.is_shutting_down():  # tag
+        return  # the GUI is not built yet, and `_finish_startup` calls this once it is; or it is going away
+    dpg.configure_item("mcp_enabled_checkbox", enabled=librarian_config.mcp_config_file.exists())  # tag
+    _refresh_mcp_status_pill()
+    _refresh_tool_cost_tooltips()
+    chat_controller.update_context_fill_indicator()  # the tools on offer may be different now
+
+def _announce_mcp_reload() -> None:
+    n_tools = len(mcp_client.tool_names)
+    _show_composer_notice(f"MCP servers reloaded: {n_tools} tool{common_text.plural_s(n_tools)}.")
+
+mcp_client = mcpclient.MCPClient(llm_settings, on_status_changed=_refresh_mcp_status, on_reloaded=_announce_mcp_reload)
 mcp_task_manager = bgtask.TaskManager(name="librarian_mcp_start",
                                       mode="sequential",
                                       executor=bg)
@@ -614,6 +623,7 @@ def _decode_staged_thumbnail(raw: bytes) -> tuple[str, int, int]:
 _BACKEND_POLL_INTERVAL_S = 3.0
 # How long the row stays up to announce a connection before it goes away.
 _BACKEND_CONNECTED_LINGER_S = 4.0
+_COMPOSER_NOTICE_LINGER_S = 6.0
 # Slice length for the two waits above. They are waited out in slices so that closing the window does not
 # have to sit through a whole interval first.
 _BACKEND_POLL_TICK_S = 0.1
@@ -654,6 +664,54 @@ def _describe_backend_status(status: sym) -> tuple[str, str, str]:
     return (fa.ICON_PLUG_CIRCLE_CHECK,
             f"LLM backend connected{model_suffix}",
             f"{headline}\n\nClick to check again.")
+
+_mcp_pill_shown = False  # likewise, for the pill offering to retry stopped MCP servers
+_composer_notice_shown = False  # likewise, for the transient notice in the same row
+
+def _refresh_mcp_status_pill() -> None:
+    """Show the pill offering to retry the MCP servers that were left stopped, or hide it if there are none."""
+    global _mcp_pill_shown
+    stopped = mcp_client.stopped_servers
+    if stopped:
+        plural_s = common_text.plural_s(len(stopped))
+        dpg.configure_item("mcp_status_button", label=f"MCP: {len(stopped)} server{plural_s} stopped. Click to try again.")  # tag
+        problems = mcp_client.problems
+        mcp_status_tooltip.text = "\n".join(f"{name}: {problems.get(name, 'stopped')}" for name in stopped)
+    _mcp_pill_shown = bool(stopped)
+    _refresh_composer_layout()
+
+composer_notice_task_manager = bgtask.TaskManager(name="librarian_composer_notice",
+                                                  mode="sequential",
+                                                  executor=bg)
+
+def _show_composer_notice(text: str) -> None:
+    """Show `text` for a few seconds in the status row above the composer."""
+    global _composer_notice_shown
+    if guiutils.is_shutting_down():
+        return
+    dpg.set_value("composer_notice_text", text)  # tag
+    _composer_notice_shown = True
+    _refresh_composer_layout()
+    def linger(task_env: env) -> None:
+        global _composer_notice_shown
+        deadline = time.monotonic() + _COMPOSER_NOTICE_LINGER_S
+        while time.monotonic() < deadline:
+            if task_env.cancelled or guiutils.is_shutting_down():
+                return  # a newer notice owns the row now, or the app is going away
+            time.sleep(_BACKEND_POLL_TICK_S)
+        _composer_notice_shown = False
+        _refresh_composer_layout()
+    composer_notice_task_manager.submit(linger, env())
+
+def _refresh_tool_cost_tooltips() -> None:
+    """Say in each toggle's tooltip how much of the context window that group of tools takes up."""
+    costs = llmclient.tool_cost_by_group(llm_settings)
+    for group, text_widget in (("internet", "internet_tool_cost_text"),  # tag
+                               ("mcp", "mcp_tool_cost_text"),  # tag
+                               ("documents", "documents_tool_cost_text")):  # tag
+        n_tokens = costs[group]
+        dpg.set_value(text_widget, f"\nAbout {n_tokens} token{common_text.plural_s(n_tokens)} of context.")
+        dpg.configure_item(text_widget, show=(n_tokens > 0))
 
 def _refresh_backend_status_pill(status: sym) -> None:
     """Put `status` into the composer's status row, and show the row."""
@@ -905,8 +963,8 @@ def _request_backend_reconnect() -> None:
 def _refresh_composer_layout() -> None:
     """Show or hide the composer's two optional rows, and give the text field the height they leave.
 
-    The rows are the backend-status pill (above the field) and the staged-attachments strip (below it,
-    shared by staged images and staged documents). The composer's outer height (`chat_controls_h`) is fixed,
+    The rows are the status row (above the field: the backend pill, the MCP pill and the transient notice,
+    side by side) and the staged-attachments strip (below it, shared by staged images and staged documents). The composer's outer height (`chat_controls_h`) is fixed,
     so a row that appears takes its height from the text field rather than adding to the composer — the chat
     and avatar panels never jump.
 
@@ -916,11 +974,15 @@ def _refresh_composer_layout() -> None:
     """
     attachments_shown = bool(staged_images or staged_files)
     field_h = gui_config.chat_field_h
-    if _backend_pill_shown:
-        dpg.show_item("backend_status_pill")  # tag
+    for flag, widget in ((_backend_pill_shown, "backend_status_pill"),  # tag
+                         (_mcp_pill_shown, "mcp_status_pill"),  # tag
+                         (_composer_notice_shown, "composer_notice_text")):  # tag
+        dpg.configure_item(widget, show=flag)
+    if _backend_pill_shown or _mcp_pill_shown or _composer_notice_shown:
+        dpg.show_item("composer_status_row")  # tag
         field_h -= gui_config.chat_backend_pill_h
     else:
-        dpg.hide_item("backend_status_pill")  # tag
+        dpg.hide_item("composer_status_row")  # tag
     if attachments_shown:
         dpg.show_item("chat_attachments_strip")  # tag
         field_h -= gui_config.chat_attachments_h
@@ -1596,16 +1658,30 @@ with timer() as tim:
                         # an item's label in one font, and the app font has no warning glyph (the same
                         # constraint that decides the jump-to-latest pill's font — see `chat_controller`).
                         # An icon that reads at a glance is worth more than those pixels.
-                        with dpg.group(tag="backend_status_pill", horizontal=True, show=False):  # tag
-                            dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="backend_status_icon")  # tag
-                            dpg.bind_item_font("backend_status_icon", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.add_button(label="",
-                                           callback=lambda: _request_backend_reconnect(),
-                                           tag="backend_status_button")  # tag
-                            # Self-sizing, because this caption is rewritten on every status change and
-                            # again by the click flash — and a `dpg.tooltip` is drawn once at its previous
-                            # size each time that happens.
-                            backend_status_tooltip = gui_tooltip.Tooltip("backend_status_button", "")  # tag
+                        with dpg.group(tag="composer_status_row", horizontal=True, show=False):
+                            with dpg.group(tag="backend_status_pill", horizontal=True, show=False):
+                                dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="backend_status_icon")
+                                dpg.bind_item_font("backend_status_icon", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.add_button(label="",
+                                               callback=lambda: _request_backend_reconnect(),
+                                               tag="backend_status_button")
+                                # Self-sizing, because this caption is rewritten on every status change and
+                                # again by the click flash — and a `dpg.tooltip` is drawn once at its previous
+                                # size each time that happens.
+                                backend_status_tooltip = gui_tooltip.Tooltip("backend_status_button", "")  # tag
+
+                            with dpg.group(tag="mcp_status_pill", horizontal=True, show=False):
+                                dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="mcp_status_icon")
+                                dpg.bind_item_font("mcp_status_icon", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("mcp_status_icon", "my_pulsating_caution_backend_theme")  # tag
+                                dpg.add_button(label="",
+                                               callback=lambda: mcp_client.retry_stopped(),
+                                               tag="mcp_status_button")
+                                dpg.bind_item_theme("mcp_status_button", "my_steady_caution_backend_theme")  # tag
+                                mcp_status_tooltip = gui_tooltip.Tooltip("mcp_status_button", "")  # tag
+
+                            dpg.add_text("", tag="composer_notice_text", show=False)
+                            dpg.bind_item_theme("composer_notice_text", "my_steady_green_backend_theme")  # tag
 
                         def send_message_to_ai_callback() -> None:
                             # Grab and strip the message. The trailing newline the multiline widget inserts on the
@@ -1967,11 +2043,14 @@ with timer() as tim:
                     with dpg.group(horizontal=True):
                         def toggle_internet_enabled():
                             app_state["internet_enabled"] = not app_state["internet_enabled"]
+                            chat_controller.update_context_fill_indicator()  # the tools on offer changed
                         def toggle_mcp_enabled():
                             app_state["mcp_enabled"] = not app_state["mcp_enabled"]
+                            chat_controller.update_context_fill_indicator()  # the tools on offer changed
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                             dpg.configure_item("autosearch_enabled_checkbox", enabled=app_state["docs_enabled"])  # tag
+                            chat_controller.update_context_fill_indicator()  # the tools on offer changed
                         def toggle_autosearch_enabled():
                             app_state["autosearch_enabled"] = not app_state["autosearch_enabled"]
                         def toggle_speech_enabled():
@@ -1994,16 +2073,19 @@ with timer() as tim:
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
                         dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nApart from any MCP servers you have set up (see next toggle), this is the\nonly switch that sends anything to a site the AI picked, so it is the one\nto turn off when the conversation should stay between you and\nthe machines you run. Your messages always go to the LLM backend you\nconfigured, and searching your documents may reach the Raven-server you\nconfigured; either of those can sit elsewhere on your network. Both are\nset in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle), do arithmetic, and ask what time it is.", parent="internet_enabled_tooltip")  # tag
+                        dpg.add_text("", tag="internet_tool_cost_text", parent="internet_enabled_tooltip", show=False)
 
                         dpg.add_checkbox(label="MCP", default_value=app_state["mcp_enabled"], callback=toggle_mcp_enabled,
                                          enabled=librarian_config.mcp_config_file.exists(), tag="mcp_enabled_checkbox")
                         dpg.bind_item_theme("mcp_enabled_checkbox", "disablable_widget_theme")  # tag
                         dpg.add_tooltip("mcp_enabled_checkbox", tag="mcp_enabled_tooltip")  # tag
                         dpg.add_text(f"Let the AI use the tools offered by the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nTo use this, create the following file, listing your servers:\n{librarian_config.mcp_config_file}\n\nSee the Librarian README, section MCP servers, for an example.\n\nChanges to the file are picked up live, and take effect at the AI's\nnext turn.", parent="mcp_enabled_tooltip")  # tag
+                        dpg.add_text("", tag="mcp_tool_cost_text", parent="mcp_enabled_tooltip", show=False)
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Let the AI search and read your document database. [Alt+D]\n\nWith this off, the document tools are not offered at all, and\nAuto-search is not in effect.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].", parent="docs_enabled_tooltip")  # tag
+                        dpg.add_text("", tag="documents_tool_cost_text", parent="docs_enabled_tooltip", show=False)
 
                         dpg.add_checkbox(label="Auto-search", default_value=app_state["autosearch_enabled"], callback=toggle_autosearch_enabled,
                                          enabled=app_state["docs_enabled"], tag="autosearch_enabled_checkbox")
@@ -3650,6 +3732,7 @@ def _gui_cancel_tasks() -> None:
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
     prompt_reload_task_manager.clear(wait=False)  # stop watching the prompt files (it writes to the datastore)
+    composer_notice_task_manager.clear(wait=False)  # take down any notice (it resizes the composer)
     panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
     server_status_task_manager.clear(wait=False)  # stop watching Raven-server (it writes into the utility panel's row)
     stop_autosave(wait=False)  # stop saving periodically; the saves at exit take over
@@ -3693,6 +3776,7 @@ def _gui_release() -> None:
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)
     prompt_reload_task_manager.clear(wait=True)
+    composer_notice_task_manager.clear(wait=True)
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
     # Before the animator is cleared, since the dialog cancels its cursor pulsation through it — and well
@@ -3919,6 +4003,7 @@ def _prompt_reload_task(task_env: env) -> None:
         time.sleep(librarian_config.prompt_files_poll_interval)
         if reload_if_changed():
             appstate.refresh_new_chat_nodes(llm_settings, datastore, app_state)
+            _show_composer_notice("Prompts updated. New chats will use them.")
 
 def _start_panel_occupancy_watch() -> None:
     """Start watching who should hold the avatar's panel. Supersedes a watch already running."""
@@ -3954,6 +4039,7 @@ def _finish_startup(sender, app_data) -> None:
     # Raven-server was reachable at startup or the app would have exited, so the watch starts believing that
     # and waits an interval before its first probe.
     _start_server_status_poll(delay_first_probe=True)
+    _refresh_mcp_status()  # for what the servers did before the GUI existed
     prompt_reload_task_manager.submit(_prompt_reload_task, env())
 
     # The blue that says where the keyboard is, on the composer and on the search field. A *caret* follower,

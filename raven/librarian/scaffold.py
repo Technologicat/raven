@@ -958,7 +958,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
         # for a reason worth stating: by round three the model's own reasoning and the earlier rounds' results
         # are in the branch, so a figure taken at turn start would claim room that has since been spent.
         # Skipped when refusing, because it walks the whole branch to serve entrypoints that will not run.
-        tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0]
+        tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0] + getattr(tool_context, "offered_tools_tokens", 0)
 
     # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
     with dyn.let(tool_context=tool_context):
@@ -1340,6 +1340,11 @@ def ai_turn(llm_settings: env,
                                                            documents_available=documents_available,
                                                            internet_available=internet_enabled,
                                                            mcp_available=mcp_enabled)
+    # They sit in the context window too, so a tool fitting a document into what is left has to know about them.
+    tool_context.offered_tools_tokens = llmclient.count_tools_tokens(llm_settings,
+                                                                     llmclient.offered_tools(llm_settings,
+                                                                                             tools_enabled=tools_enabled,
+                                                                                             tool_names=maybe_tool_names))[0]
     # `None` means every tool, so an empty tuple is the only "nothing on offer" case. There is none today —
     # `get_current_time` answers to neither switch — but the budget machinery below asks "are there tools at
     # all", and asking the list is the answer that stays true if the ungated group ever empties.

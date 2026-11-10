@@ -1,9 +1,16 @@
 """An MCP server for `test_mcpclient`, run as a subprocess so that the tests exercise a real transport.
 
 Usage: `python mcp_fixture_server.py stdio`, or `python mcp_fixture_server.py http PORT`.
+
+To fail deterministically, whether under test or while trying out a frontend by hand:
+
+`python mcp_fixture_server.py fail-unless-exists PATH`: exit at once, until the file at PATH exists; then serve over stdio.
+
+`python mcp_fixture_server.py fail-once PATH`: on the first run create the file at PATH and exit; then serve over stdio.
 """
 
 import os
+import pathlib
 import sys
 import time
 
@@ -65,7 +72,15 @@ def request_header(name: str, ctx: Context) -> str:
     return ctx.request_context.request.headers.get(name, "<unset>")
 
 if __name__ == "__main__":
-    if sys.argv[1] == "http":
+    if sys.argv[1] in ("fail-unless-exists", "fail-once"):
+        flag = pathlib.Path(sys.argv[2])
+        if not flag.exists():
+            print(f"mcp_fixture_server: failing on purpose, as '{flag}' does not exist", file=sys.stderr, flush=True)
+            if sys.argv[1] == "fail-once":
+                flag.touch()
+            sys.exit(3)
+        server.run("stdio")
+    elif sys.argv[1] == "http":
         server.run("streamable-http", host="127.0.0.1", port=int(sys.argv[2]))
     else:
         server.run("stdio")

@@ -538,7 +538,9 @@ The **MCP** toggle (`Alt+M`) switches all of their tools on or off. In the chat 
 
 **List only the tools you want, even from a server you trust.** The descriptions of every offered tool sit at the front of the prompt for the whole session, and a server publishing many large ones can take a substantial part of the context window, which is then not available for your documents and conversation. Servers commonly publish far more than any one use needs.
 
-Changes to `mcp.json` are picked up while the app runs; a server whose entry did not change keeps running. A server that dies or cannot be started is tried again, and one that keeps failing is left stopped until the app restarts or the file changes.
+Changes to `mcp.json` are picked up while the app runs; a server whose entry did not change keeps running. A server that dies or cannot be started is tried again, and one that keeps failing is left stopped. A pill above the message field then offers to try it again; changing the file does too.
+
+Each toggle's tooltip says about how many tokens of context its tools take up, and the context readout at the bottom includes them.
 
 From a script, tools are available inside a `with mcpclient.connected(llm_settings):` block, and `agent.turn` offers them when given `mcp_enabled=True`.
 

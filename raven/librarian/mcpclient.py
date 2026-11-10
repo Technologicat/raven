@@ -287,6 +287,7 @@ class _Server:
         self.connected_this_attempt = False
         self.restarting = False
         self.stopping = False
+        self.left_stopped = False
         self.deaths: list[float] = []  # `time.monotonic` of each failed run; see `MCPClient._run_server`
 
 class MCPClient:
@@ -299,17 +300,21 @@ class MCPClient:
 
     `config_file`: the `mcp.json` to read. Default is `librarian_config.mcp_config_file`.
 
-    `on_tools_changed`: 0-argument callable, called on a background thread after the set of tools may have
-                        changed: at the end of `start`, when a server has been restarted, and on a live reload.
+    `on_status_changed`: 0-argument callable, called on a background thread when `tool_names`, `problems` or
+                         `stopped_servers` may have changed.
+
+    `on_reloaded`: 0-argument callable, called on a background thread after following a change to the config file.
     """
     def __init__(self,
                  settings: env,
                  *,
                  config_file: str | pathlib.Path | None = None,
-                 on_tools_changed: Callable[[], None] | None = None) -> None:
+                 on_status_changed: Callable[[], None] | None = None,
+                 on_reloaded: Callable[[], None] | None = None) -> None:
         self.settings = settings
         self.config_file = pathlib.Path(config_file if config_file is not None else librarian_config.mcp_config_file)
-        self.on_tools_changed = on_tools_changed
+        self.on_status_changed = on_status_changed
+        self.on_reloaded = on_reloaded
         self._maybe_bridge: AsyncBridge | None = None
         self._maybe_watcher: asyncio.Task | None = None
         self._servers: list[_Server] = []
@@ -326,6 +331,11 @@ class MCPClient:
         return dict(self._problems)
     problems = property(fget=_get_problems, doc="What went wrong, by server name: a bad entry, or a server that did not start or keeps dying. "
                                                 "A problem with the file as a whole is under the key `\"\"`.")
+
+    def _get_stopped_servers(self) -> list[str]:
+        """The servers that failed too often, in configuration order."""
+        return [server.config.name for server in self._servers if server.left_stopped]
+    stopped_servers = property(fget=_get_stopped_servers, doc="The names of the servers left stopped after failing too often. `retry_stopped` tries them again.")
 
     def report_to_console(self) -> None:
         """Print how the start went, for a frontend with a terminal. Prints nothing if no servers are configured."""
@@ -406,10 +416,12 @@ class MCPClient:
                 if n_deaths > librarian_config.mcp_max_restarts:
                     plural_s = "s" if n_deaths != 1 else ""
                     server.restarting = False
+                    server.left_stopped = True
                     server.maybe_failure = (f"stopped {n_deaths} time{plural_s} within {librarian_config.mcp_restart_window:g} seconds, "
                                             "so it was left stopped for the rest of this session")
                     self._problems[name] = server.maybe_failure
                     logger.error(f"MCPClient: server '{name}': {server.maybe_failure}.")
+                    self._call_handler(self.on_status_changed)
                     return
                 server.restarting = True
                 happened = "the connection was lost" if server.connected_this_attempt else "it could not be started"
@@ -535,11 +547,16 @@ class MCPClient:
                 entrypoints[public_name] = self._make_entrypoint(server, tool.name)
                 tool_servers[public_name] = server.config.name
         self._install(specs, entrypoints, tool_servers)
-        if self.on_tools_changed is not None:
-            try:
-                self.on_tools_changed()
-            except Exception as exc:  # noqa: BLE001 -- a frontend's handler must not stop the servers
-                logger.warning(f"MCPClient: ignoring exception from `on_tools_changed`: {_describe_exception(exc)}")
+        self._call_handler(self.on_status_changed)
+
+    @staticmethod
+    def _call_handler(maybe_handler: Callable[[], None] | None) -> None:
+        if maybe_handler is None:
+            return
+        try:
+            maybe_handler()
+        except Exception as exc:  # noqa: BLE001 -- a frontend's handler must not stop the servers
+            logger.warning(f"MCPClient: ignoring exception from an event handler: {_describe_exception(exc)}")
 
     def _install(self, specs: list[dict[str, Any]], entrypoints: dict[str, Callable], tool_servers: dict[str, str]) -> None:
         """Replace the MCP tools in the settings with these.
@@ -611,10 +628,31 @@ class MCPClient:
             current = self._config_signature()
             if current != signature:
                 signature = current
-                await self._reload()
+                try:
+                    logger.info(f"MCPClient: '{self.config_file}' changed; reloading the MCP servers.")
+                    if await self._sync_with_config():
+                        self._call_handler(self.on_reloaded)
+                except Exception:  # noqa: BLE001 -- the next change to the file gets another try
+                    logger.exception("MCPClient: reloading the MCP servers failed")
 
-    async def _reload(self) -> None:
-        """Bring the servers in line with the config file.
+    def retry_stopped(self) -> None:
+        """Try the servers that were left stopped again, in the background, with a fresh allowance of retries.
+
+        Does nothing before `start` or after `shutdown`. `on_status_changed` reports the outcome.
+        """
+        async def retry() -> None:
+            try:
+                logger.info("MCPClient.retry_stopped: trying the stopped MCP servers again.")
+                await self._sync_with_config()
+            except Exception:  # noqa: BLE001 -- runs detached, so nothing else would hear of it
+                logger.exception("MCPClient.retry_stopped: failed")
+        bridge = self._maybe_bridge
+        if bridge is not None:
+            with contextlib.suppress(RuntimeError):  # the bridge has been shut down, and the question with it
+                bridge.spawn(retry())
+
+    async def _sync_with_config(self) -> bool:
+        """Bring the servers in line with the config file. Returns whether the file could be used.
 
         A server whose entry did not change, and which is running, is left alone. An unreadable file is
         reported and otherwise ignored: an editor's half-finished save should not stop everything.
@@ -622,9 +660,9 @@ class MCPClient:
         configs, problems = load_config(self.config_file)
         if "" in problems:
             self._problems[""] = problems[""]
-            logger.error(f"MCPClient: the config file changed, and cannot be used; keeping the servers as they are. {problems['']}")
-            return
-        logger.info(f"MCPClient: '{self.config_file}' changed; reloading the MCP servers.")
+            logger.error(f"MCPClient: the config file cannot be used; keeping the servers as they are. {problems['']}")
+            self._call_handler(self.on_status_changed)
+            return False
         for name, problem in problems.items():
             logger.error(f"MCPClient: server '{name}': {problem}")
 
@@ -637,8 +675,10 @@ class MCPClient:
         started = [_Server(config) for name, config in wanted.items() if name not in kept_names]
         self._servers = kept + started
         self._problems = problems
+        self._call_handler(self.on_status_changed)
         await self._connect_servers(started, librarian_config.mcp_connect_timeout)
         self._refresh_tools()
+        return True
 
     # ----------------------------------------
     # Calling a tool

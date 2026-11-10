@@ -522,6 +522,23 @@ class TestThinkingRetentionMismatch:
         warnings = [r.message for r in caplog.records if "llm_retain_thinking" in r.message]
         assert len(warnings) == 1, "the setting is named once per session, not at every prefill"
 
+    def test_the_estimate_on_screen_includes_the_tools(self, llm_settings, monkeypatch):
+        from raven.librarian import llmclient
+        controller, task_env, _reported = self._controller(llm_settings, monkeypatch, "strips")
+        branch = llmclient.count_branch_tokens(llm_settings, controller.datastore, task_env.head_node_id)[0]
+        tools = llmclient.count_tools_tokens(llm_settings, llmclient.offered_tools(llm_settings, tool_names=controller._maybe_tool_names_for_next_turn()))[0]
+        assert tools > 0, "no tools are on offer, so this fixture cannot tell a counted tool from an ignored one"
+        controller._context_prefill_entrypoint(task_env)
+        assert controller.rendered[0] == branch + tools
+
+    def test_the_new_chat_state_does_not_ask_the_backend(self, llm_settings, monkeypatch):
+        from raven.librarian import chatutil, llmclient
+        controller, task_env, _reported = self._controller(llm_settings, monkeypatch, "keeps")
+        monkeypatch.setattr(chatutil, "linearize_chat", lambda datastore, node_id: [{"role": "system", "content": []}])
+        monkeypatch.setattr(llmclient, "prefill", lambda *args, **kwargs: pytest.fail("asked the backend with no user message"))
+        controller._context_prefill_entrypoint(task_env)
+        assert len(controller.rendered) == 1, "the estimate still goes on screen"
+
     def test_a_keeping_template_says_nothing(self, llm_settings, monkeypatch, caplog):
         controller, task_env, reported = self._controller(llm_settings, monkeypatch, "keeps")
         with caplog.at_level("WARNING", logger="raven.librarian.chat_controller"):

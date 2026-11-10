@@ -2181,10 +2181,22 @@ class DPGChatController:
             # is approximate while it is wrong, where the freeze reads as the app having crashed.
             count, is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, self.app_state["HEAD"],
                                                             extract_attachments=False)
-            self._render_context_fill(count, is_exact)
+            self._render_context_fill(count + self._offered_tools_tokens(), is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
             logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")
         self._schedule_context_prefill()
+
+    def _maybe_tool_names_for_next_turn(self) -> tuple[str, ...] | None:
+        """Which tools the next turn will offer, as `llmclient.maybe_tool_names_for_turn` says given the switches."""
+        return llmclient.maybe_tool_names_for_turn(self.llm_settings,
+                                                   documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
+                                                   internet_available=self.app_state["internet_enabled"],
+                                                   mcp_available=self.app_state["mcp_enabled"])
+
+    def _offered_tools_tokens(self) -> int:
+        """How much of the context window the tools on offer take up. Not part of the stored messages."""
+        return llmclient.count_tools_tokens(self.llm_settings,
+                                            llmclient.offered_tools(self.llm_settings, tool_names=self._maybe_tool_names_for_next_turn()))[0]
 
     def _schedule_context_prefill(self) -> None:
         """(Re)arm the debounced background context-prefill for the current HEAD.
@@ -2277,16 +2289,17 @@ class DPGChatController:
             return
         if self.app_state["HEAD"] != task_env.head_node_id:  # HEAD moved while we were reading the attachments
             return
-        self._render_context_fill(estimate, estimate_is_exact)
+        tools_tokens = self._offered_tools_tokens()
+        self._render_context_fill(estimate + tools_tokens, estimate_is_exact)
+
+        # In the new-chat state there is no user message yet, and strict chat templates refuse such a prompt.
+        if not any(message["role"] == "user" for message in history):
+            return
 
         # The tool settings must match what the next turn will send, so the tool definitions are counted and
         # cached identically. They sit in the system block at the very front of the prompt, so warming a
         # different list warms a prefix that turn never sends — the whole prompt gets reprocessed anyway.
-        maybe_tool_names = llmclient.maybe_tool_names_for_turn(
-            self.llm_settings,
-            documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
-            internet_available=self.app_state["internet_enabled"],
-            mcp_available=self.app_state["mcp_enabled"])
+        maybe_tool_names = self._maybe_tool_names_for_next_turn()
         # SYSTEM means "the backend is reading a prompt and has emitted nothing yet" — that is what the turn
         # path uses it for (`on_llm_start` raises it, the first content chunk drops it). A prefill is the same
         # activity on a different trigger, so it says so too (Juha, 2026-08-25). Only around the request: the
@@ -2339,14 +2352,15 @@ class DPGChatController:
         maybe_tokenizer = self.llm_settings.tokenizer
         prefix_estimate = (llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index])[0]
                            if cut_index >= 0 else 0)
-        believed = llmclient.prompt_size_report_looks_whole(reported, prefix_estimate)
+        # What the backend reports includes the tool definitions, so what it is compared with has to as well.
+        believed = llmclient.prompt_size_report_looks_whole(reported, prefix_estimate + tools_tokens)
         # With retention on, the estimate counts every earlier thinking trace, so a template that strips them
         # makes the backend's correct figure look short - short enough, in a chat heavy with thinking, to be
         # refused above as LM Studio's short-count glitch. The figure itself says which it is.
         if self.llm_settings.retain_thinking and cut_index >= 0:
             prefix_without_traces = llmclient.count_branch_tokens(self.llm_settings, self.datastore, node_ids[cut_index],
                                                                   retain_thinking=False)[0]
-            if llmclient.template_strips_thinking(reported, prefix_estimate, prefix_without_traces):
+            if llmclient.template_strips_thinking(reported, prefix_estimate + tools_tokens, prefix_without_traces + tools_tokens):
                 believed = True
                 if not self.retention_mismatch_warned:
                     self.retention_mismatch_warned = True

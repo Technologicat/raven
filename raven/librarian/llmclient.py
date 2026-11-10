@@ -30,7 +30,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            "make_prompt_reloader", "configure",
 
            # Counting what a prompt costs
-           "count_tokens",
+           "count_tokens", "count_tools_tokens", "tool_cost_by_group",
            "image_token_cost",
            "keeps_reasoning",  # which stored thinking traces a prompt carries
            "count_branch_tokens",
@@ -65,6 +65,7 @@ import requests
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from typing import Any, Callable, Collection
 
 import sseclient  # pip install sseclient-py
@@ -1335,6 +1336,24 @@ def count_tokens(settings: env, text: str) -> tuple[int, bool]:
         return _ooba_token_count(settings.backend_url, text), True
     return round(len(text) * settings.tokens_per_character), False
 
+def count_tools_tokens(settings: env, specs: Sequence[dict]) -> tuple[int, bool]:
+    """Count the tokens the tool specifications `specs` take up. Returns `(count, is_exact)`.
+
+    Always a close estimate, whatever `is_exact` says about the tokenizer: this counts the specifications'
+    JSON, and the model's chat template renders them in its own way.
+    """
+    if not specs:
+        return 0, True
+    return count_tokens(settings, json.dumps(specs, ensure_ascii=False))
+
+def tool_cost_by_group(settings: env) -> dict[str, int]:
+    """How many tokens each switchable group of tools costs. Keys are `"documents"`, `"internet"` and `"mcp"`."""
+    groups = {"documents": settings.document_tool_names,
+              "internet": settings.network_tool_names,
+              "mcp": settings.mcp_tool_servers}
+    return {group: count_tools_tokens(settings, [spec for spec in settings.tools if spec["function"]["name"] in names])[0]
+            for group, names in groups.items()}
+
 def image_token_cost(settings: env, height: int, width: int) -> int:
     """Estimated token cost of one attached image for the loaded model — for the context-fill budget.
 
@@ -1382,8 +1401,9 @@ def count_branch_tokens(settings: env,
     """Estimate the token size of the conversation ending at `head_node_id`. Returns `(count, is_exact)`.
 
     Counts the *visible conversation content* — every message from the root down to `head_node_id`. It
-    therefore under-reports the real prompt slightly: the system prompt's framing, the per-turn injects and
-    the tool definitions all add tokens that are not in the stored messages. For the backend's own exact
+    therefore under-reports the real prompt: the system prompt's framing and the per-turn injects add tokens
+    that are not in the stored messages, as do the tool definitions, which a caller wanting them adds with
+    `count_tools_tokens`. For the backend's own exact
     figure, submit the prompt and read `usage["prompt_tokens"]`; that is what `prefill` is for.
 
     Thinking traces are counted where the prompt carries them (`keeps_reasoning`). That is an assumption
