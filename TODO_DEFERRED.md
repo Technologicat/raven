@@ -2408,11 +2408,9 @@ Decided in the corpus-interrogation sketch (2026-08-11), recorded there and nowh
 gives the tools, and skills tell Librarian how to use them — the material that does not belong in a tool's
 docstring. The lab's MCP demo needs both.
 
-Not designed yet. **The brief is drafted once MCP tools work end to end** (maintainer, 2026-11-10); this
-records the idea and what is already established about it. **v1 is prose-only** (maintainer, 2026-11-10).
-Bundled scripts wait until per-call approval exists, since a script is code the model runs on your machine
-(see stage three below). And **the lorebook is the other auto-trigger**, so how the two relate is a first
-question rather than a detail.
+**Drafted as `briefs/agent-skills-brief.md`** (2026-11-10). **v1 is prose-only** (maintainer, 2026-11-10).
+What stays here beyond that brief is **bundled scripts**, which wait until per-call approval exists, since a
+script is code the model runs on your machine (see stage three below).
 
 The Agent Skills open standard (https://agentskills.io) — originally Anthropic's, now adopted across a range
 of agent products. A skill is a folder with a `SKILL.md` carrying metadata (`name`, `description`) plus
@@ -2424,11 +2422,9 @@ surface giving the agent tools. **Skills are procedure over whatever tools exist
 scripting on top of the building blocks. For a digital librarian that means the user can describe custom
 workflows over their own document database, without either party writing code.
 
-**Librarian already has stages one and two, under another name.** The standard loads skills by progressive
-disclosure: *discovery* keeps only names and descriptions resident, *activation* pulls the full `SKILL.md`
-when a task matches, *execution* follows the instructions. The first two are what the lorebook (brief 05)
-does — a small always-resident index, full text injected on match. So the mechanism largely exists and the
-question is what sits on top of it.
+The standard loads skills by progressive disclosure: *discovery* keeps only names and descriptions resident,
+*activation* pulls the full `SKILL.md` when the model judges that a task matches, *execution* follows the
+instructions. That is a different mechanism from the lorebook's keyword triggers (brief 05); see the brief.
 
 **Stage three is where the line falls.** Executing a skill's bundled scripts is third-party code running
 in-process. The position: **instructions-only by default, scripts behind an explicit opt-in**, treated like
@@ -2437,11 +2433,6 @@ plugin surface, which the standard does not ask for. (An earlier draft of this n
 with no scripts at all, resting on brief 15's "no plugin system, no workflow DSL, no orchestration layer" —
 a line whose three prohibitions are unpicked in `briefs/design/corpus-interrogation-sketch.md`, "The scope
 boundary this sits against, restated". This item was the first thing to test them.)
-
-Open questions for the design session: how skills and lorebook entries relate (one mechanism with two
-front-ends, or two separate things); whether a skill can restrict itself to a corpus scope; and whether
-declining to run bundled scripts makes Raven's implementation non-conforming or merely a subset — worth
-checking the specification rather than assuming.
 
 **A worked example to design against** (2026-08-13). "Go through my paper pile, say which field of science
 each one belongs to, and give me something I can move the strays out with." That is a real request, made of a

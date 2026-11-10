@@ -99,10 +99,9 @@ accepted.
     2026-11-10, reversing 2026-10-19): it is orthogonal to MCP, and can be postponed.
   - **Re-run the tool-call budget probe** once the MCP tools are in (`TODO.md`, "Tool-call budget").
   - **Measure what the tool specs cost in context**, rather than building compaction for it.
-- **Agent skills** (`TODO_DEFERRED.md`, "Agent skills for Librarian"). **Part of the MCP build** (maintainer,
+- **Agent skills** (`briefs/agent-skills-brief.md`, draft). **Part of the MCP build** (maintainer,
   2026-10-19): MCP supplies the tools, and skills tell Librarian how to use them, carrying the material that
-  does not belong in a tool's docstring. The lab demo needs both. No brief yet; the item holds what is
-  established, including the open questions for its design.
+  does not belong in a tool's docstring. The lab demo needs both.
 - **The lab's MCP server.** Its v1 requirements were specced on campus on 2026-10-07; it returns text or
   JSON. Needs a fully functional demo, v1 at least, by the end of 2026, which is why the MCP client comes
   right after the corpus filter. Its endpoints are looked at once the client works. Its tools come with
