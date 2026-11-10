@@ -1019,6 +1019,7 @@ def ai_turn(llm_settings: env,
             retriever: "hybridir.HybridIR | None",
             head_node_id: str,
             internet_enabled: bool,
+            mcp_enabled: bool,
             continue_: bool,
             docs_enabled: bool,
             docs_query: str | None,
@@ -1042,7 +1043,6 @@ def ai_turn(llm_settings: env,
             tools_enabled: bool = True,
             thinking_enabled: bool = True,
             maybe_abort: netutil.Abort | None = None,
-            mcp_enabled: bool = False,
             use_character_card: bool = True,
             write_docs_query: bool = False,
             max_tokens: int | None = None) -> str:
@@ -1067,8 +1067,7 @@ def ai_turn(llm_settings: env,
                         always offered.
 
     `mcp_enabled`: Whether the tools from external MCP servers are offered — the user-facing "MCP" switch.
-                   Gates `llm_settings.mcp_tool_names` and nothing else. `False` by default, so a caller
-                   does not reach third-party tools without having asked to.
+                   Gates the tools in `llm_settings.mcp_tool_servers` and nothing else.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  A new chat node is created.
@@ -1683,12 +1682,12 @@ def retry_tool_calls(llm_settings: env,
                      retriever: "hybridir.HybridIR | None",
                      tool_node_id: str,
                      internet_enabled: bool,
+                     mcp_enabled: bool,
                      docs_enabled: bool,
                      markup: str | None,
                      docs_num_results: int | None,
                      thinking_enabled: bool = True,
                      maybe_abort: netutil.Abort | None = None,
-                     mcp_enabled: bool = False,
                      on_docs_start: Callable | None = None,
                      on_docs_progress: Callable | None = None,
                      on_docs_query: Callable | None = None,
