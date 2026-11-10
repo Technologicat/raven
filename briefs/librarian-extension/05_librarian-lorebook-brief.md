@@ -10,6 +10,19 @@ meaning of a term the moment it comes up, without a search.
 *easy* case of the same problem class. Having solved the hard one, leaving the easy one unbuilt
 would be knowledge left on the floor. So this clears the bar the project already set.
 
+**Decided at review (maintainer, 2026-11-10). Where these disagree with a section below, these win.**
+
+- **Entries reach the model as a synthetic call to a real tool**, as the clock and the automatic document
+  search do in `scaffold.build_turn_prompt`. So the lorebook needs a tool of its own to name, on offer whenever
+  there are entries, and a model can also look a term up with it. Like the clock, the inject is withheld on a
+  turn with no tools on offer.
+- **Position: the farthest of the data injects from the user's latest message**, ahead of the consulted
+  documents and this turn's search results. Whatever sits closest reads as the answer to the message.
+- **The shared injection path already exists**: the ordered `data_injects` list in `build_turn_prompt`, placed
+  just before the latest user message, so that a firing entry leaves the cached prefix alone. The *Context
+  assembler* section's first version is that list as candidate records under one budget. Read the comments
+  there before changing it, as its order is load-bearing.
+
 ---
 
 ## Design constraints (from the field, confirmed)
@@ -79,9 +92,7 @@ it heavily, and so does loop-detection.
   user, assistant, and tool-response messages. The assistant case is obvious; the tool-response
   case is a real one — if the model retrieves a document from a DB and that document (written by
   the user or by the AI earlier) uses glossary language, the definitions should fire on it too.
-- **Injection position**: simplest defensible default is a context block ahead of the latest
-  user turn. Make position configurable but ship one sane default; don't over-parameterize before
-  there's a reason.
+- **Injection position**: see the decisions at the top. Not configurable in v0.
 - **Budget**: cap total injected lorebook tokens; if more entries fire than fit, evict by
   priority. Reuse the token-counting calibration from the compat brief for the budget estimate.
 - **Determinism**: same context + same lorebook ⇒ same injection. No ranking nondeterminism.
