@@ -31,7 +31,7 @@ and why hygiene items rank higher than they used to.
 
 *Cluster: avatar-assets · Cost: ? · Gate: try one cel first; a licence check before anything is committed · Filed: 2026-11-10*
 
-The face cels (blush, data eyes, face shadow, sweatdrops, tears, the eye waver) are per-character, so only one character has a full set. Sharing face parts across characters would be a Live2D clone, which misses the point of THA3 (maintainer, 2026-11-10), so the cost of making them per character is what wants lowering.
+The face cels (blush, data eyes, face shadow, sweatdrops, tears, the eye waver) are per-character, so only one character has a full set. Splitting face, hair and clothing to share face parts across characters is not ruled out, but it leans towards a Live2D clone, which is not the point of THA3, and it makes the system much less "bring your own character": each age and gender combination would need its own set (maintainer, 2026-11-10). So lowering the cost of making them per character comes first.
 
 **The idea: edit the character's image to show the effect, and take the cel from the difference.** That needs no RGBA from the model. The compositor is alpha-over with strength scaling alpha, so per pixel and channel, with B the base, R the edit, and (α, F) the cel, R − B = α(F − B) and the composite at strength s is B + s·α(F − B) = B + s(R − B). The split into α and F drops out: every pair that reproduces the edit composites identically over this base at every strength, so the colour does not need to be known. Pick the smallest α keeping F in [0, 1] per pixel, as GIMP's "colour to alpha" does (checked numerically; not yet tried on an image).
 
