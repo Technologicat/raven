@@ -48,6 +48,7 @@ llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used if it 
 # The MCP servers whose tools the LLM may use, in the `mcpServers` format other MCP clients use.
 # See `raven.librarian.mcpclient.load_config`.
 mcp_config_file = librarian_userdata_dir / "mcp.json"  # will be used if it exists, ignored if not.
+mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
 # Separate from `raven.client.config.network_timeout` because the LLM backend is a distinct service
@@ -164,7 +165,9 @@ mcp_connect_timeout = 120.0
 # How long to wait for one MCP tool call, in seconds. A call that takes longer is reported to the AI as failed.
 mcp_call_timeout = 120.0
 
-# How long the MCP servers get to exit when the app does, in seconds. One that takes longer is abandoned.
+# How long the MCP servers get to exit when the app does, in seconds. One that takes longer is abandoned, and
+# its process may outlive the app. The SDK gives a stuck server 2 s to notice its stdin closing and 2 s more to
+# answer SIGTERM before it sends SIGKILL, so anything under 4 s can cut that short.
 mcp_shutdown_timeout = 5.0
 
 # How many rounds of tool calls the LLM may make within a single AI turn, before it has to answer.

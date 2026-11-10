@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 
 import pytest
 from unpythonic import dyn
@@ -27,6 +28,18 @@ def _write_config(path: pathlib.Path, servers: dict) -> pathlib.Path:
     path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
     return path
 
+def _mute_entry() -> tuple[str, dict]:
+    """A server that starts and says nothing, as a wedged one does, and a marker that finds its process.
+
+    The marker is unique so that it matches no other process, such as a shell whose command line quotes this file.
+    """
+    marker = f"mute_{uuid.uuid4().hex}"
+    return marker, {"command": sys.executable, "args": ["-c", f"import time; time.sleep(60)  # {marker}"]}
+
+def _processes_with(marker: str) -> list[int]:
+    psutil = pytest.importorskip("psutil")
+    return [process.pid for process in psutil.process_iter(["cmdline"]) if marker in " ".join(process.info["cmdline"] or [])]
+
 def _make_settings() -> env:
     """Real settings, built with no backend in the picture."""
     model_info = env(label="test-model", model_id="test-model", context_length=4096, is_vlm=False, loaded=True)
@@ -38,6 +51,13 @@ def _offered_names(settings: env) -> set[str]:
 def _call(settings: env, tool: str, /, **arguments):
     return settings.tool_entrypoints[tool](**arguments)
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _logs_stay_out_of_the_users_config(tmp_path_factory):
+    original = mcpclient.librarian_config.mcp_log_dir
+    mcpclient.librarian_config.mcp_log_dir = tmp_path_factory.mktemp("mcp_logs")
+    yield
+    mcpclient.librarian_config.mcp_log_dir = original
 
 @pytest.fixture
 def settings():
@@ -260,8 +280,8 @@ class TestFailures:
             assert _call(settings, "fixture__echo", text="still here")[0] == "still here"
 
     def test_a_server_that_never_answers_times_out(self, tmp_path, settings):
-        # `sleep` starts and says nothing, which is what a wedged server looks like.
-        config = _write_config(tmp_path / "mcp.json", {"mute": {"command": sys.executable, "args": ["-c", "import time; time.sleep(60)"]}})
+        marker, entry = _mute_entry()
+        config = _write_config(tmp_path / "mcp.json", {"mute": entry})
         client = mcpclient.MCPClient(settings, config_file=config)
         t0 = time.monotonic()
         try:
@@ -269,8 +289,9 @@ class TestFailures:
             assert "mute" in client.problems
             assert "no answer" in client.problems["mute"]
         finally:
-            client.shutdown(timeout=1.0)
+            client.shutdown()
         assert time.monotonic() - t0 < 10.0
+        assert not _processes_with(marker)
 
     def test_a_server_that_dies_mid_call_answers_the_model_and_the_next_call_too(self, tmp_path, settings):
         config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
@@ -279,6 +300,22 @@ class TestFailures:
             assert text.startswith("The call to die failed")
             text, _metadata = _call(settings, "fixture__echo", text="anyone there?")
             assert "failed" in text or "not available" in text
+
+
+class TestServerOutput:
+    def test_stderr_goes_to_the_servers_log_file(self, tmp_path, settings):
+        config = _write_config(tmp_path / "mcp.json", {"my server": _stdio_entry()})
+        with mcpclient.connected(settings, config_file=config):
+            _call(settings, "my_server__complain", text="grumble")
+        assert "grumble" in mcpclient._stderr_log_path("my server").read_text(encoding="utf-8")
+
+    def test_a_server_that_exits_at_once_says_where_to_read_why(self, tmp_path, settings):
+        script = "import sys; print('missing licence file', file=sys.stderr); sys.exit(3)"
+        config = _write_config(tmp_path / "mcp.json", {"quitter": {"command": sys.executable, "args": ["-c", script]}})
+        with mcpclient.connected(settings, config_file=config) as client:
+            log_path = mcpclient._stderr_log_path("quitter")
+            assert str(log_path) in client.problems["quitter"]
+        assert "missing licence file" in log_path.read_text(encoding="utf-8")
 
 
 class TestLifecycle:
@@ -307,6 +344,14 @@ class TestLifecycle:
         text, _metadata = stale(text="too late")
         assert "not available" in text
 
+    def test_shutdown_does_not_wait_out_its_allowance_when_the_server_exits_promptly(self, tmp_path, settings):
+        config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        client = mcpclient.MCPClient(settings, config_file=config)
+        client.start()
+        t0 = time.monotonic()
+        client.shutdown(timeout=10.0)
+        assert time.monotonic() - t0 < 8.0
+
     def test_shutdown_is_idempotent_and_safe_before_start(self, tmp_path, settings):
         client = mcpclient.MCPClient(settings, config_file=tmp_path / "nope.json")
         client.shutdown()
@@ -322,16 +367,36 @@ class TestLifecycle:
         finally:
             client.shutdown()
 
+    def test_shutdown_during_start_ends_the_start_and_offers_nothing(self, tmp_path, settings):
+        before = list(settings.tools)
+        marker, entry = _mute_entry()
+        config = _write_config(tmp_path / "mcp.json", {"mute": entry})
+        client = mcpclient.MCPClient(settings, config_file=config)
+        thread = threading.Thread(target=client.start, kwargs={"timeout": 60.0}, daemon=True)
+        thread.start()
+        time.sleep(0.5)
+        assert thread.is_alive(), "the start finished by itself, so this fixture cannot tell an interrupted one from a normal one"
+        assert _processes_with(marker), "the server is not running, so this fixture cannot tell a stopped one from a missing one"
+        client.shutdown()
+        thread.join(timeout=10.0)
+        assert not thread.is_alive()
+        assert settings.tools == before
+        assert "no answer" not in client.problems.get("mute", ""), "a start cut short by shutdown is not the server's failure"
+        assert not _processes_with(marker)
+
     def test_a_slow_call_in_flight_cannot_hold_up_shutdown(self, tmp_path, settings):
         config = _write_config(tmp_path / "mcp.json", {"fixture": _stdio_entry()})
+        psutil = pytest.importorskip("psutil")
         client = mcpclient.MCPClient(settings, config_file=config)
         client.start()
+        pid = int(_call(settings, "fixture__pid")[0])
         slow = settings.tool_entrypoints["fixture__slow"]
         threading.Thread(target=lambda: slow(seconds=60.0), daemon=True).start()
         time.sleep(0.3)
         t0 = time.monotonic()
-        client.shutdown(timeout=2.0)
+        client.shutdown()
         assert time.monotonic() - t0 < 10.0
+        assert not psutil.pid_exists(pid), "a server stuck in a call was left running"
 
 
 @pytest.fixture(scope="module")

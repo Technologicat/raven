@@ -49,6 +49,12 @@ def getenv(name: str) -> str:
     return os.environ.get(name, "<unset>")
 
 @server.tool()
+def complain(text: str) -> str:
+    """Write the text to the server's stderr."""
+    print(text, file=sys.stderr, flush=True)
+    return "complained"
+
+@server.tool()
 def pid() -> int:
     """Return the server's process ID."""
     return os.getpid()

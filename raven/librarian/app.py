@@ -108,6 +108,7 @@ with timer() as tim:
     from . import hybridir
     from . import imagestore
     from . import llmclient
+    from . import mcpclient
     from . import textfilestore
 
     gui_config = librarian_config.gui_config  # shorthand, this is used a lot
@@ -445,6 +446,17 @@ if not api.test_connection():
 # status pill (`_refresh_backend_status_pill`) once there is a GUI to put it in.
 llm_settings = llmclient.connect(backend_url=llm_backend_url)
 print()
+
+# In the background: a server launched through `npx` may have to be downloaded first, and the app is useful
+# before its tools arrive.
+mcp_client = mcpclient.MCPClient(llm_settings)
+mcp_task_manager = bgtask.TaskManager(name="librarian_mcp_start",
+                                      mode="sequential",
+                                      executor=bg)
+def _mcp_start_task(task_env: env) -> None:
+    mcp_client.start()
+    mcp_client.report_to_console()
+mcp_task_manager.submit(_mcp_start_task, env())
 
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
 # and write it back at exit, so running both means the later exit silently discards the other's session.
@@ -1957,6 +1969,8 @@ with timer() as tim:
                     with dpg.group(horizontal=True):
                         def toggle_internet_enabled():
                             app_state["internet_enabled"] = not app_state["internet_enabled"]
+                        def toggle_mcp_enabled():
+                            app_state["mcp_enabled"] = not app_state["mcp_enabled"]
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                             dpg.configure_item("autosearch_enabled_checkbox", enabled=app_state["docs_enabled"])  # tag
@@ -1981,7 +1995,13 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
-                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nThis is the only switch that sends anything to a site the AI picked, so it\nis the one to turn off when the conversation should stay between you and\nthe machines you run. Your messages always go to the LLM backend you\nconfigured, and searching your documents may reach the Raven-server you\nconfigured; either of those can sit elsewhere on your network. Both are\nset in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle), do arithmetic, and ask what time it is.", parent="internet_enabled_tooltip")  # tag
+                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nApart from any MCP servers you have set up (see next toggle), this is the\nonly switch that sends anything to a site the AI picked, so it is the one\nto turn off when the conversation should stay between you and\nthe machines you run. Your messages always go to the LLM backend you\nconfigured, and searching your documents may reach the Raven-server you\nconfigured; either of those can sit elsewhere on your network. Both are\nset in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle), do arithmetic, and ask what time it is.", parent="internet_enabled_tooltip")  # tag
+
+                        dpg.add_checkbox(label="MCP", default_value=app_state["mcp_enabled"], callback=toggle_mcp_enabled,
+                                         enabled=librarian_config.mcp_config_file.exists(), tag="mcp_enabled_checkbox")
+                        dpg.bind_item_theme("mcp_enabled_checkbox", "disablable_widget_theme")  # tag
+                        dpg.add_tooltip("mcp_enabled_checkbox", tag="mcp_enabled_tooltip")  # tag
+                        dpg.add_text(f"Let the AI use the tools of the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nServers are set up in the file\n{librarian_config.mcp_config_file}\nand this switch is available when that file exists.", parent="mcp_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
@@ -2511,6 +2531,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Alt+T", action_indent=0, action="Thinking", notes="AI reasoning mode on/off"),
                env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether thinking traces arrive open"),
                env(key_indent=0, key="Alt+I", action_indent=0, action="Internet", notes="websearch, webfetch"),
+               env(key_indent=0, key="Alt+M", action_indent=0, action="MCP", notes="Tools from your MCP servers"),
                env(key_indent=0, key="Alt+D", action_indent=0, action="Documents", notes="Your document database"),
                env(key_indent=1, key="Alt+A", action_indent=1, action="Auto-search", notes="Search it before each reply"),
                env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
@@ -3286,7 +3307,7 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
     # Alt+... — the switches in the row below the avatar, one key each, mnemonic on the label. Alt is
-    # otherwise unused here, which is what leaves seven letters free in one place; the graph claims
+    # otherwise unused here, which is what leaves eight letters free in one place; the graph claims
     # Alt+Left/Alt+Right for its history, and is offered the key further up, while it holds the keyboard.
     #
     # Live while the composer has the caret, like the Ctrl chords above and unlike the bare keys below:
@@ -3304,6 +3325,9 @@ def librarian_hotkeys_callback(sender, app_data):
             guiutils.toggle_checkbox("thinking_enabled_checkbox")  # tag
         elif key == dpg.mvKey_I:
             guiutils.toggle_checkbox("internet_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_M:
+            if dpg.is_item_enabled("mcp_enabled_checkbox"):  # tag  # as a click does nothing to the checkbox while no servers are set up
+                guiutils.toggle_checkbox("mcp_enabled_checkbox")  # tag
         elif key == dpg.mvKey_D:
             guiutils.toggle_checkbox("docs_enabled_checkbox")  # tag
         elif key == dpg.mvKey_A:
@@ -3667,6 +3691,9 @@ def _gui_release() -> None:
     server_status_task_manager.clear(wait=True)
     stop_autosave(wait=True)  # before the saves at exit, so that none of them overlaps a periodic one
     chat_controller.shutdown()
+    # After the chat, so that a turn in flight keeps its tools; before the wait, as it interrupts a start in progress.
+    mcp_client.shutdown()
+    mcp_task_manager.clear(wait=True)
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
     # Before the animator is cleared, since the dialog cancels its cursor pulsation through it — and well

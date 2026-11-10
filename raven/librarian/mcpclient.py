@@ -31,13 +31,17 @@ import dataclasses
 import hashlib
 import json
 import logging
+import math
 import pathlib
 import re
+import sys
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, TextIO
 
+import anyio
 import mcp
 import mcp_types
+from mcpyrate import colorizer
 from unpythonic import dyn
 from unpythonic.env import env
 
@@ -209,13 +213,39 @@ def _describe_exception(exc: BaseException) -> str:
         exc = exc.exceptions[0]
     return f"{type(exc)}: {exc}"
 
-def _open_session(config: ServerConfig) -> mcp.Client:
-    """An unopened SDK client for the server `config` describes."""
+def _stderr_log_path(server_name: str) -> pathlib.Path:
+    """Where the stderr of the stdio server called `server_name` goes."""
+    return pathlib.Path(librarian_config.mcp_log_dir).expanduser() / f"{re.sub(r'[^a-zA-Z0-9_-]', '_', server_name)}.log"
+
+@contextlib.contextmanager
+def _stderr_log(config: ServerConfig) -> Iterator[TextIO | None]:
+    """Open the file receiving a stdio server's stderr, which would otherwise interleave with a terminal app's output.
+
+    Yields `None` for a server with no stderr of ours to capture, and `sys.stderr` if the file cannot be opened.
+    """
+    if config.transport != "stdio":
+        yield None
+        return
+    path = _stderr_log_path(config.name)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file = open(path, "w", encoding="utf-8")  # noqa: SIM115 -- closed by the `with` below, which must not span the handler
+    except OSError as exc:
+        logger.warning(f"MCPClient: server '{config.name}': cannot write '{path}', so its output goes to stderr. Reason {type(exc)}: {exc}")
+        yield sys.stderr
+        return
+    with file:
+        yield file
+
+def _open_session(config: ServerConfig, errlog: TextIO | None) -> mcp.Client:
+    """An unopened SDK client for the server `config` describes. `errlog` receives a stdio server's stderr."""
     if config.transport == "stdio":
-        return mcp.Client(mcp.StdioServerParameters(command=config.command,
-                                                    args=list(config.args),
-                                                    env=config.env,
-                                                    cwd=config.cwd))
+        from mcp.client.stdio import stdio_client
+        return mcp.Client(stdio_client(mcp.StdioServerParameters(command=config.command,
+                                                                 args=list(config.args),
+                                                                 env=config.env,
+                                                                 cwd=config.cwd),
+                                       errlog=errlog))
     if config.transport == "sse":
         from mcp.client.sse import sse_client
         return mcp.Client(sse_client(config.url, headers=config.headers))
@@ -237,7 +267,8 @@ class _Server:
         self.tools: dict[str, mcp_types.Tool] = {}  # by public name
         self.maybe_failure: str | None = None
         self.maybe_task: asyncio.Task | None = None
-        self.stop: asyncio.Event | None = None  # created on the bridge's loop
+        self.maybe_scope: anyio.CancelScope | None = None
+        self.stopping = False
 
 class MCPClient:
     """Connections to the configured MCP servers, and the tools they publish.
@@ -267,6 +298,14 @@ class MCPClient:
     problems = property(fget=_get_problems, doc="What went wrong, by server name: a bad entry, or a server that did not start. "
                                                 "A problem with the file as a whole is under the key `\"\"`.")
 
+    def report_to_console(self) -> None:
+        """Print how the start went, for a frontend with a terminal. Prints nothing if no servers are configured."""
+        if self.tool_names:
+            plural_s = "s" if len(self.tool_names) != 1 else ""
+            print(colorizer.colorize(f"MCP: {len(self.tool_names)} tool{plural_s} available.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        for name, problem in self.problems.items():
+            print(colorizer.colorize(f"MCP: server '{name}': {problem}" if name else f"MCP: {problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
+
     # ----------------------------------------
     # Lifecycle
 
@@ -291,8 +330,13 @@ class MCPClient:
 
         self._servers = [_Server(config) for config in configs]
         self._maybe_bridge = AsyncBridge(name="mcp_client")
-        self._maybe_bridge.submit(self._connect_all(timeout))
-        self._register_tools()
+        try:
+            self._maybe_bridge.submit(self._connect_all(timeout))
+        except (concurrent.futures.CancelledError, RuntimeError):  # `shutdown` got here first
+            logger.info("MCPClient.start: interrupted by shutdown.")
+            return
+        if self._maybe_bridge is not None:  # or `shutdown` ran just as the servers finished connecting
+            self._register_tools()
 
     async def _connect_all(self, timeout: float) -> None:
         await asyncio.gather(*(self._connect(server, timeout) for server in self._servers))
@@ -301,33 +345,40 @@ class MCPClient:
         loop = asyncio.get_running_loop()
         server.stop = asyncio.Event()
         ready = loop.create_future()
-        server.maybe_task = loop.create_task(self._hold_session(server, ready))
-        try:
-            await asyncio.wait_for(asyncio.shield(ready), timeout)
-        except TimeoutError:
-            server.maybe_failure = f"no answer in {timeout:0.0f} seconds"
-            logger.error(f"MCPClient: server '{server.config.name}': {server.maybe_failure}")
-            server.maybe_task.cancel()
+        server.maybe_task = loop.create_task(self._hold_session(server, timeout, ready))
+        await ready
 
-    async def _hold_session(self, server: _Server, ready: asyncio.Future) -> None:
+    async def _hold_session(self, server: _Server, timeout: float, ready: asyncio.Future) -> None:
         """Open the server's session, and keep it open until told to stop.
 
         One long-lived task per server, because the SDK's sessions are anyio cancel scopes, which must be
         exited by the task that entered them. Calls from other tasks are fine.
+
+        Stopped by cancelling this scope, which ends the wait at once. The SDK shields its bounded teardown of
+        a server from anyio's cancellation; its source warns that a native `Task.cancel` can defeat that.
         """
         name = server.config.name
         try:
-            async with _open_session(server.config) as session:
-                listed = await self._list_tools(session)
-                server.tools = self._allowed(server, listed)
-                server.maybe_session = session
-                plural_s = "s" if len(server.tools) != 1 else ""
-                logger.info(f"MCPClient: server '{name}': connected, {len(server.tools)} tool{plural_s}.")
-                if not ready.done():
-                    ready.set_result(None)
-                await server.stop.wait()
+            with anyio.CancelScope(deadline=anyio.current_time() + timeout) as scope:
+                server.maybe_scope = scope
+                with _stderr_log(server.config) as errlog:
+                    async with _open_session(server.config, errlog) as session:
+                        listed = await self._list_tools(session)
+                        server.tools = self._allowed(server, listed)
+                        server.maybe_session = session
+                        scope.deadline = math.inf  # the deadline was the connection's allowance, and this is connected
+                        plural_s = "s" if len(server.tools) != 1 else ""
+                        logger.info(f"MCPClient: server '{name}': connected, {len(server.tools)} tool{plural_s}.")
+                        if not ready.done():
+                            ready.set_result(None)
+                        await anyio.sleep_forever()
+            if scope.cancelled_caught and server.maybe_session is None and not server.stopping:
+                server.maybe_failure = f"no answer in {timeout:g} seconds"
+                logger.error(f"MCPClient: server '{name}': {server.maybe_failure}")
         except Exception as exc:  # noqa: BLE001 -- one server's failure stops that server, and not the app
             server.maybe_failure = _describe_exception(exc)
+            if server.config.transport == "stdio":
+                server.maybe_failure += f" (the server's own output is in '{_stderr_log_path(name)}')"
             logger.error(f"MCPClient: server '{name}': {server.maybe_failure}")
         finally:
             server.maybe_session = None
@@ -422,8 +473,9 @@ class MCPClient:
     async def _stop_all(self, timeout: float) -> None:
         tasks = []
         for server in self._servers:
-            if server.stop is not None:
-                server.stop.set()
+            server.stopping = True
+            if server.maybe_scope is not None:
+                server.maybe_scope.cancel()
             if server.maybe_task is not None:
                 tasks.append(server.maybe_task)
         if tasks:

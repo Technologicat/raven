@@ -181,11 +181,7 @@ def minimal_chat_client(backend_url) -> None:
         mcp_client = mcpclient.MCPClient(llm_settings)
         mcp_client.start()
         atexit.register(mcp_client.shutdown)
-        if mcp_client.tool_names:
-            plural_s = "s" if len(mcp_client.tool_names) != 1 else ""
-            print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}MCP: {len(mcp_client.tool_names)} tool{plural_s} available.{colorizer.Style.RESET_ALL}")
-        for name, problem in mcp_client.problems.items():
-            print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}MCP: server '{name}': {problem}{colorizer.Style.RESET_ALL}")
+        mcp_client.report_to_console()
 
         chat_show_model_info()
 

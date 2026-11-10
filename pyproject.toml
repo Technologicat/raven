@@ -64,6 +64,7 @@ dependencies = [
     # being wrong in both directions (`investigations/prompt-size-cache-relative/`).
     "gguf>=0.19.0",
     "tokenizers>=0.23.3",  # already in the tree via sentence_transformers; declared because we import it.
+    "anyio>=4.16.0",  # librarian: the MCP client's cancel scopes. Already in the tree through `mcp`; declared because we import it.
     "mcp>=2.3.0,<3",  # librarian: MCP client, for tools from external servers. 2.x is a separate line from the still-maintained 1.x, with a different API, hence the cap.
     "mcpyrate>=4.3.0",  # we only use the colorizer utility for now
     "mistletoe>=1.6.0",  # vendored dpg-markdown
