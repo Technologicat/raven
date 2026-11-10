@@ -461,7 +461,8 @@ def _refresh_mcp_status() -> None:
     if _mcp_retry_pending and (mcp_client.all_running or mcp_client.stopped_servers):
         _mcp_retry_pending = False
         if mcp_client.all_running:
-            _show_composer_notice("MCP: all servers running.")
+            n_tools = len(mcp_client.tool_names)
+            _show_composer_notice(f"All MCP servers running: {n_tools} tool{common_text.plural_s(n_tools)}.")
     _refresh_tool_cost_tooltips()
     chat_controller.update_context_fill_indicator()  # the tools on offer may be different now
 
