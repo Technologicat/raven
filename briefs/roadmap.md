@@ -95,9 +95,8 @@ accepted.
   - **No longer gated on Hindsight**: Hindsight was only the first planned test target.
   - **Open**: whether weather stays with open-meteo or becomes a built-in tool. Partly mooted by the
     per-tool toggles, which can hide the marine and climate endpoints open-meteo also exposes.
-  - **The prompt viewer comes first** (`TODO.md`, "Show the raw prompt"; 2026-10-19). It was a 0.2.11
-    item, and 0.2.11 now follows this build, which needs it most: tool specs and injected skills are what
-    goes on the wire.
+  - **The prompt viewer is not part of this build** (`TODO.md`, "Show the raw prompt"; maintainer,
+    2026-11-10, reversing 2026-10-19): it is orthogonal to MCP, and can be postponed.
   - **Re-run the tool-call budget probe** once the MCP tools are in (`TODO.md`, "Tool-call budget").
   - **Measure what the tool specs cost in context**, rather than building compaction for it.
 - **Agent skills** (`TODO_DEFERRED.md`, "Agent skills for Librarian"). **Part of the MCP build** (maintainer,

@@ -24,6 +24,26 @@ Librarian how to use them, for material that does not belong in a tool's docstri
 both. Skills have no brief yet; `TODO_DEFERRED.md`, "Agent skills for Librarian", holds what is
 established.
 
+**Decided at the start of the build (maintainer, 2026-11-10). Where these disagree with a section below, these
+win.**
+
+- **§0 (`@tool` / `Param`) is deferred** to `TODO_DEFERRED.md`, "A `@tool` registry for the built-in tools".
+  The adapter does not need it: an MCP `inputSchema` is already JSON Schema, so an entry is a spec dict and a
+  closure.
+- **Per-call approval is deferred, and wanted soon after**: `TODO_DEFERRED.md`, "Per-call approval for MCP
+  tools". It is an inline button beside the tool call, like web access has, and not a modal; it needs UX
+  design. The December demo does not need the shell server, so **shell and Playwright stay out of the
+  configuration until it exists**. Open-meteo and the sandboxed filesystem server are the test targets.
+- **One GUI toggle**: a checkbox and an app-state flag for MCP as a whole, gating a third tool group.
+  Per-server control stays in the configuration, as `disabled` and `allowed_tools`.
+- **The prompt viewer no longer comes first.** It is orthogonal to MCP.
+- **Agent skills**: both MCP and skills are needed for the lab demo. The skills brief is written once tools
+  work end to end.
+- **Servers are started by whoever wants them, through one lifecycle** in `raven.librarian.mcpclient`: the
+  apps, `minichat`, and any script on `raven.librarian.agent`. Never from inside `llmclient.setup`, which every
+  batch tool calls.
+- **Raven keeps its own `mcp.json`**, per §3, rather than sharing LM Studio's.
+
 **Explicitly NOT this brief:** backend-hosted MCP (LM Studio talking to MCP servers itself).
 That's the quick path for *playing with* Hindsight as a tool and bypasses Raven's tool loop
 entirely — fine for experiments, wrong for the product. Different job.

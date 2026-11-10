@@ -27,6 +27,37 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Per-call approval for MCP tools
+
+*Cluster: librarian-mcp · Cost: M, and the UX is the work · Gate: UX design; wanted soon after the MCP client · Filed: 2026-11-10 · See also: `briefs/librarian-extension/04_librarian-mcp-client-brief.md`*
+
+**The MCP feature is not complete without this** (maintainer, 2026-11-10). A server is third-party code that
+acts on the model's say-so, and the text a model reads can come from a page it fetched, so with the Internet
+switch on a shell server can be steered by whoever wrote that page. LM Studio confirms each call. Raven so far
+has `allowed_tools` and `disabled`, which say what may run at all and nothing about this particular call.
+
+**An inline button beside the tool call, not a modal** (maintainer, 2026-11-10), similar to what web access
+offers for a denied host (`webfetch_denied_host`, `generation_metadata`). That existing flow refuses first and
+lets the user approve and reroll, which would run a shell command only on a second generation, so whether
+the shape carries over as it is, or the turn should wait at the button, is the first design question.
+
+What it touches: the wait has to pass through `perform_tool_calls` to the frontends, `minichat` needs a prompt
+of its own, and a headless `agent` script has no one to ask, so it denies by default. Until this exists, the
+shell and Playwright servers stay out of the configuration; the December lab demo needs neither.
+
+## A `@tool` registry for the built-in tools
+
+*Cluster: librarian-mcp · Cost: M · Gate: none, after the MCP client · Filed: 2026-11-10 · See also: `briefs/librarian-extension/04_librarian-mcp-client-brief.md` §0*
+
+§0 of the MCP brief: declare a built-in tool's schema once, on the function, with `Annotated[T, Param(...)]`,
+and generate the spec and the entrypoint table from that. Deferred from the MCP build (maintainer,
+2026-11-10), which turned out not to need it. The brief was written when `llmclient.setup` hardcoded one tool;
+the built-ins are hand-written tables in `llmtools` now, so its design needs updating when this is picked up.
+
+**A spec's text is part of a sweep's identity**: `sweep.fingerprint` hashes the offered specifications in full,
+so regenerating them, even to add `additionalProperties: false`, orphans the ledger of any sweep that offers
+those tools. One-shot runs offer none and are not affected.
+
 ## Avatar face cels from an image edit model, by difference
 
 *Cluster: avatar-assets · Cost: ? · Gate: try one cel first; a licence check before anything is committed · Filed: 2026-11-10*
