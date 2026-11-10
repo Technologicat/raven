@@ -346,7 +346,7 @@ class TestRestart:
             first_pid = int(_call(settings, "fixture__pid")[0])
             assert _call(settings, "fixture__die")[0].startswith("The call to die failed")
             assert int(_call(settings, "fixture__pid")[0]) != first_pid  # `int`, or a failure's text would pass too
-        assert "restarting" in caplog.text
+        assert "the connection was lost; trying again" in caplog.text
 
     def test_a_server_killed_between_calls_is_noticed(self, tmp_path, settings, quick_restarts):
         psutil = pytest.importorskip("psutil")
@@ -399,11 +399,49 @@ class TestRestart:
             time.sleep(1.5)
             assert client._servers[0].deaths == []
 
-    def test_a_server_that_never_started_is_not_retried(self, tmp_path, settings, quick_restarts):
+    def test_a_server_that_cannot_start_is_tried_again_and_then_left_stopped(self, tmp_path, settings, quick_restarts, monkeypatch, caplog):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_max_restarts", 2)
         config = _write_config(tmp_path / "mcp.json", {"broken": {"command": "/nonexistent/mcp-server"}})
         with mcpclient.connected(settings, config_file=config) as client:
-            time.sleep(0.5)
-            assert client._servers[0].deaths == []
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and "left stopped" not in client.problems.get("broken", ""):
+                time.sleep(0.05)
+            assert "left stopped" in client.problems["broken"]
+            assert len(client._servers[0].deaths) == 3
+        assert "could not be started" in caplog.text
+
+    def test_failed_starts_count_however_far_apart_they_are(self, tmp_path, settings, quick_restarts, monkeypatch):
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_max_restarts", 2)
+        monkeypatch.setattr(mcpclient.librarian_config, "mcp_restart_window", 0.0)  # nothing is ever recent
+        config = _write_config(tmp_path / "mcp.json", {"broken": {"command": "/nonexistent/mcp-server"}})
+        with mcpclient.connected(settings, config_file=config) as client:
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and "left stopped" not in client.problems.get("broken", ""):
+                time.sleep(0.05)
+            assert "left stopped" in client.problems["broken"]
+
+    def test_a_server_that_starts_on_the_second_try_offers_its_tools(self, tmp_path, settings, quick_restarts):
+        flag = tmp_path / "tried_once"
+        script = (f"import pathlib, runpy, sys\n"
+                  f"flag = pathlib.Path({str(flag)!r})\n"
+                  f"if not flag.exists():\n"
+                  f"    flag.touch()\n"
+                  f"    sys.exit(3)\n"
+                  f"sys.argv = ['server', 'stdio']\n"
+                  f"runpy.run_path({_FIXTURE_SERVER!r}, run_name='__main__')\n")
+        calls = []
+        config = _write_config(tmp_path / "mcp.json", {"late": {"command": sys.executable, "args": ["-c", script]}})
+        client = mcpclient.MCPClient(settings, config_file=config, on_tools_changed=lambda: calls.append(1))
+        client.start()
+        try:
+            assert "late" in client.problems, "the first attempt succeeded, so this fixture cannot tell a retry from a first start"
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and "late__echo" not in client.tool_names:
+                time.sleep(0.05)
+            assert _call(settings, "late__echo", text="made it")[0] == "made it"
+            assert client.problems == {}
+        finally:
+            client.shutdown()
 
 
 class TestLiveReload:

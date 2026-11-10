@@ -534,9 +534,11 @@ A server with a `command` is started by *Librarian* and stopped when it exits. A
 
 The **MCP** toggle (`Alt+M`) switches all of their tools on or off. In the chat they appear as `<server>__<tool>`. If a server cannot be started, the app says so in its terminal and in its log, and carries on without it. What a started server writes to its stderr is in `~/.config/raven/librarian/mcp_logs/`.
 
-**The AI calls these tools without asking you first.** An MCP server is third-party code, acting on whatever the LLM decides, and what the LLM decides can be influenced by what it reads; see the security warning below. Offer it only what you are comfortable with. `allowed_tools` is how to withhold a server's other tools, and it is worth using for a second reason: the descriptions of every offered tool sit at the front of the prompt for the whole session, and a server publishing many large ones can take a substantial part of the context window.
+**The AI calls these tools without asking you first.** An MCP server is third-party code, acting on whatever the LLM decides, and what the LLM decides can be influenced by what it reads; see the security warning below. Offer it only what you are comfortable with. `allowed_tools` is how to withhold a server's other tools.
 
-Changes to `mcp.json` are picked up while the app runs; a server whose entry did not change keeps running. A server that dies is started again, and one that keeps dying is left stopped until the app restarts or the file changes.
+**List only the tools you want, even from a server you trust.** The descriptions of every offered tool sit at the front of the prompt for the whole session, and a server publishing many large ones can take a substantial part of the context window, which is then not available for your documents and conversation. Servers commonly publish far more than any one use needs.
+
+Changes to `mcp.json` are picked up while the app runs; a server whose entry did not change keeps running. A server that dies or cannot be started is tried again, and one that keeps failing is left stopped until the app restarts or the file changes.
 
 From a script, tools are available inside a `with mcpclient.connected(llm_settings):` block, and `agent.turn` offers them when given `mcp_enabled=True`.
 

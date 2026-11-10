@@ -284,10 +284,10 @@ class _Server:
         self.maybe_task: asyncio.Task | None = None
         self.maybe_scope: anyio.CancelScope | None = None
         self.connection_lost = asyncio.Event()
-        self.has_connected = False
+        self.connected_this_attempt = False
         self.restarting = False
         self.stopping = False
-        self.deaths: list[float] = []  # `time.monotonic` of each, within the restart window
+        self.deaths: list[float] = []  # `time.monotonic` of each failed run; see `MCPClient._run_server`
 
 class MCPClient:
     """Connections to the configured MCP servers, and the tools they publish.
@@ -344,9 +344,10 @@ class MCPClient:
         Blocks until every server has connected or failed; a GUI app calls this from a background task. A
         server that fails is logged and recorded in `problems`, and the others carry on.
 
-        A server that connected and then dies is started again and the error logged. If it dies more than
-        `librarian_config.mcp_max_restarts` times within `librarian_config.mcp_restart_window` seconds, it is
-        left stopped for the rest of the session, and its tools answer that it is not running.
+        A server that dies or cannot be started is tried again and the error logged. Past
+        `librarian_config.mcp_max_restarts` retries it is left stopped for the rest of the session, and its
+        tools answer that it is not running. For a server that had connected, only deaths within
+        `librarian_config.mcp_restart_window` seconds count.
 
         `timeout`: seconds to allow each server to connect. Default is `librarian_config.mcp_connect_timeout`.
 
@@ -393,8 +394,14 @@ class MCPClient:
         name = server.config.name
         try:
             while await self._hold_session(server, timeout, ready):
+                if not ready.done():  # `start` waits for the first attempt only
+                    ready.set_result(None)
                 now = time.monotonic()
-                server.deaths = [t for t in server.deaths if now - t < librarian_config.mcp_restart_window] + [now]
+                # Attempts that never connected all count, however far apart: one that takes the whole connect
+                # timeout to fail would otherwise never reach the limit inside the window.
+                if server.connected_this_attempt:
+                    server.deaths = [t for t in server.deaths if now - t < librarian_config.mcp_restart_window]
+                server.deaths.append(now)
                 n_deaths = len(server.deaths)
                 if n_deaths > librarian_config.mcp_max_restarts:
                     plural_s = "s" if n_deaths != 1 else ""
@@ -405,7 +412,8 @@ class MCPClient:
                     logger.error(f"MCPClient: server '{name}': {server.maybe_failure}.")
                     return
                 server.restarting = True
-                logger.error(f"MCPClient: server '{name}': the connection was lost; restarting it ({n_deaths} of at most {librarian_config.mcp_max_restarts}).")
+                happened = "the connection was lost" if server.connected_this_attempt else "it could not be started"
+                logger.error(f"MCPClient: server '{name}': {happened}; trying again ({n_deaths} of at most {librarian_config.mcp_max_restarts}).")
                 await asyncio.sleep(librarian_config.mcp_restart_delay)
         finally:
             server.restarting = False
@@ -421,14 +429,16 @@ class MCPClient:
         Stopped by cancelling this scope, which ends the wait at once. The SDK shields its bounded teardown of
         a server from anyio's cancellation; its source warns that a native `Task.cancel` can defeat that.
 
-        Returns whether to try again: that is, the server had been running, and has been lost.
+        Returns whether to try again: that is, unless told to stop.
         """
         name = server.config.name
         server.connection_lost = asyncio.Event()
+        server.connected_this_attempt = False
+        server.maybe_failure = None
         try:
             with anyio.CancelScope(deadline=anyio.current_time() + timeout) as scope:
                 server.maybe_scope = scope
-                with _stderr_log(server.config, append=server.has_connected) as errlog:
+                with _stderr_log(server.config, append=bool(server.deaths)) as errlog:
                     async with _open_session(server.config, errlog) as session:
                         listed = await self._list_tools(session)
                         server.tools = self._allowed(server, listed)
@@ -436,15 +446,15 @@ class MCPClient:
                         scope.deadline = math.inf  # the deadline was the connection's allowance, and this is connected
                         plural_s = "s" if len(server.tools) != 1 else ""
                         logger.info(f"MCPClient: server '{name}': connected, {len(server.tools)} tool{plural_s}.")
-                        if server.has_connected:
+                        server.connected_this_attempt = True
+                        self._problems.pop(name, None)
+                        if ready.done():  # this is a retry, as `start` is no longer waiting
                             server.restarting = False
                             self._refresh_tools()
-                        server.has_connected = True
-                        server.maybe_failure = None
                         if not ready.done():
                             ready.set_result(None)
                         await self._watch_connection(server, session)
-            if scope.cancelled_caught and server.maybe_session is None and not server.stopping:
+            if scope.cancelled_caught and not server.connected_this_attempt and not server.stopping:
                 server.maybe_failure = f"no answer in {timeout:g} seconds"
                 logger.error(f"MCPClient: server '{name}': {server.maybe_failure}")
         except Exception as exc:  # noqa: BLE001 -- one server's failure stops that server, and not the app
@@ -456,9 +466,9 @@ class MCPClient:
             server.maybe_session = None
         if server.stopping:
             return False
-        if server.maybe_failure is not None and not server.has_connected:
+        if server.maybe_failure is not None:
             self._problems[name] = server.maybe_failure
-        return server.has_connected
+        return True
 
     @staticmethod
     async def _watch_connection(server: _Server, session: mcp.Client) -> None:

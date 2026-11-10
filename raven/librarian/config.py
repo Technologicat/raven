@@ -168,8 +168,9 @@ mcp_call_timeout = 120.0
 # How often to check that a connected MCP server is still there, in seconds.
 mcp_liveness_interval = 15.0
 
-# A server that dies is started again, up to this many times within this many seconds. Past that it is left
-# stopped for the rest of the session. `mcp_restart_delay` is the wait before each restart, in seconds.
+# A server that dies or cannot be started is tried again, up to this many times. Past that it is left stopped
+# for the rest of the session. For a server that had connected, only deaths within `mcp_restart_window` seconds
+# count. `mcp_restart_delay` is the wait before each retry, in seconds.
 mcp_max_restarts = 3
 mcp_restart_window = 300.0
 mcp_restart_delay = 2.0
