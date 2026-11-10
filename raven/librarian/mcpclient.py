@@ -50,6 +50,7 @@ from unpythonic.env import env
 from ..common import netutil
 from ..common.async_bridge import AsyncBridge
 from . import config as librarian_config
+from . import llmtools
 
 logger = logging.getLogger(__name__)
 
@@ -563,21 +564,13 @@ class MCPClient:
             logger.warning(f"MCPClient: ignoring exception from an event handler: {_describe_exception(exc)}")
 
     def _install(self, specs: list[dict[str, Any]], entrypoints: dict[str, Callable], tool_servers: dict[str, str]) -> None:
-        """Replace the MCP tools in the settings with these.
-
-        New objects throughout, as `tools` and `tool_entrypoints` start out as `llmtools`' module-level
-        tables, which other settings in this process share.
-        """
+        """Replace the MCP tools in the settings with these."""
         settings = self.settings
-        previous = self._entrypoints
         # Gated first and ungated last, for a turn starting meanwhile: a name in `mcp_tool_servers` that is
         # not registered yet is harmless, whereas one registered and not yet gated would be offered with the
         # toggle off.
         settings.mcp_tool_servers = {**settings.mcp_tool_servers, **tool_servers}
-        settings.tool_entrypoints = {**{name: function for name, function in settings.tool_entrypoints.items() if name not in previous}, **entrypoints}
-        all_specs = [*(spec for spec in settings.tools if spec["function"]["name"] not in previous), *specs]
-        settings.tools = all_specs
-        settings.request_data["tools"] = all_specs
+        llmtools.replace_tools(settings, previous_names=set(self._entrypoints), specs=specs, entrypoints=entrypoints)
         settings.mcp_tool_servers = tool_servers
         self._entrypoints = entrypoints
 

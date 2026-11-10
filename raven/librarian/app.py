@@ -109,6 +109,7 @@ with timer() as tim:
     from . import imagestore
     from . import llmclient
     from . import mcpclient
+    from . import skills
     from . import textfilestore
 
     gui_config = librarian_config.gui_config  # shorthand, this is used a lot
@@ -490,6 +491,23 @@ def _mcp_start_task(task_env: env) -> None:
         _show_composer_notice(f"MCP tools ready: {len(mcp_client.tool_names)}.")
 mcp_task_manager.submit(_mcp_start_task, env())
 
+def _refresh_skills_status() -> None:
+    """Bring the GUI up to date with the skill library: the toggle and the tools' token costs."""
+    if not dpg.does_item_exist("skills_enabled_checkbox") or guiutils.is_shutting_down():  # tag
+        return  # the GUI is not built yet, and `_finish_startup` calls this once it is; or it is going away
+    dpg.configure_item("skills_enabled_checkbox", enabled=bool(skill_library.skill_names))  # tag
+    _refresh_tool_cost_tooltips()
+    chat_controller.update_context_fill_indicator()  # the tools on offer may be different now
+
+def _on_skills_changed() -> None:
+    _refresh_skills_status()
+    _show_composer_notice(f"Skills reloaded: {len(skill_library.skill_names)}.")
+
+skill_library = skills.SkillLibrary(llm_settings, on_changed=_on_skills_changed)
+skill_library.start(watch=True)
+for _skill_folder, _skill_problem in skill_library.problems.items():
+    print(colorizer.colorize(f"Skill '{_skill_folder}': {_skill_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
+
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
 # and write it back at exit, so running both means the later exit silently discards the other's session.
 #
@@ -734,6 +752,7 @@ def _refresh_tool_cost_tooltips() -> None:
     costs = llmclient.tool_cost_by_group(llm_settings)
     for group, text_widget in (("internet", "internet_tool_cost_text"),  # tag
                                ("mcp", "mcp_tool_cost_text"),  # tag
+                               ("skills", "skills_tool_cost_text"),  # tag
                                ("documents", "documents_tool_cost_text")):  # tag
         n_tokens = costs[group]
         dpg.set_value(text_widget, f"\nAbout {n_tokens} token{common_text.plural_s(n_tokens)} of context.")
@@ -2075,6 +2094,9 @@ with timer() as tim:
                         def toggle_mcp_enabled():
                             app_state["mcp_enabled"] = not app_state["mcp_enabled"]
                             chat_controller.update_context_fill_indicator()  # the tools on offer changed
+                        def toggle_skills_enabled():
+                            app_state["skills_enabled"] = not app_state["skills_enabled"]
+                            chat_controller.update_context_fill_indicator()  # the tools on offer changed
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                             dpg.configure_item("autosearch_enabled_checkbox", enabled=app_state["docs_enabled"])  # tag
@@ -2110,7 +2132,14 @@ with timer() as tim:
                         dpg.add_text(f"Let the AI use the tools offered by the MCP servers you have set up. [Alt+M]\n\nAn MCP server is a separate program, and the AI calls its tools without\nasking you first, so offer it only what you are comfortable with.\n\nTo use this, create the following file, listing your servers:\n{librarian_config.mcp_config_file}\n\nSee the Librarian README, section MCP servers, for an example.\n\nChanges to the file are picked up live, and take effect at the AI's next turn.", parent="mcp_enabled_tooltip")  # tag
                         dpg.add_text("", tag="mcp_tool_cost_text", parent="mcp_enabled_tooltip", show=False)
 
-                        dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
+                        dpg.add_checkbox(label="Skills", default_value=app_state["skills_enabled"], callback=toggle_skills_enabled,
+                                         enabled=bool(skill_library.skill_names), tag="skills_enabled_checkbox")
+                        dpg.bind_item_theme("skills_enabled_checkbox", "disablable_widget_theme")  # tag
+                        dpg.add_tooltip("skills_enabled_checkbox", tag="skills_enabled_tooltip")  # tag
+                        dpg.add_text(f"Let the AI follow the procedures you have written as skills. [Alt+K]\n\nA skill is a folder holding a SKILL.md file. The AI reads the ones that\nmatch the task at hand. To ask for one, start a message with /skill-name.\n\nTo use this, create a skill as a folder under the following one:\n{librarian_config.skills_dir}\n\nSee the Librarian README, section Skills, for an example.\n\nChanges to the skills are picked up live, and take effect at the AI's next turn.", parent="skills_enabled_tooltip")  # tag
+                        dpg.add_text("", tag="skills_tool_cost_text", parent="skills_enabled_tooltip", show=False)
+
+                        dpg.add_checkbox(label="Docs", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Let the AI search and read your document database. [Alt+D]\n\nWith this off, the document tools are not offered at all, and\nAuto-search is not in effect.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].", parent="docs_enabled_tooltip")  # tag
                         dpg.add_text("", tag="documents_tool_cost_text", parent="docs_enabled_tooltip", show=False)
@@ -2119,7 +2148,7 @@ with timer() as tim:
                                          enabled=app_state["docs_enabled"], tag="autosearch_enabled_checkbox")
                         dpg.bind_item_theme("autosearch_enabled_checkbox", "disablable_widget_theme")  # tag
                         dpg.add_tooltip("autosearch_enabled_checkbox", tag="autosearch_enabled_tooltip")  # tag
-                        dpg.add_text("Before each reply, search the documents for your message, and give\nthe AI the best matches. [Alt+A]\n\nUsed when Documents is on.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply. With this off, the AI can still search the\ndocuments itself, when you ask it to or when it sees the need.", parent="autosearch_enabled_tooltip")  # tag
+                        dpg.add_text("Before each reply, search the documents for your message, and give\nthe AI the best matches. [Alt+A]\n\nUsed when Docs is on.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply. With this off, the AI can still search the\ndocuments itself, when you ask it to or when it sees the need.", parent="autosearch_enabled_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.
@@ -2627,7 +2656,6 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # because the table is met before the prose that explains the tree.
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue the marked AI message", notes="The last one only (new revision)"),
                env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll the marked AI message", notes="An alternative to it (new sibling)"),
-               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F8", action_indent=0, action="Copy the chatlog to the clipboard", notes="As-is"),
                env(key_indent=1, key="Shift+F8", action_indent=0, action="Same, but with chat node IDs", notes=""),
                env(key_indent=0, key="Ctrl+C", action_indent=0, action="Copy the marked message", notes="Not while typing"),
@@ -2640,7 +2668,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether thinking traces arrive open"),
                env(key_indent=0, key="Alt+I", action_indent=0, action="Internet", notes="websearch, webfetch"),
                env(key_indent=0, key="Alt+M", action_indent=0, action="MCP", notes="Tools from your MCP servers"),
-               env(key_indent=0, key="Alt+D", action_indent=0, action="Documents", notes="Your document database"),
+               env(key_indent=0, key="Alt+K", action_indent=0, action="Skills", notes="Procedures you have written"),
+               env(key_indent=0, key="Alt+D", action_indent=0, action="Docs", notes="Your document database"),
                env(key_indent=1, key="Alt+A", action_indent=1, action="Auto-search", notes="Search it before each reply"),
                env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
                env(key_indent=0, key="Alt+S", action_indent=0, action="Speech", notes="Whether the avatar speaks replies"),
@@ -2731,8 +2760,8 @@ def render_help_extras(self: helpcard.HelpWindow,
             'Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed. Recognition is by file extension, listed as `llm_docs_exts` in `raven/librarian/config.py` — add to it if you keep notes in a plain-text format that is not there. That file sets the folder above, too.',
             f'The documents are search-indexed automatically, and the index is kept up to date. It is stored in `{librarian_config.llm_database_dir}`. If you ever need to clear it manually, just delete that directory.',
             'Indexing runs in the app as it goes, but `raven-indexer` does the same from a terminal and then exits - for a folder you have just filled with hundreds of documents, or a machine you reach over SSH with no display to start a GUI on.',
-            f'When {self.c_hig}**Documents**{self.c_end} and {self.c_hig}**Auto-search**{self.c_end} are both **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.',
-            f'A reply that had nothing to stand on - no document matches, no attachments, no tool results - is marked **[no sources retrieved]**. The AI still answers; the marker reports what was **retrieved**, not whether it was used. With {self.c_hig}**Documents**{self.c_end} and {self.c_hig}**Internet**{self.c_end} both off it does not appear at all, since it would only be reporting what you just switched off.',
+            f'When {self.c_hig}**Docs**{self.c_end} and {self.c_hig}**Auto-search**{self.c_end} are both **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.',
+            f'A reply that had nothing to stand on - no document matches, no attachments, no tool results - is marked **[no sources retrieved]**. The AI still answers; the marker reports what was **retrieved**, not whether it was used. With {self.c_hig}**Docs**{self.c_end} and {self.c_hig}**Internet**{self.c_end} both off it does not appear at all, since it would only be reporting what you just switched off.',
             'To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).')],
         [helpcard.section(
             "**Message attachments**",
@@ -2760,7 +2789,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - **get_current_time** — ask what time it is
                 - **calculate** — do arithmetic
             """).strip(),
-            f'The first two need {self.c_hig}**Internet**{self.c_end}, the next three need {self.c_hig}**Documents**{self.c_end}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.',
+            f'The first two need {self.c_hig}**Internet**{self.c_end}, the next three need {self.c_hig}**Docs**{self.c_end}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.',
             'One reply may take several rounds of tool calls, up to a configurable ceiling.',
             'Either switch changes which tools are declared to the AI, and the declarations travel at the top of the conversation - so the reply after you flip one has to re-read the whole chat before it can start. Nothing is lost; on a long chat it is a pause.')])
 # Three pages, split by scope rather than to find room. Page one is the app's keyboard and nothing else,
@@ -3414,7 +3443,7 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
     # Alt+... — the switches in the row below the avatar, one key each, mnemonic on the label. Alt is
-    # otherwise unused here, which is what leaves eight letters free in one place; the graph claims
+    # otherwise unused here, which is what leaves nine letters free in one place; the graph claims
     # Alt+Left/Alt+Right for its history, and is offered the key further up, while it holds the keyboard.
     #
     # Live while the composer has the caret, like the Ctrl chords above and unlike the bare keys below:
@@ -3435,10 +3464,13 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_M:
             if dpg.is_item_enabled("mcp_enabled_checkbox"):  # tag  # as a click does nothing to the checkbox while no servers are set up
                 guiutils.toggle_checkbox("mcp_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_K:
+            if dpg.is_item_enabled("skills_enabled_checkbox"):  # tag  # as a click does nothing to the checkbox while no skills are installed
+                guiutils.toggle_checkbox("skills_enabled_checkbox")  # tag
         elif key == dpg.mvKey_D:
             guiutils.toggle_checkbox("docs_enabled_checkbox")  # tag
         elif key == dpg.mvKey_A:
-            if app_state["docs_enabled"]:  # as a click does nothing to the checkbox while Documents is off
+            if app_state["docs_enabled"]:  # as a click does nothing to the checkbox while Docs is off
                 guiutils.toggle_checkbox("autosearch_enabled_checkbox")  # tag
         elif key == dpg.mvKey_G:
             guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
@@ -3801,6 +3833,7 @@ def _gui_release() -> None:
     stop_autosave(wait=True)  # before the saves at exit, so that none of them overlaps a periodic one
     chat_controller.shutdown()
     # After the chat, so that a turn in flight keeps its tools; before the wait, as it interrupts a start in progress.
+    skill_library.shutdown()
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)
     prompt_reload_task_manager.clear(wait=True)
@@ -4068,6 +4101,7 @@ def _finish_startup(sender, app_data) -> None:
     # and waits an interval before its first probe.
     _start_server_status_poll(delay_first_probe=True)
     _refresh_mcp_status()  # for what the servers did before the GUI existed
+    _refresh_skills_status()
     prompt_reload_task_manager.submit(_prompt_reload_task, env())
 
     # The blue that says where the keyboard is, on the composer and on the search field. A *caret* follower,

@@ -121,6 +121,7 @@ def test_the_model_calls_a_tool_and_the_result_reaches_the_reply(llm_settings):
                         tools_enabled=True,
                         internet_enabled=False,
                         mcp_enabled=False,
+                        skills_enabled=False,
                         docs_enabled=False,
                         use_character_card=False)
 
@@ -163,6 +164,7 @@ def test_the_model_calls_the_calculator_and_the_arithmetic_comes_back_right(llm_
                         tools_enabled=True,
                         internet_enabled=False,
                         mcp_enabled=False,
+                        skills_enabled=False,
                         docs_enabled=False,
                         use_character_card=False)
 

@@ -95,7 +95,7 @@ from . import userprofile
 # the same discipline `__all__` already asks for.
 from .llmtools import (TOOLS, TOOL_ENTRYPOINTS,  # noqa: F401 -- re-export
                        DOCUMENT_TOOL_NAMES, NETWORK_TOOL_NAMES, EXTERNAL_SOURCE_TOOL_NAMES,
-                       maybe_tool_names_for_turn, offered_tools,
+                       maybe_tool_names_for_turn, offered_tools, SKILL_TOOL_NAME,
                        perform_tool_calls, approve_host_for_session,
 
                        CANONICAL_EMPTY_SEARCH_QUERY,
@@ -490,6 +490,8 @@ def setup(backend_url: str,
         `network_tool_names: frozenset[str]`: The same, for the tools that reach the network, gated on the
                                               user's "Internet" switch. A tool in neither set answers to no
                                               switch and is always offered.
+
+        `skill_names: frozenset[str]`: The installed agent skills. Empty until a `skills.SkillLibrary` has started.
 
         `mcp_tool_servers: dict[str, str]`: The tools from external MCP servers, gated on the user's "MCP" switch,
                                             mapped to the server each is from. Empty until an
@@ -1071,6 +1073,7 @@ def configure(model_info: env,
                    tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
                    document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database
                    network_tool_names=NETWORK_TOOL_NAMES,  # subset of `TOOLS` gated on the "Internet" switch
+                   skill_names=frozenset(),  # the installed agent skills; `skills.SkillLibrary` fills this in
                    mcp_tool_servers={},  # the tools from external MCP servers, name -> server, gated on their own switch; `mcpclient` fills this in
                    backend_url=backend_url,
                    request_data=request_data,
@@ -1388,10 +1391,11 @@ def count_tools_tokens(settings: env, specs: Sequence[dict]) -> tuple[int, bool]
     return count_tokens(settings, json.dumps(specs, ensure_ascii=False))
 
 def tool_cost_by_group(settings: env) -> dict[str, int]:
-    """How many tokens each switchable group of tools costs. Keys are `"documents"`, `"internet"` and `"mcp"`."""
+    """How many tokens each switchable group of tools costs. Keys are `"documents"`, `"internet"`, `"mcp"` and `"skills"`."""
     groups = {"documents": settings.document_tool_names,
               "internet": settings.network_tool_names,
-              "mcp": settings.mcp_tool_servers}
+              "mcp": settings.mcp_tool_servers,
+              "skills": {SKILL_TOOL_NAME}}
     return {group: count_tools_tokens(settings, [spec for spec in settings.tools if spec["function"]["name"] in names])[0]
             for group, names in groups.items()}
 

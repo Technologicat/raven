@@ -2191,7 +2191,8 @@ class DPGChatController:
         return llmclient.maybe_tool_names_for_turn(self.llm_settings,
                                                    documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
                                                    internet_available=self.app_state["internet_enabled"],
-                                                   mcp_available=self.app_state["mcp_enabled"])
+                                                   mcp_available=self.app_state["mcp_enabled"],
+                                                   skills_available=self.app_state["skills_enabled"])
 
     def _offered_tools_tokens(self) -> int:
         """How much of the context window the tools on offer take up. Not part of the stored messages."""
@@ -2426,6 +2427,8 @@ class DPGChatController:
                 self.user_turn(text=user_message_text, staged_images=staged_images, staged_files=staged_files)
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text or None  # image-only message: no text to search docs with
+                if docs_query is not None and docs_query.startswith("/"):  # it may have been a `/skill-name`, which is not part of the message
+                    docs_query = chatutil.latest_user_message_text(self.datastore, self.app_state["HEAD"]) or None
             else:
                 # Handle the RAG query: find the latest existing user message. Asked of the *branch* rather
                 # than of the view — this turn answers on the branch HEAD names, and the view shows whatever
@@ -2473,9 +2476,13 @@ class DPGChatController:
                                               head_node_id=self.app_state["HEAD"],
                                               user_message_text=text,
                                               staged_images=staged_images,
-                                              staged_files=staged_files)
+                                              staged_files=staged_files,
+                                              skills_enabled=self.app_state["skills_enabled"])
+        branch = self.datastore.linearize_up(new_head_node_id)
+        new_nodes = branch[branch.index(self.app_state["HEAD"]) + 1:]  # more than one if the message activated a skill
         self.app_state["HEAD"] = new_head_node_id  # update HEAD before the AI turn reads it as the parent
-        self.view.add_complete_message(new_head_node_id)
+        for node_id in new_nodes:
+            self.view.add_complete_message(node_id)
         self.update_context_fill_indicator()  # user message added -> context grew
         return new_head_node_id
 
@@ -3020,6 +3027,7 @@ class DPGChatController:
                                                             head_node_id=self.app_state["HEAD"],
                                                             internet_enabled=self.app_state["internet_enabled"],
                                                             mcp_enabled=self.app_state["mcp_enabled"],
+                                                            skills_enabled=self.app_state["skills_enabled"],
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=(docs_query if self.app_state["autosearch_enabled"] else None),
@@ -3036,6 +3044,7 @@ class DPGChatController:
                                                                      tool_node_id=_retry_tool_node_id,
                                                                      internet_enabled=self.app_state["internet_enabled"],
                                                                      mcp_enabled=self.app_state["mcp_enabled"],
+                                                                     skills_enabled=self.app_state["skills_enabled"],
                                                                      docs_enabled=self.app_state["docs_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,

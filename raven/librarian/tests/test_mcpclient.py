@@ -164,10 +164,10 @@ class TestRegistration:
 
     def test_the_gate_withholds_them_and_only_them(self, connected_settings):
         the_settings, client = connected_settings
-        without = llmtools.maybe_tool_names_for_turn(the_settings, documents_available=True, internet_available=True, mcp_available=False)
+        without = llmtools.maybe_tool_names_for_turn(the_settings, documents_available=True, internet_available=True, mcp_available=False, skills_available=True)
         assert not (set(without) & client.tool_names)
         assert "websearch" in without
-        with_all = llmtools.maybe_tool_names_for_turn(the_settings, documents_available=True, internet_available=True, mcp_available=True)
+        with_all = llmtools.maybe_tool_names_for_turn(the_settings, documents_available=True, internet_available=True, mcp_available=True, skills_available=True)
         assert with_all is None  # every tool on offer
 
     def test_the_module_level_tables_are_left_alone(self, connected_settings):

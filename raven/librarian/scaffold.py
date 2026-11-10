@@ -30,6 +30,7 @@ from . import chattree
 from . import chatutil
 from . import config as librarian_config
 from . import llmclient
+from . import skills
 
 # `hybridir` is only referenced by scaffold for type annotations (retriever
 # parameters); all runtime access to the retriever goes through duck-typed
@@ -59,6 +60,30 @@ def _notify(what: str, maybe_callback: Callable | None, *args, _default: Any = N
 # --------------------------------------------------------------------------------
 # User's turn
 
+def _activated_skills(datastore: chattree.Forest, head_node_id: str) -> frozenset[str]:
+    """The agent skills whose instructions are already on the branch ending at `head_node_id`."""
+    names = (datastore.get_payload(node_id).get("generation_metadata", {}).get("skill")
+             for node_id in datastore.linearize_up(head_node_id))
+    return frozenset(name for name in names if name is not None)
+
+def _store_skill_activation(llm_settings: env,
+                            datastore: chattree.Forest,
+                            head_node_id: str,
+                            skill_name: str) -> str:
+    """Store the exchange that a user's `/skill-name` stands for, on the branch ending at `head_node_id`. Returns its last node."""
+    output, metadata = llm_settings.tool_entrypoints[llmclient.SKILL_TOOL_NAME](name=skill_name)
+    call_message, result_message = _synthetic_tool_exchange(llm_settings=llm_settings,
+                                                            call_id=f"raven_skill_{skill_name}",
+                                                            function_name=llmclient.SKILL_TOOL_NAME,
+                                                            arguments={"name": skill_name},
+                                                            result_text=output)
+    call_payload = chatutil.create_payload(llm_settings=llm_settings, message=call_message)
+    call_payload["generation_metadata"] = {"status": "success", "automatic": True}
+    call_node_id = datastore.create_node(payload=call_payload, parent_id=head_node_id)
+    result_payload = chatutil.create_payload(llm_settings=llm_settings, message=result_message)
+    result_payload["generation_metadata"] = {"status": "success", "function_name": llmclient.SKILL_TOOL_NAME, **metadata}
+    return datastore.create_node(payload=result_payload, parent_id=call_node_id)
+
 def user_turn(llm_settings: env,
               datastore: chattree.Forest,
               head_node_id: str,
@@ -66,7 +91,8 @@ def user_turn(llm_settings: env,
               staged_images: list[env] | None = None,
               staged_files: list[env] | None = None,
               *,
-              add_persona: bool = True) -> str:
+              add_persona: bool = True,
+              skills_enabled: bool = False) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -98,8 +124,16 @@ def user_turn(llm_settings: env,
     `add_persona`: whether the stored text is prefixed with the user's persona name. `False` for a turn without the
                    character card, where nobody is speaking.
 
+    `skills_enabled`: Whether a message starting with `/skill-name` activates that skill. The exchange that
+                      loads it is stored ahead of the message, which is what remains after the command.
+
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
+    if skills_enabled:
+        maybe_skill_name, user_message_text = skills.parse_user_activation(llm_settings, user_message_text)
+        if maybe_skill_name is not None and maybe_skill_name not in _activated_skills(datastore, head_node_id):
+            head_node_id = _store_skill_activation(llm_settings, datastore, head_node_id, maybe_skill_name)
+
     message = chatutil.create_chat_message(llm_settings=llm_settings,
                                            role="user",
                                            text=user_message_text,
@@ -792,6 +826,7 @@ def make_tool_context(llm_settings: env | None,
                retriever=retriever,
                webfetch_allowed_hosts=frozenset(),  # volatile: recomputed per round
                used_tokens=0,  # volatile: recomputed per round
+               activated_skills=frozenset(),  # volatile: recomputed per round
                maybe_abort=None,  # volatile: the dispatch's abort handle, set per round
                grounded=False,  # accumulating: did anything this turn provide grounding material?
                consulted_documents=[])  # fixed for the turn: what the branch had already read when it began
@@ -965,6 +1000,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
         # for a reason worth stating: by round three the model's own reasoning and the earlier rounds' results
         # are in the branch, so a figure taken at turn start would claim room that has since been spent.
         # Skipped when refusing, because it walks the whole branch to serve entrypoints that will not run.
+        tool_context.activated_skills = _activated_skills(datastore, head_node_id)
         tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0] + getattr(tool_context, "offered_tools_tokens", 0)
 
     # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
@@ -1027,6 +1063,7 @@ def ai_turn(llm_settings: env,
             head_node_id: str,
             internet_enabled: bool,
             mcp_enabled: bool,
+            skills_enabled: bool,
             continue_: bool,
             docs_enabled: bool,
             docs_query: str | None,
@@ -1075,6 +1112,8 @@ def ai_turn(llm_settings: env,
 
     `mcp_enabled`: Whether the tools from external MCP servers are offered — the user-facing "MCP" switch.
                    Gates the tools in `llm_settings.mcp_tool_servers` and nothing else.
+
+    `skills_enabled`: Whether the agent skills are on offer — the user-facing "Skills" switch.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  A new chat node is created.
@@ -1346,7 +1385,8 @@ def ai_turn(llm_settings: env,
     maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings,
                                                            documents_available=documents_available,
                                                            internet_available=internet_enabled,
-                                                           mcp_available=mcp_enabled)
+                                                           mcp_available=mcp_enabled,
+                                                           skills_available=skills_enabled)
     # They sit in the context window too, so a tool fitting a document into what is left has to know about them.
     tool_context.offered_tools_tokens = llmclient.count_tools_tokens(llm_settings,
                                                                      llmclient.offered_tools(llm_settings,
@@ -1696,6 +1736,7 @@ def retry_tool_calls(llm_settings: env,
                      tool_node_id: str,
                      internet_enabled: bool,
                      mcp_enabled: bool,
+                     skills_enabled: bool,
                      docs_enabled: bool,
                      markup: str | None,
                      docs_num_results: int | None,
@@ -1812,6 +1853,7 @@ def retry_tool_calls(llm_settings: env,
     # 4. Continue the AI turn from the rebuilt tool head.
     return ai_turn(llm_settings=llm_settings,
                    mcp_enabled=mcp_enabled,
+                   skills_enabled=skills_enabled,
                    datastore=datastore,
                    retriever=retriever,
                    head_node_id=head_node_id,

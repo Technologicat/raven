@@ -22,6 +22,9 @@
 #### Raven-librarian
 
 - **Edited prompt files are picked up while the app runs.** A changed system prompt or character card becomes a new system prompt in the chat graph, and a new chat starts under it. Existing chats keep the prompt they were held under.
+- **Agent skills**: procedures written in Markdown, which the AI follows when a task matches, or when a message starts with `/skill-name`.
+  - In the [Agent Skills](https://agentskills.io) format, under `skills/` in the user folder. Bundled scripts are not run.
+  - The **Skills** toggle (`Alt+K`) and `!skills` in `raven-minichat` switch them on and off. Changes are picked up while the app runs.
 - **Tools from MCP servers**, beside the built-in ones.
   - List servers in `mcp.json`, in the format other MCP clients use. Both a server *Librarian* starts itself and one reached over HTTP or SSE.
   - The **MCP** toggle (`Alt+M`) and `!mcp` in `raven-minichat` switch them on and off; `allowed_tools` and `disabled` choose per server.

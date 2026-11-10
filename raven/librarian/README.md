@@ -492,7 +492,7 @@ There is a configurable ceiling on how many rounds of tool calls one reply may t
 
 Past that point the tools stay on offer and any further call is answered with an error saying so, rather than being quietly taken away. Two reasons. Changing the set of tools mid-reply invalidates the backend's KV cache from that point on, so the rest of the conversation has to be reprocessed; and a conversation whose earlier messages call a tool the current request no longer declares is a shape models have seen little of in training, whereas a tool that answers "not now" is one they have seen plenty of. A refusal cannot *guarantee* the reply ends, though, so after `max_tool_call_refusal_rounds` of them the tools are withdrawn outright, which does.
 
-*Librarian* provides seven tools: two on the web side, three on the document side, a clock, and a calculator. The web pair needs the **Internet** mode toggle, the document trio needs **Documents**, and the last two need neither — they answer from nothing outside the conversation, so they are always on offer.
+*Librarian* provides seven tools: two on the web side, three on the document side, a clock, and a calculator. The web pair needs the **Internet** mode toggle, the document trio needs **Docs**, and the last two need neither — they answer from nothing outside the conversation, so they are always on offer.
 
 `calculate` evaluates an arithmetic expression in a sandbox ([simpleeval](https://github.com/danthedeckie/simpleeval)), which is worth having because arithmetic is the thing an LLM is worst at while looking most confident: a total, a percentage or a square root is produced by the same next-token machinery as prose, and it is right often enough to be trusted and wrong often enough to matter. With the tool on offer the model reaches for it instead — asked for `1234 * 5678`, Qwen 3.6 called the calculator rather than answering from its head.
 
@@ -500,13 +500,13 @@ On the web side, `websearch` returns a list of results, and `webfetch` reads one
 
 Which hosts the AI may fetch from is up to you, via `webfetch_allowlist` in [`raven.librarian.config`](config.py). The default is unrestricted, subject to the network-level checks *Raven-server* enforces regardless (it refuses private-network addresses and non-HTTP(S) schemes, so the AI cannot be talked into fetching your router's admin page). Set the allowlist to a list of hosts and the AI is confined to them — a curated scientific baseline is provided in the same file as `webfetch_default_allowlist`, ready to assign. Whatever the setting, a URL **you** type in your message is fetchable for that turn: the constraint is on the AI's initiative, not on your instructions. A host that merely turned up in a websearch result is *not* auto-allowed by default (`webfetch_trust_search_results`), because a search result is nobody's instruction — a page crafted to rank for a likely query could otherwise talk the AI into fetching it, and whatever it says next arrives inside the AI's context. There is also a per-session approval: a refused fetch offers, under its result in the chat log, to allow that host for the rest of the session and fetch again. See the security warning below before loosening any of this.
 
-On the document side, the database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra LLM round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when what you are after is mentioned only in passing — a specific instrument by name, say. The automatic search has your whole message to work with and nothing to tell it which part was the question; the LLM, having read what came back, can go again with just the term that mattered.
+On the document side, the database is available to the LLM as a tool (`search_documents`) whenever the **Docs** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra LLM round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when what you are after is mentioned only in passing — a specific instrument by name, say. The automatic search has your whole message to work with and nothing to tell it which part was the question; the LLM, having read what came back, can go again with just the term that mattered.
 
-Note that **Documents** and **Internet** are independent: with **Internet** off the AI can still search and read your own documents, and with **Documents** off it can still search the web. Neither switch overrides the other.
+Note that **Docs** and **Internet** are independent: with **Internet** off the AI can still search and read your own documents, and with **Docs** off it can still search the web. Neither switch overrides the other.
 
 The LLM also gets `fetch_document`, to read a document in full once a search match looks worth following up, and `list_consulted_documents`, which names the documents this conversation has already looked at. The last one exists because the automatic search's results are shown once and then dropped: without it, a follow-up question arrives with the AI's earlier reply in view and the material behind it gone, with nothing to say so. Raven pushes that list into every turn as well as offering it as a tool, since the AI cannot notice a gap its own transcript hides. Each entry carries a label read from the document itself — a BibTeX record's title, author and year where there is one, otherwise the document's first line — so the AI can tell which one is worth re-reading without fetching all of them to find out.
 
-There is a reason to switch **Documents** off, too. The automatic search injects its best matches whether or not they are any good, so a question the database has nothing to say about still costs the prompt-processing time for a batch of irrelevant matches — noticeable as a delay before the reply begins. When the conversation has moved to a topic your corpus does not cover, turning the toggle off is the cheaper mode.
+There is a reason to switch **Docs** off, too. The automatic search injects its best matches whether or not they are any good, so a question the database has nothing to say about still costs the prompt-processing time for a batch of irrelevant matches — noticeable as a delay before the reply begins. When the conversation has moved to a topic your corpus does not cover, turning the toggle off is the cheaper mode.
 
 ### MCP servers
 
@@ -544,6 +544,28 @@ Each toggle's tooltip says about how many tokens of context its tools take up, a
 
 From a script, tools are available inside a `with mcpclient.connected(llm_settings):` block, and `agent.turn` offers them when given `mcp_enabled=True`.
 
+### Skills
+
+A *skill* is a procedure you write down in Markdown, which the AI follows when a task matches. Where MCP servers give the AI tools, a skill says how to use them together, which is material that belongs in no single tool's description. Skills use the [Agent Skills](https://agentskills.io) format, so one written for another program can often be copied as it is.
+
+A skill is a folder under `~/.config/raven/librarian/skills/`, named for the skill, holding a `SKILL.md`:
+
+```markdown
+---
+name: tidy-citations
+description: Check and tidy a list of citations against the document database. Use when the user asks to check references.
+---
+
+1. Search the documents for each citation.
+2. Report the ones you could not find, rather than guessing.
+```
+
+The AI sees each skill's name and description, and reads the instructions when it decides that a task matches. To ask for one yourself, start a message with `/tidy-citations`; the rest of the message is sent as usual. Further Markdown files in the folder can be referred to from the instructions, and the AI can read them too.
+
+The **Skills** toggle (`Alt+K`) switches them on or off. Changes are picked up while the app runs. Scripts bundled with a skill are not run.
+
+From a script, skills are available inside a `with skills.loaded(llm_settings):` block, and `agent.turn` offers them when given `skills_enabled=True`.
+
 ### Security warning
 
 To keep tool use safe, there are [certain important considerations](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). In short, giving an LLM access to all three of:
@@ -568,8 +590,6 @@ Be aware that private data can be leaked simply via sending an HTTP GET request,
 These techniques are well known, and even trivial, so spelling them out here is not an infohazard. Real attackers probably have access to many more advanced ones.
 
 ### Notes
-
-*Librarian* does **not** support skills yet.
 
 Besides anything from MCP servers, *Librarian* provides web search, web fetch, document database search, a clock and a calculator.
 
@@ -910,7 +930,8 @@ Each has a hotkey, mnemonic on its label, and they work while you are typing —
 | `Alt+Shift+T` | Show thinking | | `Alt+S` | Speech |
 | `Alt+I` | Internet | | `Alt+C` | Subtitles (**c**aptions) |
 | `Alt+M` | MCP | | | |
-| `Alt+D` | Documents | | | |
+| `Alt+K` | Skills | | | |
+| `Alt+D` | Docs | | | |
 | `Alt+A` | Auto-search | | | |
 
 *Show thinking* is `Alt+Shift+T` rather than a letter of its own because the pair is the point: `Alt+T` is what the AI does, `Alt+Shift+T` is what you see of it.
@@ -921,7 +942,7 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
   - Whether the AI may reach the network: `websearch` and `webfetch`.
   - This is the only switch that sends anything to a site the AI picked, so it is the one to turn off when the conversation should stay between you and the machines you run. It is not the only thing that can leave this particular machine: your messages always go to whichever LLM backend you configured, and searching your documents may reach whichever Raven-server you configured, either of which can sit elsewhere on your network. Those are a matter of where you point Librarian, not of this toggle.
   - If **OFF**, the two network tools are not offered to the LLM at all, so it cannot reach around the switch.
-- **Documents**
+- **Docs**
   - This one switch governs *everything* to do with the document database: the automatic search, the AI's own document tools, the grounding reminder, and — shared with *Internet* — the `[no sources retrieved]` marker. With it **OFF**, the document tools are not offered to the AI at all — so it cannot reach around the switch, and a model that tries anyway gets a refusal rather than a search.
   - If **ON**, the AI may search and read the database with its own tools, and — while **Auto-search** is on too — the database is searched each time you send a message to the AI, with the results injected into the LLM's context.
     - The *automatic* search is rather rudimentary: the query is always the user's latest message (in the current linearized view, after sending the current message if any). The LLM's own `search_documents` tool is what covers the cases where that guess is poor — it can search again with a query it wrote after reading the first results.
@@ -930,7 +951,7 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
     - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
   - If **OFF**, neither search the document database automatically nor offer the document tools.
     - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
-  - **Truthfulness, while Documents or Internet is ON.** Two things happen, and neither ever withholds an answer — they are *defence in depth*, telling you where a reply came from rather than gating it.
+  - **Truthfulness, while Docs or Internet is ON.** Two things happen, and neither ever withholds an answer — they are *defence in depth*, telling you where a reply came from rather than gating it.
     - When there is material to ground an answer in — document matches, an attachment, a tool result — the AI is reminded to base its claims about that material on that material. (This reminder is not shown in the GUI.)
       - Spurious matches are still possible, and may trip up your LLM.
         - E.g. *"What does your knowledge base say about whether cats can jump?"* may find matches in e.g. AI research literature due to the phrase *"knowledge base"*.
@@ -939,9 +960,9 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
     - When **nothing** was retrieved — no document matches, no attachments, no tool results — the reply is marked **[no sources retrieved]** below the message. The AI still answers.
       - The marker reports what was *retrieved*, not whether the reply used it. A search that returns irrelevant matches still counts as retrieval, so the absence of the marker means something came back, not that the answer rests on it. Telling those apart needs either relevance-aware retrieval scores or citations from the AI itself; both are planned, neither is built.
       - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
-    - With **Documents** and **Internet** both **OFF** the marker does not appear at all, since it would only be telling you what you just switched off. A message that only calls tools gets no marker either: the material it asked for arrives after it. An **attachment still counts as grounding** either way: attach a PDF with the database off, and the reply is treated as grounded in it.
+    - With **Docs** and **Internet** both **OFF** the marker does not appear at all, since it would only be telling you what you just switched off. A message that only calls tools gets no marker either: the material it asked for arrives after it. An **attachment still counts as grounding** either way: attach a PDF with the database off, and the reply is treated as grounded in it.
 - **Auto-search**
-  - Whether each message you send starts with a search of the document database, as described under *Documents* above. **ON** by default. Used only while *Documents* is on.
+  - Whether each message you send starts with a search of the document database, as described under *Docs* above. **ON** by default. Used only while *Documents* is on.
   - **The AI writes the search query.** Before replying, it is asked, in one short extra request with thinking off, for a query for your message with the conversation in view, so a follow-up such as *"what about the second one?"* can be searched for what it refers to. If it judges that the message needs nothing from the documents, or that a different step fits better (reading a document the conversation already named, say), there is no search, which saves the prompt processing the matches would have cost. DOCUMENTS reads *"Writing auto-search query…"* meanwhile, and *"No search needed"* in that case.
     - If no usable query comes back, the turn goes on without the search: DOCUMENTS says *"No search: query failed"*, and the reply is marked **[no document search]**.
     - To search with your message as written instead, set `docs_query_written_by_model = False` in `raven.librarian.config`. Worth doing with a model whose thinking switch sits at the top of the conversation rather than the end (Gemma 4 is one), where the extra request costs a full prompt processing. The instruction it is given is `prompts/search_query.md`.
@@ -1085,7 +1106,8 @@ mid-sentence, on noticing that the answer wants the web or the documents.
 | `Alt+Shift+T` | Show thinking |
 | `Alt+I` | Internet |
 | `Alt+M` | MCP |
-| `Alt+D` | Documents |
+| `Alt+K` | Skills |
+| `Alt+D` | Docs |
 | `Alt+A` | Auto-search |
 | `Alt+G` | Chat graph |
 | `Alt+S` | Speech |

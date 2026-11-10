@@ -299,6 +299,7 @@ def turn(llm_settings: env,
          thinking_enabled: bool = True,
          internet_enabled: bool = False,
          mcp_enabled: bool = False,
+         skills_enabled: bool = False,
          docs_enabled: bool = True,
          on_progress: Callable | None = None,
          docs_query: str | None | sym = from_user_message,
@@ -467,6 +468,9 @@ def turn(llm_settings: env,
     `mcp_enabled`: Whether the tools from external MCP servers are offered. **`False` by default**, likewise.
                    They exist in `llm_settings` only inside `with mcpclient.connected(llm_settings):`.
 
+    `skills_enabled`: Whether the agent skills are offered, and `/skill-name` honoured. **`False` by default**,
+                      likewise. They exist in `llm_settings` only inside `with skills.loaded(llm_settings):`.
+
     `docs_enabled`: Whether the documents are in play at all. `False` withdraws the document tools and
                     suppresses the automatic search whatever `docs_query` says.
 
@@ -556,7 +560,10 @@ def turn(llm_settings: env,
                                           user_message_text=user_message_text,
                                           staged_images=staged_images,
                                           staged_files=staged_files,
-                                          add_persona=use_character_card)
+                                          add_persona=use_character_card,
+                                          skills_enabled=skills_enabled)
+        if skills_enabled and docs_query == user_message_text:  # the text sent may have started with a `/skill-name`
+            docs_query = chatutil.latest_user_message_text(datastore, head_node_id)
     started_from_node_id = head_node_id
 
     # The surface takes no callbacks; this one is internal, and it is how the record gets the prompts. The
@@ -572,6 +579,7 @@ def turn(llm_settings: env,
                                      use_character_card=use_character_card,
                                      internet_enabled=internet_enabled,
                                      mcp_enabled=mcp_enabled,
+                                     skills_enabled=skills_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,
                                      docs_query=docs_query,

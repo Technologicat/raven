@@ -48,7 +48,7 @@ __all__ = ["TOOLS",
            "CANONICAL_BAD_EXPRESSION", "calculate",
 
            # How the agent loop reaches all of the above.
-           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn", "offered_tools",
+           "TOOL_ENTRYPOINTS", "SKILL_TOOL_NAME", "maybe_tool_names_for_turn", "replace_tools", "offered_tools",
            "CANONICAL_TOOL_CALL_CANCELLED", "perform_tool_calls"]
 
 import logging
@@ -59,7 +59,7 @@ import json
 import math
 import pathlib
 import threading
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, Collection, TYPE_CHECKING
 
 import requests
 import simpleeval
@@ -888,10 +888,14 @@ TOOL_ENTRYPOINTS = {"websearch": websearch,
 # ------------------------------------------------------------------------------------------------
 
 
+# The tool the skills are read through, when there are any; see `raven.librarian.skills`.
+SKILL_TOOL_NAME = "activate_skill"
+
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool,
                               internet_available: bool,
-                              mcp_available: bool) -> tuple[str, ...] | None:
+                              mcp_available: bool,
+                              skills_available: bool) -> tuple[str, ...] | None:
     """Which tools to offer on one AI turn, as a `tool_names` value for `invoke` (or `prefill`).
 
     Returns `None` when every registered tool is on offer. Note that `None` is the *permissive* value here,
@@ -916,6 +920,8 @@ def maybe_tool_names_for_turn(settings: env,
     `mcp_available`: whether the tools from external MCP servers are in play this turn. Gates
                      `settings.mcp_tool_servers`, which `mcpclient` fills in.
 
+    `skills_available`: whether the agent skills are in play this turn. Gates `SKILL_TOOL_NAME`.
+
     With all of them `False` the ungated tools are still on offer — `get_current_time` and `calculate` today — so
     the result is that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
     `tools` field rather than sending one, since some backends reject an empty list.)
@@ -933,9 +939,26 @@ def maybe_tool_names_for_turn(settings: env,
         withheld |= set(settings.network_tool_names)
     if not mcp_available:
         withheld |= set(settings.mcp_tool_servers)
+    if not skills_available and SKILL_TOOL_NAME in settings.tool_entrypoints:
+        withheld.add(SKILL_TOOL_NAME)
     if not withheld:
         return None
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
+
+def replace_tools(settings: env,
+                  *,
+                  previous_names: Collection[str],
+                  specs: list[dict[str, Any]],
+                  entrypoints: dict[str, Callable]) -> None:
+    """Replace the tools called `previous_names` in `settings` with `specs` and `entrypoints`.
+
+    For the sources of tools that come and go during a session. Builds new objects, as the tables start out
+    as this module's own, which other settings in the process share.
+    """
+    settings.tool_entrypoints = {**{name: function for name, function in settings.tool_entrypoints.items() if name not in previous_names}, **entrypoints}
+    all_specs = [*(spec for spec in settings.tools if spec["function"]["name"] not in previous_names), *specs]
+    settings.tools = all_specs
+    settings.request_data["tools"] = all_specs
 
 def offered_tools(settings: env,
                   *,

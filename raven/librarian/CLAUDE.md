@@ -35,15 +35,15 @@ number claims a precision that the next commit removes. The previous exact figur
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~4.0k), minichat.py (~750, minimal reference client),
+Layer 5 - Applications:     app.py (~4.0k), minichat.py (~800, minimal reference client),
                             indexer.py (~150, the `raven-indexer` CLI)
-Layer 4 - Controller/GUI:   chat_controller.py (~3.0k), chatmessage.py (~2.5k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
+Layer 4 - Controller/GUI:   chat_controller.py (~3.2k), chatmessage.py (~2.5k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
                             chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~370),
                             chatlog_search.py (~390)
 Layer 4 - Scripting:        agent.py (~830), the headless sibling of the controller;
                             sweep.py (~600), one question over a set of items
 Layer 3 - Orchestration:    scaffold.py (~1.8k)
-Layer 2 - Backends:         llmclient.py (~3.1k), llmtools.py (~1.3k), mcpclient.py (~760), hybridir.py (~2.0k)
+Layer 2 - Backends:         llmclient.py (~3.1k), llmtools.py (~1.3k), mcpclient.py (~760), skills.py (~330), hybridir.py (~2.0k)
 Layer 1 - Utilities:        chatutil.py (~2.0k), chatsearch.py (~130), appstate.py (~580), cleanup.py (~290),
                             imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~3.2k),
                             userprofile.py (~200), messagetext.py (~500)
@@ -98,6 +98,8 @@ Each layer only imports from layers below it. No circular dependencies.
 - **`llmtools.py`** — The tools the LLM may call, and the registry that offers them. A tool is three things that have to agree: the JSON schema the model is shown (`TOOLS`), the function that runs when it asks (`TOOL_ENTRYPOINTS`), and whether it is offered this turn at all (`maybe_tool_names_for_turn`, over `DOCUMENT_TOOL_NAMES` / `NETWORK_TOOL_NAMES`). They live together because a schema naming an unregistered function, or a tool gated in neither group, is a mismatch that surfaces as the model calling something that does not exist. `perform_tool_calls` is the other half: validate what was asked against the registry, dispatch, and package the results as `role="tool"` messages. The allowlist gating is here rather than at the call site — `webfetch` is the one tool that visits an address the *model* chose, so its refusal path, its per-session approvals and the standing warning against memoizing it sit where a reader changing one sees the others. Every canned string a tool can return is a `CANONICAL_*` constant here, written to be acted on by the model rather than merely displayed. **`llmclient` imports this and not the reverse**; the single reach back is deferred, inside `fetch_document_wrapper`, for the token budget its answer has to fit. `llmclient` re-exports the public names, so `llmclient.TOOLS` and `llmclient.perform_tool_calls` still resolve — where the tools live is not the callers' business.
 
 - **`mcpclient.py`** — Tools from external MCP servers, added to the settings so that `perform_tool_calls` finds them as it finds a built-in. One lifecycle for every frontend and script: `MCPClient.start`/`shutdown`, or `with mcpclient.connected(settings):`. **Not called from `llmclient.setup`**, which every batch tool runs, and whose settings a sweep's fingerprint depends on. MCP tools are the third gated group, `settings.mcp_tool_servers`, and each server is its own concurrency group in `perform_tool_calls`. A connected server that dies is restarted, within limits; an app follows changes to `mcp.json` (`start(watch=True)`), a script does not, so that what it offers cannot change during a run. The SDK is asyncio; everything here crosses into it through `raven.common.async_bridge`, with one long-lived task per server holding its session open. New lists are built rather than appended to, since `settings.tools` starts out as `llmtools`' module-level table.
+
+- **`skills.py`** — Agent skills, in the format of the Agent Skills standard: a folder with a `SKILL.md`. The LLM sees a catalog in the description of one tool, `activate_skill`, and that tool's result is the skill's body, kept on the branch as an ordinary tool round; the node's metadata names the skill, which is how a repeat activation is recognized. `/skill-name` from the user stores the same exchange ahead of the message (`scaffold.user_turn`). The lifecycle mirrors `mcpclient`: never from `llmclient.setup`, and only the apps follow the directory. Prose only: bundled scripts are not run.
 
 - **`hybridir.py`** — `HybridIR` class: sliding-window chunking with overlap, BM25 keyword search (`bm25s`), ChromaDB vector search, reciprocal rank fusion, contiguous chunk merging. Pending-edit pattern (queue adds/updates/deletes, then `commit()`). `HybridIRFileSystemEventHandler` watches directory via watchdog, auto-commits changes. Background processing via `bgtask.TaskManager`. Tokenization: lowercase + lemmatize + stopword removal via spaCy (through raven-server); each word gives its lemma and also its surface form where they differ, and numbers are kept (`keyword_tokens`). The datastore records which `TOKENIZER_VERSION` made its tokens, and one made by another is re-tokenized by the next `commit`, which `setup` schedules.
 
@@ -168,6 +170,7 @@ Everything sits under `librarian_config.librarian_userdata_dir` — `~/.config/r
 | `rag_index/` | the built RAG index (`llm_database_dir`) |
 | `api_key.txt` | optional; used if present |
 | `mcp.json` | optional; the MCP servers whose tools the LLM may use (`mcpclient.load_config`) |
+| `skills/` | optional; one folder per agent skill (`skills.scan`) |
 | `mcp_logs/` | what each stdio MCP server wrote to its stderr, one file per server, rewritten at each start |
 
 **`chat.json`'s on-disk shape is a flat mapping of node ID → node, with no wrapper key.** Not `{"nodes": {...}}` — the top level *is* the node dict, even though the in-memory attribute is `PersistentForest.nodes`. Node IDs look like `gensym#forest-node:<uuid>`. Within a node, `node["data"]` maps revision → payload, so a script that wants "the message" has to pick a revision (or iterate all of them, which is what the sidecar GC mark phase does). Worth knowing before writing any ad-hoc script against the file: assuming a `"nodes"` key silently yields zero nodes rather than an error.

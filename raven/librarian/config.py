@@ -48,6 +48,8 @@ llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used if it 
 # The MCP servers whose tools the LLM may use, in the `mcpServers` format other MCP clients use.
 # See `raven.librarian.mcpclient.load_config`.
 mcp_config_file = librarian_userdata_dir / "mcp.json"  # will be used if it exists, ignored if not.
+skills_dir = librarian_userdata_dir / "skills"  # one folder per agent skill, each holding a `SKILL.md`; see `raven.librarian.skills`
+skills_poll_interval = 2.0  # how often the apps look for changed skills, in seconds
 mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

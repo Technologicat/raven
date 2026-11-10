@@ -69,6 +69,7 @@ with timer() as tim:
     from . import llmclient
     from . import mcpclient
     from . import scaffold
+    from . import skills
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 print()
 
@@ -99,6 +100,11 @@ _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
                                        gloss=" (tools from the MCP servers in the configuration)",
                                        summary="MCP tools",
                                        detail=f"; servers configured in '{librarian_config.mcp_config_file}'"),
+                  "!skills": _FlagCommand(flag="skills_enabled",
+                                          subject="Agent skills",
+                                          gloss=" (procedures the AI follows; /skill-name asks for one)",
+                                          summary="Agent skills",
+                                          detail=f"; skills in '{librarian_config.skills_dir}'"),
                   "!docs": _FlagCommand(flag="docs_enabled",
                                         subject="Document database",
                                         gloss=" (retrieval-augmented generation, RAG)",
@@ -182,6 +188,12 @@ def minimal_chat_client(backend_url) -> None:
         mcp_client.start(watch=True)
         atexit.register(mcp_client.shutdown)
         mcp_client.report_to_console()
+
+        skill_library = skills.SkillLibrary(llm_settings)
+        skill_library.start(watch=True)
+        atexit.register(skill_library.shutdown)
+        for name, problem in skill_library.problems.items():
+            print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}Skill '{name}': {problem}{colorizer.Style.RESET_ALL}")
 
         chat_show_model_info()
 
@@ -593,8 +605,10 @@ def minimal_chat_client(backend_url) -> None:
                 new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
                                                       datastore=datastore,
                                                       head_node_id=app_state["HEAD"],
-                                                      user_message_text=user_message_text)
+                                                      user_message_text=user_message_text,
+                                                      skills_enabled=app_state["skills_enabled"])
                 app_state["HEAD"] = new_head_node_id
+                user_message_text = chatutil.latest_user_message_text(datastore, new_head_node_id) or ""  # it may have started with a `/skill-name`
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text
             else:
@@ -721,6 +735,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
                                                 internet_enabled=app_state["internet_enabled"],
                                                 mcp_enabled=app_state["mcp_enabled"],
+                                                skills_enabled=app_state["skills_enabled"],
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=(docs_query if app_state["autosearch_enabled"] else None),
                                                 write_docs_query=librarian_config.docs_query_written_by_model,
