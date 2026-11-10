@@ -20,6 +20,7 @@ from unpythonic import dyn
 from unpythonic.env import env
 
 from raven.common import netutil
+from raven.librarian import agent
 from raven.librarian import chattree
 from raven.librarian import chatutil
 from raven.librarian import llmclient
@@ -1091,6 +1092,43 @@ class TestToolNamesFiltersTheRequest:
         sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
         llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, tool_names=None)
         assert "tools" not in sent["json"]
+
+
+    @pytest.mark.parametrize("kwargs", [{"tools_enabled": True, "tool_names": None},
+                                        {"tools_enabled": True, "tool_names": ()},
+                                        {"tools_enabled": True, "tool_names": ("search_documents",)},
+                                        {"tools_enabled": False, "tool_names": None}])
+    def test_offered_tools_is_what_goes_on_the_wire(self, monkeypatch, invoke_settings, kwargs):
+        invoke_settings.request_data = dict(invoke_settings.request_data, tools=list(self._SPECS))
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), **kwargs)
+        assert sent["json"].get("tools", []) == llmclient.offered_tools(invoke_settings, **kwargs)
+
+
+class TestOneShotRequest:
+    """What a batch tool's one-shot call sends, down to the shape of each message.
+
+    A sweep's fingerprint covers the prompt, not the code that builds the request, so a change here would
+    change a batch run's answers while its ledgers go on being found. Failing here is the point: decide then
+    whether the stored answers still stand.
+    """
+
+    def test_the_task_goes_alone_and_with_no_tools(self, monkeypatch, invoke_settings):
+        tool = {"type": "function", "function": {"name": "calculate"}}
+        invoke_settings.request_data = dict(invoke_settings.request_data, tools=[tool])
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+
+        agent.ask_record(invoke_settings, "Extract the keywords.")
+
+        # The name is the configured user's, so this holds on any machine; the rest is the shape.
+        task = f"{invoke_settings.personas['user']}: Extract the keywords."
+        assert sent["json"] == {"stream": True,
+                                "messages": [{"role": "user",
+                                              "content": [{"type": "text", "text": task}],
+                                              "tool_calls": []}],
+                                "continue_": False,
+                                "max_tokens": agent.DEFAULT_MAX_REPLY_TOKENS,
+                                "stream_options": {"include_usage": True}}
 
 
 class TestThinkingPreferenceReachesTheWire:

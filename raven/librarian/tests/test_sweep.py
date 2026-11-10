@@ -1,5 +1,6 @@
 """Tests for `raven.librarian.sweep`: the fingerprint, the ledger, and a run's resume, failure and stop rules."""
 
+import hashlib
 import json
 import logging
 
@@ -26,6 +27,26 @@ def _echo(llm_settings, batch, maybe_abort):
 
 
 class TestFingerprint:
+    _TOOL = {"type": "function", "function": {"name": "calculate", "description": "Evaluate an expression."}}
+
+    def test_a_run_without_tools_keeps_the_fingerprint_it_always_had(self, llm_settings):
+        # Worked out here, without `tools` in the picture: ledgers on disk are found by this value.
+        record = llm_settings.model_record
+        joined = "\x00".join(("p", f"model={record.model_id}", f"quantization={record.quantization}", "declared=None"))
+        expected = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:8]
+        assert sweep.fingerprint(llm_settings, "p") == expected
+        assert sweep.fingerprint(llm_settings, "p", tools=[]) == expected
+
+    def test_the_tools_offered_change_it(self, llm_settings):
+        without = sweep.fingerprint(llm_settings, "p")
+        with_tool = sweep.fingerprint(llm_settings, "p", tools=[self._TOOL])
+        assert with_tool != without
+
+    def test_a_reworded_tool_description_changes_it(self, llm_settings):
+        reworded = {"type": "function", "function": {"name": "calculate", "description": "Do arithmetic."}}
+        assert (sweep.fingerprint(llm_settings, "p", tools=[reworded]) !=
+                sweep.fingerprint(llm_settings, "p", tools=[self._TOOL]))
+
     def test_each_part_of_the_instrument_changes_it(self, llm_settings):
         base = sweep.fingerprint(llm_settings, "the prompt")
         assert sweep.fingerprint(llm_settings, "the prompt") == base  # deterministic

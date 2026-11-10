@@ -48,7 +48,7 @@ __all__ = ["TOOLS",
            "CANONICAL_BAD_EXPRESSION", "calculate",
 
            # How the agent loop reaches all of the above.
-           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn",
+           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn", "offered_tools",
            "CANONICAL_TOOL_CALL_CANCELLED", "perform_tool_calls"]
 
 import logging
@@ -930,6 +930,29 @@ def maybe_tool_names_for_turn(settings: env,
     if not internet_available:
         withheld |= set(settings.network_tool_names)
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
+
+def offered_tools(settings: env,
+                  *,
+                  tools_enabled: bool = True,
+                  tool_names: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+    """The tool specifications one model call offers, in the order they go on the wire.
+
+    `tools_enabled` and `tool_names` mean what they mean to `llmclient.invoke`, which builds its request from
+    this. An empty result means no `tools` field is sent at all.
+
+    `tool_names` is a tuple from `maybe_tool_names_for_turn`, or any collection of names; `None` offers every
+    tool. A name that is not a tool is logged and ignored.
+    """
+    if not tools_enabled:
+        return []
+    specs = settings.request_data["tools"]
+    if tool_names is None:
+        return list(specs)
+    unknown_names = set(tool_names) - {tool["function"]["name"] for tool in specs}
+    if unknown_names:  # a typo here would silently switch a tool off, so say so rather than filter quietly
+        logger.warning(f"offered_tools: Ignoring unknown tool name{common_text.plural_s(len(unknown_names))} {sorted(unknown_names)} in `tool_names`; "
+                       f"available: {sorted(settings.tool_entrypoints)}.")
+    return [tool for tool in specs if tool["function"]["name"] in tool_names]
 
 # The result a tool call gets when the user stopped the turn before it finished, and the one each call after
 # it gets, never having started. Every call the model asked for needs a result of its own, or the next

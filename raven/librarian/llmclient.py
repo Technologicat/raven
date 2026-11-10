@@ -94,7 +94,7 @@ from . import userprofile
 # the same discipline `__all__` already asks for.
 from .llmtools import (TOOLS, TOOL_ENTRYPOINTS,  # noqa: F401 -- re-export
                        DOCUMENT_TOOL_NAMES, NETWORK_TOOL_NAMES, EXTERNAL_SOURCE_TOOL_NAMES,
-                       maybe_tool_names_for_turn,
+                       maybe_tool_names_for_turn, offered_tools,
                        perform_tool_calls, approve_host_for_session,
 
                        CANONICAL_EMPTY_SEARCH_QUERY,
@@ -2442,23 +2442,21 @@ def invoke(settings: env,
     if on_prompt_ready is not None:
         _notify("on_prompt_ready", on_prompt_ready, history)
 
+    tools = offered_tools(settings, tools_enabled=tools_enabled, tool_names=tool_names)
     if not tools_enabled:
         logger.info(f"{me}: Tool calling is disabled. Stripping tool specifications from request.")
-        data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
     elif tool_names is None:
         logger.info(f"{me}: Tool calling is enabled. Providing tool specifications in request.")
-        # The `tools` field is already in `settings.request_data`, so there's nothing to do. The backend builds
-        # the tool-calling instructions from it, using the model's own chat template.
     else:
-        unknown_names = set(tool_names) - {tool["function"]["name"] for tool in data["tools"]}
-        if unknown_names:  # a typo here would silently switch a tool off, so say so rather than filter quietly
-            logger.warning(f"{me}: Ignoring unknown tool name{common_text.plural_s(len(unknown_names))} {sorted(unknown_names)} in `tool_names`; "
-                           f"available: {sorted(settings.tool_entrypoints)}.")
-        data["tools"] = [tool for tool in data["tools"] if tool["function"]["name"] in tool_names]
         logger.info(f"{me}: Tool calling is enabled, restricted to {sorted(tool_names)}. "
-                    f"Providing {len(data['tools'])} tool specification{common_text.plural_s(len(data['tools']))} in request.")
-        if not data["tools"]:  # an empty `tools` list is not the same thing as no tools; some backends reject it
-            data.pop("tools")
+                    f"Providing {len(tools)} tool specification{common_text.plural_s(len(tools))} in request.")
+    # The backend builds the tool-calling instructions from this field, using the model's own chat template.
+    # Without one the LLM has no tools and makes no tool calls. An empty list is not the same thing as no
+    # field: some backends reject it.
+    if tools:
+        data["tools"] = tools
+    else:
+        data.pop("tools")
 
     # Asked to give up before we even sent anything: don't bother the backend at all. Costs one check and
     # covers the case where the user cancels while the turn is still queued behind another task.

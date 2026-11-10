@@ -34,7 +34,7 @@ import pathlib
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, Iterable
 
 from unpythonic import ETAEstimator, sym
 from unpythonic.env import env
@@ -49,7 +49,11 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------
 # The instrument
 
-def fingerprint(llm_settings: env, material: str, declared: str | None = None) -> str:
+def fingerprint(llm_settings: env,
+                material: str,
+                declared: str | None = None,
+                *,
+                tools: Iterable[dict] = ()) -> str:
     """A short hash of everything that decides what an answer means. Eight hex digits.
 
     `llm_settings`: the settings the run asks with; the model's id and quantization are read from
@@ -62,12 +66,19 @@ def fingerprint(llm_settings: env, material: str, declared: str | None = None) -
     `declared`: settings the backend does not report and the operator does, as free text, e.g. the KV
                 cache quantization. `None` when nothing is declared.
 
+    `tools`: the tool specifications each call offers the model, from `llmclient.offered_tools`, in full,
+             since a tool's description is read as much as its name. Leave it empty for a run that asks
+             without tools, as a one-shot `agent.ask` does.
+
     The load configuration the backend reports (batch sizes, flash attention, speculative decoding, ...)
     is not hashed, so a change to it keeps the cache. It goes into the ledger's header instead
     (`instrument_header`), and a change *during* a run stops the run.
     """
     record = llm_settings.model_record
     parts = (material, f"model={record.model_id}", f"quantization={record.quantization}", f"declared={declared}")
+    tools = list(tools)
+    if tools:  # only when there are some, so that a run without tools keeps the fingerprints it has always had
+        parts += (f"tools={json.dumps(tools, sort_keys=True)}",)
     return hashlib.sha256("\x00".join(parts).encode("utf-8")).hexdigest()[:8]
 
 def instrument_header(llm_settings: env, declared: str | None = None) -> dict:
