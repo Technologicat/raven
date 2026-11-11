@@ -41,7 +41,7 @@ Layer 4 - Controller/GUI:   chat_controller.py (~3.0k), chatmessage.py (~2.5k), 
                             chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~370),
                             chatlog_search.py (~390)
 Layer 4 - Scripting:        agent.py (~830), the headless sibling of the controller;
-                            sweep.py (~470), one question over a set of items
+                            sweep.py (~600), one question over a set of items
 Layer 3 - Orchestration:    scaffold.py (~1.8k)
 Layer 2 - Backends:         llmclient.py (~3.1k), llmtools.py (~1.3k), mcpclient.py (~760), hybridir.py (~2.0k)
 Layer 1 - Utilities:        chatutil.py (~2.0k), chatsearch.py (~130), appstate.py (~580), cleanup.py (~290),

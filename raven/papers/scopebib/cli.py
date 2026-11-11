@@ -10,7 +10,7 @@ on a marked copy of the worklist; `compare` says how far two runs agree. Every c
 everything the run used, so passing it back with `--run-file` repeats the run.
 """
 
-__all__ = ["COMMANDS", "DEFAULTS", "DEFINITION_SNAPSHOT", "Plan", "UsageError", "resolve", "execute", "compare_runs", "main"]
+__all__ = ["COMMANDS", "DEFAULTS", "DEFINITION_SNAPSHOT", "run_status", "Plan", "UsageError", "resolve", "execute", "compare_runs", "main"]
 
 import argparse
 import dataclasses
@@ -163,7 +163,44 @@ def _parser() -> argparse.ArgumentParser:
     stamp.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
     stamp.add_argument("--log-level", default="INFO",
                        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"), help="How much to log.")
+    status = commands.add_parser("status", help="How far a run has got, stage by stage: from its folder or its "
+                                                "ledger directory, while it runs or afterwards.")
+    status.add_argument("directory", metavar="DIR",
+                        help="A run's folder (holding its run.toml, which says where the ledgers are), or a ledger "
+                             "directory.")
+    status.add_argument("--log", metavar="PATH", default=None, help="Write the log here instead of to stderr.")
+    status.add_argument("--log-level", default="WARNING",
+                        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"), help="How much to log.")
     return parser
+
+
+# What `status` calls each ledger, by its name before the fingerprint.
+_STAGE_LABELS = {"judge-titles": "judge, from titles", "judge-abstracts": "judge, from abstracts",
+                 "review": "review", "extract": "extract"}
+
+
+def run_status(directory: str | pathlib.Path) -> list[str]:
+    """`raven-scopebib status`: lines saying how far each stage's sweep has got, in pipeline order.
+
+    `directory`: a run's folder, whose `run.toml` names the ledger directory, or a ledger directory.
+
+    Raises `UsageError` when neither holds ledgers.
+    """
+    from ...librarian import sweep  # noqa: PLC0415 -- `cli` imports what each command needs
+    from . import runfile  # noqa: PLC0415
+
+    directory = pathlib.Path(directory).expanduser()
+    ledgers = directory
+    if (directory / "run.toml").exists():
+        maybe_ledgers = runfile.load_run_file(directory / "run.toml").settings.maybe_ledgers
+        if maybe_ledgers is not None:
+            ledgers = maybe_ledgers
+    entries = sweep.status(ledgers)
+    if not entries:
+        raise UsageError(f"no ledgers in {ledgers}")
+    order = list(_STAGE_LABELS)
+    entries.sort(key=lambda e: (order.index(e.name.rsplit("-", 1)[0]) if e.name.rsplit("-", 1)[0] in order else len(order), e.name))
+    return [f"ledgers: {ledgers}"] + sweep.format_status(entries, labels=_STAGE_LABELS)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -514,6 +551,13 @@ def main() -> None:  # pragma: no cover -- `resolve` and `execute` carry the log
             sys.exit(1)
         for path in written:
             print(f"wrote {path}")
+        sys.exit(0)
+    if opts.command == "status":
+        try:
+            print("\n".join(run_status(opts.directory)))
+        except (UsageError, runfile.RunFileError) as exc:
+            print(f"raven-scopebib: {exc}", file=sys.stderr)
+            sys.exit(1)
         sys.exit(0)
     if opts.command == "stamp":
         from .. import bibtex

@@ -429,3 +429,53 @@ class TestSweep:
     def test_a_batch_size_below_one_is_refused(self, llm_settings, tmp_path):
         with pytest.raises(ValueError):
             sweep.Sweep(llm_settings, _echo, _items(1), sweep.Ledger(tmp_path, "run", "x"), batch_size=0)
+
+
+class TestStatus:
+    def test_a_finished_run_says_how_far_it_got_and_how_it_ended(self, llm_settings, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "asked", "abcd1234")
+        sweep.Sweep(llm_settings, _echo, _items(5), ledger, batch_size=2).run()
+        (entry,) = sweep.status(tmp_path)
+        assert entry.name == "asked-abcd1234"
+        assert (entry.state, entry.total, entry.todo, entry.done, entry.failed) == ("completed", 5, 5, 5, 0)
+        assert entry.eta is None
+
+    def test_a_run_with_nothing_to_do_leaves_the_last_runs_state(self, llm_settings, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "asked", "abcd1234")
+        sweep.Sweep(llm_settings, _echo, _items(3), ledger).run()
+        sweep.Sweep(llm_settings, _echo, _items(3), ledger).run()
+        (entry,) = sweep.status(tmp_path)
+        assert (entry.todo, entry.done) == (3, 3)
+
+    def test_a_running_state_from_a_live_process_is_running_with_an_estimate(self, tmp_path):
+        import os
+        import time
+        ledger = sweep.Ledger(tmp_path, "asked", "abcd1234")
+        ledger.path.write_text("")
+        now = time.time()
+        ledger.write_state({"state": "running", "total": 10, "answered_before": 0, "todo": 10, "done": 4, "failed": 0,
+                            "started": now - 40, "updated": now, "elapsed": 40.0, "pid": os.getpid(), "model": "m"})
+        (entry,) = sweep.status(tmp_path)
+        assert entry.state == "running" and entry.eta == pytest.approx(60.0)
+
+    def test_a_running_state_from_a_dead_process_long_unchanged_is_gone(self, tmp_path):
+        import time
+        ledger = sweep.Ledger(tmp_path, "asked", "abcd1234")
+        ledger.path.write_text("")
+        old = time.time() - 3600
+        state = {"state": "running", "total": 10, "answered_before": 0, "todo": 10, "done": 4, "failed": 0,
+                 "started": old - 40, "updated": old, "elapsed": 40.0, "pid": 2 ** 22 + 12345, "model": "m"}
+        ledger.write_state(state)
+        assert sweep.status(tmp_path)[0].state == "gone"
+
+    def test_a_ledger_from_before_state_files_is_counted_from_the_ledger(self, tmp_path):
+        ledger = sweep.Ledger(tmp_path, "asked", "abcd1234")
+        ledger.write_answer("a", 1)
+        ledger.write_answer("b", 2)
+        (entry,) = sweep.status(tmp_path)
+        assert (entry.state, entry.answered) == ("unknown", 2)
+
+    def test_the_lines_name_a_ledger_by_its_label_and_fingerprint(self, llm_settings, tmp_path):
+        sweep.Sweep(llm_settings, _echo, _items(2), sweep.Ledger(tmp_path, "asked", "abcd1234")).run()
+        (line,) = sweep.format_status(sweep.status(tmp_path), labels={"asked": "the question"})
+        assert line.startswith("the question [abcd1234]: completed, 2 of 2 this run (0 failed), 2 items in all")

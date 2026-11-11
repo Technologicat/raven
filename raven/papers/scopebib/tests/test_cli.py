@@ -308,3 +308,27 @@ class TestResuming:
         monkeypatch.setattr(agent, "ask_record", model)
         cli.execute(cli.resolve(parse("run", "--run-file", str(out / "run.toml"))), nlp=_NLP(), connect=connect)
         assert model.calls["extract"] > 0
+
+
+class TestStatus:
+    def _ledgers(self, directory):
+        from raven.librarian import sweep
+        for name, fp in (("extract", "eeee0000"), ("judge-titles", "aaaa0000"), ("review", "rrrr0000")):
+            sweep.Ledger(directory, name, fp).write_answer("x", {"ok": True})
+
+    def test_stages_come_in_pipeline_order_with_their_names(self, tmp_path):
+        self._ledgers(tmp_path)
+        lines = cli.run_status(tmp_path)
+        assert [line.split(":")[0] for line in lines[1:]] == ["judge, from titles [aaaa0000]", "review [rrrr0000]",
+                                                              "extract [eeee0000]"]
+
+    def test_a_run_folder_is_read_through_its_run_file(self, tmp_path):
+        self._ledgers(tmp_path / "elsewhere")
+        (tmp_path / "run").mkdir()
+        (tmp_path / "run" / "run.toml").write_text('[run]\nledgers = "../elsewhere"\n')
+        lines = cli.run_status(tmp_path / "run")
+        assert lines[0].endswith("elsewhere") and len(lines) == 4
+
+    def test_a_folder_with_no_ledgers_is_refused(self, tmp_path):
+        with pytest.raises(cli.UsageError, match="no ledgers"):
+            cli.run_status(tmp_path)

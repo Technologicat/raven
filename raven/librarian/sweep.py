@@ -24,13 +24,16 @@ is a worked example.
 __all__ = ["fingerprint", "instrument_header", "digest",
            "Ledger",
            "completed", "cancelled", "backend_unavailable", "model_changed",
-           "Failure", "Sweep"]
+           "Failure", "Sweep",
+           "status", "format_status", "main"]
 
 import datetime
 import hashlib
 import json
 import logging
+import os
 import pathlib
+import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -40,6 +43,7 @@ from unpythonic import ETAEstimator, sym
 from unpythonic.env import env
 
 from ..common import netutil
+from ..common import utils as common_utils
 
 from . import agent
 from . import llmclient
@@ -136,6 +140,13 @@ class Ledger:
         self.fingerprint = fingerprint
         self.path = self.directory / f"{name}-{fingerprint}.jsonl"
         self.traces_path = self.directory / f"{name}-{fingerprint}-traces.jsonl"
+        self.state_path = self.directory / f"{name}-{fingerprint}-state.jsonl"
+
+    def write_state(self, state: dict) -> None:
+        """Replace the run's state file, one JSON object read by `status`, which says how far a run has got."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        with common_utils.atomic_write(self.state_path) as f:
+            f.write(json.dumps(state, ensure_ascii=False) + "\n")
 
     def _append(self, path: pathlib.Path, payload: dict) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -378,9 +389,21 @@ class Sweep:
         last_logged_count = None
         outcome, message = completed, ""
 
+        started = time.time()
+
+        def save_state(state: str, elapsed: float) -> None:
+            # For `status`, from another terminal. A run with nothing to do leaves the state of the last one.
+            if todo:
+                self.ledger.write_state({"state": state, "total": len(self.items), "answered_before": len(answered),
+                                         "todo": len(todo), "done": done, "failed": failed, "started": started,
+                                         "updated": time.time(), "elapsed": elapsed, "pid": os.getpid(),
+                                         "model": self.llm_settings.model})
+
         def report(ids: list[str], final: bool = False) -> None:
             nonlocal last_logged, last_logged_count
             elapsed = time.monotonic() - t0
+            if not final:
+                save_state("running", elapsed)
             status_line = f"{done + failed} / {len(todo)} items, {failed} failed; {eta.formatted_eta}"
             with self._lock:
                 self._progress = env(done=done, failed=failed, total=len(todo), elapsed=elapsed, eta=eta,
@@ -469,6 +492,104 @@ class Sweep:
                 break
 
         report([], final=True)
+        save_state(str(outcome), time.monotonic() - t0)
         if message:
             logger.warning(f"Sweep.run: stopped: {message}")
         return env(outcome=outcome, message=message, done=done, failed=failed, total=len(todo))
+
+
+# --------------------------------------------------------------------------------
+# How far a run has got, from another terminal
+
+# A running state not updated for this long, from a process that is gone, is a run that died without saying so.
+_STALE_SECONDS = 600
+
+
+def _process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # it exists, as another user's
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def status(directory: str | pathlib.Path) -> list[env]:
+    """How far each sweep in `directory`, a ledger directory, has got. One `env` per ledger, sorted by name.
+
+    Each has `name` (the ledger's file name without `.jsonl`), and from the state file a run writes as it goes:
+    `state` (`"running"`, an outcome such as `"completed"` or `"model_changed"`, or `"gone"` for a run whose process
+    has died without saying so), `total`, `todo`, `done`, `failed`, `started`, `updated` (both epoch seconds),
+    `elapsed` and `eta` (seconds, `None` when it cannot be estimated) and `model`. A ledger written before runs kept
+    a state file has `state` `"unknown"` and only `answered`, counted from the ledger itself.
+
+    Reads files only, so it can be asked of a run going on in another process, or on another machine's disk.
+    """
+    directory = pathlib.Path(directory)
+    out = []
+    for path in sorted(directory.glob("*.jsonl")):
+        stem = path.name[:-len(".jsonl")]
+        if stem.endswith(("-traces", "-state")) or "-" not in stem:
+            continue
+        name, fp = stem.rsplit("-", 1)
+        ledger = Ledger(directory, name, fp)
+        if not ledger.state_path.exists():
+            out.append(env(name=stem, state="unknown", answered=len(ledger.answers())))
+            continue
+        state = json.loads(ledger.state_path.read_text(encoding="utf-8"))
+        tried = state["done"] + state["failed"]
+        remaining = state["todo"] - tried
+        if state["state"] == "running" and not _process_alive(state["pid"]) and time.time() - state["updated"] > _STALE_SECONDS:
+            state["state"] = "gone"
+        eta = state["elapsed"] / tried * remaining if (state["state"] == "running" and tried and remaining) else None
+        out.append(env(name=stem, eta=eta, **{k: state[k] for k in ("state", "total", "todo", "done", "failed",
+                                                                     "started", "updated", "elapsed", "model")}))
+    return out
+
+
+def _duration(seconds: float) -> str:
+    seconds = int(seconds)
+    return f"{seconds // 3600} h {seconds % 3600 // 60:02d} min" if seconds >= 3600 else f"{seconds // 60} min {seconds % 60:02d} s"
+
+
+def format_status(entries: Sequence[env], *, labels: Mapping[str, str] | None = None) -> list[str]:
+    """`status`'s answer as lines for a terminal. `labels` maps a ledger's name (without the fingerprint) to what
+    to call it, e.g. a stage's name, with the fingerprint after it in brackets, since a replicate shares the name;
+    a ledger it does not name is called by its file name."""
+    lines = []
+    for entry in entries:
+        name, fp = entry.name.rsplit("-", 1)
+        label = f"{labels[name]} [{fp}]" if labels and name in labels else entry.name
+        if entry.state == "unknown":
+            lines.append(f"{label}: {entry.answered} answered (no state recorded)")
+            continue
+        progress = f"{entry.done + entry.failed} of {entry.todo} this run ({entry.failed} failed), {entry.total} items in all"
+        when = datetime.datetime.fromtimestamp(entry.updated).strftime("%Y-%m-%d %H:%M")
+        if entry.state == "running":
+            eta = f", about {_duration(entry.eta)} left" if entry.eta is not None else ""
+            lines.append(f"{label}: running, {progress}; {_duration(entry.elapsed)} so far{eta} (last update {when})")
+        elif entry.state == "gone":
+            lines.append(f"{label}: stopped without saying so, at {progress} (last update {when}); run again to resume")
+        else:
+            lines.append(f"{label}: {entry.state.replace('_', ' ')}, {progress}, in {_duration(entry.elapsed)} (at {when})")
+    return lines
+
+
+def main() -> None:  # pragma: no cover -- `status` and `format_status` carry the logic, and are tested
+    import argparse
+    parser = argparse.ArgumentParser(prog="python -m raven.librarian.sweep",
+                                     description="How far the sweeps in a ledger directory have got.")
+    parser.add_argument("directories", nargs="+", metavar="DIR", help="A ledger directory.")
+    opts = parser.parse_args()
+    for directory in opts.directories:
+        entries = status(directory)
+        if len(opts.directories) > 1:
+            print(f"{directory}:")
+        print("\n".join(format_status(entries)) if entries else f"no ledgers in {directory}")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

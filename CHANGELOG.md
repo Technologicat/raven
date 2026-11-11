@@ -37,6 +37,7 @@
   - A backend that goes away, or a model swapped mid-run, stops the run with a message, instead of marking every remaining item as failed.
   - Several items per model call, progress and an ETA for a console or a GUI, and cancelling that reaches the call in flight.
   - `agent.turn`, `agent.ask` and `agent.ask_record` take `maybe_abort`, which is what makes that cancel possible.
+  - A run keeps a small state file beside its ledger, and `python -m raven.librarian.sweep DIR` says from it how far each run in a directory has got, while it goes or after it stopped.
 - **A setting for whether the AI gets back its thinking from earlier turns**: `llm_retain_thinking` in `raven.librarian.config`, on by default.
   - Off, thinking from before your latest message is no longer sent. Thinking within the current reply, across its tool calls, still is.
   - The context-fill readout now counts the thinking that is sent. It used to count none.
@@ -113,6 +114,7 @@
   - `run.toml` is written before anything is asked, naming every step's model and instrument, the steps not yet reached included; so a run that dies partway, by Ctrl+C or a crash, can be resumed the same way.
   - On LM Studio, each step can use a model of its own, `--model STEP=KEY`: the run loads each in turn, by itself, and loads the starting model again at the end.
   - `--replicate` and `raven-scopebib compare` measure how far two runs agree, with Cohen's kappa: the test-retest reliability of the LLM's answers, or one model against another.
+  - `raven-scopebib status` says how far a run has got, stage by stage, from its folder or its ledger directory: what is done, what failed, and about how long is left. It reads files only, so it works from another terminal while the run goes, or after it stopped.
   - How to write a definition file, and the rest, is in [the paper tools' manual](raven/papers/README.md#raven-scopebib--telling-which-records-are-about-what-you-searched-for).
 
 #### Raven-checkrefs

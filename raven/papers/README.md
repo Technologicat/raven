@@ -817,6 +817,15 @@ raven-scopebib compare rep1/run.toml rep2/run.toml
 
 `compare` reads two run files and writes, beside the second, `compare-with-<first run's directory>` and a list of the records the two disagreed on. It asks no backend. For each step — the judge's verdict, each test and its confidence, the reviewer's answer, each closed field — it gives the number of records both runs answered, the share on which they agree, and **Cohen's kappa**: the agreement beyond what chance would give, if each run gave each answer as often as it does. 1 is perfect agreement and 0 no better than chance; kappa is not defined where both runs gave a single answer throughout. See [Cohen's kappa](https://en.wikipedia.org/wiki/Cohen%27s_kappa) for more. Two different models compare the same way.
 
+### How far a run has got: `status`
+
+```bash
+raven-scopebib status run/          # a run's folder; its run.toml says where the ledgers are
+raven-scopebib status ledgers/      # or a ledger directory
+```
+
+One line per step, in pipeline order: what this run has done of what it set out to do, how many failed, and about how long is left, or how it ended. It reads files only, so it can be asked from another terminal while the run goes, or after it stopped; a run whose process died without saying so is reported as such. A step answered before steps kept a state file shows only its count of answers.
+
 ## `raven-checkrefs` — does the document still match the corpus?
 
 Every other tool here turns a `.bib` into a better one. This one changes nothing: it compares a corpus with something a person has written from it — a manuscript's reference list, an appendix table, a coauthor's working list — and says where the two no longer agree.
