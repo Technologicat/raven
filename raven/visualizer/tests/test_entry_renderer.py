@@ -257,3 +257,30 @@ class TestClusterIDOrdering:
 
     def test_the_misc_group_alone_is_still_the_misc_group(self):
         assert entry_renderer.order_cluster_ids([-1]) == [-1]
+
+
+# --------------------------------------------------------------------------------
+# Cluster purity, in words
+
+class TestPurityReadouts:
+    def test_the_dataset_purity_is_a_sentence_with_a_percentage(self):
+        text = entry_renderer.format_dataset_purity(env(dataset_purity=0.583))
+        assert "58%" in text and "closest neighbours" in text
+
+    def test_a_dataset_imported_before_purity_was_measured_has_no_readout(self):
+        # The field is absent from the file altogether, not `None`.
+        assert entry_renderer.format_dataset_purity(env(labels=[])) is None
+
+    def test_a_dataset_with_no_clusters_has_no_readout(self):
+        assert entry_renderer.format_dataset_purity(env(dataset_purity=None)) is None
+
+    def test_each_cluster_reads_its_own_purity(self):
+        file_content = env(cluster_purities=[0.62, 0.35])
+        assert entry_renderer.format_cluster_purity(file_content, 0) == "purity 62%"
+        assert entry_renderer.format_cluster_purity(file_content, 1) == "purity 35%"
+
+    def test_misc_and_undefined_clusters_show_nothing(self):
+        file_content = env(cluster_purities=[0.62, None])
+        assert entry_renderer.format_cluster_purity(file_content, -1) is None
+        assert entry_renderer.format_cluster_purity(file_content, 1) is None
+        assert entry_renderer.format_cluster_purity(env(labels=[]), 0) is None

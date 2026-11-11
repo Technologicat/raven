@@ -49,6 +49,7 @@ from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
 from . import config as visualizer_config
+from . import entry_renderer
 from .app_state import app_state
 
 gui_config = visualizer_config.gui_config
@@ -393,6 +394,12 @@ def load_dataset(ds):
             _cluster_color_themes.append(this_scatterplot_theme)
 
         dpg.set_item_label("plot", f"Semantic map [{os.path.basename(ds.absolute_filename)}]")  # tag
+        maybe_purity_text = entry_renderer.format_dataset_purity(ds.file_content)
+        if maybe_purity_text is not None:
+            dpg.set_value("dataset_purity_text", maybe_purity_text)  # tag
+            dpg.show_item("display_filters_group")  # tag
+        else:
+            dpg.hide_item("display_filters_group")  # tag
         reset_zoom()
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 

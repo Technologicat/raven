@@ -59,6 +59,8 @@
   - `"agglomerative"` clusters in the embedding space, and in the corpora we have tested places more of the corpus in clusters. Clusters of fewer than 5 records are shown as outliers. The tree is cut at 100 clusters (`clustering_n_clusters`), lowered for a small corpus so that clusters hold at least 10 records on average (`clustering_min_mean_cluster_size`). The map still positions the points, so a cluster can look scattered on it.
   - `"llm"` is for a small corpus: one LLM call groups every record into themes by what it is about. The themes are named, and the map shows one circle per theme. A corpus too large for one prompt is refused before asking. What the collection is for can be given to the model as context: `raven-importer --aim` or `--aim-file`, or the window's aim field.
   - The dataset records which method made it.
+- **The Visualizer says how tight its clusters are.** A line above the plot gives the dataset's cluster purity: on average, how many of a clustered record's closest neighbours are in its own cluster. Each cluster's header in the info panel gives its own.
+  - The importer measures it in the embedding space, whichever clustering method made the clusters. A dataset imported with an earlier version shows neither; importing it again adds them.
 
 #### Raven-server
 

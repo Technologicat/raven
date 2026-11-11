@@ -335,6 +335,7 @@ def reset_app_state(_update_gui=True):
         plotter.clear_cluster_color_themes()
 
         dpg.set_item_label("plot", "Semantic map [no dataset loaded]")  # tag  # TODO: DRY duplicate definitions for labels
+        dpg.hide_item("display_filters_group")  # tag
 
 
 def open_file(filename):
@@ -789,6 +790,11 @@ with timer() as tim:
                             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255), tag="search_field_text_color")
                             dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (140, 140, 140))
                     dpg.bind_item_theme("search_field", "search_field_theme")  # tag
+
+                # Readouts about the dataset shown, and the controls that act on them. Above the plot, which fills
+                # the rest of the column. Hidden while nothing in it applies; `plotter.load_dataset` fills it.
+                with dpg.group(tag="display_filters_group", horizontal=True, show=False):
+                    dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
 
                 # Plotter.
                 # Configure explicitly so we are future-proof against possible defaults changes in DPG.

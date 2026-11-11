@@ -1460,7 +1460,9 @@ def _update_info_panel(*, task_env=None, env=None):
             cluster_title_widget = dpg.add_text(cluster_title, tag=f"cluster_{cluster_id}_title_build{env.internal_build_number}", color=(180, 180, 180), parent=cluster_header_group)
             dpg.set_item_user_data(cluster_title_widget, ("cluster_title", cluster_id))  # for `_is_cluster_title`
             plural_s = "s" if len(entries_by_cluster[cluster_id]) != 1 else ""
-            entries_text = f"[{len(entries_by_cluster[cluster_id])} item{plural_s}]"
+            maybe_purity_text = entry_renderer.format_cluster_purity(ds.file_content, cluster_id)
+            purity_part = f", {maybe_purity_text}" if maybe_purity_text is not None else ""
+            entries_text = f"[{len(entries_by_cluster[cluster_id])} item{plural_s}{purity_part}]"
             dpg.add_text(entries_text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_count_build{env.internal_build_number}", parent=cluster_header_group)
             dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)
 

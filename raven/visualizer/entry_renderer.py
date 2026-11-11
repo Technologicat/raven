@@ -21,6 +21,8 @@ Public API:
     the title, when there are none), then year, then title.
   - `order_cluster_ids(cluster_ids)` — sort ascending with the misc group
     (cluster `-1`) moved to the end.
+  - `format_dataset_purity(file_content)`, `format_cluster_purity(file_content,
+    cluster_id)` — the importer's cluster purity, in words.
 
 Cross-module state read via `app_state`:
   `dataset` (for `sorted_entries`, `file_content.keywords_available`, and
@@ -28,7 +30,8 @@ Cross-module state read via `app_state`:
 """
 
 __all__ = ["reference_order", "get_entries_for_selection",
-           "order_cluster_ids"]
+           "order_cluster_ids",
+           "format_dataset_purity", "format_cluster_purity"]
 
 import collections
 import math
@@ -135,3 +138,28 @@ def order_cluster_ids(cluster_ids):
     if out and out[0] == -1:  # move the misc group (if any) to the end
         out = out[1:] + [-1]
     return out
+
+
+def format_dataset_purity(file_content) -> str | None:
+    """The dataset's cluster purity as a sentence, or `None` for a dataset that does not record it.
+
+    `file_content`: a loaded dataset file (`dataset.file_content`). Datasets imported before purity was measured
+                    lack it, as does one where no record is in a cluster.
+    """
+    maybe_purity = getattr(file_content, "dataset_purity", None)
+    if maybe_purity is None:
+        return None
+    return (f"Cluster purity: on average, {maybe_purity:.0%} of a clustered record's closest neighbours "
+            f"are in its own cluster.")
+
+
+def format_cluster_purity(file_content, cluster_id: int) -> str | None:
+    """Cluster `cluster_id`'s purity, as `"purity 62%"`, or `None` where there is none to show.
+
+    `None` for the Misc group (-1), for a dataset that does not record purity, and for a cluster whose purity is
+    undefined (a cluster of one). `format_dataset_purity` is the sentence that says what the number means.
+    """
+    purities = getattr(file_content, "cluster_purities", None)
+    if cluster_id < 0 or purities is None or cluster_id >= len(purities) or purities[cluster_id] is None:
+        return None
+    return f"purity {purities[cluster_id]:.0%}"
