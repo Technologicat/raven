@@ -584,6 +584,19 @@ AOKK's kept and held records after screening, 2,032 records in 74 agglomerative 
   10 s here with FFT gradients.
 - **Exaggeration 4 is worse by this measure**, despite Böhm, Berens and Kobak (2022) placing it nearest UMAP: it pulls
   the map into one continuum, which on a corpus this crowded (one search on one topic) merges neighbouring clusters.
+- **The importer's own settings (Gove et al. 2022: learning rate 10, 500 iterations, perplexity max(16, n/100)) do as
+  well as openTSNE's defaults** when fitted on every record: 0.580 against 0.582, in half the time (4.9 s against
+  9.8 s). The importer keeps them, and since 2026-11-11 fits on every record, centered.
+- **Time for a full fit**, those settings, FFT gradients, 8 threads, on the hydrogen-production corpus's 1024-dimensional
+  vectors (embedding time not included):
+
+  | records | perplexity | time |
+  |---|---|---|
+  | 12,000 | 120 | 12 s |
+  | 91,500 | 100 | 107 s |
+  | 91,500 | 300 | 184 s |
+
+  The Visualizer's GUI becomes unusable well before 100k points, so no sample path is kept for large datasets.
 - Not yet tried: PaCMAP, which is a new dependency. The plots colour by cluster with 20 colours, so colours repeat
   across clusters; read the numbers, and the plots only for shape.
 

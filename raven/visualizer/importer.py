@@ -735,8 +735,9 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
 def _reduce_dimension(unique_vs, n_clusters, all_vectors):
     """Reduce the dimensionality of the semantic vectors from the high-dimensional space into 2D.
 
-    `unique_vs`: output of `_cluster_highdim_semantic_vectors`, which see.
-    `n_clusters`: output of `_cluster_highdim_semantic_vectors`, which see.
+    `unique_vs`: output of `_cluster_highdim_semantic_vectors`, which see: the sample UMAP is fitted on. `None` for
+                 t-SNE, which is fitted on every entry.
+    `n_clusters`: output of `_cluster_highdim_semantic_vectors`, which see. `None` for t-SNE.
     `all_vectors`: output of `_get_highdim_semantic_vectors`, which see.
 
     Returns `lowdim_data`, a rank-2 `np.array` of shape `[N, 2]`, containing a 2D point for each entry.
@@ -752,7 +753,8 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
           (in this case, hypersphere surface) is forcibly crumpled into a planar 2D representation,
           using the available plot area efficiently.
 
-    The dimension reducer runs in a single thread on CPU and may take a long time (minutes).
+    t-SNE is fitted on every entry, centered as the agglomerative clustering centers them. UMAP is fitted on the
+    representative sample and the rest of the dataset placed by it, which is what keeps UMAP's run time bearable.
     """
     logger.info("Dimension reduction for visualization...")
     _update_status_and_log(f"Loading dimension reduction library for '{visualizer_config.vis_method}'...", log_indent=1)
@@ -781,17 +783,20 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
             #
             # See also:
             #   https://pgg1610.github.io/blog_fastpages/python/data-visualization/2021/02/03/tSNEvsUMAP.html
+            #
+            # Fitted on every entry, not on a sample placed with `transform`: on a crowded corpus the sample (from the
+            # high-dimensional seed pass) is thin, and the map then loses most of the cluster structure. Measured in
+            # `investigations/highdim-clustering/` ("The 2D map"): neighbour agreement with the high-D clusters 0.31
+            # from the sample, 0.58 from every entry; a full fit with FFT gradients took 12 s at 12k entries.
             import openTSNE
             trans = openTSNE.TSNE(n_components=2,
-                                  perplexity=max(16.0, len(unique_vs) / 100.0),
+                                  perplexity=max(16.0, len(all_vectors) / 100.0),
                                   exaggeration=1.0,
                                   learning_rate=10.0,
                                   metric="cosine",
                                   n_iter=500,
-                                  # n_jobs=6,
-                                  # n_jobs=n_jobs,
-                                  # initialization="pca",
-                                  # initialization="spectral",
+                                  negative_gradient_method="fft",
+                                  n_jobs=8,
                                   random_state=42)
         elif visualizer_config.vis_method == "umap":
             # UMAP (Uniform Manifold Approximation and Projection) assumes that the data is uniformly distributed
@@ -824,10 +829,18 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
     if _is_cancelled():
         return
 
+    if visualizer_config.vis_method == "tsne":
+        with timer() as tim:
+            _update_status_and_log(f"Mapping the full dataset into 2D [n = {len(all_vectors)}]...", log_indent=1)
+            lowdim_data = np.asarray(trans.fit(_centered(all_vectors)))
+        progress.tick()
+        progress.tick()
+        logger.info(f"        Done in {tim.dt:0.6g}s.")
+        return lowdim_data
+
     with timer() as tim:
         _update_status_and_log(f"Learning dimension reduction into 2D from the detected {n_clusters} semantic clusters, using {len(unique_vs)} representative points...", log_indent=1)
         trans = trans.fit(unique_vs)
-        # trans = trans.fit(all_vectors)  # DEBUG: high quality result, but extremely expensive! (several minutes for 5k points)
     progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
@@ -847,6 +860,18 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
 CLUSTERING_METHODS = ("hdbscan_2d", "agglomerative", "llm")
 
 
+def _centered(vectors) -> np.ndarray:
+    """`vectors` normalized, the corpus mean direction removed, and normalized again, as `float64`.
+
+    Embeddings share a large common component, which crowds every cosine similarity into a narrow band; removing it
+    widens the range a clustering or a map works over. Measured in `investigations/highdim-clustering/` (finding 7).
+    """
+    vectors = np.asarray(vectors, dtype=np.float64)
+    vectors = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    vectors = vectors - vectors.mean(axis=0, keepdims=True)
+    return vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+
+
 def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
     """Cluster labels from agglomerative clustering of the high-dimensional vectors.
 
@@ -860,15 +885,10 @@ def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
     """
     from sklearn.cluster import AgglomerativeClustering
 
-    vectors = np.asarray(all_vectors, dtype=np.float64)
-    if len(vectors) < 2:
-        return np.full(len(vectors), -1, dtype=np.int64)
-    # Center, then normalize. Embeddings share a large common component, which crowds every cosine similarity
-    # into a narrow band; removing it widens the range the clustering works over. Measured in
-    # `investigations/highdim-clustering/` (finding 7), along with the choice of method and cut below.
-    vectors = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
-    vectors = vectors - vectors.mean(axis=0, keepdims=True)
-    vectors = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    if len(all_vectors) < 2:
+        return np.full(len(all_vectors), -1, dtype=np.int64)
+    # The method and the cut below are the ones measured in `investigations/highdim-clustering/`.
+    vectors = _centered(all_vectors)
     raw = AgglomerativeClustering(n_clusters=min(n_clusters, len(vectors)),
                                   metric="cosine",
                                   linkage="average").fit_predict(vectors)
@@ -1933,7 +1953,10 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
             progress.tock()
             progress.tock()
         else:
-            unique_vs, n_clusters = _cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
+            if visualizer_config.vis_method == "umap":  # fitted on a sample, which this finds; t-SNE is fitted on everything
+                unique_vs, n_clusters = _cluster_highdim_semantic_vectors(all_vectors)
+            else:
+                unique_vs, n_clusters = None, None
             progress.tock()
             if _is_cancelled():
                 return False

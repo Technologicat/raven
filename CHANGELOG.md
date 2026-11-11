@@ -161,6 +161,10 @@
 - **Within each cluster, the info panel and the plot's tooltip list papers in reference-list order**: by authors, then year, then title, where they were by title.
   - A paper with no authors is listed by its title in their place, as a reference list puts it, and an undated one after the dated ones by the same authors.
   - Accents do not move a name to the end: *Sá* comes before *Sipos*.
+- **The semantic map keeps the dataset's topical structure much better.** With `vis_method = "tsne"`, the default, the map is now fitted on every record, where before it was fitted on a sample and the rest of the records placed by that fit.
+  - On a corpus about a single topic, the sample was thin, and records of one cluster could end up spread across the whole map.
+  - The import takes somewhat longer: on our test machine, about ten seconds for a few thousand records.
+  - `vis_method = "umap"` is unchanged.
 
 #### Raven-deduplicate
 

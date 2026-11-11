@@ -1223,6 +1223,35 @@ class TestClustering:
         assert n_clusters == 0
         assert np.array_equal(unique_vs, vectors)
 
+    def test_the_tsne_map_keeps_each_group_among_its_own(self, monkeypatch):
+        # Every entry's nearest neighbours on the map should come from its own direction. Two directions is the
+        # smallest fixture where a map that had lost the structure would show it.
+        import numpy as np
+        from sklearn.neighbors import NearestNeighbors
+        monkeypatch.setattr(importer.visualizer_config, "vis_method", "tsne")
+        all_vectors = two_directions(n_per_cluster=40)
+        group = np.repeat([0, 1], 40)
+        lowdim = importer._reduce_dimension(None, None, all_vectors)
+        assert lowdim.shape == (80, 2)
+        _, idx = NearestNeighbors(n_neighbors=6).fit(lowdim).kneighbors(lowdim)
+        agreement = (group[idx[:, 1:]] == group[:, None]).mean()
+        assert agreement > 0.95, f"only {agreement:.2f} of each entry's map neighbours share its group"
+
+    def test_the_tsne_map_is_fitted_on_every_entry(self, monkeypatch):
+        # Fitting t-SNE on the seed pass's sample and placing the rest with `transform` lost most of the cluster
+        # structure on a crowded corpus; the fit takes every entry, centered.
+        monkeypatch.setattr(importer.visualizer_config, "vis_method", "tsne")
+        fitted = []
+        real_centered = importer._centered
+
+        def recording_centered(vectors):
+            fitted.append(len(vectors))
+            return real_centered(vectors)
+
+        monkeypatch.setattr(importer, "_centered", recording_centered)
+        importer._reduce_dimension(None, None, two_directions(n_per_cluster=20))
+        assert fitted == [40], "t-SNE was not fitted on every entry"
+
     def test_the_2d_pass_tags_each_entry_with_its_own_cluster(self):
         # The tagging walks `vis_data` and `labels` by the same index, so an off-by-one here would mislabel
         # every point in the dataset while looking perfectly healthy -- every entry still gets *a* cluster.
