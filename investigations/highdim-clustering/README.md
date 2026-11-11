@@ -560,12 +560,40 @@ flag comes and goes, so a prompt that wants it must ask for it. The runs are kep
   and worth checking before the rework, since the answer would apply to the shipped pipeline rather
   than only to this apparatus.
 
+## The 2D map: how much of the clustering it keeps (2026-11-11)
+
+**Question:** with the clusters found in the embedding space (agglomerative), does the importer's map keep them
+together? In the Visualizer, one such cluster was spread over the whole map. `map_layout.py` scores a layout by
+neighbour agreement: for each clustered record, the share of its 10 nearest neighbours on the map in its own cluster.
+
+AOKK's kept and held records after screening, 2,032 records in 74 agglomerative clusters with 77 outliers:
+
+| layout | agreement |
+|---|---|
+| floor: random points | 0.041 |
+| **the importer's map**: t-SNE fitted on a sample of high-D HDBSCAN seeds, the rest placed by `transform` | **0.313** |
+| openTSNE fitted on every record (FFT), exaggeration 1 | 0.534 |
+| the same, exaggeration 4 | 0.322 |
+| openTSNE fitted on every record, **centered vectors**, exaggeration 1 | **0.582** |
+| the same, exaggeration 4 | 0.329 |
+| ceiling-ish: the same measure in the centered embedding space itself | 0.570 |
+
+- **The sample is what loses the structure.** Fitting on every record nearly doubles the agreement, and on centered
+  vectors, the space the clusters were found in, it reaches the embedding space's own figure. On this corpus the
+  importer's seed pass found 22 clusters and 1,794 outliers, so the training sample was thin. A full fit took about
+  10 s here with FFT gradients.
+- **Exaggeration 4 is worse by this measure**, despite Böhm, Berens and Kobak (2022) placing it nearest UMAP: it pulls
+  the map into one continuum, which on a corpus this crowded (one search on one topic) merges neighbouring clusters.
+- Not yet tried: PaCMAP, which is a new dependency. The plots colour by cluster with 20 colours, so colours repeat
+  across clusters; read the numbers, and the plots only for shape.
+
 ## Scripts
 
 | script | what it answers |
 |---|---|
 | `clusterlab.py` | shared loading, normalization, centering, PCA and the scoring metrics. Not a script |
 | `sweep.py` | which HDBSCAN hyperparameters give what, in a chosen space. `--center`, `--pca N`, `--metric` |
+| `map_layout.py` | how much of a dataset's high-D clustering a 2D layout keeps: neighbour agreement for the importer's map and for openTSNE variants, against a random floor and the embedding space itself, with a plot of each |
 | `show_clusters.py` | one configuration's clusters with their titles, nearest-the-centre first, for judging coherence. `--algorithm agglomerative` fits the recommended method; `--llm-keywords` labels each cluster with the LLM (see below); `--assign-outliers` tests brief item 3 |
 | `compare_methods.py` | HDBSCAN vs k-means vs agglomerative vs the shipped 2D labelling, on one yardstick. **Unmatched — read with `matched_control.py`, not alone** |
 | `matched_control.py` | the negative control: the same comparison at matched coverage and matched cluster count, against a random floor. This is the one that settled finding 5 |
