@@ -460,6 +460,33 @@ class TestTurn:
         assert [message["role"] for message in bare] == ["user"]
         assert [message["role"] for message in in_character] == ["system", "assistant", "user"]
 
+    def test_the_bare_models_task_is_not_spoken_by_anyone(self, monkeypatch, llm_settings):
+        # The persona prefix ("<user name>: ...") belongs to the character, so a bare turn's task goes out without it,
+        # both as stored and on the wire. The in-character turn is the control: there the prefix is sent.
+        prompts = []
+
+        def fake_invoke(**kw):
+            passed = {name: kw[name] for name in ("add_personas",) if name in kw}  # what `invoke` would forward
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"], **passed))
+            return make_invoke_result(content="raven, corvid")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        user = llm_settings.personas["user"]
+        assert user, "the fixture's user has no persona name, so this test cannot tell a prefix from none"
+
+        bare = agent.turn(llm_settings, "Extract the keywords.", use_character_card=False, tools_enabled=False)
+        agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
+
+        def sent_task(prompt):
+            return chatutil.content_to_text(prompt[-1]["content"])
+
+        bare_prompt, in_character_prompt = prompts
+        assert sent_task(in_character_prompt) == f"{user}: Extract the keywords."
+        assert sent_task(bare_prompt) == "Extract the keywords."
+        task_node_id = bare.datastore.get_parent(bare.head_node_id)
+        stored = chatutil.content_to_text(bare.datastore.get_payload(task_node_id)["message"]["content"])
+        assert stored == "Extract the keywords."
+
     def test_the_bare_models_stored_reply_is_not_spoken_by_anyone(self, monkeypatch, llm_settings):
         # The persona prefix is part of the character, so it goes with it. `reply` is stripped either way,
         # which is what hid this: the text a parser reads is the *stored* one, and a caller that saves the

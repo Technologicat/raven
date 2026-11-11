@@ -1133,8 +1133,8 @@ class TestOneShotRequest:
 
         agent.ask_record(invoke_settings, "Extract the keywords.")
 
-        # The name is the configured user's, so this holds on any machine; the rest is the shape.
-        task = f"{invoke_settings.personas['user']}: Extract the keywords."
+        # A one-shot runs without the character card, so the task carries no persona prefix.
+        task = "Extract the keywords."
         assert sent["json"] == {"stream": True,
                                 "messages": [{"role": "user",
                                               "content": [{"type": "text", "text": task}],

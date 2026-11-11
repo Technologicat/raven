@@ -2110,7 +2110,8 @@ def serialize_history_for_wire(settings: env,
                                history: list[dict],
                                *,
                                continue_: bool,
-                               datastore: chattree.PersistentForest | None = None) -> list[dict]:
+                               datastore: chattree.PersistentForest | None = None,
+                               add_personas: bool = True) -> list[dict]:
     """Return a wire-ready deep copy of `history`: text scrubbed, image parts preserved and sidecar-resolved.
 
     Per-message transform, applied to every message (or all but the last when `continue_`):
@@ -2150,6 +2151,10 @@ def serialize_history_for_wire(settings: env,
     `datastore`: the chat's `PersistentForest`, needed only to resolve the `sidecar:` URLs of attachments.
                  A history with no attachments — which is what a script assembling a prompt from
                  `scaffold.build_turn_prompt` usually has — needs none, and the default is therefore `None`.
+
+    `add_personas`: whether each message's text is prefixed with its role's persona name (`"Aria: ..."`). `False`
+                    for a turn without the character card, where there are no personas to speak; a prefix stored
+                    in the history is then removed.
     """
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't touch the current AI message when continuing; else process all.
@@ -2169,7 +2174,7 @@ def serialize_history_for_wire(settings: env,
                                              text=chatutil.content_to_text(message["content"]),
                                              thoughts_mode="discard",
                                              markup=None,
-                                             add_persona=True))
+                                             add_persona=add_personas))
         if datastore is None:
             continue
         for part in message["content"]:
@@ -2407,7 +2412,8 @@ def invoke(settings: env,
            calibrate: bool = True,
            maybe_abort: netutil.Abort | None = None,
            on_partial_message: Callable | None = None,
-           purpose: str = "turn") -> env:
+           purpose: str = "turn",
+           add_personas: bool = True) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -2537,6 +2543,9 @@ def invoke(settings: env,
     `purpose`: What this call is for, named in every log line this function writes. `"turn"` (default) is a
                real generation; `prefill` passes its own.
 
+    `add_personas`: whether each message on the wire is prefixed with its role's persona name; `False` for a turn
+                    without the character card. See `serialize_history_for_wire`.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -2574,7 +2583,8 @@ def invoke(settings: env,
     data = copy.deepcopy(settings.request_data)
 
     # Normalize message content for resend (see `serialize_history_for_wire`).
-    history = serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
+    history = serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore,
+                                         add_personas=add_personas)
 
     # Held, not logged: on a refusal this is the diagnosis (see `_describe_strict_template_violations`).
     template_violations = _describe_strict_template_violations(history)

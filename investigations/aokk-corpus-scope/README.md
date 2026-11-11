@@ -1018,6 +1018,29 @@ wrong keep from passing on a title alone. Measured in two parts, the second chec
    hand**: those are labels already made. They had: the held-for-review tier. **The design for the sample itself is in
    `blind-sample-design.md`.**
 
+## The user's persona prefix in a one-shot prompt (2026-11-11)
+
+**Question:** until 2026-11-11 a one-shot turn without the character card still sent its task as `Juha: You are
+screening…`, the user's persona name being prepended to the stored message and again on the wire. The sweep
+fingerprint does not cover that prefix. Does dropping it change the answers, which would mean the existing
+ledgers no longer describe what the code asks?
+
+The 72 hand-screened records (the 2026-11-06c run, Qwen 3.8 27B), run three ways: run 1 with the prefix, a
+replicate with the prefix (`replicate = 2`, so fresh answers), and a run without it. Traces confirmed the prefix
+present in run 1 and absent in the third. Verdict agreement with run 1:
+
+| run | agreement | Cohen's κ | removed / to a person / kept |
+|---|---|---|---|
+| run 1 itself | | | 55 / 13 / 4 |
+| replicate, same prompt | 0.86 | 0.62 | 54 / 16 / 2 |
+| without the prefix | 0.93 | 0.80 | 57 / 9 / 6 |
+
+The reviewer and the extracted fields show the same order. **Dropping the prefix changes the answers no more
+than running again does**; with one run each on 72 records, its being the smaller of the two is within the noise.
+So the prefix was dropped from bare turns (`agent.turn(..., use_character_card=False)`), the fingerprint left as
+it was, and the ledgers written with the prefix kept. The data is in
+`00_stuff/rawdata/AOKK/scopebib-2026-11-11-persona/`, gitignored.
+
 ## Files
 
 | File | What it is |

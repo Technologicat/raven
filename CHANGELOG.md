@@ -208,6 +208,8 @@
 - **An embedding model loaded in LM Studio beside the chat model is no longer taken for it.** Before, whichever loaded model LM Studio listed first was the one Librarian named and sent requests to.
 - **A web search with a blank query tells the AI that the query was blank**, and that it must not be. Before, the AI was told that the search engine did not respond, which was not what had gone wrong.
   - Raven-server refuses a blank query too, and a `max_links` that is not a positive integer.
+- **A scripted turn without the character card no longer sends the task under the user's name.** `raven.librarian.agent.turn` with `use_character_card=False`, which the batch tools use, prefixed the task with the user's persona name (`Name: ...`), both in the stored chat and on the wire.
+  - We measured this on one screening run: dropping the prefix changed the answers no more than running the same prompt again did, so saved answers in ledgers remain valid.
 
 #### Raven-visualizer
 

@@ -555,7 +555,8 @@ def turn(llm_settings: env,
                                           head_node_id=head_node_id,
                                           user_message_text=user_message_text,
                                           staged_images=staged_images,
-                                          staged_files=staged_files)
+                                          staged_files=staged_files,
+                                          add_persona=use_character_card)
     started_from_node_id = head_node_id
 
     # The surface takes no callbacks; this one is internal, and it is how the record gets the prompts. The

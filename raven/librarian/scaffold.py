@@ -64,7 +64,9 @@ def user_turn(llm_settings: env,
               head_node_id: str,
               user_message_text: str,
               staged_images: list[env] | None = None,
-              staged_files: list[env] | None = None) -> str:
+              staged_files: list[env] | None = None,
+              *,
+              add_persona: bool = True) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -93,11 +95,15 @@ def user_turn(llm_settings: env,
                     with any model (its text is folded into the prompt at wire-build), so this is not gated on
                     vision capability.
 
+    `add_persona`: whether the stored text is prefixed with the user's persona name. `False` for a turn without the
+                   character card, where nobody is speaking.
+
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
     message = chatutil.create_chat_message(llm_settings=llm_settings,
                                            role="user",
-                                           text=user_message_text)
+                                           text=user_message_text,
+                                           add_persona=add_persona)
     sidecar_metadata_by_filename = {}
     if staged_images:
         from . import imagestore  # deferred: only pulls Pillow/torch when an image is actually attached
@@ -248,6 +254,7 @@ def _write_docs_query(llm_settings: env,
                                tool_names=maybe_tool_names,
                                thinking_enabled=False,
                                max_tokens=librarian_config.docs_query_max_tokens,
+                               add_personas=use_character_card,
                                datastore=datastore,
                                calibrate=False,
                                maybe_abort=maybe_abort,
@@ -1492,7 +1499,8 @@ def ai_turn(llm_settings: env,
                                    datastore=datastore,  # resolve any sidecar: image refs to data: URLs on the wire
                                    maybe_abort=maybe_abort,
                                    max_tokens=max_tokens,
-                                   on_partial_message=(store_partial if not continue_this_message else None))
+                                   on_partial_message=(store_partial if not continue_this_message else None),
+                                   add_personas=use_character_card)
         except netutil.Aborted:
             # Not a backend failure: the user asked for this turn to stop. Re-raised ahead of the catch
             # below, which would otherwise write "the backend failed" into the chat as a rerollable message
