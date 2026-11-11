@@ -1164,7 +1164,6 @@ def _apply_backend_facts(settings: env,
     # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
     settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
     settings.tokenizer = None
-    settings.tokenizer_settled = threading.Event()
     tokenizer_sources = []
     if librarian_config.llm_tokenizer_path:
         tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
@@ -1183,6 +1182,7 @@ def _start_tokenizer_load(settings: env, tokenizer_sources: list[str]) -> None:
     thread that also delivers keystrokes. Counts asked for before then use the tier below, so the readout
     starts out approximate and sharpens — the same shape as the backend-figure upgrade it replaces.
     """
+    settings.tokenizer_settled = threading.Event()  # this load's own, so a reload is waited for afresh
     if not tokenizer_sources:
         settings.tokenizer_settled.set()
         if settings.backend_flavor == "oobabooga":
