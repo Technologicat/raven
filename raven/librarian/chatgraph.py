@@ -45,7 +45,6 @@ __all__ = ["LINE_COLOR",
 import colorsys
 import dataclasses
 import functools
-import itertools
 import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -55,6 +54,7 @@ logger = logging.getLogger(__name__)
 import strip_markdown
 
 from ..common import color as common_color
+from ..common import numutils as common_numutils
 from ..common import text as common_text
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
@@ -991,13 +991,6 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
             (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
 
 
-# Beyond this many cards the pile is constructed rather than searched for. `n!` is fine at 8 (40320,
-# computed once and cached) and is not at 12; the deck is abbreviated long before either, so the exact
-# answer is the one that ever gets used.
-_MAX_SEARCHED_PILE = 8
-
-
-@functools.lru_cache(maxsize=None)
 def _pile_columns(n_cards: int, step_x: float, step_y: float) -> Tuple[int, ...]:
     """Return which column each card of a pile of `n_cards` sits in — one card per row, one per column.
 
@@ -1039,17 +1032,11 @@ def _pile_columns(n_cards: int, step_x: float, step_y: float) -> Tuple[int, ...]
     where a repeated column would have been a typo drawing two cards on top of each other, and the picture
     would merely have looked like one fewer attachment.
     """
+    # `common.numutils` searches exhaustively up to eight cards, and the deck is abbreviated long before that,
+    # so the exact answer is the one that ever gets used.
     if n_cards <= 1:
         return (0,)
-    if n_cards > _MAX_SEARCHED_PILE:
-        # Odd rows first, then even. A permutation, and spread out, without a factorial search.
-        return tuple(list(range(1, n_cards, 2)) + list(range(0, n_cards, 2)))
-
-    def spread(permutation: Tuple[int, ...]) -> List[float]:
-        points = [(column * step_x, row * step_y) for row, column in enumerate(permutation)]
-        return sorted(math.dist(a, b) for a, b in itertools.combinations(points, 2))
-
-    return max(itertools.permutations(range(n_cards)), key=spread)
+    return common_numutils.maximin_latin_square(n_cards, step_x, step_y)
 
 
 # How many stripped messages to remember. A rebuild draws a few dozen boxes and the next one draws mostly

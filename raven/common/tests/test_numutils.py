@@ -119,3 +119,22 @@ class TestNonanalyticSmoothTransition:
         val_m1 = nonanalytic_smooth_transition(0.25, m=1.0)
         val_m3 = nonanalytic_smooth_transition(0.25, m=3.0)
         assert val_m3 < val_m1
+
+
+class TestMaximinLatinSquare:
+    def test_the_small_answers_are_the_ones_drawn_by_hand(self):
+        from raven.common.numutils import maximin_latin_square
+        assert maximin_latin_square(2) == (0, 1)
+        assert maximin_latin_square(3) == (0, 2, 1)
+        assert maximin_latin_square(4) == (1, 3, 0, 2)
+
+    @pytest.mark.parametrize("n", [0, 1, 5, 8, 9, 15])
+    def test_every_answer_is_a_permutation(self, n):
+        # One point per row and one per column, including above the size where the search gives way to a construction.
+        from raven.common.numutils import maximin_latin_square
+        assert sorted(maximin_latin_square(n)) == list(range(n))
+
+    def test_the_answer_is_never_the_staircase(self):
+        from raven.common.numutils import maximin_latin_square
+        for n in range(3, 12):
+            assert maximin_latin_square(n) != tuple(range(n))

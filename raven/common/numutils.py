@@ -3,11 +3,15 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["clamp", "nonanalytic_smooth_transition", "psi"]
+__all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
+           "maximin_latin_square"]
 
 import logging
 logger = logging.getLogger(__name__)
 
+import functools
+import itertools
+import math
 from typing import Union
 
 import numpy as np
@@ -72,3 +76,37 @@ def psi(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  #
             return np.exp(-1.0 / x**m) * (x > 0.0)
         except (ZeroDivisionError, OverflowError):  # for scalar x
             return 0.0
+
+
+# --------------------------------------------------------------------------------
+# Layout
+
+# Beyond this many points the square is constructed rather than searched for. `n!` is fine at 8 (40320,
+# computed once and cached) and is not at 12.
+MAX_SEARCHED_LATIN_SQUARE = 8
+
+
+@functools.lru_cache(maxsize=None)
+def maximin_latin_square(n: int, step_x: float = 1.0, step_y: float = 1.0) -> tuple[int, ...]:
+    """Which column each of `n` rows takes in a maximin Latin square: one point per row and one per column.
+
+    Of all the permutations, the one whose closest pair of points is as far apart as it can be, measured with
+    columns `step_x` apart and rows `step_y` apart; ties are broken by the next-closest pair and so on down,
+    and then lexicographically. So 2 points give `(0, 1)`, 3 give `(0, 2, 1)` and 4 give `(1, 3, 0, 2)`. The
+    identity, a staircase, is a legal Latin square and is what the maximin criterion rules out: points placed
+    this way read as scattered rather than stacked or gridded. It is the two-dimensional case of Latin
+    hypercube sampling (McKay, Beckman and Conover, 1979): https://en.wikipedia.org/wiki/Latin_hypercube_sampling
+
+    Above `MAX_SEARCHED_LATIN_SQUARE` points the search would be factorial, so the answer is constructed
+    instead: odd columns first, then even. That is a permutation and spread out, but not the maximin optimum.
+    """
+    if n <= 1:
+        return tuple(range(n))
+    if n > MAX_SEARCHED_LATIN_SQUARE:
+        return tuple(list(range(1, n, 2)) + list(range(0, n, 2)))
+
+    def spread(permutation: tuple[int, ...]) -> list[float]:
+        points = [(column * step_x, row * step_y) for row, column in enumerate(permutation)]
+        return sorted(math.dist(a, b) for a, b in itertools.combinations(points, 2))
+
+    return max(itertools.permutations(range(n)), key=spread)
