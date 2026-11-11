@@ -135,7 +135,9 @@ def llm_backed_stages() -> tuple[LLMBackedStage, ...]:
                  ((LLMBackedStage("cluster keywords", 'clusters_keyword_method = "llm"', "using frequency keywords"),
                    visualizer_config.clusters_keyword_method == "llm"),
                   (LLMBackedStage("entry summaries", "summarize = True", "no summaries"),
-                   visualizer_config.summarize))
+                   visualizer_config.summarize),
+                  (LLMBackedStage("clusters", 'clustering_method = "llm"', "clustering agglomeratively instead"),
+                   visualizer_config.clustering_method == "llm"))
                  if wanted)
 
 
@@ -148,9 +150,22 @@ def _effective_keyword_method() -> str:
     Meaningful only once `_setup_llm_backend` has run, which is what binds `llm_settings`; before that
     it reports a fallback that has not been decided yet.
     """
+    if _effective_clustering_method() == "llm":
+        return "llm grouping"  # the theme names are the keywords
     if visualizer_config.clusters_keyword_method == "llm" and llm_settings is None:
         return "frequencies"
     return visualizer_config.clusters_keyword_method
+
+
+def _effective_clustering_method() -> str:
+    """Which clustering method this run is actually using.
+
+    The configured `raven.visualizer.config.clustering_method`, except that `"llm"` reads as `"agglomerative"`
+    where no usable LLM backend answered for this run. Meaningful only once `_setup_llm_backend` has run.
+    """
+    if visualizer_config.clustering_method == "llm" and llm_settings is None:
+        return "agglomerative"
+    return visualizer_config.clustering_method
 
 
 def _setup_llm_backend(backend_url: Optional[str] = None, *, llm_policy=llm_required) -> None:
@@ -819,7 +834,7 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
     return lowdim_data
 
 
-CLUSTERING_METHODS = ("hdbscan_2d", "agglomerative")
+CLUSTERING_METHODS = ("hdbscan_2d", "agglomerative", "llm")
 
 
 def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
@@ -860,7 +875,8 @@ def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
 
 
 def _cluster_vis_data(input_data, lowdim_data, all_vectors):
-    """Find the clusters the map shows, by the method `visualizer_config.clustering_method` names.
+    """Find the clusters the map shows, by the method `visualizer_config.clustering_method` names: `"hdbscan_2d"` or
+    `"agglomerative"`. (`"llm"` finds the map as well as the clusters, so it is `_cluster_with_llm`.)
 
     `input_data`: output of `_parse_input_files`, which see.
     `lowdim_data`: output of `_reduce_dimension`, which see. What `"hdbscan_2d"` clusters.
@@ -875,9 +891,12 @@ def _cluster_vis_data(input_data, lowdim_data, all_vectors):
     Mutates `input_data`, adding the fields `item.cluster_id` and `item.cluster_probability` (confidence value;
     `"agglomerative"` has none, so it is 1.0 for a cluster's members and 0.0 for an outlier).
     """
-    method = visualizer_config.clustering_method
-    if method not in CLUSTERING_METHODS:
-        raise ValueError(f"_cluster_vis_data: unknown `clustering_method` {method!r}; expected one of {CLUSTERING_METHODS}")
+    if visualizer_config.clustering_method not in CLUSTERING_METHODS:
+        raise ValueError(f"_cluster_vis_data: unknown `clustering_method` {visualizer_config.clustering_method!r}; "
+                         f"expected one of {CLUSTERING_METHODS}")
+    method = _effective_clustering_method()
+    if method == "llm":
+        raise ValueError("_cluster_vis_data: `clustering_method = \"llm\"` makes the map too; use `_cluster_with_llm`")
 
     # Concatenate data from individual input files into one large dataset. This is what we will visualize.
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
@@ -910,6 +929,36 @@ def _cluster_vis_data(input_data, lowdim_data, all_vectors):
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return vis_data, labels, n_vis_clusters, n_vis_outliers
+
+
+def _cluster_with_llm(input_data):
+    """Group the dataset into themes with an LLM, and lay the themes out as circles: `"llm"` clustering.
+
+    `input_data`: output of `_parse_input_files`, which see.
+
+    Returns (`vis_data`, `labels`, `n_vis_clusters`, `n_vis_outliers`, `lowdim_data`, `themes`): the first four as
+    `_cluster_vis_data` returns them, `lowdim_data` the made-up map in place of a dimension reduction, and
+    `themes` the grouping, each with its name, description and every placement (`raven.visualizer.llmclustering`).
+
+    Mutates `input_data` as `_cluster_vis_data` does, `cluster_probability` being 1.0 for a theme's members.
+
+    Raises `llmclustering.PromptTooLarge` when the dataset does not fit in one prompt.
+    """
+    from . import llmclustering  # noqa: PLC0415 -- deferred: needed only by this method
+
+    _update_status_and_log("Grouping the dataset into themes with the LLM...", log_indent=1)
+    vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
+    with timer() as tim:
+        labels, lowdim_data, themes = llmclustering.cluster(llm_settings, vis_data,
+                                                            maybe_aim=visualizer_config.clustering_llm_aim)
+        n_vis_clusters = len(themes)
+        n_vis_outliers = int(np.sum(labels == -1))
+        for idx, entry in enumerate(vis_data):
+            entry.cluster_id = labels[idx]
+            entry.cluster_probability = 0.0 if labels[idx] == -1 else 1.0
+        logger.info(f"        The LLM found {n_vis_clusters} themes, placing all but {n_vis_outliers} of {len(vis_data)} data points.")
+    logger.info(f"        Done in {tim.dt:0.6g}s.")
+    return vis_data, labels, n_vis_clusters, n_vis_outliers, lowdim_data, themes
 
 
 def _field_or_placeholder(fields, name: str, placeholder: str, entry_key: str, transform=None) -> str:
@@ -1850,16 +1899,23 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Dimension reduction hiD -> 2D
 
-        unique_vs, n_clusters = _cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
-        progress.tock()
-        if _is_cancelled():
-            return False
-        lowdim_data = _reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
-        progress.tock()
-        if _is_cancelled():
-            return False
-        vis_data, labels, n_vis_clusters, n_vis_outliers = _cluster_vis_data(input_data, lowdim_data, all_vectors)  # find the map's clusters
-        progress.tock()
+        maybe_llm_themes = None
+        if _effective_clustering_method() == "llm":  # the themes make both the clusters and the map
+            vis_data, labels, n_vis_clusters, n_vis_outliers, lowdim_data, maybe_llm_themes = _cluster_with_llm(input_data)
+            progress.tock()
+            progress.tock()
+            progress.tock()
+        else:
+            unique_vs, n_clusters = _cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
+            progress.tock()
+            if _is_cancelled():
+                return False
+            lowdim_data = _reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
+            progress.tock()
+            if _is_cancelled():
+                return False
+            vis_data, labels, n_vis_clusters, n_vis_outliers = _cluster_vis_data(input_data, lowdim_data, all_vectors)  # find the map's clusters
+            progress.tock()
         if _is_cancelled():
             return False
 
@@ -1878,7 +1934,9 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find a set of keywords for each cluster
 
-        if visualizer_config.extract_keywords:
+        if maybe_llm_themes is not None:
+            vis_keywords_by_cluster = [[theme["name"]] for theme in maybe_llm_themes]
+        elif visualizer_config.extract_keywords:
             vis_keywords_by_cluster = _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors)
         else:
             vis_keywords_by_cluster = []
@@ -1917,13 +1975,14 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            "all_input_filenames_str": all_input_filenames_str,  # concatenated, "file1_file2_..._fileN", for naming output figures for this combination of input files
                            "embedding_model": visualizer_config.embedding_model,
                            "vis_method": visualizer_config.vis_method,  # dimension reduction method
-                           "clustering_method": visualizer_config.clustering_method,  # how the clusters were found
+                           "clustering_method": _effective_clustering_method(),  # how the clusters were found, after any fallback
+                           "llm_themes": maybe_llm_themes,  # `"llm"` clustering's themes, every placement included; else `None`
                            "n_vis_clusters": n_vis_clusters,  # number of clusters detected
                            "n_vis_outliers": n_vis_outliers,  # number of outlier points, not belonging to any cluster
                            "labels": labels,
                            "vis_data": vis_data,  # list, concatenated entries from all input files
                            "lowdim_data": lowdim_data,  # rank-2 `np.array` of shape `[N, 2]`, 2D points from the semantic mapping, after dimension reduction
-                           "keywords_available": visualizer_config.extract_keywords,
+                           "keywords_available": visualizer_config.extract_keywords or maybe_llm_themes is not None,
                            # Which method produced `vis_keywords_by_cluster`, because the keywords themselves
                            # do not say: a list of six nouns looks the same whichever way it was arrived at,
                            # so without this the dataset cannot be told apart from one built the other way.

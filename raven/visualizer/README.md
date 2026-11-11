@@ -542,7 +542,7 @@ editor. Mnemonic: *Mr. T Lite*.
 - Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.
 - Hardware requirements, especially GPU. Tested on a laptop with an NVIDIA RTX 3070 Ti mobile, 8 GB VRAM.
 - Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. This causes many entries to be placed into a catch-all "*Misc*" cluster.
-- Hyperparameters of the clustering algorithm in the BibTeX importer may be dataset-dependent, but are not yet configurable. This will change in the future.
+- The clustering method is configurable: `clustering_method` in [`raven.visualizer.config`](config.py) chooses HDBSCAN on the 2D map (the default), agglomerative clustering in the embedding space, or an LLM grouping into named themes for a corpus small enough to fit in one prompt. HDBSCAN's own hyperparameters may be dataset-dependent, and are not yet configurable.
 - Dataset files are currently **not** portable across different Python versions.
 - We attempt to provide keyboard access to GUI features whenever reasonably possible, but the plotter is currently one place where this is not reasonably possible. The *Open dataset* dialog is fully keyboard-operable: arrow keys walk the listing, Enter descends or picks, Tab completes the filename, and there are chords for sorting, filtering, the places panel and the path field. Press F1 inside it for the full list.
 - As explained in the main README, configuration is currently fed in as a Python module, [`raven.visualizer.config`](config.py), which exists specifically as a configuration file.

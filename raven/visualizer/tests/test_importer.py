@@ -1111,6 +1111,39 @@ class TestAgglomerativeClustering:
             importer._cluster_vis_data(_entries_env(4), np.zeros((4, 2)), np.eye(4))
 
 
+class TestLLMClustering:
+    def test_without_a_backend_the_llm_method_falls_back_to_agglomerative(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clustering_method", "llm")
+        monkeypatch.setattr(importer, "llm_settings", None)
+        assert importer._effective_clustering_method() == "agglomerative"
+        monkeypatch.setattr(importer, "llm_settings", object())  # the control: with one, it is the LLM
+        assert importer._effective_clustering_method() == "llm"
+
+    def test_the_llm_method_names_its_keywords_after_the_themes(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clustering_method", "llm")
+        monkeypatch.setattr(importer, "llm_settings", object())
+        assert importer._effective_keyword_method() == "llm grouping"
+
+    def test_the_2d_and_agglomerative_step_refuses_the_llm_method(self, monkeypatch):
+        import numpy as np
+        monkeypatch.setattr(visualizer_config, "clustering_method", "llm")
+        monkeypatch.setattr(importer, "llm_settings", object())
+        with pytest.raises(ValueError, match="_cluster_with_llm"):
+            importer._cluster_vis_data(_entries_env(4), np.zeros((4, 2)), np.eye(4))
+
+    def test_the_llm_step_tags_each_entry_with_its_theme(self, monkeypatch):
+        import numpy as np
+        from raven.visualizer import llmclustering
+        themes = [{"name": "A", "description": "", "placements": []}, {"name": "B", "description": "", "placements": []}]
+        labels = np.array([0, 1, 0, -1])
+        monkeypatch.setattr(llmclustering, "cluster", lambda settings, entries, maybe_aim=None: (labels, np.zeros((4, 2)), themes))
+        monkeypatch.setattr(importer, "llm_settings", object())
+        vis_data, got_labels, n_clusters, n_outliers, lowdim, got_themes = importer._cluster_with_llm(_entries_env(4))
+        assert (n_clusters, n_outliers) == (2, 1) and got_themes is themes and lowdim.shape == (4, 2)
+        assert [entry.cluster_id for entry in vis_data] == [0, 1, 0, -1]
+        assert [entry.cluster_probability for entry in vis_data] == [1.0, 1.0, 1.0, 0.0]
+
+
 class TestClustering:
     def test_the_highdim_pass_finds_the_clusters_that_are_there(self):
         _, n_clusters = importer._cluster_highdim_semantic_vectors(two_directions())

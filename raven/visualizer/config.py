@@ -59,10 +59,23 @@ vis_method = "tsne"  # good quality, fast (recommended)
 #                      `investigations/highdim-clustering/`; the cut at 100 does not suit small
 #                      corpora (a few hundred records or fewer).
 #
+#     "llm":           for a small corpus: one LLM call groups every record into themes by what it
+#                      is about, and the themes make both the clusters, named, and the map, one
+#                      circle per theme. Every title and abstract goes into one prompt, so a corpus
+#                      that does not fit in the model's context window is refused before asking;
+#                      use "agglomerative" for one that size. Needs an LLM backend
+#                      (`raven.librarian.config`); without one, a run that may go on without it
+#                      clusters agglomeratively.
+#
 clustering_method = "hdbscan_2d"
 # clustering_method = "agglomerative"
-clustering_n_clusters = 100
-clustering_min_cluster_size = 5
+# clustering_method = "llm"
+clustering_n_clusters = 100  # "agglomerative"
+clustering_min_cluster_size = 5  # "agglomerative"
+
+# For `clustering_method = "llm"`: what the collection is for, told to the model as context (not as a
+# list of themes). Empty to tell it nothing.
+clustering_llm_aim = ""
 
 # Whether to detect keywords, for visualizing per-cluster topics.
 #

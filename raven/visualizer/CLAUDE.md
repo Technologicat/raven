@@ -7,12 +7,12 @@ package, not as a figure to quote. Re-measure before quoting one. `python script
 checks this table against the package, including whether every module is in it.
 
 ```
-importer.py       (~1.9k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+importer.py       (~2.0k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
 app.py            (~1.6k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
-config.py         (~310)  — Configuration-as-code (import settings, models, GUI settings). The
+config.py         (~330)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
@@ -23,6 +23,8 @@ word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py   (~130)  — `raven-importer` entry point
+llmclustering.py  (~240)  — `clustering_method = "llm"`: one LLM call groups a small corpus into named themes, laid
+                            out as circles on a maximin Latin square
 savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side), as JSON
 app_state.py       (~62)  — top-level app state containers
 ```
@@ -135,7 +137,7 @@ The tooltip (`_update_annotation`, ~300 lines) and info panel (`_update_info_pan
 
 ## importer.py Structure
 
-Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster (2D) → extract keywords (NLP, cached) → collect cluster keywords (frequency or LLM) → optional LLM summarize → save dataset.
+Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster the map (`clustering_method`: HDBSCAN in 2D, or agglomerative in high-D) → extract keywords (NLP, cached) → collect cluster keywords (frequency or LLM) → optional LLM summarize → save dataset. With `clustering_method = "llm"`, `llmclustering` replaces the high-D clustering, the reduction and the map clustering, and its theme names are the cluster keywords.
 
 Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked via macro/microstep counter with ETA. Background execution via `bgtask.TaskManager`. Optionally connects to raven-server for NLP; falls back to local models via `mayberemote`.
 
