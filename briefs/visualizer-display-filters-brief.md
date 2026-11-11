@@ -1,7 +1,8 @@
 # Brief: the Visualizer's display filters, starting with cluster purity
 
-*Status: decided 2026-11-11, being built. Steps 1–4 below are the first build; date filtering and recolouring
-are later work that reuses the layer from step 3.*
+*Status: decided 2026-11-11. Steps 1–3 built the same day; step 4 next. The row's layout (step 3) works and
+wants tuning before it is final (maintainer, 2026-11-11). Date filtering and recolouring are later work that
+reuses the layer from step 3.*
 
 The Visualizer is an interactive view on the data, so the user should be able to set aside what they take to be
 noise, and later filter and recolour by other criteria (date, first author). This brief scopes the layer that
@@ -32,8 +33,8 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
      lists, so a series is refilled from any set of points, contiguous or not.
    - The slider sets `current_label_id` to `cluster_id`, or to -1 (Misc) for a cluster whose purity is below
      the cutoff, then refills the series and triggers the existing info panel and tooltip rebuilds.
-   - The slider sits in a row under the plot, beside the dataset purity line: the readout and the control that
-     acts on it, together.
+   - The slider sits in a row beside the dataset purity line: the readout and the control that acts on it,
+     together. Built above the plot rather than under it, as the plot fills the rest of the column.
 4. **Visibility: gray out or hide.** Each record is shown normally, grayed, or hidden. First use: a checkbox to
    gray out or hide Misc.
 
