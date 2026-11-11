@@ -1,4 +1,4 @@
-Rajaus: mitä aineistoon otetaan (sovittu 6.11.2026)
+Rajaus: mitä aineistoon otetaan (sovittu 6.11. ja 11.11.2026)
 
 Päätä otsikon ja abstraktin perusteella. Sovitut säännöt ratkaisevat, jos ne ja oma vaikutelma ovat ristiriidassa.
 
@@ -27,8 +27,11 @@ EI MUKAAN
 - Agentti, joka tekee opettajan toimistotyötä, esimerkiksi opetussuunnitelman täyttämistä.
 - Agentti, joka on vasta suunnitteluvaiheessa.
 - Tutkimukset, joissa oppija ei käytä tekoälyä.
+- Muut kuin empiiriset tutkimukset: näkemykset, teoria ja mallit, laskennalliset tutkimukset ilman osallistujia, suunnitelmat ilman arviointia.
+- Taustalla oppijaan mukautuva järjestelmä, jonka kanssa oppija ei ole suoraan vuorovaikutuksessa.
 
 EPÄSELVÄT: tee päätös parhaan arviosi mukaan
 - Työssä olevien opettajien täydennyskoulutus oppilaitoksen järjestämällä kurssilla.
 - Sekaotokset, joissa on opiskelijoiden lisäksi muita.
-- Mukautuva tutor, joka mukauttaa sisältöä mutta ei keskustele (vielä päättämättä).
+- Generatiivinen työkalu: oppija pyytää tekoälyä tuottamaan jotain, ilman jatkuvaa keskustelua (vielä päättämättä).
+- Palautetta antava tekoäly, joka reagoi oppijan tekemiseen keskustelematta (vielä päättämättä).

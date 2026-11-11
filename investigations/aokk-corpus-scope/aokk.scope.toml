@@ -161,8 +161,9 @@ in all of those the learner is a model.
 yes = "a human is taught or is learning"
 no = "no human is taught or learning: the learner is a model"
 
-# ---- Tags: questions the team decides on the whole set at once. The team has since settled `study_kind`'s reviews and
-# part of `focus`, so the rules below read those values; `agent_kind`'s adaptive tutors are still open.
+# ---- Tags: questions the team decides on the whole set at once. The team has since settled `study_kind` (only empirical
+# work is in), part of `focus`, and `agent_kind`'s adaptive systems (out), so the rules below read those values.
+# `agent_kind`'s generative tools and feedback are still open.
 
 [[field]]
 name = "study_kind"
@@ -252,6 +253,16 @@ action = "remove"
 [[rule]]
 label = "a literature review, with no learner-AI interaction of its own"
 when = { study_kind = ["review"] }
+action = "remove"
+
+[[rule]]
+label = "not an empirical study: no data from learners using the AI"
+when = { study_kind = ["computational", "theoretical", "position", "design_proposal", "other"] }
+action = "remove"
+
+[[rule]]
+label = "an adaptive system working in the background, with no direct exchange with the learner"
+when = { agent_kind = ["adaptive"] }
 action = "remove"
 
 [[rule]]

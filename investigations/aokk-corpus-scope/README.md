@@ -1018,6 +1018,28 @@ wrong keep from passing on a title alone. Measured in two parts, the second chec
    hand**: those are labels already made. They had: the held-for-review tier. **The design for the sample itself is in
    `blind-sample-design.md`.**
 
+## The meeting of 2026-11-11: two rules, and a sample of keeps
+
+The team's answers to the full run's open questions (in the team report beside the run, gitignored): non-empirical
+work is out, on the same ground as reviews; an adaptive system working in the background is out, as only direct
+interaction with the AI counts; the removals look right, and the keeps are too many. Generative tools and feedback were
+left open. Further: full texts are to be judged by an LLM with a subset checked by hand, a second model family is to
+read the removals, and more rated records are wanted from both removals and keeps once the rules are frozen again.
+
+**The two rules**, added to `aokk.scope.toml`, among the removals: `study_kind` anything but `empirical` (a
+`not_stated` is left to the other rules), and `agent_kind = adaptive`. Applied to the full run from its saved answers alone
+(`AOKK/scopebib-2026-11-11-rules-v2/`, run with the full run's `run.toml` and a closed backend port, so that any
+missing answer would have failed the run; none was): removed 2,454 → 3,210, sent to a person 817 → 469, kept 1,215 → 807.
+The hand-check pile shrinks because records held for another reason, such as the full-text flag, are removed first
+when they are non-empirical or adaptive.
+
+**A blind sample of 60 keeps** from those 807, for the team to tune the rules on (`keeps60-blind/` there;
+`draw_blind_sample.py draw ... --quota "kept: conversational=30" --quota "kept: rest=30" --seed 17 --rules Rajaus.txt`,
+excluding the 72 and the earlier 60): 30 of the 442 conversational keeps, and 30 of the 350 others (14 feedback, 12
+generative tool, 3 not stated, 1 other). The second half says whether the open categories should go; the first, what the
+tuned pile still keeps wrongly. `Rajaus.txt` carries the 11.11 decisions, with generative tools and feedback marked
+undecided.
+
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 
 **Question:** until 2026-11-11 a one-shot turn without the character card still sent its task as `Juha: You are

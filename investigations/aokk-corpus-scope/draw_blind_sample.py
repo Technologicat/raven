@@ -1,13 +1,17 @@
 """Draw the stratified blind sample of `blind-sample-design.md` from a `raven-scopebib` run, and score it once rated.
 
     python investigations/aokk-corpus-scope/draw_blind_sample.py draw RUN_DIR OUT_DIR --exclude DECISIONS.tsv [--seed 17]
+        [--quota STRATUM=N ...]
     python investigations/aokk-corpus-scope/draw_blind_sample.py score OUT_DIR RATED.xlsx
 
 `draw` takes the run's three outcome tables (`03b-removed`, `03c-kept`, `03a-CHECK-BY-HAND`) and its rule table
 (`02b-ruled`, for the kept records' tags), leaves out every record in `--exclude` (a table with a `key` column: what
 people have rated already) and every record the sift removed (no abstract to decide from, and not the tool's judgement),
-and draws by the tool's outcome, at random within each stratum: 30 removed, 20 kept, 10 sent to a person. Each record's
-group is recorded in the key for reading the result: what decided a removal, a kept record's tags, a hold's reason.
+and draws by the tool's outcome, at random within each stratum: by default 30 removed, 20 kept, 10 sent to a person.
+`--quota` replaces those (`--quota "kept: conversational=30" --quota "kept: rest=30"`): the strata are `removed`, `kept`
+and `to a person`, and `kept: conversational` and `kept: rest` split the kept records by their `agent_kind` tag. Each
+record's group is recorded in the key for reading the result: what decided a removal, a kept record's tags, a hold's
+reason. `--exclude` may be given more than once.
 
 It writes the sheet people fill in, with `--rules` on a second sheet of it,
 (`blind-sample.xlsx`: shuffled, with title, abstract, venue and link and nothing of the stratum or the tool's answer, and
@@ -29,7 +33,8 @@ import sys
 from raven.common import tabular
 from raven.papers.scopebib import report
 
-QUOTAS = {"removed": 30, "kept": 20, "to a person": 10}
+QUOTAS = {"removed": 30, "kept": 20, "to a person": 10}  # the default; `--quota` replaces it
+KEPT_SPLIT = ("kept: conversational", "kept: rest")
 # The rater's four columns carry the names the team gave them in their own sheet. Only the decision is needed; the
 # check was promised to be fast, so the other three say they are optional.
 OPTIONAL = " (valinnainen)"
@@ -70,11 +75,15 @@ def add_rules_sheet(path: pathlib.Path, rules: pathlib.Path) -> None:
     book.save(path)
 
 
-def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, seed: int,
-         maybe_rules: pathlib.Path | None = None) -> int:
-    excluded = {row["key"] for row in tabular.read_table(exclude)}
+def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, excludes: list[pathlib.Path], seed: int,
+         maybe_rules: pathlib.Path | None = None, quotas: dict[str, int] = QUOTAS) -> int:
+    excluded = {row["key"] for exclude in excludes for row in tabular.read_table(exclude)}
     tags = {row["key"]: row for row in read_table_any(run_dir, report.EXTRACT_AUDIT)}
-    strata: dict[str, dict[str, list[str]]] = {name: collections.defaultdict(list) for name in QUOTAS}
+    unknown = set(quotas) - set(QUOTAS) - set(KEPT_SPLIT)
+    if unknown:
+        raise SystemExit(f"unknown strata {sorted(unknown)}; known: {list(QUOTAS) + list(KEPT_SPLIT)}")
+    split_kept = any(name in KEPT_SPLIT for name in quotas)
+    strata: dict[str, dict[str, list[str]]] = {name: collections.defaultdict(list) for name in quotas}
     rows_by_key = {}
     for stem, stratum in ((report.REMOVED_AUDIT, "removed"), (report.KEPT_AUDIT, "kept"),
                           (report.CHECK_BY_HAND, "to a person")):
@@ -82,18 +91,22 @@ def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, se
             if row["key"] in excluded or row.get("removed by") == "sift":
                 continue
             rows_by_key[row["key"]] = row
+            target = stratum
             if stratum == "removed":
                 group = removal_group(row)
             elif stratum == "kept":
                 tag = tags.get(row["key"], {})
                 group = f"{tag.get('study_kind', '?')} / {tag.get('agent_kind', '?')}"
+                if split_kept:
+                    target = KEPT_SPLIT[0] if tag.get("agent_kind") == "conversational" else KEPT_SPLIT[1]
             else:
                 group = row["why"].split(" (")[0].split(";")[0][:80]
-            strata[stratum][group].append(row["key"])
+            if target in strata:
+                strata[target][group].append(row["key"])
 
     rng = random.Random(seed)
     key_rows, sheet_rows = [], []
-    for stratum, quota in QUOTAS.items():
+    for stratum, quota in quotas.items():
         size = sum(len(keys) for keys in strata[stratum].values())
         everyone = sorted((key, group) for group, keys in strata[stratum].items() for key in keys)
         chosen = rng.sample(everyone, min(quota, len(everyone)))
@@ -108,7 +121,8 @@ def draw(run_dir: pathlib.Path, out_dir: pathlib.Path, exclude: pathlib.Path, se
     out_dir.mkdir(parents=True, exist_ok=True)
     tabular.write_table(out_dir / "blind-sample.xlsx", [], SHEET_COLUMNS,
                         [[row[column] for column in SHEET_COLUMNS] for row in sheet_rows])
-    tabular.write_table(out_dir / "blind-key.tsv", [f"seed {seed}, from {run_dir}, excluding {exclude.name}"],
+    tabular.write_table(out_dir / "blind-key.tsv",
+                        [f"seed {seed}, from {run_dir}, excluding {', '.join(e.name for e in excludes)}"],
                         KEY_COLUMNS, [[row[column] for column in KEY_COLUMNS] for row in key_rows])
     if maybe_rules is not None:
         add_rules_sheet(out_dir / "blind-sample.xlsx", maybe_rules)
@@ -133,7 +147,7 @@ def score(out_dir: pathlib.Path, rated: pathlib.Path) -> int:
             decisions[row["key"]] = "drop"
     print(f"{len(decisions)} of {len(key)} rated")
     weighted_missed = weighted_total = 0.0
-    for stratum in QUOTAS:
+    for stratum in dict.fromkeys(row["stratum"] for row in key.values()):
         rows = [row for row in key.values() if row["stratum"] == stratum and row["key"] in decisions]
         if not rows:
             continue
@@ -143,8 +157,9 @@ def score(out_dir: pathlib.Path, rated: pathlib.Path) -> int:
         if stratum == "removed":
             print(f"removed:     {keeps} of {n} rated in scope; the share of removals that are wrong is at most "
                   f"{100 * upper_bound(keeps, n):.1f}% (95%, one-sided)")
-        elif stratum == "kept":
-            print(f"kept:        {n - keeps} of {n} rated out of scope; at most {100 * upper_bound(n - keeps, n):.1f}%")
+        elif stratum.startswith("kept"):
+            print(f"{stratum + ':':12s} {n - keeps} of {n} rated out of scope; at most "
+                  f"{100 * upper_bound(n - keeps, n):.1f}%")
         else:
             print(f"to a person: {keeps} of {n} rated in scope")
         # The in-scope share of each stratum, scaled to its size in the pool: an estimate of in-scope records per stratum.
@@ -163,7 +178,10 @@ def main() -> int:
     p_draw = commands.add_parser("draw", help="draw the sample and write the sheet and the key")
     p_draw.add_argument("run_dir")
     p_draw.add_argument("out_dir")
-    p_draw.add_argument("--exclude", required=True, help="a table whose 'key' column lists records already rated")
+    p_draw.add_argument("--exclude", required=True, action="append",
+                        help="a table whose 'key' column lists records already rated; repeatable")
+    p_draw.add_argument("--quota", action="append", default=None, metavar="STRATUM=N",
+                        help="how many to draw from a stratum, replacing the default quotas; repeatable")
     p_draw.add_argument("--seed", type=int, default=17)
     p_draw.add_argument("--rules", default=None, help="a text file of the scope rules, put on a second sheet for raters")
     p_score = commands.add_parser("score", help="score a filled-in sheet against the key")
@@ -171,8 +189,11 @@ def main() -> int:
     p_score.add_argument("rated")
     opts = parser.parse_args()
     if opts.command == "draw":
-        return draw(pathlib.Path(opts.run_dir), pathlib.Path(opts.out_dir), pathlib.Path(opts.exclude), opts.seed,
-                    pathlib.Path(opts.rules) if opts.rules else None)
+        quotas = QUOTAS
+        if opts.quota:
+            quotas = {name.strip(): int(n) for name, n in (spec.rsplit("=", 1) for spec in opts.quota)}
+        return draw(pathlib.Path(opts.run_dir), pathlib.Path(opts.out_dir), [pathlib.Path(e) for e in opts.exclude],
+                    opts.seed, pathlib.Path(opts.rules) if opts.rules else None, quotas)
     return score(pathlib.Path(opts.out_dir), pathlib.Path(opts.rated))
 
 
