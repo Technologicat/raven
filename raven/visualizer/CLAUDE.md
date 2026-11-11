@@ -17,12 +17,12 @@ config.py         (~330)  — Configuration-as-code (import settings, models, GU
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
-importer_gui.py   (~550)  — the importer's window, its two file dialogs, and its start/stop lifecycle
+importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
-importer_cli.py   (~130)  — `raven-importer` entry point
+importer_cli.py   (~140)  — `raven-importer` entry point
 llmclustering.py  (~240)  — `clustering_method = "llm"`: one LLM call groups a small corpus into named themes, laid
                             out as circles on a maximin Latin square
 savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side), as JSON
