@@ -266,8 +266,12 @@ def _warn_if_lmstudio_parallel(backend_url: str) -> None:
     except Exception as exc:
         logger.debug(f"_warn_if_lmstudio_parallel: could not read LM Studio's load settings: {type(exc)}: {exc}")
 
-def resolve_model_info(backend_url: str, flavor: str) -> env:
+def resolve_model_info(backend_url: str, flavor: str, prefer_model_id: str | None = None) -> env:
     """Resolve the loaded model's identity and context window for `flavor`.
+
+    `prefer_model_id`: with several models loaded, answer for the one with this id if it is among them, rather
+                       than for the first the backend lists. For a caller already using a model, which should
+                       not be moved to another by a second one being loaded (`follow_model_swap`).
 
     Returns an `env` with:
       `label`: human-facing model identity for the character card. The card asserts this as a *fact* about
@@ -314,7 +318,10 @@ def resolve_model_info(backend_url: str, flavor: str) -> env:
                   for model in models if model.get("type") != "embedding"
                   for instance in model.get("loaded_instances") or []]
         if loaded:
-            model, instance = loaded[0]  # with several loaded, the first LM Studio lists; `n_loaded` lets a caller say so
+            # With several loaded, the preferred one if it is there, else the first LM Studio lists; `n_loaded`
+            # lets a caller say so.
+            model, instance = next(((m, i) for m, i in loaded if prefer_model_id is not None and i.get("id") == prefer_model_id),
+                                   loaded[0])
             load_config = instance.get("config") or {}
             quantization = model.get("quantization") or {}
             # A record with no vision flag is "cannot tell", not "cannot see": a bare `is True` would
@@ -670,6 +677,14 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
         _announce_backend_status(status, backend_url, maybe_model=settings.model)
     return status
 
+def _same_model(a: env, b: env) -> bool:
+    """Whether two model records describe the same model loaded the same way: equal in every field but `n_loaded`,
+    the count of models loaded beside it."""
+    def without_count(record):
+        return {k: v for k, v in record.items() if k != "n_loaded"}
+    return without_count(a) == without_count(b)
+
+
 def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
     """Bring `settings` up to date if the backend has loaded a different model since. Return whether it had.
 
@@ -679,8 +694,10 @@ def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
     one — together with what was fitted to the old one, the token-count calibration and the local tokenizer.
     Everything else in `settings` is left alone, including any per-run overrides a caller has set.
 
-    "Changed" means any field of the record: the same model reloaded with different settings — another
-    quantization, flash attention toggled — counts, as does loading a second model beside it.
+    "Changed" means any field of the model's record: the same model reloaded with different settings — another
+    quantization, flash attention toggled — counts. Another model loaded beside it does not: while the model in
+    use is still loaded as it was, it stays the one in use, whatever the backend lists first, so that loading a
+    model for something else does not move a running conversation or batch onto it.
 
     When the backend does not answer, it only records that (`backend_is_reachable`, which `backend_status`
     reads), so that a frontend can say so; recovering is `reconnect`'s job. Returns `False` then.
@@ -697,7 +714,14 @@ def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
         settings.backend_is_reachable = False
         return False
     settings.backend_is_reachable = True
+    if getattr(info, "n_loaded", 1) > 1 and info.model_id != settings.model_id:
+        info = resolve_model_info(settings.backend_url, settings.backend_flavor, prefer_model_id=settings.model_id)
     if info == settings.model_record:
+        return False
+    if _same_model(info, settings.model_record):
+        if getattr(info, "n_loaded", 1) > getattr(settings.model_record, "n_loaded", 1):
+            logger.info(f"follow_model_swap: the backend now has {info.n_loaded} models loaded; staying with '{settings.model}'.")
+        settings.model_record = info
         return False
 
     if info.label == settings.model:

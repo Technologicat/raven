@@ -196,6 +196,7 @@
 
 #### Raven-librarian
 
+- **Loading a second model in LM Studio no longer moves Librarian onto it.** In v0.2.10, a model loaded beside the one in use, and listed before it, became the model the next turn asked. Now the model in use stays in use while it is loaded unchanged; another model appearing does not count as a change. The same applies to a `raven.librarian.sweep` batch, which a second model no longer stops.
 - **A message spoken into the microphone is sent with the attachments staged for it.** Before, it went out without them, and they stayed in the strip to be sent with the next message.
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
 - **A bare key in `api_key.txt` is sent as `Bearer <key>`**, the form OpenAI-compatible APIs expect. Before, the file went out verbatim as the `Authorization` header, so a bare key was rejected. A value naming its own scheme (`Bearer …`, `Basic …`) is still sent as is, and a blank file now means no key.

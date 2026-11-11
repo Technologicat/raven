@@ -1965,6 +1965,40 @@ class TestFollowModelSwap:
         record = settings.model_record
         assert (record.model_id, record.quantization, record.bits_per_weight) == ("b-model", "Q4_K_XL", 4.5)
 
+    def _settings_using(self, monkeypatch, model_id):
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+        return llmclient.configure(model_info=llmclient._model_info(label=model_id, model_id=model_id, context_length=4096,
+                                                                    is_vlm=True, loaded=True),
+                                   backend_flavor="lmstudio", backend_url="http://x", quiet=True)
+
+    def _backend_lists(self, monkeypatch, *model_ids):
+        """LM Studio with `model_ids` loaded, in its listing order, honouring `prefer_model_id` as it does."""
+        def resolve(backend_url, flavor, prefer_model_id=None):
+            chosen = prefer_model_id if prefer_model_id in model_ids else model_ids[0]
+            return llmclient._model_info(label=chosen, model_id=chosen, context_length=4096, is_vlm=True, loaded=True,
+                                         n_loaded=len(model_ids))
+        monkeypatch.setattr(llmclient, "resolve_model_info", resolve)
+
+    def test_a_second_model_listed_first_does_not_take_over(self, monkeypatch):
+        settings = self._settings_using(monkeypatch, "big")
+        self._backend_lists(monkeypatch, "small", "big")
+        assert llmclient.follow_model_swap(settings) is False
+        assert settings.model_id == "big" and settings.request_data["model"] == "big"
+        assert settings.model_record.n_loaded == 2
+
+    def test_a_second_model_listed_after_it_changes_nothing(self, monkeypatch):
+        settings = self._settings_using(monkeypatch, "big")
+        self._backend_lists(monkeypatch, "big", "small")
+        assert llmclient.follow_model_swap(settings) is False
+        assert settings.model_id == "big"
+
+    def test_with_the_model_in_use_unloaded_the_next_one_is_followed(self, monkeypatch):
+        # The control for the two above: the same backend, without the model in use, is a swap.
+        settings = self._settings_using(monkeypatch, "big")
+        self._backend_lists(monkeypatch, "small", "other")
+        assert llmclient.follow_model_swap(settings) is True
+        assert settings.model_id == "small"
+
     def test_a_swapped_model_is_followed_and_overrides_survive(self, settings, monkeypatch):
         self._backend_has(monkeypatch, label="b-model", model_id="b-model", context_length=8192, is_vlm=False)
         assert llmclient.follow_model_swap(settings) is True
