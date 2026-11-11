@@ -163,7 +163,6 @@
   - Accents do not move a name to the end: *Sá* comes before *Sipos*.
 - **The semantic map keeps the dataset's topical structure much better.** With `vis_method = "tsne"`, the default, the map is now fitted on every record, where before it was fitted on a sample and the rest of the records placed by that fit.
   - On a corpus about a single topic, the sample was thin, and records of one cluster could end up spread across the whole map.
-  - The import takes somewhat longer: on our test machine, about ten seconds for a few thousand records.
   - `vis_method = "umap"` is unchanged.
 
 #### Raven-deduplicate
