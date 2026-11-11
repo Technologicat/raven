@@ -152,3 +152,20 @@ placements 0.82, omega 0.64, against 0.76 and 0.57 with 10 entries. Fewer themes
 do, and is no argument for fewer: the 7 lack the community and non-Western entries of the 10. 9 to 24 of the 40 placed twice per
 run; `None of these` again unused; three repair turns. Between the two catalogues the runs agree at ARI 0.55, so the
 catalogue a study is sorted under decides much of where it lands.
+
+## As an import method (2026-11-11)
+
+The method ships as the Visualizer importer's `clustering_method = "llm"` (`raven/visualizer/llmclustering.py`): one run,
+themes only, with the prompt worded for any collection rather than for a review. Single runs on the health-education
+study's 40 final studies, the same model, against this bundle's five no-aim runs at 4, 5, 6, 5 and 5 themes:
+
+| Prompt | Aim | Themes |
+|---|---|---|
+| Generic, no grain cue | none | 3 |
+| Generic, no grain cue | topic line | 7 |
+| This bundle's review framing | none | 5 |
+| Generic, with "as a table of thematic clusters would" | none | 4 |
+
+So both the aim and the wording move the grain; dropping the review's "table of thematic clusters" took the generic
+prompt below this bundle's range, and putting that cue back, without the claim that the collection is a review, returns it
+to the range's low end. One run each, against a spread of 4 to 6 here, so read the differences as leads.

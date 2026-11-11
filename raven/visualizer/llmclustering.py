@@ -29,7 +29,7 @@ PROMPT = """You are helping to make sense of a collection of research papers.{ai
 
 Below are all {n} papers in the collection, numbered, each with its authors, year, title and abstract.
 
-Group the papers into themes by what they are about.{aim_note} Choose the themes the material itself suggests; how many is up to you.
+Group the papers into themes by what they are about, as a table of thematic clusters would.{aim_note} Choose the themes the material itself suggests; how many is up to you.
 
 Place every paper at least once. A paper that genuinely belongs under two themes may be placed under both, but treat that as the exception. For each placement, give a one-sentence reason why the paper belongs there. Mark exactly one placement of each paper as its primary one: where it belongs most.
 
