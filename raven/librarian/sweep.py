@@ -140,7 +140,7 @@ class Ledger:
         self.fingerprint = fingerprint
         self.path = self.directory / f"{name}-{fingerprint}.jsonl"
         self.traces_path = self.directory / f"{name}-{fingerprint}-traces.jsonl"
-        self.state_path = self.directory / f"{name}-{fingerprint}-state.jsonl"
+        self.state_path = self.directory / f"{name}-{fingerprint}.state.json"
 
     def write_state(self, state: dict) -> None:
         """Replace the run's state file, one JSON object read by `status`, which says how far a run has got."""
@@ -532,7 +532,7 @@ def status(directory: str | pathlib.Path) -> list[env]:
     out = []
     for path in sorted(directory.glob("*.jsonl")):
         stem = path.name[:-len(".jsonl")]
-        if stem.endswith(("-traces", "-state")) or "-" not in stem:
+        if stem.endswith("-traces") or "-" not in stem:
             continue
         name, fp = stem.rsplit("-", 1)
         ledger = Ledger(directory, name, fp)

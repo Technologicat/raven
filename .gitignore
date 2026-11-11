@@ -39,3 +39,7 @@ raven/avatar/assets/characters/00_workfiles/parody/
 # Deliberately narrow rather than ignoring `.claude/` wholesale — the skills beside it are
 # version-controlled on purpose, so they travel with the code they document.
 .claude/settings.local.json
+
+# A sweep's run state, beside its ledger (`raven.librarian.sweep`). Ledgers are kept out by each bundle's own
+# patterns; this one is named so that no ledger glob picks it up, and so needs its own line.
+*.state.json
