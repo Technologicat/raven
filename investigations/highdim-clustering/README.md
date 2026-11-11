@@ -600,12 +600,43 @@ AOKK's kept and held records after screening, 2,032 records in 74 agglomerative 
 - Not yet tried: PaCMAP, which is a new dependency. The plots colour by cluster with 20 colours, so colours repeat
   across clusters; read the numbers, and the plots only for shape.
 
+## Cluster purity: is there a natural line between tight and loose clusters? (2026-11-11)
+
+**Question:** can the importer tell a loose agglomerative cluster from a tight one, and show the loose ones as
+outliers? `cluster_purity.py` clusters each corpus as the importer does and measures each cluster's purity: the
+share of each member's `k` nearest neighbours in the centered space that are members too, `k` being the cluster's
+size minus one, capped at 10. A random group of the same size would score about `k / N`, well under 0.01 here.
+
+| corpus | records | clusters | purity, 10 / 50 / 90 % |
+|---|---|---|---|
+| AOKK, all records | 5,007 | 83 | 0.14 / 0.27 / 0.66 |
+| AOKK, kept and held after screening | 2,032 | 74 | 0.20 / 0.35 / 0.70 |
+| ECCOMAS 2024 | 2,519 | 84 | 0.24 / 0.47 / 0.73 |
+| hydrogen production | 4,794 | 79 | 0.26 / 0.52 / 0.79 |
+| hydrogen cars | 3,750 | 64 | 0.24 / 0.51 / 0.82 |
+| AI papers | 947 | 59 | 0.28 / 0.45 / 0.75 |
+| arXiv test | 686 | 38 | 0.30 / 0.49 / 0.78 |
+| AOKK, Springer export | 999 | 51 | 0.20 / 0.45 / 0.70 |
+| banichuk references | 531 | 28 | 0.38 / 0.74 / 0.97 |
+| health education | 117 | 0 | (every record an outlier) |
+
+- **No corpus shows a gap.** Purities spread broadly in each, with no separate tight and loose groups, so there is
+  no threshold to derive; any fixed one would be a preference.
+- **The level is a property of the corpus.** A search on one topic (AOKK) gives soft clusters throughout, and
+  a broad reference list (banichuk) tight ones. The AOKK cluster that prompted this, five records spread over the
+  map in three blobs, sits at its corpus's median: typical, not an exception. Purity measures how crowded the
+  corpus is as much as how good a cluster is, which makes the median a usable dataset-level signal.
+- **The fixed cut breaks small corpora.** At 100 clusters with a minimum of 5, a corpus of a few hundred records
+  is cut into fragments under the minimum: health education (117) had no cluster at all, biology (165) 4 with 142
+  outliers, geography (128) 2 with 113.
+
 ## Scripts
 
 | script | what it answers |
 |---|---|
 | `clusterlab.py` | shared loading, normalization, centering, PCA and the scoring metrics. Not a script |
 | `sweep.py` | which HDBSCAN hyperparameters give what, in a chosen space. `--center`, `--pca N`, `--metric` |
+| `cluster_purity.py` | how tight the importer's agglomerative clusters are: purity per cluster across corpora, with a histogram per corpus |
 | `map_layout.py` | how much of a dataset's high-D clustering a 2D layout keeps: neighbour agreement for the importer's map and for openTSNE variants, against a random floor and the embedding space itself, with a plot of each |
 | `show_clusters.py` | one configuration's clusters with their titles, nearest-the-centre first, for judging coherence. `--algorithm agglomerative` fits the recommended method; `--llm-keywords` labels each cluster with the LLM (see below); `--assign-outliers` tests brief item 3 |
 | `compare_methods.py` | HDBSCAN vs k-means vs agglomerative vs the shipped 2D labelling, on one yardstick. **Unmatched — read with `matched_control.py`, not alone** |
