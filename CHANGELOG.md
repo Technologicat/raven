@@ -61,6 +61,7 @@
   - The dataset records which method made it.
 - **The Visualizer says how tight its clusters are.** A line above the plot gives the dataset's cluster purity: on average, how many of a clustered record's closest neighbours are in its own cluster. Each cluster's header in the info panel gives its own.
   - The importer measures it in the embedding space, whichever clustering method made the clusters. A dataset imported with an earlier version shows neither; importing it again adds them.
+  - A slider beside it shows the clusters below a chosen purity as Misc, on the map and in the info panel, and back again as it moves. The selection is kept.
 
 #### Raven-server
 

@@ -930,7 +930,7 @@ def _get_cluster_of_current_item():
         if current_item is not None:
             data_idx = widget_to_data_idx[current_item]
             entry = app_state.dataset.sorted_entries[data_idx]
-            return entry.cluster_id
+            return entry.current_label_id
         logger.debug("_get_cluster_of_current_item: No current item (info panel empty?)")
         return None
 
@@ -1005,7 +1005,7 @@ def select_cluster_by_id(cluster_id, mode):
     the moment of the gesture. A handler reads it and passes it down; this then works the same whenever
     it is called, including from anywhere that does not run in the event dispatch.
     """
-    data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.cluster_id == cluster_id]
+    data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.current_label_id == cluster_id]
     selection.update(data_idxs, mode, wait=False)
 
 
@@ -1019,7 +1019,7 @@ def select_current_cluster():
             return
         data_idx = widget_to_data_idx[item]
     entry = app_state.dataset.sorted_entries[data_idx]
-    select_cluster_by_id(entry.cluster_id, mode)
+    select_cluster_by_id(entry.current_label_id, mode)
 
 
 # --------------------------------------------------------------------------------

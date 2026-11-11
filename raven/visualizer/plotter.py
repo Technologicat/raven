@@ -26,6 +26,7 @@ __all__ = ["get_visible_datapoints",
            "parse_dataset_file",
            "colormap_position",
            "load_dataset",
+           "refresh_series",
            "create_highlight_series",
            "clear_cluster_color_themes"]
 
@@ -49,6 +50,7 @@ from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
 from . import config as visualizer_config
+from . import displaystate
 from . import entry_renderer
 from .app_state import app_state
 
@@ -322,6 +324,7 @@ def parse_dataset_file(filename):
         @call
         def _():
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
+            displaystate.init(ds.sorted_entries)
             for data_idx, entry in enumerate(ds.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
                 entry.normalized_title = common_utils.normalize_search_string(entry.title.strip())  # for searching
@@ -371,6 +374,11 @@ def load_dataset(ds):
             label = ds.sorted_labels[start]  # all `ds.sorted_labels[start:end]` are the same
             datas.append((label, xs, ys))
 
+        # A Misc series even for a dataset with no outliers, for the display filters to move records into.
+        if not any(label == -1 for label, _, _ in datas):
+            datas.insert(0, (-1, [], []))
+        ds.series_labels = [label for label, _, _ in datas]  # for `refresh_series`
+
         max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
             series_tag = f"my_scatter_series_{label}"  # tag
@@ -397,11 +405,26 @@ def load_dataset(ds):
         maybe_purity_text = entry_renderer.format_dataset_purity(ds.file_content)
         if maybe_purity_text is not None:
             dpg.set_value("dataset_purity_text", maybe_purity_text)  # tag
+            dpg.set_value("purity_cutoff_slider", 0)  # tag  # every record under its own cluster, as `displaystate.init` left them
             dpg.show_item("display_filters_group")  # tag
         else:
             dpg.hide_item("display_filters_group")  # tag
         reset_zoom()
     logger.info(f"    Done in {tim.dt:0.6g}s.")
+
+
+def refresh_series(ds) -> None:
+    """Refill the scatter series of `ds` from each record's `current_label_id` (see `raven.visualizer.displaystate`).
+
+    The series are the ones `load_dataset` made, one per label the importer found plus Misc; a series whose label no
+    record currently has is emptied. The records' order, and so every `data_idx`, is untouched.
+    """
+    groups = displaystate.points_by_label(ds.sorted_entries)
+    for label in ds.series_labels:
+        idxs = groups.get(label, [])
+        xs = list(ds.sorted_lowdim_data[idxs, 0]) if idxs else []
+        ys = list(ds.sorted_lowdim_data[idxs, 1]) if idxs else []
+        dpg.set_value(f"my_scatter_series_{label}", [xs, ys])  # tag
 
 
 # --------------------------------------------------------------------------------

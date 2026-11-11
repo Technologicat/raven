@@ -122,6 +122,7 @@ with timer() as tim:
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import annotation
     from . import config as visualizer_config
+    from . import displaystate
     from . import importer  # BibTeX importer
     from . import importer_gui  # ...and its GUI
     from . import info_panel
@@ -795,6 +796,30 @@ with timer() as tim:
                 # the rest of the column. Hidden while nothing in it applies; `plotter.load_dataset` fills it.
                 with dpg.group(tag="display_filters_group", horizontal=True, show=False):
                     dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
+
+                    def purity_cutoff_changed(sender, app_data):
+                        """Show the clusters below the chosen purity as Misc, and redraw what shows them."""
+                        ds = app_state.dataset
+                        if ds is None:
+                            return
+                        if displaystate.relabel_by_purity(ds.sorted_entries,
+                                                          getattr(ds.file_content, "cluster_purities", None),
+                                                          app_data / 100):
+                            plotter.refresh_series(ds)
+                            info_panel.update()
+                            annotation.update(force=True)
+                    dpg.add_text("Show clusters below", color=(140, 140, 140), tag="purity_cutoff_label_text")
+                    dpg.add_slider_int(tag="purity_cutoff_slider",
+                                       min_value=0,
+                                       max_value=100,
+                                       default_value=0,
+                                       format="%d%%",
+                                       width=160,
+                                       callback=purity_cutoff_changed)
+                    dpg.add_text("purity as Misc", color=(140, 140, 140), tag="purity_cutoff_label_text_2")
+                    with dpg.tooltip("purity_cutoff_slider", tag="purity_cutoff_tooltip"):  # tag
+                        dpg.add_text("At 0% every cluster is shown as itself. Ctrl+click to type a value.",
+                                     tag="purity_cutoff_tooltip_text")
 
                 # Plotter.
                 # Configure explicitly so we are future-proof against possible defaults changes in DPG.

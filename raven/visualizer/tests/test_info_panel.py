@@ -188,7 +188,7 @@ class RecordingDPG:
 
 
 def make_entry(title, cluster_id, data_idx, **fields):
-    return env(title=title, cluster_id=cluster_id, data_idx=data_idx,
+    return env(title=title, cluster_id=cluster_id, current_label_id=cluster_id, data_idx=data_idx,
                author="Author, An", year="2024", **fields)
 
 

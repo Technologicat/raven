@@ -82,7 +82,7 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
     entries_by_cluster = collections.defaultdict(lambda: list())
     for data_idx in data_idxs:  # item indices into `sorted_xxx`
         entry = dataset.sorted_entries[data_idx]
-        entries_by_cluster[entry.cluster_id].append((data_idx, entry))
+        entries_by_cluster[entry.current_label_id].append((data_idx, entry))
 
     # Order within each cluster: by default, as a reference list is ordered.
     for entries_in_this_cluster in entries_by_cluster.values():

@@ -18,8 +18,9 @@ from raven.visualizer.app_state import app_state
 
 
 def make_entry(title, cluster_id, **fields):
-    """One record of `dataset.sorted_entries`, carrying the fields these tests sort or group by."""
-    return env(title=title, cluster_id=cluster_id, **fields)
+    """One record of `dataset.sorted_entries`, carrying the fields these tests sort or group by, shown under the
+    importer's label as `raven.visualizer.displaystate.init` leaves it."""
+    return env(title=title, cluster_id=cluster_id, current_label_id=cluster_id, **fields)
 
 
 def make_dataset(entries, *, keywords_available=True, vis_keywords_by_cluster=None):
