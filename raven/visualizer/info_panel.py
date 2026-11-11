@@ -191,10 +191,9 @@ _scroll_animation_lock = threading.RLock()
 
 _search_jump = None  # `(display_idx, target_y_scroll)` of the last jump to a search match, while it may still say where the reader is; see `_search_jump_holds`.
 
+# A `Tooltip` rather than a plain `dpg.tooltip`: the copy acknowledgment rewrites the caption, and a
+# `dpg.tooltip` would draw one frame at its old size.
 _copy_report_tooltip = None  # gui_tooltip.Tooltip on the copy-report button, created in `build_header`.
-                             # A `Tooltip` rather than a plain `dpg.tooltip`, because the copy
-                             # acknowledgment rewrites the caption and a `dpg.tooltip` would draw one
-                             # frame at its old size.
 
 
 def build_header():
