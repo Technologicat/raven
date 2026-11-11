@@ -123,6 +123,7 @@ with timer() as tim:
     from . import annotation
     from . import config as visualizer_config
     from . import displaystate
+    from . import entry_renderer
     from . import importer  # BibTeX importer
     from . import importer_gui  # ...and its GUI
     from . import info_panel
@@ -794,32 +795,39 @@ with timer() as tim:
 
                 # Readouts about the dataset shown, and the controls that act on them. Above the plot, which fills
                 # the rest of the column. Hidden while nothing in it applies; `plotter.load_dataset` fills it.
-                with dpg.group(tag="display_filters_group", horizontal=True, show=False):
-                    dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
+                # A table, so that the controls sit flush right: the first column stretches, and the second fits
+                # its content.
+                with dpg.table(tag="display_filters_group", header_row=False, show=False,
+                               policy=dpg.mvTable_SizingFixedFit, borders_innerV=False, borders_outerV=False,
+                               borders_innerH=False, borders_outerH=False):
+                    dpg.add_table_column(width_stretch=True)
+                    dpg.add_table_column(width_fixed=True)
+                    with dpg.table_row():
+                        dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
+                        with dpg.group(horizontal=True):
 
-                    def purity_cutoff_changed(sender, app_data):
-                        """Show the clusters below the chosen purity as Misc, and redraw what shows them."""
-                        ds = app_state.dataset
-                        if ds is None:
-                            return
-                        if displaystate.relabel_by_purity(ds.sorted_entries,
-                                                          getattr(ds.file_content, "cluster_purities", None),
-                                                          app_data / 100):
-                            plotter.refresh_series(ds)
-                            info_panel.update()
-                            annotation.update(force=True)
-                    dpg.add_text("Show clusters below", color=(140, 140, 140), tag="purity_cutoff_label_text")
-                    dpg.add_slider_int(tag="purity_cutoff_slider",
-                                       min_value=0,
-                                       max_value=100,
-                                       default_value=0,
-                                       format="%d%%",
-                                       width=160,
-                                       callback=purity_cutoff_changed)
-                    dpg.add_text("purity as Misc", color=(140, 140, 140), tag="purity_cutoff_label_text_2")
-                    with dpg.tooltip("purity_cutoff_slider", tag="purity_cutoff_tooltip"):  # tag
-                        dpg.add_text("At 0% every cluster is shown as itself. Ctrl+click to type a value.",
-                                     tag="purity_cutoff_tooltip_text")
+                            def purity_cutoff_changed(sender, app_data):
+                                """Show the clusters below the chosen purity as Misc, and redraw what shows them."""
+                                ds = app_state.dataset
+                                if ds is None:
+                                    return
+                                if displaystate.relabel_by_purity(ds.sorted_entries,
+                                                                  getattr(ds.file_content, "cluster_purities", None),
+                                                                  app_data / 100):
+                                    plotter.refresh_series(ds)
+                                    info_panel.update()
+                                    annotation.update(force=True)
+                            dpg.add_text("Purity cutoff for Misc", color=(140, 140, 140), tag="purity_cutoff_label_text")
+                            dpg.add_slider_int(tag="purity_cutoff_slider",
+                                               min_value=0,
+                                               max_value=100,
+                                               default_value=0,
+                                               format="%d%%",
+                                               width=160,
+                                               callback=purity_cutoff_changed)
+                # The explanation of both the readout and the cutoff, on the slider: a reader hovers a control, not a label.
+                with dpg.tooltip("purity_cutoff_slider", tag="purity_cutoff_tooltip"):  # tag
+                    dpg.add_text(entry_renderer.PURITY_EXPLANATION, tag="purity_cutoff_tooltip_text")
 
                 # Plotter.
                 # Configure explicitly so we are future-proof against possible defaults changes in DPG.

@@ -264,9 +264,8 @@ class TestClusterIDOrdering:
 # Cluster purity, in words
 
 class TestPurityReadouts:
-    def test_the_dataset_purity_is_a_sentence_with_a_percentage(self):
-        text = entry_renderer.format_dataset_purity(env(dataset_purity=0.583))
-        assert "58%" in text and "closest neighbours" in text
+    def test_the_dataset_purity_is_a_short_readout_with_a_percentage(self):
+        assert entry_renderer.format_dataset_purity(env(dataset_purity=0.583)) == "Cluster purity: 58% on average"
 
     def test_a_dataset_imported_before_purity_was_measured_has_no_readout(self):
         # The field is absent from the file altogether, not `None`.

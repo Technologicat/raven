@@ -31,7 +31,7 @@ Cross-module state read via `app_state`:
 
 __all__ = ["reference_order", "get_entries_for_selection",
            "order_cluster_ids",
-           "format_dataset_purity", "format_cluster_purity"]
+           "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity"]
 
 import collections
 import math
@@ -140,8 +140,18 @@ def order_cluster_ids(cluster_ids):
     return out
 
 
+#: What cluster purity means, and what the purity cutoff does; the tooltip of the readouts and the slider.
+PURITY_EXPLANATION = ("Cluster purity: of a record's closest neighbours in meaning, the share in its own cluster.\n"
+                      "The line gives the average over every record in a cluster; each cluster's header gives its own.\n"
+                      "\n"
+                      "Clusters with purity below the cutoff are shown as Misc, on the map and in the info panel.\n"
+                      "At 0%, every cluster is shown as itself. Ctrl+click the slider to type a value.")
+
+
 def format_dataset_purity(file_content) -> str | None:
-    """The dataset's cluster purity as a sentence, or `None` for a dataset that does not record it.
+    """The dataset's cluster purity as a short readout, or `None` for a dataset that does not record it.
+
+    `PURITY_EXPLANATION` is what it means, for a tooltip.
 
     `file_content`: a loaded dataset file (`dataset.file_content`). Datasets imported before purity was measured
                     lack it, as does one where no record is in a cluster.
@@ -149,8 +159,7 @@ def format_dataset_purity(file_content) -> str | None:
     maybe_purity = getattr(file_content, "dataset_purity", None)
     if maybe_purity is None:
         return None
-    return (f"Cluster purity: on average, {maybe_purity:.0%} of a clustered record's closest neighbours "
-            f"are in its own cluster.")
+    return f"Cluster purity: {maybe_purity:.0%} on average"
 
 
 def format_cluster_purity(file_content, cluster_id: int) -> str | None:

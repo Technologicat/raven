@@ -314,6 +314,9 @@ def _render_worker(*, task_env, env=None):
                     cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id)
                     cluster_title_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_title_group_build{env.internal_build_number}", parent=annotation_target_group)
                     dpg.add_text(cluster_title, color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_title_text_build{env.internal_build_number}", parent=cluster_title_group)  # "#42"
+                    maybe_purity_text = entry_renderer.format_cluster_purity(ds.file_content, cluster_id)
+                    if maybe_purity_text is not None:
+                        dpg.add_text(f"[{maybe_purity_text}]", color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_purity_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[purity 62%]"
                     dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_keywords_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[keyword0, ...]"
                     for data_idx, entry in cluster_content:  # `data_idx`: item index into `sorted_xxx`
                         if task_env is not None and task_env.cancelled:
