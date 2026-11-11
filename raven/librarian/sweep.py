@@ -506,6 +506,11 @@ _STALE_SECONDS = 600
 
 
 def _process_alive(pid: int) -> bool:
+    """Whether process `pid` exists. Always `False` on Windows, where this cannot be asked this way: there, signal 0
+    is `CTRL_C_EVENT`, and `os.kill` would interrupt the process instead. A running state is then judged gone by its
+    age alone."""
+    if os.name == "nt":
+        return False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -522,7 +527,7 @@ def status(directory: str | pathlib.Path) -> list[env]:
 
     Each has `name` (the ledger's file name without `.jsonl`), and from the state file a run writes as it goes:
     `state` (`"running"`, an outcome such as `"completed"` or `"model_changed"`, or `"gone"` for a run whose process
-    has died without saying so), `total`, `todo`, `done`, `failed`, `started`, `updated` (both epoch seconds),
+    has died without saying so, or on Windows one not updated for ten minutes), `total`, `todo`, `done`, `failed`, `started`, `updated` (both epoch seconds),
     `elapsed` and `eta` (seconds, `None` when it cannot be estimated) and `model`. A ledger written before runs kept
     a state file has `state` `"unknown"` and only `answered`, counted from the ledger itself.
 

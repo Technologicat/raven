@@ -447,6 +447,13 @@ class TestStatus:
         (entry,) = sweep.status(tmp_path)
         assert (entry.todo, entry.done) == (3, 3)
 
+    def test_the_liveness_check_never_signals_on_windows(self, monkeypatch):
+        # There, signal 0 is CTRL_C_EVENT: `os.kill(pid, 0)` interrupts the process rather than asking about it.
+        import os
+        monkeypatch.setattr(sweep.os, "name", "nt")
+        monkeypatch.setattr(sweep.os, "kill", lambda *args: pytest.fail("os.kill was called on Windows"))
+        assert sweep._process_alive(os.getpid()) is False
+
     def test_a_running_state_from_a_live_process_is_running_with_an_estimate(self, tmp_path):
         import os
         import time
