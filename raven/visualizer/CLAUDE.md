@@ -7,12 +7,12 @@ package, not as a figure to quote. Re-measure before quoting one. `python script
 checks this table against the package, including whether every module is in it.
 
 ```
-importer.py       (~1.8k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+importer.py       (~1.9k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
 app.py            (~1.6k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
-config.py         (~290)  — Configuration-as-code (import settings, models, GUI settings). The
+config.py         (~310)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
@@ -22,7 +22,7 @@ selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
-importer_cli.py   (~120)  — `raven-importer` entry point
+importer_cli.py   (~130)  — `raven-importer` entry point
 savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side), as JSON
 app_state.py       (~62)  — top-level app state containers
 ```

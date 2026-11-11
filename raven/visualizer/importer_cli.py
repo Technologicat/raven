@@ -45,6 +45,8 @@ def main() -> None:
     llm_group.add_argument('--no-llm', dest='llm', action='store_const', const='off',
                            help='import without the stages that need an LLM, this run only, and do not '
                                 'try a backend at all.')
+    parser.add_argument('--clustering', choices=['hdbscan_2d', 'agglomerative'], default=None,
+                        help="how to find the map's clusters, overriding the configured `clustering_method`")
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
@@ -79,6 +81,10 @@ def main() -> None:
     logger.info("Settings (for LOCAL models):")
     logger.info(f"    Embedding model: {visualizer_config.embedding_model}")
     logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
+    if opts.clustering is not None:
+        logger.info(f"Using clustering method '{opts.clustering}' from --clustering, overriding the configured '{visualizer_config.clustering_method}'.")
+        visualizer_config.clustering_method = opts.clustering
+    logger.info(f"        Clustering method: {visualizer_config.clustering_method}")
     logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
     logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
     logger.info(f"    Summarize via LLM: {visualizer_config.summarize}")

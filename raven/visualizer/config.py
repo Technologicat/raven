@@ -47,6 +47,23 @@ embedding_model = "Snowflake/snowflake-arctic-embed-l"
 # vis_method = "umap"  # best quality, slow
 vis_method = "tsne"  # good quality, fast (recommended)
 
+# How to find the clusters the map shows. One of:
+#
+#     "hdbscan_2d":    HDBSCAN on the 2D map, after dimension reduction. The original method.
+#
+#     "agglomerative": agglomerative clustering (average linkage, cosine) of the high-dimensional
+#                      embeddings, centered first, with the tree cut at `clustering_n_clusters` and
+#                      clusters smaller than `clustering_min_cluster_size` shown as outliers.
+#                      Places more of the corpus in clusters. The 2D map still positions the points,
+#                      so a cluster can look scattered on it. Measured in
+#                      `investigations/highdim-clustering/`; the cut at 100 does not suit small
+#                      corpora (a few hundred records or fewer).
+#
+clustering_method = "hdbscan_2d"
+# clustering_method = "agglomerative"
+clustering_n_clusters = 100
+clustering_min_cluster_size = 5
+
 # Whether to detect keywords, for visualizing per-cluster topics.
 #
 # Keyword extraction is somewhat expensive (requires NLP), so this can be disabled.

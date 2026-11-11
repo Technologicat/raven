@@ -1049,6 +1049,68 @@ def two_blobs(n_per_blob=40, dim=2, separation=10.0, seed=42):
     return np.concatenate([first, second], axis=0)
 
 
+def directions_with_strays(n_per_cluster=20, n_groups=3, n_strays=3, dim=16, spread=0.05, seed=7):
+    """`n_groups` tight groups of unit vectors along different axes, then `n_strays` single vectors along axes of
+    their own, as one array. The strays are what a cut leaves as clusters of one."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    axes = np.eye(dim)
+    groups = [axes[g] + rng.normal(0.0, spread, size=(n_per_cluster, dim)) for g in range(n_groups)]
+    strays = [axes[n_groups + k][None, :] + rng.normal(0.0, spread, size=(1, dim)) for k in range(n_strays)]
+    vectors = np.concatenate(groups + strays, axis=0)
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+
+class TestAgglomerativeClustering:
+    def test_groups_become_clusters_and_a_cluster_of_one_becomes_an_outlier(self):
+        import numpy as np
+        vectors = directions_with_strays()
+        labels = importer._agglomerative_labels(vectors, n_clusters=6, min_cluster_size=5)
+        assert sorted(set(labels.tolist())) == [-1, 0, 1, 2]
+        assert np.all(labels[-3:] == -1), "each stray is a cluster of one, under the size limit"
+        for g in range(3):  # each group is one cluster of its own
+            group = labels[g * 20:(g + 1) * 20]
+            assert len(set(group.tolist())) == 1 and group[0] != -1
+
+    def test_the_survivors_are_numbered_from_zero_without_gaps(self):
+        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=5)
+        kept = sorted(set(labels.tolist()) - {-1})
+        assert kept == list(range(len(kept)))
+
+    def test_with_no_size_limit_every_point_is_in_a_cluster(self):
+        # The control for the test above: the same cut keeps the strays when nothing is too small, so it is the
+        # size limit that made them outliers.
+        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=1)
+        assert -1 not in set(labels.tolist())
+        assert len(set(labels.tolist())) == 6
+
+    def test_a_cut_above_the_number_of_points_is_capped(self):
+        labels = importer._agglomerative_labels(directions_with_strays(n_per_cluster=1, n_groups=2, n_strays=1),
+                                                n_clusters=100, min_cluster_size=5)
+        assert list(labels) == [-1, -1, -1]
+
+    def test_the_map_step_clusters_the_highdim_vectors_when_configured_to(self, monkeypatch):
+        # The 2D points here are all the same, so any cluster found has to have come from the high-dimensional
+        # vectors -- which is what this method is for.
+        import numpy as np
+        monkeypatch.setattr(visualizer_config, "clustering_method", "agglomerative")
+        monkeypatch.setattr(visualizer_config, "clustering_n_clusters", 6)
+        monkeypatch.setattr(visualizer_config, "clustering_min_cluster_size", 5)
+        vectors = directions_with_strays()
+        entries_env = _entries_env(len(vectors))
+        vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_vis_data(entries_env, np.zeros((len(vectors), 2)), vectors)
+        assert (n_vis_clusters, n_vis_outliers) == (3, 3)
+        for entry, label in zip(vis_data, labels):
+            assert entry.cluster_id == label
+            assert entry.cluster_probability == (0.0 if label == -1 else 1.0)
+
+    def test_an_unknown_method_is_refused_by_name(self, monkeypatch):
+        import numpy as np
+        monkeypatch.setattr(visualizer_config, "clustering_method", "kmeans")
+        with pytest.raises(ValueError, match="kmeans"):
+            importer._cluster_vis_data(_entries_env(4), np.zeros((4, 2)), np.eye(4))
+
+
 class TestClustering:
     def test_the_highdim_pass_finds_the_clusters_that_are_there(self):
         _, n_clusters = importer._cluster_highdim_semantic_vectors(two_directions())
@@ -1119,7 +1181,7 @@ class TestClustering:
         entries = [env(title=f"paper {i}", abstract="") for i in range(len(lowdim))]
         input_data = env(parsed_data_by_filename={"a.bib": entries})
 
-        vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_lowdim_data(input_data, lowdim)
+        vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_vis_data(input_data, lowdim, None)
 
         assert vis_data == entries, "the concatenation should preserve order; the labels are indexed by it"
         assert len(labels) == len(lowdim)
@@ -1136,7 +1198,7 @@ class TestClustering:
 
         lowdim = two_blobs(n_per_blob=40, dim=2)
         entries_env = _entries_env(len(lowdim))
-        _, labels, _, n_vis_outliers = importer._cluster_lowdim_data(entries_env, lowdim)
+        _, labels, _, n_vis_outliers = importer._cluster_vis_data(entries_env, lowdim, None)
         assert n_vis_outliers == int(np.sum(labels == -1))
 
     def test_the_2d_pass_concatenates_across_input_files_in_order(self):
@@ -1149,7 +1211,7 @@ class TestClustering:
         second = [env(title=f"second {i}", abstract="") for i in range(len(lowdim) // 2)]
         input_data = env(parsed_data_by_filename={"a.bib": first, "b.bib": second})
 
-        vis_data, _, _, _ = importer._cluster_lowdim_data(input_data, lowdim)
+        vis_data, _, _, _ = importer._cluster_vis_data(input_data, lowdim, None)
         assert vis_data == first + second
 
 

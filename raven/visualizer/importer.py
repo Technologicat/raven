@@ -819,11 +819,52 @@ def _reduce_dimension(unique_vs, n_clusters, all_vectors):
     return lowdim_data
 
 
-def _cluster_lowdim_data(input_data, lowdim_data):
-    """Cluster the low-dimensional (2D) data.
+CLUSTERING_METHODS = ("hdbscan_2d", "agglomerative")
+
+
+def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
+    """Cluster labels from agglomerative clustering of the high-dimensional vectors.
+
+    `all_vectors`: rank-2 `np.array` of shape `[N, highdim]`, as `_get_highdim_semantic_vectors` returns.
+    `n_clusters`: where to cut the tree; capped at `N`.
+    `min_cluster_size`: a cluster smaller than this is not a topic anyone would read, so its members become
+                        outliers.
+
+    Returns a rank-1 `np.array` of cluster IDs, numbered from 0 by order of first appearance in the data, with
+    outliers marked -1.
+    """
+    from sklearn.cluster import AgglomerativeClustering
+
+    vectors = np.asarray(all_vectors, dtype=np.float64)
+    if len(vectors) < 2:
+        return np.full(len(vectors), -1, dtype=np.int64)
+    # Center, then normalize. Embeddings share a large common component, which crowds every cosine similarity
+    # into a narrow band; removing it widens the range the clustering works over. Measured in
+    # `investigations/highdim-clustering/` (finding 7), along with the choice of method and cut below.
+    vectors = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    vectors = vectors - vectors.mean(axis=0, keepdims=True)
+    vectors = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    raw = AgglomerativeClustering(n_clusters=min(n_clusters, len(vectors)),
+                                  metric="cosine",
+                                  linkage="average").fit_predict(vectors)
+
+    # Agglomerative assigns every point, so it has no outliers of its own: a cut deep enough to be useful leaves a
+    # tail of two- and three-member clusters, which are shown as outliers rather than as topics.
+    labels = np.full(len(raw), -1, dtype=np.int64)
+    sizes = collections.Counter(raw.tolist())
+    renumber = {}
+    for idx, cluster in enumerate(raw.tolist()):
+        if sizes[cluster] >= min_cluster_size:
+            labels[idx] = renumber.setdefault(cluster, len(renumber))
+    return labels
+
+
+def _cluster_vis_data(input_data, lowdim_data, all_vectors):
+    """Find the clusters the map shows, by the method `visualizer_config.clustering_method` names.
 
     `input_data`: output of `_parse_input_files`, which see.
-    `lowdim_data`: output of `_reduce_dimension`, which see.
+    `lowdim_data`: output of `_reduce_dimension`, which see. What `"hdbscan_2d"` clusters.
+    `all_vectors`: output of `_get_highdim_semantic_vectors`, which see. What `"agglomerative"` clusters.
 
     Returns (`vis_data`, `labels`, `n_vis_clusters`, `n_vis_outliers`), where:
         - `vis_data`: list, concatenated entries from all input files in `input_data` (this is what the visualizer reads)
@@ -831,31 +872,44 @@ def _cluster_lowdim_data(input_data, lowdim_data):
         - `n_vis_clusters`: int, how many clusters were detected
         - `n_vis_outliers`: int, how many data points were left without any cluster
 
-    Mutates `input_data`, adding the fields `item.cluster_id` and `item.cluster_probability` (confidence value).
+    Mutates `input_data`, adding the fields `item.cluster_id` and `item.cluster_probability` (confidence value;
+    `"agglomerative"` has none, so it is 1.0 for a cluster's members and 0.0 for an outlier).
     """
-    # Judging by paper titles in the test dataset, the initial high-dimensional clustering (and then training the dimension reduction using those points)
-    # seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative points only, maps the full dataset into the 2D space
-    # in a semantically sensible manner.
-    _update_status_and_log("Detecting clusters in 2D semantic map...", log_indent=1)
+    method = visualizer_config.clustering_method
+    if method not in CLUSTERING_METHODS:
+        raise ValueError(f"_cluster_vis_data: unknown `clustering_method` {method!r}; expected one of {CLUSTERING_METHODS}")
 
     # Concatenate data from individual input files into one large dataset. This is what we will visualize.
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
 
     with timer() as tim:
-        # On `copy`, see the semantic clustering pass; same reasoning, and the same no-op.
-        vis_clusterer = HDBSCAN(min_cluster_size=10, min_samples=2, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid", copy=True)
-        vis_clusterer.fit(lowdim_data)
-        n_vis_clusters = np.shape(vis_clusterer.medoids_)[0]
-        n_vis_outliers = sum(vis_clusterer.labels_ == -1)
+        if method == "hdbscan_2d":
+            # Judging by paper titles in the test dataset, the initial high-dimensional clustering (and then training the dimension
+            # reduction using those points) seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative
+            # points only, maps the full dataset into the 2D space in a semantically sensible manner.
+            _update_status_and_log("Detecting clusters in 2D semantic map...", log_indent=1)
+            # On `copy`, see the semantic clustering pass; same reasoning, and the same no-op.
+            vis_clusterer = HDBSCAN(min_cluster_size=10, min_samples=2, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid", copy=True)
+            vis_clusterer.fit(lowdim_data)
+            labels = vis_clusterer.labels_
+            probabilities = vis_clusterer.probabilities_
+        else:
+            _update_status_and_log("Detecting clusters in the high-dimensional semantic space...", log_indent=1)
+            labels = _agglomerative_labels(all_vectors,
+                                           n_clusters=visualizer_config.clustering_n_clusters,
+                                           min_cluster_size=visualizer_config.clustering_min_cluster_size)
+            probabilities = (labels != -1).astype(np.float64)
+        n_vis_clusters = len(set(labels.tolist()) - {-1})
+        n_vis_outliers = int(np.sum(labels == -1))
         # Tag the data points with the cluster IDs. Outliers get the tag -1.
         for idx, entry in enumerate(vis_data):
-            entry.cluster_id = vis_clusterer.labels_[idx]
-            entry.cluster_probability = vis_clusterer.probabilities_[idx]
+            entry.cluster_id = labels[idx]
+            entry.cluster_probability = probabilities[idx]
         if n_vis_clusters > 0:
-            logger.info(f"        Detected {n_vis_clusters} clusters in 2D, with {n_vis_outliers} outlier data points (out of {len(lowdim_data)} data points total).")
+            logger.info(f"        Detected {n_vis_clusters} clusters ({method}), with {n_vis_outliers} outlier data points (out of {len(vis_data)} data points total).")
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
-    return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
+    return vis_data, labels, n_vis_clusters, n_vis_outliers
 
 
 def _field_or_placeholder(fields, name: str, placeholder: str, entry_key: str, transform=None) -> str:
@@ -1282,8 +1336,8 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
                               max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
-    `vis_data`: output of `_cluster_lowdim_data`, which see.
-    `n_vis_clusters`: output of `_cluster_lowdim_data`, which see.
+    `vis_data`: output of `_cluster_vis_data`, which see.
+    `n_vis_clusters`: output of `_cluster_vis_data`, which see.
 
     `all_keywords`: Used when `config.clusters_keyword_method == "frequencies"`.
 
@@ -1804,7 +1858,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         progress.tock()
         if _is_cancelled():
             return False
-        vis_data, labels, n_vis_clusters, n_vis_outliers = _cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
+        vis_data, labels, n_vis_clusters, n_vis_outliers = _cluster_vis_data(input_data, lowdim_data, all_vectors)  # find the map's clusters
         progress.tock()
         if _is_cancelled():
             return False
@@ -1863,6 +1917,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            "all_input_filenames_str": all_input_filenames_str,  # concatenated, "file1_file2_..._fileN", for naming output figures for this combination of input files
                            "embedding_model": visualizer_config.embedding_model,
                            "vis_method": visualizer_config.vis_method,  # dimension reduction method
+                           "clustering_method": visualizer_config.clustering_method,  # how the clusters were found
                            "n_vis_clusters": n_vis_clusters,  # number of clusters detected
                            "n_vis_outliers": n_vis_outliers,  # number of outlier points, not belonging to any cluster
                            "labels": labels,
