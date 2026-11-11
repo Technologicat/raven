@@ -20,7 +20,7 @@ plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space q
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
-entry_renderer.py (~140)  — per-entry rendering shared by panel and tooltip
+entry_renderer.py (~170)  — per-entry rendering shared by panel and tooltip, and the cluster purity readouts
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py   (~140)  — `raven-importer` entry point
 llmclustering.py  (~240)  — `clustering_method = "llm"`: one LLM call groups a small corpus into named themes, laid
