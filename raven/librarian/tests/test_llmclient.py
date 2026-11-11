@@ -27,6 +27,15 @@ from raven.librarian import chatutil
 from raven.librarian import llmclient
 from raven.librarian import llmtools
 
+
+def _same_setting(a, b):
+    """Whether two settings values agree. A `threading.Event` (the tokenizer load's `tokenizer_settled`) is a
+    signal rather than data, so two of them agree when both are set or neither is."""
+    import threading
+    if isinstance(a, threading.Event) and isinstance(b, threading.Event):
+        return a.is_set() == b.is_set()
+    return a == b
+
 # This module used to open with an `importorskip` on `llmclient`, because importing it reached
 # `raven.client.api` and so required `spacy` and `av`, neither of which CI installs. That import is now
 # deferred to the two network tool wrappers — which is also why the tests below patch
@@ -2173,7 +2182,7 @@ class TestConfigureMatchesSetup:
         # env-valued field (`settings.formatters`) never matches itself across two calls that way — while
         # `env.__eq__` compares contents and gets it right.
         differing = [k for k in sorted(from_setup.keys())
-                     if from_setup[k] != from_configure[k]]
+                     if not _same_setting(from_setup[k], from_configure[k])]
         assert not differing, f"configure() diverged from setup() on: {differing}"
 
     def test_missing_context_length_defaults_the_same_way(self, monkeypatch):
@@ -3765,7 +3774,7 @@ class TestBackendFacts:
         llmclient.reconnect(settings)
         expected = self._settings(self._SECOND, flavor="lmstudio")
         assert any(settings[name] != self._settings(self._FIRST, flavor="oobabooga")[name] for name in settings), "the two backends do not differ, so this fixture cannot tell a written field from a missed one"
-        differing = {name for name in expected if name != "formatters" and settings[name] != expected[name]}
+        differing = {name for name in expected if name != "formatters" and not _same_setting(settings[name], expected[name])}
         assert differing == set()
 
     def test_a_per_run_override_survives_a_reconnect(self, monkeypatch):
@@ -3846,3 +3855,24 @@ class TestBackendErrorMessage:
     def test_a_long_body_is_shortened(self):
         text = llmclient._backend_error_message("x" * 1000, max_length=10)
         assert text == "x" * 10 + "…"
+
+
+class TestWaitingForTheTokenizer:
+    def test_with_no_local_tokenizer_it_returns_at_once_and_says_so(self):
+        import threading
+        settings = env(tokenizer=None, tokenizer_settled=threading.Event())
+        settings.tokenizer_settled.set()
+        assert llmclient.wait_for_tokenizer(settings, timeout=5.0) is False
+
+    def test_it_waits_for_a_load_in_progress(self):
+        import threading
+        import time
+        settings = env(tokenizer=None, tokenizer_settled=threading.Event())
+
+        def load():
+            time.sleep(0.2)
+            settings.tokenizer = object()
+            settings.tokenizer_settled.set()
+        threading.Thread(target=load).start()
+        # The control is the first test: there, nothing is loading and the answer is False at once.
+        assert llmclient.wait_for_tokenizer(settings, timeout=5.0) is True

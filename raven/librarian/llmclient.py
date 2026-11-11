@@ -30,7 +30,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            "make_prompt_reloader", "configure",
 
            # Counting what a prompt costs
-           "count_tokens", "count_tools_tokens", "tool_cost_by_group",
+           "wait_for_tokenizer", "count_tokens", "count_tools_tokens", "tool_cost_by_group",
            "image_token_cost",
            "keeps_reasoning",  # which stored thinking traces a prompt carries
            "count_branch_tokens",
@@ -1038,6 +1038,7 @@ def configure(model_info: env,
     settings = env(user=user, char=char,
                    retain_thinking=librarian_config.llm_retain_thinking,  # send earlier turns' thinking traces; see `keeps_reasoning`
                    tokenizer=None,  # local tokenizer for exact counts, or None (see `count_tokens`); loaded in the background
+                   tokenizer_settled=threading.Event(),  # set once that load has finished or there is none; see `wait_for_tokenizer`
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
                    **_prompt_texts(user, char),
                    stopping_strings=stopping_strings,
@@ -1139,6 +1140,7 @@ def _apply_backend_facts(settings: env,
     # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
     settings.tokens_per_character = _DEFAULT_TOKENS_PER_CHARACTER
     settings.tokenizer = None
+    settings.tokenizer_settled = threading.Event()
     tokenizer_sources = []
     if librarian_config.llm_tokenizer_path:
         tokenizer_sources = _resolve_tokenizer_sources(librarian_config.llm_tokenizer_path,
@@ -1158,6 +1160,7 @@ def _start_tokenizer_load(settings: env, tokenizer_sources: list[str]) -> None:
     starts out approximate and sharpens — the same shape as the backend-figure upgrade it replaces.
     """
     if not tokenizer_sources:
+        settings.tokenizer_settled.set()
         if settings.backend_flavor == "oobabooga":
             logger.info("_start_tokenizer_load: no local tokenizer configured; token counts will be exact, from the backend's token-count endpoint.")
         else:
@@ -1172,12 +1175,15 @@ def _start_tokenizer_load(settings: env, tokenizer_sources: list[str]) -> None:
     def load_it() -> None:
         # The backend is asked to confirm the tokenizer, which is two small requests — one more reason this
         # belongs on a thread of its own rather than in the startup path.
-        backend_counter = _make_backend_token_counter(settings)
-        for source in tokenizer_sources:
-            if (tokenizer := _load_local_tokenizer(source, backend_counter)) is not None:
-                settings.tokenizer = tokenizer
-                return
-        logger.warning(f"_start_tokenizer_load: no local tokenizer could be used, of {tokenizer_sources}; token counts stay estimates.")
+        try:
+            backend_counter = _make_backend_token_counter(settings)
+            for source in tokenizer_sources:
+                if (tokenizer := _load_local_tokenizer(source, backend_counter)) is not None:
+                    settings.tokenizer = tokenizer
+                    return
+            logger.warning(f"_start_tokenizer_load: no local tokenizer could be used, of {tokenizer_sources}; token counts stay estimates.")
+        finally:
+            settings.tokenizer_settled.set()
 
     threading.Thread(target=load_it, name="llmclient tokenizer load", daemon=True).start()
 
@@ -1319,6 +1325,17 @@ def _ooba_token_count(backend_url: str, text: str) -> int:
     # ooba's undocumented web API endpoints are listed in `text-generation-webui/extensions/openai/script.py`.
     response = requests.post(f"{backend_url}/v1/internal/token-count", headers=headers, json={"text": text}, timeout=librarian_config.llm_network_timeout)
     return response.json()["length"]
+
+def wait_for_tokenizer(settings: env, timeout: float | None = 60.0) -> bool:
+    """Wait until the local tokenizer `setup` started loading is ready, or known not to be. Returns whether it is ready.
+
+    For a batch caller that wants an exact count of the first prompt it sends: the tokenizer loads in the
+    background, and `count_tokens` asked before then estimates. `timeout`, in seconds, bounds the wait; `None`
+    waits as long as the load takes. Returns at once where no local tokenizer is configured.
+    """
+    settings.tokenizer_settled.wait(timeout)
+    return settings.tokenizer is not None
+
 
 def count_tokens(settings: env, text: str) -> tuple[int, bool]:
     """Count tokens in `text` for the loaded model. Returns `(count, is_exact)`.

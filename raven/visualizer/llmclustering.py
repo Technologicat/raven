@@ -222,6 +222,7 @@ def cluster(llm_settings, entries: list, *, maybe_aim: str | None = None) -> tup
     from ..librarian import llmclient  # noqa: PLC0415 -- the LLM side is loaded only when a run needs it
 
     prompt = build_prompt(entries, maybe_aim=maybe_aim)
+    llmclient.wait_for_tokenizer(llm_settings)  # an exact count where one is available; it loads in the background
     n_tokens, exact = llmclient.count_tokens(llm_settings, prompt)
     budget = llm_settings.context_length - MAX_REPLY_TOKENS
     if n_tokens > budget:

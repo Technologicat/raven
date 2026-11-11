@@ -131,6 +131,7 @@ class TestTheSizeCheck:
     def test_a_dataset_that_does_not_fit_is_refused_before_asking(self, monkeypatch):
         from raven.librarian import agent, llmclient
         monkeypatch.setattr(llmclient, "count_tokens", lambda settings, text: (50_000, True))
+        monkeypatch.setattr(llmclient, "wait_for_tokenizer", lambda settings: True)
         monkeypatch.setattr(agent, "ask_record", lambda *a, **k: pytest.fail("asked although the prompt does not fit"))
         settings = env(context_length=llmclustering.MAX_REPLY_TOKENS + 10_000)
         with pytest.raises(llmclustering.PromptTooLarge, match="agglomerative"):
@@ -140,6 +141,7 @@ class TestTheSizeCheck:
         # The control for the test above: the same call with room to spare goes through to the model.
         from raven.librarian import agent, llmclient
         monkeypatch.setattr(llmclient, "count_tokens", lambda settings, text: (5_000, True))
+        monkeypatch.setattr(llmclient, "wait_for_tokenizer", lambda settings: True)
         monkeypatch.setattr(agent, "ask_record",
                             lambda *a, **k: env(reply=_reply([_theme("A", [1, 2, 3])]), reasoning=[], truncated=False))
         labels, points, themes = llmclustering.cluster(env(context_length=llmclustering.MAX_REPLY_TOKENS + 10_000), _entries(3))
