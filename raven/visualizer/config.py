@@ -53,11 +53,12 @@ vis_method = "tsne"  # good quality, fast (recommended)
 #
 #     "agglomerative": agglomerative clustering (average linkage, cosine) of the high-dimensional
 #                      embeddings, centered first, with the tree cut at `clustering_n_clusters` and
-#                      clusters smaller than `clustering_min_cluster_size` shown as outliers.
+#                      clusters smaller than `clustering_min_cluster_size` shown as outliers. For a
+#                      small corpus the cut is lowered so that clusters hold at least
+#                      `clustering_min_mean_cluster_size` records on average.
 #                      Places more of the corpus in clusters. The 2D map still positions the points,
 #                      so a cluster can look scattered on it. Measured in
-#                      `investigations/highdim-clustering/`; the cut at 100 does not suit small
-#                      corpora (a few hundred records or fewer).
+#                      `investigations/highdim-clustering/`.
 #
 #     "llm":           for a small corpus: one LLM call groups every record into themes by what it
 #                      is about, and the themes make both the clusters, named, and the map, one
@@ -73,6 +74,7 @@ clustering_method = "hdbscan_2d"
 # clustering_method = "llm"
 clustering_n_clusters = 100  # "agglomerative"
 clustering_min_cluster_size = 5  # "agglomerative"
+clustering_min_mean_cluster_size = 10  # "agglomerative"
 
 # Whether to detect keywords, for visualizing per-cluster topics.
 #

@@ -55,7 +55,8 @@ def main() -> int:
         vectors, _model = clusterlab.load_vectors(path)
         labels = np.asarray(importer._agglomerative_labels(vectors,
                                                            n_clusters=visualizer_config.clustering_n_clusters,
-                                                           min_cluster_size=visualizer_config.clustering_min_cluster_size))
+                                                           min_cluster_size=visualizer_config.clustering_min_cluster_size,
+                                                           min_mean_cluster_size=visualizer_config.clustering_min_mean_cluster_size))
         centered = importer._centered(vectors)
         rows = purities(centered, labels)
         results[name] = rows

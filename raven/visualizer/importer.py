@@ -872,13 +872,15 @@ def _centered(vectors) -> np.ndarray:
     return vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
 
 
-def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
+def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size, min_mean_cluster_size):
     """Cluster labels from agglomerative clustering of the high-dimensional vectors.
 
     `all_vectors`: rank-2 `np.array` of shape `[N, highdim]`, as `_get_highdim_semantic_vectors` returns.
-    `n_clusters`: where to cut the tree; capped at `N`.
+    `n_clusters`: where to cut the tree, at most; see `min_mean_cluster_size`.
     `min_cluster_size`: a cluster smaller than this is not a topic anyone would read, so its members become
                         outliers.
+    `min_mean_cluster_size`: the cut is lowered, for a small dataset, so that clusters hold at least this many
+                             records on average: `min(n_clusters, N // min_mean_cluster_size)`, and at least one.
 
     Returns a rank-1 `np.array` of cluster IDs, numbered from 0 by order of first appearance in the data, with
     outliers marked -1.
@@ -889,7 +891,10 @@ def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size):
         return np.full(len(all_vectors), -1, dtype=np.int64)
     # The method and the cut below are the ones measured in `investigations/highdim-clustering/`.
     vectors = _centered(all_vectors)
-    raw = AgglomerativeClustering(n_clusters=min(n_clusters, len(vectors)),
+    # Without the lowering, a fixed cut splits a small corpus into fragments under `min_cluster_size`, and every
+    # record comes out an outlier: a corpus of 117 records had no cluster at all at a cut of 100.
+    n_clusters = max(1, min(n_clusters, len(vectors) // min_mean_cluster_size))
+    raw = AgglomerativeClustering(n_clusters=n_clusters,
                                   metric="cosine",
                                   linkage="average").fit_predict(vectors)
 
@@ -946,7 +951,8 @@ def _cluster_vis_data(input_data, lowdim_data, all_vectors):
             _update_status_and_log("Detecting clusters in the high-dimensional semantic space...", log_indent=1)
             labels = _agglomerative_labels(all_vectors,
                                            n_clusters=visualizer_config.clustering_n_clusters,
-                                           min_cluster_size=visualizer_config.clustering_min_cluster_size)
+                                           min_cluster_size=visualizer_config.clustering_min_cluster_size,
+                                           min_mean_cluster_size=visualizer_config.clustering_min_mean_cluster_size)
             probabilities = (labels != -1).astype(np.float64)
         n_vis_clusters = len(set(labels.tolist()) - {-1})
         n_vis_outliers = int(np.sum(labels == -1))

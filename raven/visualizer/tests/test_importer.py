@@ -1066,7 +1066,7 @@ class TestAgglomerativeClustering:
     def test_groups_become_clusters_and_a_cluster_of_one_becomes_an_outlier(self):
         import numpy as np
         vectors = directions_with_strays()
-        labels = importer._agglomerative_labels(vectors, n_clusters=6, min_cluster_size=5)
+        labels = importer._agglomerative_labels(vectors, n_clusters=6, min_cluster_size=5, min_mean_cluster_size=10)
         assert sorted(set(labels.tolist())) == [-1, 0, 1, 2]
         assert np.all(labels[-3:] == -1), "each stray is a cluster of one, under the size limit"
         for g in range(3):  # each group is one cluster of its own
@@ -1074,21 +1074,30 @@ class TestAgglomerativeClustering:
             assert len(set(group.tolist())) == 1 and group[0] != -1
 
     def test_the_survivors_are_numbered_from_zero_without_gaps(self):
-        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=5)
+        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=5, min_mean_cluster_size=10)
         kept = sorted(set(labels.tolist()) - {-1})
         assert kept == list(range(len(kept)))
 
     def test_with_no_size_limit_every_point_is_in_a_cluster(self):
         # The control for the test above: the same cut keeps the strays when nothing is too small, so it is the
         # size limit that made them outliers.
-        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=1)
+        labels = importer._agglomerative_labels(directions_with_strays(), n_clusters=6, min_cluster_size=1, min_mean_cluster_size=10)
         assert -1 not in set(labels.tolist())
         assert len(set(labels.tolist())) == 6
 
     def test_a_cut_above_the_number_of_points_is_capped(self):
         labels = importer._agglomerative_labels(directions_with_strays(n_per_cluster=1, n_groups=2, n_strays=1),
-                                                n_clusters=100, min_cluster_size=5)
+                                                n_clusters=100, min_cluster_size=5, min_mean_cluster_size=10)
         assert list(labels) == [-1, -1, -1]
+
+    def test_a_small_corpus_is_cut_into_clusters_it_can_fill(self):
+        # 63 records and a cut of 100: unlowered, every record is a cluster of one and all of them outliers.
+        import numpy as np
+        vectors = directions_with_strays()
+        unlowered = importer._agglomerative_labels(vectors, n_clusters=100, min_cluster_size=5, min_mean_cluster_size=1)
+        assert np.all(unlowered == -1), "the cut fitted this fixture anyway, so it cannot show the lowering"
+        labels = importer._agglomerative_labels(vectors, n_clusters=100, min_cluster_size=5, min_mean_cluster_size=10)
+        assert sorted(set(labels.tolist())) == [-1, 0, 1, 2]
 
     def test_the_map_step_clusters_the_highdim_vectors_when_configured_to(self, monkeypatch):
         # The 2D points here are all the same, so any cluster found has to have come from the high-dimensional
