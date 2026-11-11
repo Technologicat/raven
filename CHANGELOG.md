@@ -54,6 +54,12 @@
   - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.
 - **The info panel can be on the right**, with the plot on the left and the toolbar still between them. **Ctrl+Shift+P**, or the new ↔ toolbutton, swaps the sides while the app runs.
   - The app remembers the side when it closes. `--panel-side left` or `right` chooses for one session, over what was remembered.
+- **The map's clusters can be found in the embedding space**, by agglomerative clustering, which in the corpora we have tested places more of the corpus in clusters than the default.
+  - `clustering_method = "agglomerative"`, in `raven.visualizer.config`, switches it on. The default is still HDBSCAN on the 2D map.
+  - `raven-importer --clustering agglomerative` chooses it for one import.
+  - Clusters of fewer than 5 records are shown as outliers. The cut at 100 clusters (`clustering_n_clusters`) does not suit a corpus of a few hundred records or fewer.
+  - The map still positions the points, so a cluster can look scattered on it.
+  - The dataset records which method made it.
 
 #### Raven-server
 
