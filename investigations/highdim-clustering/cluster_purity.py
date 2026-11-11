@@ -66,8 +66,8 @@ def main() -> int:
         sizes = np.array([r[1] for r in rows])
         hist, _ = np.histogram(p, bins=bins)
         print(f"{name}: {len(vectors)} records, {len(rows)} clusters, {int((labels == -1).sum())} outliers")
-        print(f"    purity quantiles 10/25/50/75/90%: " + " ".join(f"{q:.2f}" for q in np.quantile(p, [.1, .25, .5, .75, .9])))
-        print(f"    histogram by 0.1:  " + " ".join(f"{h:3d}" for h in hist))
+        print("    purity quantiles 10/25/50/75/90%: " + " ".join(f"{q:.2f}" for q in np.quantile(p, [.1, .25, .5, .75, .9])))
+        print("    histogram by 0.1:  " + " ".join(f"{h:3d}" for h in hist))
         print(f"    clusters of 5-9 records, median purity {np.median(p[sizes < 10]) if (sizes < 10).any() else float('nan'):.2f};"
               f" of 10 or more, {np.median(p[sizes >= 10]) if (sizes >= 10).any() else float('nan'):.2f}")
 
