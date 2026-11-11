@@ -47,6 +47,11 @@ def main() -> None:
                                 'try a backend at all.')
     parser.add_argument('--clustering', choices=['hdbscan_2d', 'agglomerative', 'llm'], default=None,
                         help="how to find the map's clusters, overriding the configured `clustering_method`")
+    aim_group = parser.add_mutually_exclusive_group()
+    aim_group.add_argument('--aim', metavar='TEXT', default=None,
+                           help="for --clustering llm: what the collection is for, told to the model as context")
+    aim_group.add_argument('--aim-file', metavar='PATH', default=None,
+                           help="as --aim, read from a text file")
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
@@ -83,8 +88,14 @@ def main() -> None:
     logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
     if opts.clustering is not None:
         logger.info(f"Using clustering method '{opts.clustering}' from --clustering, overriding the configured '{visualizer_config.clustering_method}'.")
-        visualizer_config.clustering_method = opts.clustering
-    logger.info(f"        Clustering method: {visualizer_config.clustering_method}")
+    clustering_method = opts.clustering or visualizer_config.clustering_method
+    logger.info(f"        Clustering method: {clustering_method}")
+    clustering_aim = opts.aim
+    if opts.aim_file is not None:
+        with open(opts.aim_file, "r", encoding="utf-8") as aim_file:
+            clustering_aim = aim_file.read()
+    if clustering_aim and clustering_method != "llm":
+        logger.warning(f"The aim is used only by --clustering llm; this run clusters with '{clustering_method}', so it is ignored.")
     logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
     logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
     logger.info(f"    Summarize via LLM: {visualizer_config.summarize}")
@@ -95,7 +106,8 @@ def main() -> None:
                           "optional": importer.llm_optional,
                           "off": importer.llm_disabled}[opts.llm]
             importer.import_bibtex(None, opts.output_filename, *opts.input_filenames,
-                                   llm_backend_url=opts.backend_url, llm_policy=llm_policy)
+                                   llm_backend_url=opts.backend_url, llm_policy=llm_policy,
+                                   clustering_method=opts.clustering, clustering_aim=clustering_aim)
     except importer.LLMBackendUnavailable as exc:
         # A batch tool stops rather than starting. The check runs before any of the expensive stages, so
         # nothing is lost by stopping here, and the alternative — finishing with frequency keywords where
@@ -105,7 +117,7 @@ def main() -> None:
         # Named as a labelled list rather than as a sentence about them, so that nothing in the line has to
         # agree with how many there turn out to be. The settings are spelled out because a terminal has the
         # room and the reader is about to go and edit one.
-        wanted = [f"{stage.name} (`{stage.setting}`)" for stage in importer.llm_backed_stages()]
+        wanted = [f"{stage.name} (`{stage.setting}`)" for stage in importer.llm_backed_stages(opts.clustering)]
         print(colorizer.colorize(exc.headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {exc.advice}")
         print(f"Configured to need it, in `raven.visualizer.config`: {', '.join(wanted)}.")
         print("If the backend is elsewhere, point this run at it with --backend-url.")
@@ -121,7 +133,7 @@ def main() -> None:
         logger.info(f"All done in {tim.dt:0.6g}s total.")
         maybe_fallback = importer.llm_fallback_box.get()
         if maybe_fallback is not None:
-            without = ", ".join(stage.without for stage in importer.llm_backed_stages())
+            without = ", ".join(stage.without for stage in importer.llm_backed_stages(opts.clustering))
             print(f"Imported without the LLM, {without}: {maybe_fallback.headline}")
 
 

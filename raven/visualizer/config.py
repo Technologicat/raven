@@ -65,17 +65,14 @@ vis_method = "tsne"  # good quality, fast (recommended)
 #                      that does not fit in the model's context window is refused before asking;
 #                      use "agglomerative" for one that size. Needs an LLM backend
 #                      (`raven.librarian.config`); without one, a run that may go on without it
-#                      clusters agglomeratively.
+#                      clusters agglomeratively. What the collection is for can be told to the
+#                      model per import: `raven-importer --aim`, or the importer window's aim field.
 #
 clustering_method = "hdbscan_2d"
 # clustering_method = "agglomerative"
 # clustering_method = "llm"
 clustering_n_clusters = 100  # "agglomerative"
 clustering_min_cluster_size = 5  # "agglomerative"
-
-# For `clustering_method = "llm"`: what the collection is for, told to the model as context (not as a
-# list of themes). Empty to tell it nothing.
-clustering_llm_aim = ""
 
 # Whether to detect keywords, for visualizing per-cluster topics.
 #

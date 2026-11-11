@@ -54,9 +54,9 @@
   - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.
 - **The info panel can be on the right**, with the plot on the left and the toolbar still between them. **Ctrl+Shift+P**, or the new ↔ toolbutton, swaps the sides while the app runs.
   - The app remembers the side when it closes. `--panel-side left` or `right` chooses for one session, over what was remembered.
-- **Two more ways for the importer to find the map's clusters**, chosen by `clustering_method` in `raven.visualizer.config`, or for one import by `raven-importer --clustering`. The default is still HDBSCAN on the 2D map.
+- **Two more ways for the importer to find the map's clusters**, chosen by `clustering_method` in `raven.visualizer.config`, or for one import by `raven-importer --clustering` or the importer window's new *Clustering* selector. The default is still HDBSCAN on the 2D map.
   - `"agglomerative"` clusters in the embedding space, and in the corpora we have tested places more of the corpus in clusters. Clusters of fewer than 5 records are shown as outliers. The cut at 100 clusters (`clustering_n_clusters`) does not suit a corpus of a few hundred records or fewer, and the map still positions the points, so a cluster can look scattered on it.
-  - `"llm"` is for a small corpus: one LLM call groups every record into themes by what it is about. The themes are named, and the map shows one circle per theme. A corpus too large for one prompt is refused before asking; `clustering_llm_aim` tells the model what the collection is for.
+  - `"llm"` is for a small corpus: one LLM call groups every record into themes by what it is about. The themes are named, and the map shows one circle per theme. A corpus too large for one prompt is refused before asking. What the collection is for can be given to the model as context: `raven-importer --aim` or `--aim-file`, or the window's aim field.
   - The dataset records which method made it.
 
 #### Raven-server

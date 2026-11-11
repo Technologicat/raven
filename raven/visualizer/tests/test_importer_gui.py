@@ -82,11 +82,13 @@ class FakeImporter:
     def has_task(self):
         return self.running
 
-    def llm_backed_stages(self):
+    def llm_backed_stages(self, clustering_method=None):
         return self._llm_stages
 
-    def start_task(self, started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=None):
+    def start_task(self, started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=None,
+                   clustering_method=None, clustering_aim=None):
         self.started_with = (output_filename, input_filenames)
+        self.started_clustering = (clustering_method, clustering_aim)
         self.started_backend_url = llm_backend_url
         self.started_policy = llm_policy
         self.started_callback = started_callback
@@ -275,6 +277,24 @@ class TestShowingAndHidingTheWindow:
 
 # --------------------------------------------------------------------------------
 # Starting and stopping
+
+class TestClusteringChoice:
+    def test_the_combo_starts_on_the_configured_method(self, gui):
+        assert importer_gui.clustering_method_chosen() == importer_gui.visualizer_config.clustering_method
+
+    def test_the_chosen_method_and_the_aim_reach_the_run(self, gui):
+        llm_label = next(label for label, method in importer_gui.CLUSTERING_CHOICES if method == "llm")
+        dpg.set_value("importer_clustering_combo", llm_label)  # tag
+        dpg.set_value("importer_aim_input", "Teaching with chatbots.")  # tag
+        importer_gui._output_file_box << "/out/dataset.pickle"
+        importer_gui._input_files_box << ["/in/one.bib"]
+        importer_gui.start_or_stop()
+        assert gui.started_clustering == ("llm", "Teaching with chatbots.")
+
+    def test_every_method_has_a_choice_in_the_window(self, gui):
+        from raven.visualizer import importer
+        assert {method for _label, method in importer_gui.CLUSTERING_CHOICES} == set(importer.CLUSTERING_METHODS)
+
 
 class TestStartingAndStopping:
     def test_an_import_starts_once_both_filenames_are_known(self, gui):

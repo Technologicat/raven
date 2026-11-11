@@ -681,9 +681,10 @@ def pipeline_stub(body=None):
     The signature is mirrored here rather than in each test that needs a stub. A stub taking `**kwargs`
     would accept anything and so stop checking how `importer_task` calls the pipeline, which is part of
     what these tests are for; a stub per test restating the signature breaks every test at once when a
-    parameter is added, which has now happened twice -- `llm_backend_url`, then `llm_policy`.
+    parameter is added, which has now happened three times -- `llm_backend_url`, `llm_policy`, then the
+    clustering method and aim.
     """
-    def stub(status_cb, out, *ins, llm_backend_url=None, llm_policy=None):
+    def stub(status_cb, out, *ins, llm_backend_url=None, llm_policy=None, clustering_method=None, clustering_aim=None):
         if body is not None:
             return body(out, ins)
     return stub
@@ -1112,6 +1113,23 @@ class TestAgglomerativeClustering:
 
 
 class TestLLMClustering:
+    def test_a_runs_own_method_wins_over_the_configured_one(self, monkeypatch):
+        from unpythonic import dyn
+        monkeypatch.setattr(visualizer_config, "clustering_method", "hdbscan_2d")
+        assert importer._configured_clustering_method() == "hdbscan_2d"
+        with dyn.let(clustering_method_override="llm"):
+            assert importer._configured_clustering_method() == "llm"
+            assert "clusters" in [stage.name for stage in importer.llm_backed_stages()]
+
+    def test_the_stage_list_can_describe_a_method_before_its_run(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clustering_method", "hdbscan_2d")
+        assert "clusters" not in [stage.name for stage in importer.llm_backed_stages()]
+        assert "clusters" in [stage.name for stage in importer.llm_backed_stages("llm")]
+
+    def test_an_unknown_method_is_refused_before_the_run_starts(self):
+        with pytest.raises(ValueError, match="kmeans"):
+            importer.import_bibtex(None, "/out/never.pickle", "/in/never.bib", clustering_method="kmeans")
+
     def test_without_a_backend_the_llm_method_falls_back_to_agglomerative(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clustering_method", "llm")
         monkeypatch.setattr(importer, "llm_settings", None)

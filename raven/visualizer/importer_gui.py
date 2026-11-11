@@ -16,7 +16,8 @@ once the default path for the dialogs is known. `destroy_filedialogs` belongs in
 before `dpg.destroy_context`.
 """
 
-__all__ = ["FALLBACK_ICON_THEME", "setup_themes",
+__all__ = ["CLUSTERING_CHOICES",
+           "FALLBACK_ICON_THEME", "setup_themes",
 
            "set_llm_backend_url",
 
@@ -33,6 +34,7 @@ __all__ = ["FALLBACK_ICON_THEME", "setup_themes",
            "import_bibtex_files",
 
            "update_status",
+           "clustering_method_chosen",
            "start_or_stop",
 
            "build_window"]
@@ -57,6 +59,15 @@ from . import config as visualizer_config
 from .app_state import app_state
 
 gui_config = visualizer_config.gui_config
+
+# The importer window's choice of clustering method: its combo's labels, and the method each names.
+CLUSTERING_CHOICES = (("HDBSCAN on the 2D map", "hdbscan_2d"),
+                      ("Agglomerative, in the embedding space", "agglomerative"),
+                      ("LLM themes, for a small corpus", "llm"))
+
+# The method the last run started with, so that the fallback notice describes that run rather than what the
+# combo says now. `None` before any run.
+_run_clustering_method = None
 
 
 def _importer():
@@ -315,7 +326,7 @@ def _refresh_llm_fallback_notice() -> None:
     # The stages are the ones the configuration asked for: they all drop together, and the config cannot
     # have changed under a run, so what was configured is what was given up. Each carries its own phrase
     # for what happens without it, so this reads the list rather than keeping a second copy keyed by name.
-    without = "; ".join(stage.without for stage in importer.llm_backed_stages())
+    without = "; ".join(stage.without for stage in importer.llm_backed_stages(_run_clustering_method))
     dpg.set_value("importer_llm_fallback_text",  # tag
                   f"LLM backend unreachable. {without[:1].upper()}{without[1:]}.")
     dpg.set_value("importer_llm_fallback_tooltip_text", f"{fallback.headline}\n{fallback.advice}")  # tag
@@ -384,6 +395,12 @@ def _done_callback(task_env):
 # --------------------------------------------------------------------------------
 # Start/stop lifecycle
 
+def clustering_method_chosen() -> str:
+    """The clustering method the importer window's combo names."""
+    label = dpg.get_value("importer_clustering_combo")  # tag
+    return dict(CLUSTERING_CHOICES).get(label, visualizer_config.clustering_method)
+
+
 def _start(output_file, *input_files):
     """Start the BibTeX importer to import `input_files` (.bib) into `output_file` (Raven-visualizer dataset format, currently .pickle)."""
     importer = _importer()
@@ -395,9 +412,13 @@ def _start(output_file, *input_files):
     # `llm_optional`: a GUI run finishes on what it can do without a backend and says so in the notice
     # above the status line, where the CLI stops instead. It has a window to report in and a Stop button
     # for a user who would rather wait for the backend than keep the result.
+    global _run_clustering_method
+    _run_clustering_method = clustering_method_chosen()
     importer.start_task(_started_callback, _done_callback, output_file, *input_files,
                         llm_backend_url=_llm_backend_url,
-                        llm_policy=importer.llm_optional)
+                        llm_policy=importer.llm_optional,
+                        clustering_method=_run_clustering_method,
+                        clustering_aim=dpg.get_value("importer_aim_input"))  # tag
 
 def _stop():
     """Stop (cancel) the BibTeX importer task, if any is running."""
@@ -501,6 +522,20 @@ def build_window():
                                    tag="open_import_table"):
                         dpg.add_table_column(label="Input BibTeX files")
                     _update_input_files_table()
+
+            dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Clustering:")
+                dpg.add_combo(items=[label for label, _method in CLUSTERING_CHOICES],
+                              default_value=next((label for label, method in CLUSTERING_CHOICES
+                                                  if method == visualizer_config.clustering_method),
+                                                 CLUSTERING_CHOICES[0][0]),
+                              width=-1,
+                              tag="importer_clustering_combo")
+            dpg.add_input_text(hint="What the collection is for (used only with LLM themes)",
+                               width=-1,
+                               tag="importer_aim_input")
 
             dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
 

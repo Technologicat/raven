@@ -121,10 +121,13 @@ class LLMBackedStage(NamedTuple):
     without: str
 
 
-def llm_backed_stages() -> tuple[LLMBackedStage, ...]:
+def llm_backed_stages(clustering_method: Optional[str] = None) -> tuple[LLMBackedStage, ...]:
     """Which stages this configuration asks an LLM for.
 
     Empty when the configuration needs no backend, so `if llm_backed_stages():` is how to ask that.
+
+    `clustering_method`: the clustering method to describe, for a frontend whose run has not started; `None`
+                         takes the one this run was asked for (`_configured_clustering_method`).
 
     One source for a condition two frontends act on and three messages describe. They render it
     differently — `raven-importer` prints the settings, having a terminal and a reader about to go and
@@ -137,7 +140,7 @@ def llm_backed_stages() -> tuple[LLMBackedStage, ...]:
                   (LLMBackedStage("entry summaries", "summarize = True", "no summaries"),
                    visualizer_config.summarize),
                   (LLMBackedStage("clusters", 'clustering_method = "llm"', "clustering agglomeratively instead"),
-                   visualizer_config.clustering_method == "llm"))
+                   (clustering_method or _configured_clustering_method()) == "llm"))
                  if wanted)
 
 
@@ -163,9 +166,16 @@ def _effective_clustering_method() -> str:
     The configured `raven.visualizer.config.clustering_method`, except that `"llm"` reads as `"agglomerative"`
     where no usable LLM backend answered for this run. Meaningful only once `_setup_llm_backend` has run.
     """
-    if visualizer_config.clustering_method == "llm" and llm_settings is None:
+    method = _configured_clustering_method()
+    if method == "llm" and llm_settings is None:
         return "agglomerative"
-    return visualizer_config.clustering_method
+    return method
+
+
+def _configured_clustering_method() -> str:
+    """The clustering method this run was asked for: `import_bibtex`'s `clustering_method`, else the configured
+    `raven.visualizer.config.clustering_method`."""
+    return dyn.clustering_method_override or visualizer_config.clustering_method
 
 
 def _setup_llm_backend(backend_url: Optional[str] = None, *, llm_policy=llm_required) -> None:
@@ -891,8 +901,8 @@ def _cluster_vis_data(input_data, lowdim_data, all_vectors):
     Mutates `input_data`, adding the fields `item.cluster_id` and `item.cluster_probability` (confidence value;
     `"agglomerative"` has none, so it is 1.0 for a cluster's members and 0.0 for an outlier).
     """
-    if visualizer_config.clustering_method not in CLUSTERING_METHODS:
-        raise ValueError(f"_cluster_vis_data: unknown `clustering_method` {visualizer_config.clustering_method!r}; "
+    if _configured_clustering_method() not in CLUSTERING_METHODS:
+        raise ValueError(f"_cluster_vis_data: unknown `clustering_method` {_configured_clustering_method()!r}; "
                          f"expected one of {CLUSTERING_METHODS}")
     method = _effective_clustering_method()
     if method == "llm":
@@ -950,7 +960,7 @@ def _cluster_with_llm(input_data):
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
     with timer() as tim:
         labels, lowdim_data, themes = llmclustering.cluster(llm_settings, vis_data,
-                                                            maybe_aim=visualizer_config.clustering_llm_aim)
+                                                            maybe_aim=dyn.clustering_aim)
         n_vis_clusters = len(themes)
         n_vis_outliers = int(np.sum(labels == -1))
         for idx, entry in enumerate(vis_data):
@@ -1659,6 +1669,7 @@ progress = _Progress()
 def _discard_message(new_msg):
     pass
 make_dynvar(maybe_update_status=_discard_message)
+make_dynvar(clustering_method_override=None, clustering_aim="")  # `import_bibtex`'s per-run choices, for the stages it calls
 
 bg = None
 task_manager = None
@@ -1685,7 +1696,8 @@ def init(executor):
         task_manager = None
         raise
 
-def start_task(started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required) -> bool:
+def start_task(started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required,
+               clustering_method=None, clustering_aim=None) -> bool:
     """Spawn a background task to convert BibTeX files into a Raven-visualizer dataset file.
 
     `started_callback`: callable or `None`.
@@ -1730,6 +1742,8 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
                   to report the fallback in, and a Stop button for a user who would rather wait for the
                   backend than keep the result.
 
+    `clustering_method`, `clustering_aim`: As in `import_bibtex`, which see.
+
     Return value is `True` if the task was successfully submitted, and `False` otherwise.
     Task submission may fail if the module has not been initialized, or if an importer
     task is already running.
@@ -1762,7 +1776,8 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
                 started_callback(task_env)
             with dyn.let(task_env=task_env):
                 logger.info(f"importer_task: {task_env.task_name}: entering `import_bibtex` function.")
-                import_bibtex(update_status, output_filename, *input_filenames, llm_backend_url=llm_backend_url, llm_policy=llm_policy)  # get args from closure, no need to have them in `task_env`
+                import_bibtex(update_status, output_filename, *input_filenames, llm_backend_url=llm_backend_url, llm_policy=llm_policy,
+                              clustering_method=clustering_method, clustering_aim=clustering_aim)  # get args from closure, no need to have them in `task_env`
                 logger.info(f"importer_task: {task_env.task_name}: done.")
         # Used to be VERY IMPORTANT, to not silently swallow uncaught exceptions from background task.
         # But now `TaskManager._done_callback` does this. However, we need to update the GUI with the
@@ -1814,7 +1829,8 @@ def cancel_task():
 # --------------------------------------------------------------------------------
 # The actual BibTeX importer function (BibTeX to Raven-visualizer dataset)
 
-def import_bibtex(status_update_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required) -> None:
+def import_bibtex(status_update_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required,
+                  clustering_method=None, clustering_aim=None) -> None:
     """Import BibTeX file(s) into a Raven-visualizer dataset.
 
     This is the synchronous, foreground function that actually performs the task,
@@ -1849,6 +1865,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                   stages; `llm_disabled` runs without them and never tries a backend. See
                   `_setup_llm_backend`, whose parameter this is.
 
+    `clustering_method`: how to find the map's clusters, one of `CLUSTERING_METHODS`, for this run. `None` (the
+                         default) takes the configured `raven.visualizer.config.clustering_method`.
+
+    `clustering_aim`: for `"llm"` clustering, what the collection is for, told to the model as context. `None`
+                      or empty tells it nothing. Ignored by the other methods.
+
     No return value.
 
     Filenames are automatically converted to absolute paths via `_parse_input_files`,
@@ -1862,7 +1884,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
     else:
         maybe_update_status = _discard_message
 
-    with dyn.let(maybe_update_status=maybe_update_status):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
+    if clustering_method is not None and clustering_method not in CLUSTERING_METHODS:
+        raise ValueError(f"import_bibtex: unknown `clustering_method` {clustering_method!r}; expected one of {CLUSTERING_METHODS}")
+
+    with dyn.let(maybe_update_status=maybe_update_status,
+                 clustering_method_override=clustering_method,
+                 clustering_aim=clustering_aim or ""):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
         # --------------------------------------------------------------------------------
         # Connect to the LLM backend, if this configuration has a stage that needs one
         #
