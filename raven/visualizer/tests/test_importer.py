@@ -1121,6 +1121,48 @@ class TestAgglomerativeClustering:
             importer._cluster_vis_data(_entries_env(4), np.zeros((4, 2)), np.eye(4))
 
 
+class TestClusterPurity:
+    def test_a_tight_group_labelled_as_one_cluster_is_pure(self):
+        import numpy as np
+        vectors = directions_with_strays()
+        labels = np.array([0] * 20 + [1] * 20 + [2] * 20 + [-1] * 3)
+        purities, dataset_purity = importer._cluster_purities(vectors, labels)
+        assert purities == [1.0, 1.0, 1.0]
+        assert dataset_purity == 1.0
+
+    def test_a_group_split_between_two_labels_is_not(self):
+        # Group 0 alternates between labels 0 and 3, so each half's nearest neighbours are as often in the other
+        # half as in its own. Groups 1 and 2, labelled whole, are the control.
+        import numpy as np
+        vectors = directions_with_strays()
+        labels = np.array([0, 3] * 10 + [1] * 20 + [2] * 20 + [-1] * 3)
+        purities, dataset_purity = importer._cluster_purities(vectors, labels)
+        assert purities[1] == purities[2] == 1.0, "the groups labelled whole should be pure"
+        assert purities[0] < 0.7 and purities[3] < 0.7, f"a group split in two came out pure: {purities}"
+        assert dataset_purity < 1.0
+
+    def test_the_dataset_figure_weights_each_clustered_record_equally(self):
+        # A mean over records, not over clusters: a large pure cluster outweighs a small mixed pair.
+        import numpy as np
+        vectors = directions_with_strays()
+        labels = np.array([0, 3] * 10 + [1] * 20 + [2] * 20 + [-1] * 3)
+        purities, dataset_purity = importer._cluster_purities(vectors, labels)
+        by_record = np.mean([purities[0]] * 10 + [purities[3]] * 10 + [1.0] * 40)
+        assert dataset_purity == pytest.approx(by_record)
+        assert dataset_purity != pytest.approx(np.mean(purities)), "this fixture cannot tell the two means apart"
+
+    def test_a_cluster_of_one_has_no_purity(self):
+        import numpy as np
+        vectors = directions_with_strays()
+        labels = np.array([0] * 20 + [1] * 20 + [2] * 20 + [3, -1, -1])
+        purities, _ = importer._cluster_purities(vectors, labels)
+        assert purities[3] is None
+
+    def test_with_no_cluster_there_is_nothing_to_measure(self):
+        import numpy as np
+        assert importer._cluster_purities(directions_with_strays(), np.full(63, -1)) == ([], None)
+
+
 class TestLLMClustering:
     def test_a_runs_own_method_wins_over_the_configured_one(self, monkeypatch):
         from unpythonic import dyn

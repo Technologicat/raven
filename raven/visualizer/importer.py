@@ -872,6 +872,48 @@ def _centered(vectors) -> np.ndarray:
     return vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
 
 
+#: How many of a record's nearest neighbours `_cluster_purities` looks at, at most.
+PURITY_MAX_NEIGHBOURS = 10
+
+
+def _cluster_purities(all_vectors, labels) -> tuple[list[float | None], float | None]:
+    """How much each cluster's members have their nearest neighbours inside it, and the same for the dataset.
+
+    `all_vectors`: rank-2 `np.array` of shape `[N, highdim]`, as `_get_highdim_semantic_vectors` returns.
+    `labels`: each record's cluster ID, -1 for an outlier.
+
+    For a record in a cluster of `s` members, its share is the fraction of its `k = min(s - 1,
+    PURITY_MAX_NEIGHBOURS)` nearest neighbours, in the centered embedding space by cosine, that are in its cluster.
+    A cluster's purity is its members' mean share, and the dataset's is the mean share over every record in a
+    cluster.
+
+    Returns `(cluster_purities, maybe_dataset_purity)`: a list indexed by cluster ID, `None` for a cluster of one
+    (which has no neighbours of its own to count), and `None` for the dataset when no record is in a cluster.
+    """
+    from sklearn.neighbors import NearestNeighbors
+
+    labels = np.asarray(labels)
+    n_clusters = int(labels.max()) + 1 if len(labels) else 0
+    if n_clusters == 0:
+        return [], None
+    vectors = _centered(all_vectors)
+    n_neighbors = min(PURITY_MAX_NEIGHBOURS + 1, len(vectors))
+    _, neighbours = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine").fit(vectors).kneighbors(vectors)
+    shares_by_cluster: list[list[float]] = [[] for _ in range(n_clusters)]
+    for cluster_id in range(n_clusters):
+        members = np.where(labels == cluster_id)[0]
+        k = min(len(members) - 1, PURITY_MAX_NEIGHBOURS)
+        if k < 1:
+            continue
+        for idx in members:
+            # A record need not come first among its own neighbours: an identical record ties with it.
+            others = [j for j in neighbours[idx] if j != idx][:k]
+            shares_by_cluster[cluster_id].append(float(np.isin(others, members).mean()))
+    cluster_purities = [float(np.mean(shares)) if shares else None for shares in shares_by_cluster]
+    all_shares = [share for shares in shares_by_cluster for share in shares]
+    return cluster_purities, (float(np.mean(all_shares)) if all_shares else None)
+
+
 def _agglomerative_labels(all_vectors, *, n_clusters, min_cluster_size, min_mean_cluster_size):
     """Cluster labels from agglomerative clustering of the high-dimensional vectors.
 
@@ -1975,6 +2017,11 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         if _is_cancelled():
             return False
 
+        with timer() as tim:
+            cluster_purities, maybe_dataset_purity = _cluster_purities(all_vectors, labels)
+        if maybe_dataset_purity is not None:
+            logger.info(f"    Cluster purity: on average, {maybe_dataset_purity:.0%} of a clustered record's closest neighbours are in its own cluster. Done in {tim.dt:0.6g}s.")
+
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
@@ -2046,7 +2093,9 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            # falls back, and the fallback is exactly what a later reader needs to know about.
                            "clusters_keyword_method": _effective_keyword_method(),
                            "all_keywords": all_keywords,
-                           "vis_keywords_by_cluster": vis_keywords_by_cluster}
+                           "vis_keywords_by_cluster": vis_keywords_by_cluster,
+                           "cluster_purities": cluster_purities,  # per cluster ID, see `_cluster_purities`; `None` where undefined
+                           "dataset_purity": maybe_dataset_purity}  # `None` when no record is in a cluster
             with open(output_filename, "wb") as output_file:
                 pickle.dump(output_data, output_file)
         logger.info(f"    Done in {tim.dt:0.6g}s.")

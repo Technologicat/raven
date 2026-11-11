@@ -6,7 +6,7 @@
 Each corpus is clustered as the importer clusters it (`raven.visualizer.importer._agglomerative_labels`, with the
 configured cut and minimum size). A cluster's purity: for each member, the share of its `k` nearest neighbours in
 the centered embedding space that are members too, averaged over the cluster, where `k` is the cluster's size minus
-one, capped at `K_MAX`. Scale-free: 1 means the members are each other's nearest neighbours, whatever the cluster's
+one, capped at `raven.visualizer.importer.PURITY_MAX_NEIGHBOURS`. Scale-free: 1 means the members are each other's nearest neighbours, whatever the cluster's
 size; a random group of the same size would score about `k / N`.
 
 The question is whether purities fall into a tight group and a loose one at a common level across corpora, which
@@ -22,21 +22,14 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import clusterlab  # noqa: E402 -- beside this script
 
-K_MAX = 10
-
 
 def purities(vectors: np.ndarray, labels: np.ndarray) -> list[tuple[int, int, float]]:
-    """`(cluster id, size, purity)` per cluster, outliers (-1) excluded. `vectors` centered and normalized."""
-    sims = vectors @ vectors.T
-    np.fill_diagonal(sims, -np.inf)
-    order = np.argsort(-sims, axis=1)[:, :K_MAX]
-    out = []
-    for cid in sorted(set(labels.tolist()) - {-1}):
-        members = np.where(labels == cid)[0]
-        k = min(len(members) - 1, K_MAX)
-        inside = np.isin(order[members, :k], members).mean()
-        out.append((cid, len(members), float(inside)))
-    return out
+    """`(cluster id, size, purity)` per cluster, outliers (-1) excluded, as the importer measures it
+    (`raven.visualizer.importer._cluster_purities`)."""
+    from raven.visualizer import importer
+    cluster_purities, _ = importer._cluster_purities(vectors, labels)
+    return [(cid, int((labels == cid).sum()), purity) for cid, purity in enumerate(cluster_purities)
+            if purity is not None]
 
 
 def main() -> int:
@@ -57,8 +50,7 @@ def main() -> int:
                                                            n_clusters=visualizer_config.clustering_n_clusters,
                                                            min_cluster_size=visualizer_config.clustering_min_cluster_size,
                                                            min_mean_cluster_size=visualizer_config.clustering_min_mean_cluster_size))
-        centered = importer._centered(vectors)
-        rows = purities(centered, labels)
+        rows = purities(vectors, labels)
         results[name] = rows
         if not rows:
             print(f"{name}: {len(vectors)} records, no cluster reached the minimum size; every record is an outlier")
