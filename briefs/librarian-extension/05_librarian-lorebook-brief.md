@@ -60,7 +60,7 @@ would be knowledge left on the floor. So this clears the bar the project already
 2. **Where entries come from.** The configured path the glossary is read from, the folder for single-entry
    files, and the default header level.
 3. **The tool.** Its name (working name `look_up_term`), and what it answers for a near miss as against an
-   unknown term.
+   unknown term. The maintainer leans towards DWIM here (2026-11-12): offer the best candidates by edit distance.
 4. **The numbers.** Scan window, per-firing budget, per-chat cap and recursion depth, from proposed defaults.
 5. **The GUI and scripts.** A toggle in a row of toggles that is already full, a reload notice, and whether
    scripts have the lorebook off by default, as they do MCP and skills.
