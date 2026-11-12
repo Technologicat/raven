@@ -18,6 +18,7 @@
     - [In the GUI](#in-the-gui)
         - [Save imported dataset as](#save-imported-dataset-as)
         - [Select input BibTeX files](#select-input-bibtex-files)
+        - [Choose how clusters are found](#choose-how-clusters-are-found)
         - [Start the import](#start-the-import)
     - [From the command line](#from-the-command-line)
     - [Good to know](#good-to-know)
@@ -32,6 +33,7 @@
     - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
     - [Put the info panel on the right](#put-the-info-panel-on-the-right)
+    - [How tight the clusters are, and showing loose ones as Misc](#how-tight-the-clusters-are-and-showing-loose-ones-as-misc)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
 - [Limitations](#limitations)
@@ -103,7 +105,7 @@ The technology is roughly explained by the following figures.
 
 <p align="center">
 <img src="../../img/raven-data-processing-pipeline-ai.png" alt="Raven-visualizer's data processing pipeline." height="400"/> <br/>
-<i>Raven-visualizer's data processing pipeline. (a) Semantic embedding onto the high-dimensional hypersphere. (b) <a href="https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html">HDBSCAN</a> in the high-dimensional space detects initial clusters. (c) The initial clusters are dimension-reduced into 2D via fitting a <a href="https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding">t-SNE</a> model. Then the full dataset is mapped through the fitted model. (d) HDBSCAN in 2D produces the final clusters, shown on the <b>semantic map</b> in Raven-visualizer.</i>
+<i>Raven-visualizer's data processing pipeline. (a) Semantic embedding onto the high-dimensional hypersphere. (b) <a href="https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html">HDBSCAN</a> in the high-dimensional space detects initial clusters, whose representatives train the dimension reduction; this step is now used only with UMAP, as t-SNE (the default) is fitted to the whole dataset. (c) The dataset is dimension-reduced into 2D with <a href="https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding">t-SNE</a>. (d) HDBSCAN in 2D produces the final clusters, shown on the <b>semantic map</b> in Raven-visualizer. This is the default; see <a href="#choose-how-clusters-are-found">Choose how clusters are found</a> for the others.</i>
 </p>
 
 ## In the GUI
@@ -167,6 +169,21 @@ Pressing Esc cancels the file picker.
 
 **:exclamation: With the exception of the search functionality, the file picker currently requires using the mouse. This is a known issue. :exclamation:**
 
+### Choose how clusters are found
+
+The *Clustering* selector in the *BibTeX import window* chooses how this import finds the clusters the map shows. It starts at `clustering_method` in [`raven.visualizer.config`](config.py).
+
+- **HDBSCAN on the 2D map**, the default: clusters are the dense regions of the map. Records between them go to *Misc*, and on some datasets that is many of them.
+- **Agglomerative, in the embedding space**: records are grouped by meaning in the full embedding space, so the clusters do not depend on the map. This places more of the dataset in clusters. A cluster smaller than 5 records is shown as *Misc*.
+  - Where the grouping stops is set by `clustering_n_clusters`, `clustering_min_cluster_size` and `clustering_min_mean_cluster_size` in [`raven.visualizer.config`](config.py). For a small dataset the number of clusters is lowered, so that clusters hold at least 10 records on average.
+  - The map still positions the points, so a cluster can be spread over more than one place on it.
+- **LLM themes, for a small corpus**: one call to the LLM reads every title and abstract and groups the records into themes, which it names. The names are the cluster keywords.
+  - The map is a layout of the themes, one circle each, and not a semantic map: where a circle sits means nothing.
+  - A record may belong under two themes; its point is drawn under the one it belongs to most.
+  - It needs an LLM backend, and a model whose context window holds the whole dataset. A dataset too large stops the import before anything is asked, with an error suggesting *Agglomerative*. With no backend, the import window uses *Agglomerative* instead and says so; `raven-importer` stops, unless given `--llm optional`.
+
+The *Aim* field says what the collection is for, and is given to the LLM as context. It is used only with *LLM themes*. Leave it empty to let the material speak for itself.
+
 ### Start the import
 
 To start the import, click the play icon in the *BibTeX import window*, or press Ctrl+Enter while the *BibTeX import window* is open. A progress bar will appear. While the import is running, a brief status message at the bottom of the *BibTeX import window* will indicate what the importer is currently doing. More detailed status is printed into the terminal window from which you started Raven.
@@ -189,6 +206,8 @@ raven-importer mydata.pickle file1.bib file2.bib ...
 ```
 
 Status messages are printed into the terminal window.
+
+To choose how clusters are found for this import, overriding the configuration, use `--clustering hdbscan_2d`, `--clustering agglomerative` or `--clustering llm`; with the last, `--aim "what the collection is for"` or `--aim-file aim.txt` gives the LLM its context. See [Choose how clusters are found](#choose-how-clusters-are-found).
 
 When the configuration asks for LLM cluster keywords or summaries and no LLM backend answers, `raven-importer` stops before it starts, where the GUI importer goes ahead without them. `--llm optional` makes it go ahead too, with frequency keywords and no summaries, and say so at the end; `--no-llm` leaves those stages out for this run without trying a backend.
 
@@ -417,6 +436,21 @@ raven-visualizer --panel-side right mydata.pickle
 ```
 
 
+## How tight the clusters are, and showing loose ones as Misc
+
+The row above the plot gives the dataset's **cluster purity**, as in *"Cluster purity: 58% on average"*. For a record in a cluster, purity is the share of its closest neighbours in meaning (in the embedding space) that are in the same cluster; the row gives the average over every record in a cluster. Each cluster's header, in the info panel and in the plot's tooltip, gives that cluster's own, as *"purity 62%"*.
+
+- **High purity** means the cluster is a tight topic: its records' nearest neighbours are each other.
+- **Low purity** means the cluster overlaps its neighbours: its records are related, but each has closer neighbours elsewhere. Read such a cluster as a region of the map rather than as a topic.
+- **Compare clusters within one dataset, not across datasets.** A collection on a single topic has low purity throughout, because everything in it is related; a broad one has high purity. There is no general threshold for a "good" cluster.
+
+The **Purity cutoff for Misc** slider, at the right end of the row, shows every cluster below the chosen purity as *Misc*: on the map, in the info panel and in the tooltip. It works live, and your selection is kept as clusters come and go. At 0%, every cluster is shown as itself. Hover over the slider for a reminder of all this; Ctrl+click it to type a value.
+
+The cutoff changes only what is shown. The dataset file is unchanged, and the slider starts at 0% whenever a dataset is loaded.
+
+A dataset imported before Raven measured purity shows neither the row nor the cluster purities. Importing it again adds them; the embeddings are cached beside the BibTeX file, so that is quick.
+
+
 ## Create a word cloud
 
 Raven can make a word cloud from the auto-detected per-entry keywords of the individual studies in the current selection. The size of each word in the picture represents its relative number of occurrences within the selection:
@@ -541,8 +575,7 @@ editor. Mnemonic: *Mr. T Lite*.
 
 - Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.
 - Hardware requirements, especially GPU. Tested on a laptop with an NVIDIA RTX 3070 Ti mobile, 8 GB VRAM.
-- Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. This causes many entries to be placed into a catch-all "*Misc*" cluster.
-- The clustering method is configurable: `clustering_method` in [`raven.visualizer.config`](config.py) chooses HDBSCAN on the 2D map (the default), agglomerative clustering in the embedding space, or an LLM grouping into named themes for a corpus small enough to fit in one prompt. HDBSCAN's own hyperparameters may be dataset-dependent, and are not yet configurable.
+- Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. With the default clustering method, this causes many entries to be placed into a catch-all "*Misc*" cluster; see [Choose how clusters are found](#choose-how-clusters-are-found) for the alternatives. HDBSCAN's own hyperparameters may be dataset-dependent, and are not yet configurable.
 - Dataset files are currently **not** portable across different Python versions.
 - We attempt to provide keyboard access to GUI features whenever reasonably possible, but the plotter is currently one place where this is not reasonably possible. The *Open dataset* dialog is fully keyboard-operable: arrow keys walk the listing, Enter descends or picks, Tab completes the filename, and there are chords for sorting, filtering, the places panel and the path field. Press F1 inside it for the full list.
 - As explained in the main README, configuration is currently fed in as a Python module, [`raven.visualizer.config`](config.py), which exists specifically as a configuration file.
