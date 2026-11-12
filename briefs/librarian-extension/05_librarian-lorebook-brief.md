@@ -52,6 +52,19 @@ would be knowledge left on the floor. So this clears the bar the project already
   text stays in the scan window, so a new term fires at the next user message; an edit followed directly by a
   reroll answers without the definition. "Save as a new branch" makes a fresh node, and that path scans.
 
+**To discuss before building** (listed 2026-11-12; the build follows the skills work, which landed that day):
+
+1. **How far the assembler's first version goes.** The lorebook alone emitting candidates, or the clock and the
+   document search moved onto candidate records and a shared budget in the same pass. The second touches every
+   turn's prompt assembly.
+2. **Where entries come from.** The configured path the glossary is read from, the folder for single-entry
+   files, and the default header level.
+3. **The tool.** Its name (working name `look_up_term`), and what it answers for a near miss as against an
+   unknown term.
+4. **The numbers.** Scan window, per-firing budget, per-chat cap and recursion depth, from proposed defaults.
+5. **The GUI and scripts.** A toggle in a row of toggles that is already full, a reload notice, and whether
+   scripts have the lorebook off by default, as they do MCP and skills.
+
 ---
 
 ## Design constraints (from the field, confirmed)
