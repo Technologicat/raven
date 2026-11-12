@@ -494,7 +494,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Draw per-character AI chat icons for all characters (e.g. `aria1.png` → `aria1_icon.png`, RGBA 64×64).
 
-- **[Parked]** Avatar vector emotions: blend several emotions by classification values; normalize appropriately. Low priority.
+- **[Medium]** Blend several emotions by their scores, instead of showing only the top one. Schedule together with the emotion-vector item below; it applies to either source, since the text classifier already scores all 28 labels.
+  - **Where**: each preset (`raven.server.modules.avatarutil.load_emotion_presets`) is a posedict of morph weights plus a celstack of cel strengths, so a blend is a weighted mix of both, normalized. The server's `set_emotion` takes a single name, so it needs a variant that takes a mix.
+  - **The scores need cleaning first, because the classifier is noisy**: a cutoff below which an emotion is dropped, or whatever statistical treatment turns out appropriate (top-k, renormalizing what survives, smoothing over time). Otherwise every face is a faint average of all 28.
+  - Check whether every pair of morphs mixes sensibly. Some may be meant as alternatives rather than ingredients.
 
 - **[Medium]** Drive the avatar's emotion from emotion vectors read off the LLM's activations, as an opt-in beside the text classifier: `briefs/design/emotion-vector-avatar-sketch.md`. The first step is offline — extract the vectors for the current Qwen and read them over recorded conversations — which answers which layer to tap and whose emotion the readings track, before anything is built into the serving path.
 
