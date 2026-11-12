@@ -448,6 +448,13 @@ The **Purity cutoff for Misc** slider, at the right end of the row, shows every 
 
 The cutoff changes only what is shown. The dataset file is unchanged, and the slider starts at 0% whenever a dataset is loaded.
 
+**A cluster can appear on the map in several separate pieces**, when the clusters were found in the embedding space (*Agglomerative*). Its purity says which of two things you are seeing:
+
+- **High purity: the map has torn the cluster.** The records are each other's nearest neighbours in meaning, but the map cannot keep that everywhere. It flattens a space of a thousand dimensions onto a plane, which is like crumpling a globe flat: somewhere, neighbours end up apart. The cluster is real; its pieces belong together.
+- **Low purity: the cluster is loose.** Its records are related to each other, but each one's closest neighbours are in other clusters, and the map places each record by its neighbours. The pieces are real structure: read them as parts of the neighbouring topics that this cluster also touches.
+
+HDBSCAN finds its clusters on the map itself, so with that method each cluster is one dense region of the map.
+
 A dataset imported before Raven measured purity shows neither the row nor the cluster purities. Importing it again adds them; the embeddings are cached beside the BibTeX file, so that is quick.
 
 

@@ -611,6 +611,15 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - **The technique survives; only the library was the problem.** torchaudio supplied two things: a wav2vec2 CTC acoustic model, and `forced_align`, which is Viterbi over CTC log-probabilities against known text. The model is available from `transformers`, already present transitively via `sentence_transformers`. The alignment step is a dynamic program over a lattice — small, well-specified, and squarely in-house territory for a codebase that already carries a custom xdot renderer and a GPU Lanczos scaler for similar reasons. So the escape route to re-scope is **CTC forced alignment, with the alignment step buildable in-house if it has to be**. Look for a maintained library first — that is a quick search, and if one exists it is the cheaper answer. What has changed is that a null result is no longer a dead end: the acoustic model is already available, the alignment is a dynamic program, and building it is a normal afternoon rather than a blocker. Worth a probe before it is needed rather than after.
     - **Record the trigger, not only the date.** October 2028 is the *latest* the cap can bite, not the earliest. Any dependency that comes to require 3.13+ brings it forward, and **torch is the likeliest candidate** — at which point Raven is wedged between torch and Kokoro with no room to move. A date invites forgetting; a trigger keeps the check cheap. Concretely: whenever a dependency bump is blocked by `requires-python`, that is this decision coming due, and the forced-alignment route is what to reach for.
 
+- **[Medium]** A figure and screenshot sweep. **Scheduled: 0.2.12 or 0.2.13** (maintainer, 2026-11-12). The documentation's
+  images lag the apps, and nothing flags it: a screenshot keeps rendering however far the window it shows has moved on.
+  - Known stale: `img/raven-data-processing-pipeline-ai.png`, whose step (b), the initial clustering in the embedding
+    space, now feeds only UMAP (the t-SNE map is fitted to the whole dataset; the caption in `raven/visualizer/README.md`
+    says so meanwhile); `img/screenshot-import-bibtex.png`, which has no *Clustering* selector or *Aim* field; and
+    `img/screenshot-main.png`, from before the purity row above the plot.
+  - Then the rest of `img/`, against the apps as they are: about thirty images, listed by
+    `git ls-files '*.md' | xargs grep -oh 'img/[A-Za-z0-9_.-]*'`.
+
 - **[Low]** wosfile: consider vendoring our fixed version. Check upstream activity first — may be worth a PR instead.
 
 - **[Low]** Raven technical report (arXiv): document Raven as a citable reference. "Here's a tasteful way to put existing ideas together, plus a GUI app." Needs a CS category endorser.
