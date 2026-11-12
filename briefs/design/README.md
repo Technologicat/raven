@@ -46,6 +46,11 @@ anything in one as settled.
   starting from a launcher, with Raven-server and the LLM backend coming up by themselves. Mostly existing
   items seen as one piece, plus three things to probe.
 
+- **[`emotion-vector-avatar-sketch.md`](emotion-vector-avatar-sketch.md)** — the avatar's emotion read from
+  the LLM's activations instead of from its text, so the face can show what the text does not. Opt-in, for
+  setups we run ourselves; the text classifier stays the default. The open problem is whose emotion a vector
+  is tracking, and the serving stack that exposes hidden states at all.
+
 The first three are not independent: two of them converge (the interrogation flow *is* a view-control problem,
 and the avatar's HCI is how you address a view), and both need the architecture sketch before parts of them can
 be built. The fourth sits across all of them — it describes no mechanism, and is what the others are designed

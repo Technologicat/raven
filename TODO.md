@@ -496,6 +496,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Parked]** Avatar vector emotions: blend several emotions by classification values; normalize appropriately. Low priority.
 
+- **[Medium]** Drive the avatar's emotion from emotion vectors read off the LLM's activations, as an opt-in beside the text classifier: `briefs/design/emotion-vector-avatar-sketch.md`. The first step is offline — extract the vectors for the current Qwen and read them over recorded conversations — which answers which layer to tap and whose emotion the readings track, before anything is built into the serving path. A readout gives one score per emotion per token, so the parked blending item above becomes relevant the day this lands.
+
 
 ### Robustness
 
