@@ -1041,6 +1041,11 @@ tuned pile still keeps wrongly. `Rajaus.txt` carries the 11.11 decisions, with g
 undecided. Sent to the team on 2026-11-12 as `sample-keeps.xlsx`; `draw_blind_sample.py score keeps60-blind FILLED.xlsx`
 reads it back.
 
+**Expected next (2026-11-12): rules v2, and probably a new LLM run.** The keeps are too lenient by the team's account,
+and tightening them may need more than rules over today's fields: a new field, or a reworded test or extractor
+question, changes the fingerprint and is answered afresh. GPU time is the only cost, and the final set comes out more
+precise. The keep sample's ratings decide which, before v2 is frozen.
+
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 
 **Question:** until 2026-11-11 a one-shot turn without the character card still sent its task as `Juha: You are
