@@ -55,8 +55,11 @@ Steering, if it ever comes up, would need the manifold-aware treatment.
 route: a thin llama.cpp-based server that taps intermediate tensors via llama.cpp's eval callback (the
 `imatrix` tool uses this mechanism) and streams per-token emotion scores alongside the text. llama.cpp already
 has the reverse direction built in (`llama-cvector-generator`, `--control-vector`), which suggests the
-extraction side is close to existing tooling too. Where it runs is open: a raven-server module, or on a
-dedicated local AI server. To check: Qwen 3.8's hybrid layers (Gated DeltaNet interleaved with attention, 3:1) — which residual
+extraction side is close to existing tooling too. The tap has to be inside the process that runs the
+model, so it goes wherever the LLM backend goes, and the scores reach Librarian with the text over the backend's
+API, not through Raven-server. Don't assume the two share a host: in development they run on separate
+machines, LLM serving is likely to move to a dedicated local AI server, and on the road everything runs on one
+machine. To check: Qwen 3.8's hybrid layers (Gated DeltaNet interleaved with attention, 3:1) — which residual
 stream to tap. The attention layers are the natural first candidate.
 
 ## Whose emotion is it?
