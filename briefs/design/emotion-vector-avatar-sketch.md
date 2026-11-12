@@ -97,6 +97,10 @@ identical prompts.
   (Juha, 2026-11-12): add the source to the existing INFO line in `update_emotion_from_text`
   ("updating emotion to '…'"), and write one INFO line whenever the source changes, so one grep shows which
   signal drove a given face.
+- **Blending.** The avatar shows only the top emotion today, though the text classifier already scores all
+  28. Blending several presets by score is a separate `TODO.md` item, scheduled with this one. It applies
+  to either source, and the readout's scores will want the same cleaning (a cutoff or similar) as the
+  classifier's.
 - **Thinking.** Whether readings during the reasoning channel drive the face, or only those during the
   visible answer, is a choice to make once there are readings to look at.
 
