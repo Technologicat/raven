@@ -1038,7 +1038,8 @@ when they are non-empirical or adaptive.
 excluding the 72 and the earlier 60): 30 of the 442 conversational keeps, and 30 of the 350 others (14 feedback, 12
 generative tool, 3 not stated, 1 other). The second half says whether the open categories should go; the first, what the
 tuned pile still keeps wrongly. `Rajaus.txt` carries the 11.11 decisions, with generative tools and feedback marked
-undecided.
+undecided. Sent to the team on 2026-11-12 as `sample-keeps.xlsx`; `draw_blind_sample.py score keeps60-blind FILLED.xlsx`
+reads it back.
 
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 
