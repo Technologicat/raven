@@ -25,3 +25,7 @@ with a forecast table. So the skill does change the behaviour, for this model.
 The date was the weak step. Before the skill gave a table of month offsets, neither of two runs got it right. With the
 table, two of three did; the third added the offset wrongly in its head, and one of the two right ones skipped
 the calculator altogether. A step the model can skip, it sometimes will.
+
+**Qwen 3.8 27B (Q4, 186 Ki context), 2026-11-12**, driven by hand in the GUI: right in both runs, date
+included, through the model's own activation and through `/erisian-forecast`. With skills off it said that it
+did not know of an Erisian forecast.
