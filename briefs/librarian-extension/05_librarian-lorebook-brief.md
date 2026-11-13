@@ -84,6 +84,17 @@ would be knowledge left on the floor. So this clears the bar the project already
   with the system-prompt visibility toggle. A change on disk updates the tool's token-cost tooltip through
   `on_changed`, as the skills library does.
 - **Scripts have it off by default**: `agent.turn(..., lorebook_enabled=False)`, mirroring `skills_enabled`.
+  - **`agent.ask` has no lorebook**, the lorebook being retrieval-shaped and `ask` having neither retrieval nor
+    history. The lorebook module exposes its scan as a pure function from text to matched entries, which a
+    batch tool can compose into its own prompt.
+- **`raven.common.filewatch.DirectoryWatcher`**, the shared watcher: watchdog events only mark paths dirty;
+  after a quiet period the dirty paths are re-stat'ed (through symlinks) and the *net* change against a
+  snapshot is reported as `created` / `modified` / `deleted`, by path relative to the watched directory.
+  `start(known=...)` takes a reference snapshot (`relative path → (mtime, size)`) and reports offline changes
+  against it before going live — hybridir builds it from its index and keeps its relocation repair; skills and
+  the lorebook pass `None`. A file counts as modified when its mtime or size *differs* (hybridir used "mtime
+  increased", which missed a file restored from a backup). Symlinked files are followed; symlinked
+  subdirectories under `recursive=True` are not, in v1, and the docstring says so.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
