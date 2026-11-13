@@ -149,7 +149,7 @@ def unsatisfied_imports(start: pathlib.Path, root: pathlib.Path,
 
 
 def test_modules(root: pathlib.Path) -> list[pathlib.Path]:
-    """Every tracked test module, from wherever in the repository it lives.
+    """Every test module in the repository, tracked or new, from wherever in the repository it lives.
 
     Asking git rather than globbing a named tree, because pytest has no `testpaths` setting: it collects
     from the whole repository, so a `scripts/tests/` module is collected in CI exactly like a package one.
@@ -157,8 +157,11 @@ def test_modules(root: pathlib.Path) -> list[pathlib.Path]:
     outside it — a test there needing something CI lacks would have passed this check and failed on push,
     which is the one failure this script exists to prevent. Naming the trees that have tests today would
     reintroduce that the next time one appears; git knows them all.
+
+    Untracked files count too, ignored ones excepted: a test module not yet committed is the likeliest one
+    to need something new, and the time to ask is before the commit.
     """
-    tracked = subprocess.run(["git", "-C", str(root), "ls-files"],
+    tracked = subprocess.run(["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"],
                              capture_output=True, text=True).stdout.split()
     return sorted(root / p for p in tracked
                   if (q := pathlib.PurePosixPath(p)).parent.name == "tests"
