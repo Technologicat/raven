@@ -100,7 +100,6 @@ with timer() as tim:
 
     from ...vendor.tha3.poser.modes.load_poser import load_poser
     from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-    from ...vendor.tha3.util import torch_linear_to_srgb
 
     from ... import config as global_config
 
@@ -114,13 +113,14 @@ with timer() as tim:
     from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
-    from ...common.image import utils as imageutils
     from ...common.hfutil import maybe_install_models
     from ...common.running_average import RunningAverage
     from ...common.video import compositor
 
     from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
     from ...server.modules import avatarutil
+
+    from . import render as poserender
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
@@ -1069,53 +1069,6 @@ class PoseEditorGUI:
             for panel in self.cel_control_panels.values():
                 panel.read_from_celstack(celstack)
 
-    def _render(self, celstack: Dict[str, float], pose: List[float], output_index: int):
-        """Render `celstack` and `pose` on active device. Return the image data as a float NumPy array of shape [h, w, c], on CPU."""
-        assert self.torch_base_image is not None
-
-        posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
-        with torch.inference_mode():
-            # Cel blending: apply cels to base image.
-            torch_source_image = compositor.render_celstack(self.torch_base_image, celstack, self.torch_cels)
-
-            # # DEBUG
-            # numpy_source_image = avatarutil.torch_image_to_numpy(torch_source_image)  # display-ready copy to CPU, shape [h, w, c], range [0, 1], SRGB, 4 channels (RGBA), for GUI
-            # raw_data = numpy_source_image.ravel()  # [h, w, c] -> linearly indexed
-            # dpg.set_value(self.source_image_texture, raw_data)  # send the cel-blended final source image to the GUI
-
-            # data range [0, 1] -> [-1, 1], for poser
-            torch_source_image.mul_(2.0)
-            torch_source_image.sub_(1.0)
-
-            # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-            output_image = self.poser.pose(torch_source_image, posetensor, output_index)[0].float()
-
-            # The outputs are the poser's intermediates as well as its result, and only the four-channel ones are
-            # images; the others are data, such as masks and flow fields. They also come in several sizes, and the
-            # texture takes exactly one.
-            #
-            # Out of place: the poser's outputs are not ours to modify. The THA3 modes cache the eyebrow
-            # decomposer's outputs while the input image stays the same, and some of those are among the outputs
-            # shown here, so converting one in place changes what every later render composes the face from.
-            if output_image.shape[0] == 4:
-                output_image = (output_image + 1.0) * 0.5  # [-1, 1] -> [0, 1]
-                output_image = torch.cat([torch_linear_to_srgb(output_image[:3, :, :]),  # apply gamma correction
-                                          output_image[3:, :, :]])
-            else:
-                output_image = imageutils.channels_to_rgba(output_image)
-            if output_image.shape[1:] != (self.image_size, self.image_size):
-                # Nearest-neighbour, so that a low-resolution intermediate shows its pixels as they are.
-                output_image = torch.nn.functional.interpolate(output_image.unsqueeze(0),
-                                                               size=(self.image_size, self.image_size),
-                                                               mode="nearest")[0]
-
-            # reshape [c, h, w] -> [h, w, c]
-            c, h, w = output_image.shape
-            output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
-
-            arr = output_image.detach().cpu().numpy()
-        return arr
-
     def update_output(self) -> None:
         """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
@@ -1159,7 +1112,9 @@ class PoseEditorGUI:
                 render_start_time = time.monotonic_ns()
 
                 # Cel-blend and apply the poser.
-                numpy_output_image = self._render(current_celstack, current_pose, output_index)  # apply the poser
+                numpy_output_image = poserender.render(self.poser, self.torch_base_image, self.torch_cels,
+                                                       current_celstack, current_pose, output_index,
+                                                       device=self.device, dtype=self.dtype, size=self.image_size)
                 raw_data = numpy_output_image.ravel()  # shape [h, w, c] -> linearly indexed
                 dpg.set_value(self.result_image_texture, raw_data)  # send the final posed image to the GUI
 
