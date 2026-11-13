@@ -25,9 +25,14 @@
     - [Low VRAM - what to do?](#low-vram---what-to-do)
     - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
 - [Limitations](#limitations)
-- [Inside the poser: what the output indices show](#inside-the-poser-what-the-output-indices-show)
-- [Lipsync: how the mouth follows the speech](#lipsync-how-the-mouth-follows-the-speech)
-- [Codebase structure](#codebase-structure)
+- [Development guide](#development-guide)
+    - [The instance lifecycle](#the-instance-lifecycle)
+    - [The video stream](#the-video-stream)
+    - [Driving the character](#driving-the-character)
+    - [Lipsync: how the mouth follows the speech](#lipsync-how-the-mouth-follows-the-speech)
+    - [How Raven's client puts it together](#how-ravens-client-puts-it-together)
+    - [Inside the poser: what the output indices show](#inside-the-poser-what-the-output-indices-show)
+    - [Codebase structure](#codebase-structure)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -424,7 +429,84 @@ The model files are shared between the live animator and the standalone pose edi
 - This software is not compatible with characters created for VTuber software, such as Live2D. Rather, this is an independent exploration of somewhat similar functionality, for providing a live anime avatar for AI characters.
 
 
-# Inside the poser: what the output indices show
+# Development guide
+
+For writing your own client for the avatar, possibly in another language. Everything a client does goes over Raven-server's web API, plain HTTP with JSON; Raven's own client is Python, in [`raven.client`](../client/), and the sections below name the code that does each part. Each endpoint's docstring, in [`raven.server.app`](../server/app.py), has its exact input and output.
+
+**Authentication.** A server started with `--secure` requires an API key on every request, as `Authorization: Bearer <key>`; it prints the key at startup, and keeps it in `server/api_key.txt` under Raven's user data folder. Without `--secure`, it accepts every request. Either way, run the server on a trusted network only: the traffic is not encrypted.
+
+## The instance lifecycle
+
+1. **Load a character.** `POST /api/avatar/load`, `multipart/form-data`, with the character image as the attachment `file`: an RGBA image in any format Pillow reads, which the server scales to 512×512. Add-on cels go along as further attachments, each named for its cel. The answer is `{"instance_id": "..."}`, which every other call takes. One server can run several instances.
+2. **Configure it.** `POST /api/avatar/load_emotion_templates` and `POST /api/avatar/load_animator_settings`, each with its JSON; an empty object resets to the server's defaults. The animator settings include the postprocessor's filters and the video stream's image format.
+3. **Run it.** `POST /api/avatar/start` starts the animation, and `/api/avatar/stop` pauses it.
+4. **Keep it alive.** `POST /api/avatar/heartbeat` with `{"instance_ids": [...]}`, for every instance the client holds. The server unloads an instance whose client has not checked in for `avatar_session_timeout` seconds (120 by default, in the server config); Raven's client sends one every 10 seconds. **A client that misses this loses its avatar after two minutes**, with no error, so it is the one call a port must not leave out. The answer lists any of the given IDs the server does not have, typically because it was restarted, so the client can load them again.
+5. **Release it.** `POST /api/avatar/unload` with the instance ID. It succeeds whether or not the instance still exists, so a client shutting down need not know whether the server was restarted underneath it.
+
+`POST /api/avatar/reload` replaces the character of an existing instance.
+
+## The video stream
+
+`GET /api/avatar/result_feed?instance_id=...` is a `multipart/x-mixed-replace` stream, separated by `--frame`, one image file per part. Each part carries `Content-Type` and `Content-Length`, and three headers of Raven's own:
+
+- `X-Crop`: JSON, `{"enabled", "left", "top", "right", "bottom"}`, the crop applied to this frame, its edges as fractions of the full image, 0 to 1.
+- `X-Full-Size`: the uncropped image's size, as `"width height"` in pixels, so that a cropped frame can be placed where it belongs.
+- `X-Server-Stats`: JSON, the server's timings per phase, for a client that shows a frame rate.
+
+**Keep reading the stream.** The server renders a new frame only once the previous one has been read, aiming at its target frame rate (25 by default), so a client that stops reading stops the animation. Read it continuously, in a background thread or an async loop. The instance ID is a URL parameter so that a browser can show the stream directly, as long as the frames are in a format browsers decode, such as the default PNG. Closing the connection stops the server sending.
+
+Raven's renderer, [`raven.client.avatar_renderer`](../client/avatar_renderer.py), draws the backdrop image on the client side, beneath the frame, using `X-Crop` and `X-Full-Size` to keep the frame aligned with it when cropped.
+
+## Driving the character
+
+- **Emotion:** `POST /api/avatar/set_emotion` with `{"instance_id", "emotion_name"}`; the names are the emotion templates'. There is no getter: a client that needs the current emotion keeps its own copy.
+- **Morphs and cels, directly:** `/api/avatar/modify_overrides` sets or unsets the listed morphs or cel strengths and leaves others alone; `/api/avatar/set_overrides` replaces all of them at once. Lipsync is built on these, as described below. The keys are listed in [`raven.server.modules.avatarutil`](../server/modules/avatarutil.py).
+- **Effects:** `/api/avatar/start_data_eyes` and `/api/avatar/stop_data_eyes` switch on and fade out the "data eyes" effect, which Raven shows while the AI consults an external source (a web search, a document search, an attached document). `/api/avatar/trigger_animefx` plays one of the character's animefx by name.
+- **A mouth with no timings:** `/api/avatar/start_talking` and `/api/avatar/stop_talking` open and close the mouth at random.
+
+## Lipsync: how the mouth follows the speech
+
+The whole path, from text to a moving mouth, precisely enough to reimplement.
+
+**1. Synthesize the speech, with timings.** `POST /api/tts/speak` with `"get_metadata": true` returns the audio as the response body, and the timing of each word in the custom header `x-word-timestamps`: a JSON list of `{"word", "phonemes", "start_time", "end_time"}`, the times in seconds from the start of the audio, `word` and `phonemes` URL-encoded (percent-escaped UTF-8). The phonemes are a string of IPA characters, stress marks included, such as `ɹˈizənəbli`. The timings are available in English only. The endpoint's docstring in [`raven.server.app`](../server/app.py) has the full input format.
+
+**2. Split each word's time between its phonemes.** Each character of `phonemes` gets an equal share of its word's time span, in order. A word with no phonemes, or without both timestamps, is skipped. This is `build_phoneme_stream` in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py), which is engine-neutral and small enough to port as it is.
+
+**3. Map each phoneme to a mouth shape.** The table `phoneme_to_morph`, in [`raven.client.tts`](../client/tts.py), maps each phoneme to one of six mouth morphs (`mouth_aaa_index`, `mouth_eee_index`, `mouth_iii_index`, `mouth_ooo_index`, `mouth_uuu_index`, `mouth_delta`) or to one of three commands:
+
+- `!close_mouth`: close the mouth (*b*, *p* and *m*, which are said with closed lips).
+- `!keep`: leave the mouth as it is (stress marks, the vowel extender, commas and other pausing punctuation).
+- `!maybe_close_mouth`: close the mouth if this slot lasts at least half a second, else as `!keep` (sentence-ending punctuation).
+
+A phoneme missing from the table is dropped, leaving a gap in the timeline, which also leaves the mouth as it is.
+
+**4. Play the audio, and follow it with a clock.** About every 10 ms, read the playback position, subtract the *video offset*, look up the phoneme slot at that time (a binary search on the start times; `phoneme_at` in the same module), and act on it:
+
+- **A mouth morph:** set it to 1 and the other five to 0.
+- **`!close_mouth`**, or **`!maybe_close_mouth`** on a long enough pause: set all six to 0.
+- **`!keep`**, or a gap: send nothing.
+- **Before the first phoneme:** send nothing. **After the last one**, while the audio still plays out: set all six to 0.
+
+The video offset, in seconds, compensates for the avatar's video arriving later than the audio: positive values shift the video later with respect to the audio, negative ones earlier. Raven-librarian's default is −0.8 s, and the right value depends on the setup.
+
+**5. Send the mouth to the server.** `POST /api/avatar/modify_overrides` with `{"instance_id": ..., "action": "set", "overrides": {"mouth_aaa_index": 1.0, "mouth_eee_index": 0.0, ...}}`, all six mouth morphs listed. This replaces those morphs' values in the animator's *target* pose; the animator then moves the current pose toward the target on every frame, so the server smooths the mouth's movement and the client can send plain 0s and 1s. Raven's client sends this on every tick that calls for it, as each call says "the mouth is like this now"; sending it only when the shape changes gives the same result with fewer requests.
+
+**6. When the speech ends, give the mouth back.** `POST /api/avatar/modify_overrides` with `"action": "unset"` and the six mouth morphs (the values are ignored) removes the overrides, and the animator's own mouth animation takes over again. Raven's client does this however playback ended, error included.
+
+`modify_overrides` touches only the morphs it lists, so other parts of a client can override other morphs or cels at the same time. Its sibling `set_overrides` replaces all overrides at once. The server's `/api/avatar/start_talking` is a different thing: a mouth that opens and closes at random, following no timings.
+
+The pieces, in Raven's own code: the timing math and the tick loop in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py); the avatar-specific part (the table, the tick callback, the cleanup) in `play_encoded_with_avatar_lipsync` in [`raven.client.tts`](../client/tts.py); how the server applies an override in `modify_overrides` and `render_animation_frame`, in [`raven.server.modules.avatar`](../server/modules/avatar.py).
+
+## How Raven's client puts it together
+
+None of this is required by the server; it is how Raven-librarian drives the avatar, in [`raven.client.avatar_controller`](../client/avatar_controller.py), and a reasonable model for another client.
+
+- **Speech, a sentence at a time.** Text to be spoken goes into a queue. A background task strips Markdown and emoji, splits the text into sentences with the server's natural-language analysis, translates each for subtitles if those are on, and prepares its speech with timings. A second task speaks the prepared sentences in order, with lipsync, while the first is already preparing the next ones, so there is no pause between sentences for synthesis.
+- **Emotion from the text.** The client classifies text with `POST /api/classify`, which returns emotions with scores, and sets the highest-scoring one that is not on its blacklist, falling back to `neutral` on any failure. While a reply is streaming in, it classifies a sliding window of the most recent lines, every few lines, as single lines classify unstably ([`raven.common.text.EmotionWindow`](../common/text/window.py)); when a finished message is shown, it classifies the whole message.
+- **Back to neutral when idle.** When the avatar has not spoken for a set time, the client sets the emotion to `neutral` again.
+- **Data eyes around external sources.** On while a tool call reaches outside, or an attached document is being read, and off afterwards; the effect nests, so overlapping uses keep it on until the last one ends.
+
+## Inside the poser: what the output indices show
 
 The pose editor's **Output index** chooser (**Ctrl+I**) shows any of the poser's outputs: the final image, which is output 0, and the intermediate results of the networks that make it. They are a view into how THA3 works, and this section says what each is. For the design itself, see Pramook Khungurn's [THA3 technical report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html).
 
@@ -478,40 +560,7 @@ The poser returns the networks' outputs in a fixed order, which is the same for 
 | 27 | eyebrow decomposer | background layer alpha |
 | 28 | eyebrow decomposer | background layer color change |
 
-# Lipsync: how the mouth follows the speech
-
-This section describes the whole path, from text to a moving mouth, precisely enough to reimplement on another client. Raven's own client does it in Python; everything it sends and receives goes over Raven-server's web API, so another client can do the same.
-
-**1. Synthesize the speech, with timings.** `POST /api/tts/speak` with `"get_metadata": true` returns the audio as the response body, and the timing of each word in the custom header `x-word-timestamps`: a JSON list of `{"word", "phonemes", "start_time", "end_time"}`, the times in seconds from the start of the audio, `word` and `phonemes` URL-encoded (percent-escaped UTF-8). The phonemes are a string of IPA characters, stress marks included, such as `ɹˈizənəbli`. The timings are available in English only. The endpoint's docstring in [`raven.server.app`](../server/app.py) has the full input format.
-
-**2. Split each word's time between its phonemes.** Each character of `phonemes` gets an equal share of its word's time span, in order. A word with no phonemes, or without both timestamps, is skipped. This is `build_phoneme_stream` in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py), which is engine-neutral and small enough to port as it is.
-
-**3. Map each phoneme to a mouth shape.** The table `phoneme_to_morph`, in [`raven.client.tts`](../client/tts.py), maps each phoneme to one of six mouth morphs (`mouth_aaa_index`, `mouth_eee_index`, `mouth_iii_index`, `mouth_ooo_index`, `mouth_uuu_index`, `mouth_delta`) or to one of three commands:
-
-- `!close_mouth`: close the mouth (*b*, *p* and *m*, which are said with closed lips).
-- `!keep`: leave the mouth as it is (stress marks, the vowel extender, commas and other pausing punctuation).
-- `!maybe_close_mouth`: close the mouth if this slot lasts at least half a second, else as `!keep` (sentence-ending punctuation).
-
-A phoneme missing from the table is dropped, leaving a gap in the timeline, which also leaves the mouth as it is.
-
-**4. Play the audio, and follow it with a clock.** About every 10 ms, read the playback position, subtract the *video offset*, look up the phoneme slot at that time (a binary search on the start times; `phoneme_at` in the same module), and act on it:
-
-- **A mouth morph:** set it to 1 and the other five to 0.
-- **`!close_mouth`**, or **`!maybe_close_mouth`** on a long enough pause: set all six to 0.
-- **`!keep`**, or a gap: send nothing.
-- **Before the first phoneme:** send nothing. **After the last one**, while the audio still plays out: set all six to 0.
-
-The video offset, in seconds, compensates for the avatar's video arriving later than the audio: positive values shift the video later with respect to the audio, negative ones earlier. Raven-librarian's default is −0.8 s, and the right value depends on the setup.
-
-**5. Send the mouth to the server.** `POST /api/avatar/modify_overrides` with `{"instance_id": ..., "action": "set", "overrides": {"mouth_aaa_index": 1.0, "mouth_eee_index": 0.0, ...}}`, all six mouth morphs listed. This replaces those morphs' values in the animator's *target* pose; the animator then moves the current pose toward the target on every frame, so the server smooths the mouth's movement and the client can send plain 0s and 1s. Raven's client sends this on every tick that calls for it, as each call says "the mouth is like this now"; sending it only when the shape changes gives the same result with fewer requests.
-
-**6. When the speech ends, give the mouth back.** `POST /api/avatar/modify_overrides` with `"action": "unset"` and the six mouth morphs (the values are ignored) removes the overrides, and the animator's own mouth animation takes over again. Raven's client does this however playback ended, error included.
-
-`modify_overrides` touches only the morphs it lists, so other parts of a client can override other morphs or cels at the same time. Its sibling `set_overrides` replaces all overrides at once. The server's `/api/avatar/start_talking` is a different thing: a mouth that opens and closes at random, following no timings.
-
-The pieces, in Raven's own code: the timing math and the tick loop in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py); the avatar-specific part (the table, the tick callback, the cleanup) in `play_encoded_with_avatar_lipsync` in [`raven.client.tts`](../client/tts.py); how the server applies an override in `modify_overrides` and `render_animation_frame`, in [`raven.server.modules.avatar`](../server/modules/avatar.py).
-
-# Codebase structure
+## Codebase structure
 
 Where to find the relevant files:
 
