@@ -27,6 +27,7 @@ flowchart TD
     SUB["Subagents"]
     MCPS["MCP server side in Librarian"]
     LIBF["Librarian features deferred from 0.2.11"]
+    JSAV["JavaScript avatar client"]
 
     CF -.-> MCP
     CF -.-> SKL
@@ -43,7 +44,7 @@ flowchart TD
     MCP -.-> LIBF
 ```
 
-`HS`, `USE` and `SUB` have no edges yet: their place is open.
+`HS`, `USE`, `SUB` and `JSAV` have no edges yet: their place is open.
 
 **The rest of 2026, as decided 2026-10-19 (maintainer):** the *per-document pass → corpus filter* chain
 first, being what blocks the AOKK researchers (the pass landed 2026-10-21, as `raven.librarian.sweep`); then the MCP client with agent skills, which the lab's
@@ -128,3 +129,10 @@ accepted.
   subagent — rather than a recursion limit. Part of the research group's multiagent goals.
 - **MCP server side in Librarian.** The lab system's experiment-planning agent could consult Librarian's
   document database, and could draft reports that Librarian fetches over MCP. Multiagent too; not specced.
+- **JavaScript avatar client.** Raven-avatar in browser-based tools, including the JAMK team's: the video
+  stream, lipsync, and the rest of the client side, as a library others drop in. Wanted "soon-ish"
+  (maintainer, 2026-11-13), as a colleague's browser-based conversational tools with an avatar are about to be
+  built. The reasoning is the maintainer's: one engineered, robust and composable client, so that no tool has
+  to reimplement it ad hoc each time, which saves compute globally, is kinder to the AIs doing the coding, and
+  leaves fewer bugs. The first piece is done: `raven/avatar/README.md` → *Lipsync: how the mouth follows the
+  speech* (2026-11-13) documents the protocol a port follows. Not specced.
