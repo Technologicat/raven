@@ -464,13 +464,13 @@ Raven's renderer, [`raven.client.avatar_renderer`](../client/avatar_renderer.py)
 - **Emotion:** `POST /api/avatar/set_emotion` with `{"instance_id", "emotion_name"}`; the names are the emotion templates'. There is no getter: a client that needs the current emotion keeps its own copy.
 - **Morphs and cels, directly:** `/api/avatar/modify_overrides` sets or unsets the listed morphs or cel strengths and leaves others alone; `/api/avatar/set_overrides` replaces all of them at once. Lipsync is built on these, as described below. The keys are listed in [`raven.server.modules.avatarutil`](../server/modules/avatarutil.py).
 - **Effects:** `/api/avatar/start_data_eyes` and `/api/avatar/stop_data_eyes` switch on and fade out the "data eyes" effect, which Raven shows while the AI consults an external source (a web search, a document search, an attached document). `/api/avatar/trigger_animefx` plays one of the character's animefx by name.
-- **A mouth with no timings:** `/api/avatar/start_talking` and `/api/avatar/stop_talking` open and close the mouth at random.
+- **A mouth with no timings:** `/api/avatar/start_talking` and `/api/avatar/stop_talking` start and stop an animation that opens and closes the mouth at random.
 
 ## Lipsync: how the mouth follows the speech
 
 The whole path, from text to a moving mouth, precisely enough to reimplement.
 
-**1. Synthesize the speech, with timings.** `POST /api/tts/speak` with `"get_metadata": true` returns the audio as the response body, and the timing of each word in the custom header `x-word-timestamps`: a JSON list of `{"word", "phonemes", "start_time", "end_time"}`, the times in seconds from the start of the audio, `word` and `phonemes` URL-encoded (percent-escaped UTF-8). The phonemes are a string of IPA characters, stress marks included, such as `ɹˈizənəbli`. The timings are available in English only. The endpoint's docstring in [`raven.server.app`](../server/app.py) has the full input format.
+**1. Synthesize the speech, with timings.** `POST /api/tts/speak` with `"get_metadata": true` returns the audio as the response body, and the timing of each word in the custom header `x-word-timestamps`: a JSON list of `{"word", "phonemes", "start_time", "end_time"}`, the times in seconds from the start of the audio, `word` and `phonemes` URL-encoded (percent-escaped UTF-8). The phonemes are a string of IPA characters, with a few additions of Misaki's, the phonemizer Kokoro uses (such as `ᵊ`, a muted schwa), stress marks included: `ɹˈizənəbli`, for example. The timings are available in English only. The endpoint's docstring in [`raven.server.app`](../server/app.py) has the full input format.
 
 **2. Split each word's time between its phonemes.** Each character of `phonemes` gets an equal share of its word's time span, in order. A word with no phonemes, or without both timestamps, is skipped. This is `build_phoneme_stream` in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py), which is engine-neutral and small enough to port as it is.
 
@@ -489,7 +489,7 @@ A phoneme missing from the table is dropped, leaving a gap in the timeline, whic
 - **`!keep`**, or a gap: send nothing.
 - **Before the first phoneme:** send nothing. **After the last one**, while the audio still plays out: set all six to 0.
 
-The video offset, in seconds, compensates for the avatar's video arriving later than the audio: positive values shift the video later with respect to the audio, negative ones earlier. Raven-librarian's default is −0.8 s, and the right value depends on the setup.
+The video offset, in seconds, is calibrated by hand for audio-video sync: it compensates for the avatar's video arriving later than the audio. Positive values shift the video later with respect to the audio, negative ones earlier. Raven-librarian's default is −0.8 s, and the right value depends on the setup.
 
 **5. Send the mouth to the server.** `POST /api/avatar/modify_overrides` with `{"instance_id": ..., "action": "set", "overrides": {"mouth_aaa_index": 1.0, "mouth_eee_index": 0.0, ...}}`, all six mouth morphs listed. This replaces those morphs' values in the animator's *target* pose; the animator then moves the current pose toward the target on every frame, so the server smooths the mouth's movement and the client can send plain 0s and 1s. Raven's client sends this on every tick that calls for it, as each call says "the mouth is like this now"; sending it only when the shape changes gives the same result with fewer requests.
 
@@ -504,7 +504,7 @@ The pieces, in Raven's own code: the timing math and the tick loop in [`raven.co
 None of this is required by the server; it is how Raven-librarian drives the avatar, in [`raven.client.avatar_controller`](../client/avatar_controller.py), and a reasonable model for another client.
 
 - **Speech, a sentence at a time.** Text to be spoken goes into a queue. A background task strips Markdown and emoji, splits the text into sentences with the server's natural-language analysis, translates each for subtitles if those are on, and prepares its speech with timings. A second task speaks the prepared sentences in order, with lipsync, while the first is already preparing the next ones, so there is no pause between sentences for synthesis.
-- **Emotion from the text.** The client classifies text with `POST /api/classify`, which returns emotions with scores, and sets the highest-scoring one that is not on its blacklist, falling back to `neutral` on any failure. While a reply is streaming in, it classifies a sliding window of the most recent lines, every few lines, as single lines classify unstably ([`raven.common.text.EmotionWindow`](../common/text/window.py)); when a finished message is shown, it classifies the whole message.
+- **Emotion from the text.** The client classifies text with `POST /api/classify`, which returns emotions with scores, and sets the highest-scoring one that is not on its blacklist, falling back to `neutral` on any failure. While a reply is streaming in, it classifies a sliding window of the most recent lines, every few lines, as single lines classify unstably ([`raven.common.text.EmotionWindow`](../common/text/window.py)); when a finished message is shown, as on switching to an older chat branch, it classifies the whole message.
 - **Back to neutral when idle.** When the avatar has not spoken for a set time, the client sets the emotion to `neutral` again.
 - **Data eyes around external sources.** On while a tool call reaches outside, or an attached document is being read, and off afterwards; the effect nests, so overlapping uses keep it on until the last one ends.
 
