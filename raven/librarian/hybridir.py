@@ -44,11 +44,9 @@ import os
 import pathlib
 import re
 import threading
-from typing import Any, Callable, Container, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Container, Dict, Iterable, List, Optional, Tuple, Union
 import uuid
 
-import watchdog.events
-import watchdog.observers
 
 import numpy as np
 
@@ -65,6 +63,7 @@ from ..client import mayberemote
 from ..common import bgtask
 from ..common import datastorelock
 from ..common import docextract
+from ..common import filewatch
 from ..common import nlptools
 from ..common import text as common_text
 from ..common import utils as common_utils
@@ -758,7 +757,7 @@ class HybridIR:
                 You can use this to easily locate the original file a given search result refers to.
 
                 If your document did not come from a file, use angle brackets
-                to disable the file system event handler's rescan for that document,
+                to keep the file system event handler from looking for it on disk,
                 e.g. `path="<my in-memory document>"`.
 
         `text`: Plain-text content of the file, to be indexed for searching.
@@ -853,8 +852,8 @@ class HybridIR:
                     the current document, partial state is persisted, and the unprocessed remainder is
                     requeued into `_pending_edits` so a later `commit` (in the same session) picks up
                     where this one left off. On app shutdown, that "later commit" never happens — the
-                    leftovers sit in memory until the process exits, and `bootup.rescan` re-detects the
-                    corresponding file changes via mtime on next startup. The `cancelled` attribute is
+                    leftovers sit in memory until the process exits, and the handler's `bootup` re-detects the
+                    corresponding file changes via mtime and size on next startup. The `cancelled` attribute is
                     read defensively via `getattr`, so a namespace without it pre-set is accepted (and
                     treated as not-cancelled).
         """
@@ -1544,8 +1543,7 @@ def init(executor):
     If you use the all-in-one convenience function `setup`, you do not need `init`;
     `setup` calls `init` automatically.
 
-    Otherwise, `init` must be called before `HybridIRFileSystemEventHandler`
-    (including its `rescan` method) can be used.
+    Otherwise, `init` must be called before a `HybridIRFileSystemEventHandler` is constructed.
 
     `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
                 Used for running the background tasks for ingesting files
@@ -1609,16 +1607,20 @@ def shutdown(wait: bool = True) -> None:
     Drain order is **ingest before commit** (preserved by the dict's insertion-order semantics): a
     finishing ingest task submits a new commit on its way out, so commits must be drained *after* every
     ingest has exited or a fresh commit task could slip in behind us. Also worth noting: this only
-    cancels module-level task work. Watchdog observers are owned by individual `HybridIRFileSystemEventHandler`
-    instances; stop them via the instance's own `shutdown` method (also registered via `atexit`).
+    cancels module-level task work. Each `HybridIRFileSystemEventHandler` owns its directory watcher; stop it
+    via the instance's own `shutdown` method (also registered via `atexit`).
     """
     for task_manager in task_managers.values():
         task_manager.clear(wait=wait)
 
 # --------------------------------------------------------------------------------
 
-# See e.g. https://www.kdnuggets.com/monitor-your-file-system-with-pythons-watchdog
-class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
+def _came_from_file(doc: Dict) -> bool:
+    """Whether an index record is for a file, by the convention that an in-memory document's path is `"<...>"`."""
+    return not (doc["path"].startswith("<") and doc["path"].endswith(">"))
+
+
+class HybridIRFileSystemEventHandler:
     def __init__(self,
                  docs_dir: Union[str, pathlib.Path],
                  recursive: bool,
@@ -1653,7 +1655,9 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                      format it cannot parse indexes line noise, and the document then sits in the
                      index findable and wrong, which is worse than never ingesting it.
 
-        Uses the `watchdog` library.
+        Changes made while the app was not running are found at construction, by comparing the directory
+        with what the index recorded; live ones as they happen. Both through `raven.common.filewatch`, so a
+        save by temporary file and rename, and an edit to the target of a symlinked document, are seen.
         """
         # Canonical (not symlink-resolved) — `_make_document_id_from_path` takes each document's path
         # relative to this, so the two must be normalized the same way or every id lookup fails.
@@ -1662,7 +1666,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         self.retriever = retriever
         self.extractor = extractor if extractor is not None else docextract.PLAINTEXT
 
-        self._docs_observer = None  # populated by `bootup`
+        self._maybe_watcher: filewatch.DirectoryWatcher | None = None  # populated by `bootup`
         self._shutdown_lock = threading.RLock()
 
         # For delayed commit (commit when new/modified files stop appearing in quick succession)
@@ -1685,51 +1689,92 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         self.bootup()
 
     def bootup(self):
-        """Scan for offline changes, start the directory monitor, and set up the app-exit hook for monitor shutdown."""
-
-        # Rescan docs directory for changes made while the app was not running.
-        self.rescan(self.docs_dir,
-                    recursive=self.recursive)
-
-        # Register handler to auto-update search indices on live changes in docs directory.
-        self._docs_observer = watchdog.observers.Observer()
-        self._docs_observer.schedule(self,
-                                     path=self.docs_dir,
-                                     recursive=self.recursive)
-        self._docs_observer.start()
-
-        # And make sure it shuts down gracefully at app exit.
+        """Bring the index up to date with the documents directory, start watching it, and stop at app exit."""
+        logger.info(f"HybridIRFileSystemEventHandler.bootup: Scanning '{self.docs_dir}' for offline changes (changes made while this app was not running).")
+        # Compare by `document_id` -- the path *relative* to the documents directory -- and not by the
+        # absolute path each record also stores. The relative path is what identifies a document, and it is
+        # what survives the documents directory being renamed, moved, or reached through a symlink; the
+        # absolute path is a fact about where the collection sits today. Keying on the latter makes a
+        # collection reached by a second spelling of the same directory read as an entirely different one:
+        # every file new, every indexed document deleted.
+        with self.retriever.datastore_lock:
+            known = {document_id: (doc["mtime"], doc["filesize"])
+                     for document_id, doc in self.retriever.documents.items()
+                     if _came_from_file(doc)}
+        self._offline_counts = {filewatch.CREATED: 0, filewatch.MODIFIED: 0, filewatch.DELETED: 0}
+        watcher = filewatch.DirectoryWatcher(self.docs_dir,
+                                             on_changed=self._on_changed,
+                                             accept=lambda path: self.extractor.handles(str(path)),
+                                             recursive=self.recursive)
+        watcher.start(known=known)  # reports the offline changes through `_on_changed` before returning
+        self._maybe_watcher = watcher
+        counts, self._offline_counts = self._offline_counts, None
+        new_plural_s = "s" if counts[filewatch.CREATED] != 1 else ""
+        updated_plural_s = "s" if counts[filewatch.MODIFIED] != 1 else ""
+        deleted_plural_s = "s" if counts[filewatch.DELETED] != 1 else ""
+        logger.info(f"HybridIRFileSystemEventHandler.bootup: Scan complete. Found {counts[filewatch.CREATED]} new file{new_plural_s}, "
+                    f"{counts[filewatch.MODIFIED]} updated file{updated_plural_s}, and {counts[filewatch.DELETED]} deleted file{deleted_plural_s}.")
+        self._repoint_relocated(watcher.snapshot.keys())
         atexit.register(self.shutdown)
 
     def shutdown(self):
-        """Make the directory monitor exit gracefully.
+        """Stop watching the documents directory. Safe to call more than once.
 
         This is normally only used as the app-exit hook, but if you need to re-instantiate,
         then call the `shutdown` method of the old instance before creating the new one.
         """
         with self._shutdown_lock:
-            try:  # EAFP
-                self.docs_observer.stop()
-                self.docs_observer.join()
-            except AttributeError:  # `self.docs_observer is None` already
-                pass
-            self.docs_observer = None
+            if self._maybe_watcher is not None:
+                self._maybe_watcher.stop()
+                self._maybe_watcher = None
+
+    def _repoint_relocated(self, found: Iterable[pathlib.Path]) -> None:
+        """Point records whose stored path is gone at where their file is now. Metadata only, nothing to reindex.
+
+        `found`: the files in the documents directory, relative to it.
+        """
+        # A document found by its id under the documents directory, whose stored absolute path no longer
+        # exists: the directory was renamed or moved. Only when the stored path is *gone*, never merely
+        # spelled differently: reached through a symlinked slot, the stored real path is the more durable of
+        # the two, the slot being free to point at another collection later.
+        with self.retriever.datastore_lock:
+            relocated = {}
+            for relative_path in found:
+                document_id = str(relative_path)
+                doc = self.retriever.documents.get(document_id)
+                if doc is not None and _came_from_file(doc) and not os.path.exists(doc["path"]):
+                    relocated[document_id] = (doc["path"], str(self.docs_dir / relative_path))
+            for document_id, (_old_path, new_path) in relocated.items():
+                self.retriever.documents[document_id]["path"] = new_path
+        if relocated:
+            logger.info(f"HybridIRFileSystemEventHandler._repoint_relocated: {len(relocated)} indexed {'document' if len(relocated) == 1 else 'documents'} "  # plural
+                        "no longer at the recorded path, and found by ID under the documents directory: updating the recorded paths.")
+            for document_id, (old_path, new_path) in relocated.items():
+                logger.info(f"HybridIRFileSystemEventHandler._repoint_relocated: Document '{document_id}' moved: recorded path '{old_path}' is gone; now '{new_path}'.")
+            self.retriever._save_datastore()
+
+    def _on_changed(self, relative_path: pathlib.Path, kind: str) -> None:
+        """Schedule the index work for one changed file. Called by the watcher, offline changes included."""
+        if self._offline_counts is not None:
+            self._offline_counts[kind] += 1
+        if not task_managers:
+            logger.warning("HybridIRFileSystemEventHandler._on_changed: Module not initialized, cannot proceed.")
+            return
+        document_id = str(relative_path)
+        logger.info(f"HybridIRFileSystemEventHandler._on_changed: Document '{document_id}' {kind}: scheduling index update.")
+        if kind == filewatch.CREATED:
+            task_managers["ingest"].submit(self._make_task(kind="add", path=self.docs_dir / relative_path), envcls())
+        elif kind == filewatch.MODIFIED:
+            task_managers["ingest"].submit(self._make_task(kind="update", path=self.docs_dir / relative_path), envcls())
+        else:
+            # By id: the file is gone, so there is nothing on disk to derive one from.
+            task_managers["ingest"].submit(self._make_delete_task(document_id), envcls())
 
     # `document_id` needs to be unique, but easily mappable from filename, persistently.
     def _make_document_id_from_path(self, path: Union[pathlib.Path, str]) -> str:
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
         relp = p.relative_to(self.docs_dir)
         return str(relp)
-
-    def _sanity_check(self, path: Union[pathlib.Path, str]) -> bool:
-        if not task_managers:
-            logger.warning("HybridIRFileSystemEventHandler._sanity_check: Module not initialized, cannot proceed.")
-            return False
-        abspath = str(common_utils.canonical_path(path))
-        if not self.extractor.handles(abspath):
-            logger.info(f"HybridIRFileSystemEventHandler._sanity_check: file '{abspath}': file extension not in monitored list {list(self.extractor.extensions)}, ignoring file.")
-            return False
-        return True
 
     def _read(self, path: Union[pathlib.Path, str]) -> Optional[str]:
         abspath = common_utils.canonical_path(path)
@@ -1797,129 +1842,9 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                 task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each update
             return scheduled_update
 
-        elif kind == "delete":
-            def scheduled_delete(task_env: envcls) -> None:
-                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': deleting from search indices.")
-                self.retriever.delete(document_id)
-
-                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': scheduling commit to save changes to HybridIR.")
-                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each delete
-            return scheduled_delete
-
         else:
-            raise ValueError(f"Unknown kind '{kind}'; expected one of 'add', 'update', 'delete'.")
+            raise ValueError(f"Unknown kind '{kind}'; expected one of 'add', 'update'. (Deletion is by id: `_make_delete_task`.)")
 
-    def rescan(self, path: Union[pathlib.Path, str], recursive: bool = False) -> None:
-        """Rescan for documents at `path`.
-
-        This adds/updates/deletes files from the retriever's index as necessary.
-
-        Useful at app startup, since events only fire on live changes (while the app is running).
-        """
-        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scanning '{path}' for offline changes (changes made while this app was not running).")
-        abspath = common_utils.canonical_path(path)
-        found_paths = []
-        for root, dirs, files in os.walk(abspath):
-            if not recursive:
-                dirs.clear()
-            for filename in files:
-                filepath = os.path.join(root, filename)
-                if self._sanity_check(filepath):
-                    found_paths.append(str(common_utils.canonical_path(filepath)))
-        plural_s = "s" if len(found_paths) != 1 else ""
-        logger.info(f"HybridIRFileSystemEventHandler.rescan: Found {len(found_paths)} file{plural_s}.")
-
-        # Compare by `document_id` -- the path *relative* to the documents directory -- and not by the
-        # absolute path each record also stores. The relative path is what identifies a document, and it is
-        # what survives the documents directory being renamed, moved, or reached through a symlink; the
-        # absolute path is a fact about where the collection sits today. Keying on the latter makes a
-        # collection reached by a second spelling of the same directory read as an entirely different one:
-        # every file new, every indexed document deleted. It also *raised*, because building the deletion
-        # task re-derived an id from the stored path, and a stored path outside the current documents
-        # directory has no relative form -- the same "'<target>' is not in the subpath of '<documents dir>'"
-        # that symlinked documents used to fail with, surviving on the deletion path.
-        with self.retriever.datastore_lock:
-            def came_from_file(doc: Dict) -> bool:  # convention: in-memory sources use paths of the form "<document_name_here>"
-                return not (doc["path"].startswith("<") and doc["path"].endswith(">"))
-            indexed_document_ids = {document_id for document_id, doc in self.retriever.documents.items()
-                                    if came_from_file(doc)}
-            # Safe to derive: every found path came from walking `self.docs_dir`, so it is under it by
-            # construction. This is the direction that always works, which is why deletion is handled by
-            # id below rather than by re-deriving one from a stored path.
-            found_document_ids = {self._make_document_id_from_path(path): path for path in found_paths}
-
-            def is_file_updated(document_id: str, path: str) -> bool:
-                stats = self.retriever._stat(path)
-                doc = self.retriever.documents[document_id]
-                mtime_increased = (stats["mtime"] > doc["mtime"])
-                filesize_changed = (stats["size"] != doc["filesize"])
-                return mtime_increased or filesize_changed
-
-            new_found_paths = [path for document_id, path in found_document_ids.items()
-                               if document_id not in indexed_document_ids]
-            updated_paths = [path for document_id, path in found_document_ids.items()
-                             if document_id in indexed_document_ids and is_file_updated(document_id, path)]
-            deleted_document_ids = [document_id for document_id in indexed_document_ids
-                                    if document_id not in found_document_ids]
-
-            # A document found where it was, content unchanged, but whose stored absolute path no longer
-            # exists: the documents directory was renamed or moved. Repoint the record at where the file is
-            # now, so opening it works — metadata only, nothing to reindex. Only when the stored path is
-            # *gone*, never merely spelled differently: reached through a symlinked slot, the stored real path
-            # is the more durable of the two, the slot being free to point at another collection later.
-            relocated = {document_id: (self.retriever.documents[document_id]["path"], path)
-                         for document_id, path in found_document_ids.items()
-                         if document_id in indexed_document_ids and path not in updated_paths
-                         and not os.path.exists(self.retriever.documents[document_id]["path"])}
-            for document_id, (_old_path, new_path) in relocated.items():
-                self.retriever.documents[document_id]["path"] = new_path
-
-        new_plural_s = "s" if len(new_found_paths) != 1 else ""
-        updated_plural_s = "s" if len(updated_paths) != 1 else ""
-        deleted_plural_s = "s" if len(deleted_document_ids) != 1 else ""
-        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_document_ids)} deleted file{deleted_plural_s}.")
-        if relocated:
-            logger.info(f"HybridIRFileSystemEventHandler.rescan: {len(relocated)} indexed {'document' if len(relocated) == 1 else 'documents'} "  # plural
-                        "no longer at the recorded path, and found by ID under the documents directory: updating the recorded paths.")
-            for document_id, (old_path, new_path) in relocated.items():
-                logger.info(f"HybridIRFileSystemEventHandler.rescan: Document '{document_id}' moved: recorded path '{old_path}' is gone; now '{new_path}'.")
-            self.retriever._save_datastore()
-
-        for path in new_found_paths:
-            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' is new: scheduling ingest.")
-            task_managers["ingest"].submit(self._make_task(kind="add", path=path), envcls())
-        for path in updated_paths:
-            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was updated: scheduling ingest.")
-            task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
-        for document_id in deleted_document_ids:
-            logger.info(f"HybridIRFileSystemEventHandler.rescan: Document '{document_id}' was deleted: scheduling deletion from index.")
-            task_managers["ingest"].submit(self._make_delete_task(document_id), envcls())
-
-    def on_created(self, event) -> None:
-        path = event.src_path
-        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}'.")
-        if not self._sanity_check(path):
-            return
-        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
-        task_managers["ingest"].submit(self._make_task(kind="add", path=path), envcls())
-
-    def on_modified(self, event) -> None:
-        path = event.src_path
-        logger.info(f"HybridIRFileSystemEventHandler.on_modified: File '{path}'.")
-        if not self._sanity_check(path):
-            return
-        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
-        task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
-
-    def on_deleted(self, event) -> None:
-        path = event.src_path
-        logger.info(f"HybridIRFileSystemEventHandler.on_deleted: File '{path}'.")
-        if not self._sanity_check(path):
-            return
-        logger.info(f"HybridIRFileSystemEventHandler.on_deleted: File '{path}': scheduling deletion from index.")
-        task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
-
-    # TODO: Do we need `on_moved`, too?
 
 # --------------------------------------------------------------------------------
 
@@ -1995,7 +1920,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
     # contract three of them would eventually get wrong.
     retriever._process_lock = index_lock
 
-    # The watchdog observer can't watch a non-existent directory; without this, a fresh-install or
+    # A directory watcher can't watch a non-existent directory; without this, a fresh-install or
     # docs-dir-moved-aside startup raises FileNotFoundError from `inotify_add_watch` during `bootup()`.
     docs_dir_path = common_utils.canonical_path(docs_dir)
     if not docs_dir_path.is_dir():

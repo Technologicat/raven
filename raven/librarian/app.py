@@ -3792,7 +3792,7 @@ def _gui_release() -> None:
     # before the context is destroyed under it — a DPG call into a dying context is a segfault, not an
     # exception, so the guards on those writes cannot help here.
     audio_recorder.require().stop(wait=True)
-    # Stop the watchdog observer first so no new ingest/commit tasks land while we're tearing down,
+    # Stop watching the documents directory first so no new ingest/commit tasks land while we're tearing down,
     # then cancel any in-flight RAG indexing. `hybridir.shutdown` waits for the running commit to exit
     # its per-doc loop, partial-save what was applied, and release `datastore_lock`. This must run
     # before `chat_controller.shutdown()`: any chat task blocked inside `retriever.search` waits on

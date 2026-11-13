@@ -7,9 +7,11 @@ yet cached.
 """
 
 import math
+import os
 import pathlib
 import textwrap
 import threading
+import time
 import types
 
 import pytest
@@ -21,6 +23,7 @@ bm25s = pytest.importorskip("bm25s", reason="bm25s not installed (needs full dep
 # on which dependency happens to be missing first, rather than on whether the module can be imported at all.
 pytest.importorskip("raven.librarian.hybridir", reason="full dependency stack not installed")
 
+from raven.common import filewatch
 from raven.librarian import hybridir
 
 
@@ -695,17 +698,35 @@ class TestRescanKeysOnDocumentId:
     """
 
     def _handler(self, docs_dir, indexed):
-        """A handler wired to a stub retriever holding `indexed`, as `{document_id: absolute path}`."""
+        """A handler wired to a stub retriever holding `indexed`, as `{document_id: absolute path}`.
+
+        Each record carries its file's current mtime and size, found at the recorded path or else under
+        `docs_dir` by its id, as an index kept up to date would hold them (moving a directory changes
+        neither). So only what a test changes on purpose differs.
+        """
+        def record(document_id, path):
+            mtime, filesize = (filewatch.signature_of(path) or
+                               filewatch.signature_of(pathlib.Path(docs_dir) / document_id) or
+                               (0.0, 1))
+            return {"path": path, "mtime": mtime, "filesize": filesize}
         retriever = types.SimpleNamespace(
-            documents={document_id: {"path": path, "mtime": 0, "filesize": 1}
-                       for document_id, path in indexed.items()},
-            datastore_lock=threading.RLock(),
-            _stat=lambda path: {"mtime": 0, "size": 1})
+            documents={document_id: record(document_id, path) for document_id, path in indexed.items()},
+            datastore_lock=threading.RLock())
         handler = hybridir.HybridIRFileSystemEventHandler.__new__(hybridir.HybridIRFileSystemEventHandler)
         handler.docs_dir = pathlib.Path(docs_dir)
+        handler.recursive = False
+        handler.extractor = types.SimpleNamespace(handles=lambda path: True)
         handler.retriever = retriever
         handler.commit_task = lambda task_env: None  # bypassing __init__, so the real one is not bound
+        handler._shutdown_lock = threading.RLock()
+        handler._maybe_watcher = None
         return handler
+
+    @staticmethod
+    def _sync(handler):
+        """Bring the stub index up to date with the directory, as at app start, and stop watching again."""
+        handler.bootup()
+        handler.shutdown()
 
     def test_the_same_collection_under_a_second_spelling_needs_no_work(self, tmp_path, monkeypatch):
         real = tmp_path / "documents_hydrogen"
@@ -716,12 +737,11 @@ class TestRescanKeysOnDocumentId:
 
         # Indexed by its real directory; rescanned through the symlink. Same document, both times.
         handler = self._handler(slot, {"paper.bib": str(real / "paper.bib")})
-        monkeypatch.setattr(handler, "_sanity_check", lambda path: True)
         scheduled = []
         monkeypatch.setitem(hybridir.task_managers, "ingest",
                             types.SimpleNamespace(submit=lambda *a, **kw: scheduled.append(a)))
 
-        handler.rescan(slot)
+        self._sync(handler)
         assert scheduled == []   # not "every file new and every document deleted", and no ValueError
 
     def test_a_document_whose_file_is_gone_is_deleted_by_id(self, tmp_path, monkeypatch):
@@ -737,17 +757,16 @@ class TestRescanKeysOnDocumentId:
         monkeypatch.setitem(hybridir.task_managers, "commit",
                             types.SimpleNamespace(submit=lambda *a, **kw: None))
 
-        handler.rescan(slot)
+        self._sync(handler)
         assert deleted == ["vanished.bib"]
 
-    def _rescan_with_saves_counted(self, handler, slot, monkeypatch):
-        """Rescan `slot`; return `(scheduled tasks, datastore saves)`."""
+    def _sync_with_saves_counted(self, handler, slot, monkeypatch):
+        """Sync the handler with `slot`; return `(scheduled tasks, datastore saves)`."""
         scheduled, saves = [], []
-        monkeypatch.setattr(handler, "_sanity_check", lambda path: True)
         monkeypatch.setattr(handler.retriever, "_save_datastore", lambda: saves.append(1), raising=False)
         monkeypatch.setitem(hybridir.task_managers, "ingest",
                             types.SimpleNamespace(submit=lambda *a, **kw: scheduled.append(a)))
-        handler.rescan(slot)
+        self._sync(handler)
         return scheduled, saves
 
     def test_a_renamed_documents_directory_repoints_the_recorded_paths(self, tmp_path, monkeypatch):
@@ -758,7 +777,7 @@ class TestRescanKeysOnDocumentId:
         (slot / "paper.bib").write_text("@article{a, title={H2}}", encoding="utf-8")
         handler = self._handler(slot, {"paper.bib": str(tmp_path / "llmclient" / "documents" / "paper.bib")})
 
-        scheduled, saves = self._rescan_with_saves_counted(handler, slot, monkeypatch)
+        scheduled, saves = self._sync_with_saves_counted(handler, slot, monkeypatch)
         assert handler.retriever.documents["paper.bib"]["path"] == str(slot / "paper.bib")
         assert saves == [1], "the repointed paths were not persisted"
         assert scheduled == [], "a moved but unchanged document was reindexed"
@@ -773,9 +792,74 @@ class TestRescanKeysOnDocumentId:
         slot.symlink_to(real)
         handler = self._handler(slot, {"paper.bib": str(real / "paper.bib")})
 
-        _scheduled, saves = self._rescan_with_saves_counted(handler, slot, monkeypatch)
+        _scheduled, saves = self._sync_with_saves_counted(handler, slot, monkeypatch)
         assert handler.retriever.documents["paper.bib"]["path"] == str(real / "paper.bib")
         assert saves == []
+
+
+class TestLiveDocumentChanges:
+    """What the index is asked to do when a document changes while the app runs, however it was saved."""
+
+    @pytest.fixture
+    def watched(self, tmp_path, monkeypatch):
+        """A handler watching `docs/` (holding `a.txt`, indexed and current), and the `(kind, name)` it schedules."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.txt").write_text("version one", encoding="utf-8")
+        mtime, filesize = filewatch.signature_of(docs / "a.txt")
+        handler = hybridir.HybridIRFileSystemEventHandler.__new__(hybridir.HybridIRFileSystemEventHandler)
+        handler.docs_dir = docs
+        handler.recursive = False
+        handler.extractor = hybridir.docextract.PLAINTEXT
+        handler.retriever = types.SimpleNamespace(
+            documents={"a.txt": {"path": str(docs / "a.txt"), "mtime": mtime, "filesize": filesize}},
+            datastore_lock=threading.RLock(),
+            _stat=lambda path: {"mtime": os.stat(path).st_mtime, "size": os.stat(path).st_size})
+        handler.commit_task = lambda task_env: None
+        handler._shutdown_lock = threading.RLock()
+        handler._maybe_watcher = None
+        scheduled = []
+        monkeypatch.setattr(handler, "_make_task", lambda kind, path: (kind, pathlib.Path(path).name))
+        monkeypatch.setattr(handler, "_make_delete_task", lambda document_id: ("delete", document_id))
+        monkeypatch.setitem(hybridir.task_managers, "ingest",
+                            types.SimpleNamespace(submit=lambda task, env: scheduled.append(task)))
+        handler.bootup()
+        yield handler, docs, scheduled
+        handler.shutdown()
+
+    @staticmethod
+    def _wait_for(scheduled, expected):
+        deadline = time.monotonic() + 10.0
+        while expected not in scheduled and time.monotonic() < deadline:
+            time.sleep(0.1)
+        time.sleep(1.0)  # stragglers, which are the point: a temporary file's ghost would arrive about now
+        return scheduled
+
+    def test_an_in_place_save_updates_the_document(self, watched):
+        # The control: the plainest save, which any watcher sees.
+        handler, docs, scheduled = watched
+        (docs / "a.txt").write_text("version two, longer", encoding="utf-8")
+        assert self._wait_for(scheduled, ("update", "a.txt")) == [("update", "a.txt")]
+
+    @pytest.mark.parametrize("temporary_name", ["tmpk3j2x9", ".a.txt.swp.txt"])
+    def test_a_save_by_rename_updates_the_document_and_indexes_no_temporary_file(self, watched, temporary_name):
+        handler, docs, scheduled = watched
+        temporary = docs / temporary_name
+        temporary.write_text("version two, longer", encoding="utf-8")
+        os.replace(temporary, docs / "a.txt")
+        assert self._wait_for(scheduled, ("update", "a.txt")) == [("update", "a.txt")]
+
+    def test_editing_a_symlinked_documents_target_updates_it(self, watched, tmp_path):
+        handler, docs, scheduled = watched
+        target = tmp_path / "elsewhere.txt"
+        target.write_text("version one", encoding="utf-8")
+        try:
+            (docs / "linked.txt").symlink_to(target)
+        except OSError as exc:  # Windows without the privilege
+            pytest.skip(f"cannot create symlinks here: {exc}")
+        self._wait_for(scheduled, ("add", "linked.txt"))
+        target.write_text("version two, longer", encoding="utf-8")
+        assert self._wait_for(scheduled, ("update", "linked.txt")) == [("add", "linked.txt"), ("update", "linked.txt")]
 
 
 # ---------------------------------------------------------------------------
