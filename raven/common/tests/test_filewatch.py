@@ -149,6 +149,90 @@ class TestSymlinks:
             assert recorder.wait_for(("a.md", filewatch.MODIFIED)) == [("a.md", filewatch.MODIFIED)]
 
 
+class TestSymlinkedDirectories:
+    """A linked subdirectory, as an agent skill kept in a repository and linked into the skills folder."""
+
+    @pytest.fixture
+    def skill(self, docs, tmp_path):
+        """`docs/skill` -> `elsewhere/skill`, holding `SKILL.md`."""
+        target = tmp_path / "elsewhere" / "skill"
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("version one")
+        symlink_or_skip(docs / "skill", target)
+        return target
+
+    def test_its_files_are_found_under_the_links_name(self, docs, recorder, skill):
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, recursive=True, **FAST)
+        watcher.start()
+        watcher.stop()
+        assert set(watcher.snapshot) == {pathlib.Path("a.md"), pathlib.Path("skill/SKILL.md")}
+
+    def test_editing_a_file_in_the_target_modifies_it_under_the_link(self, docs, recorder, skill):
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, **FAST):
+            (skill / "SKILL.md").write_text("version two, longer")
+            assert recorder.wait_for(("skill/SKILL.md", filewatch.MODIFIED)) == [("skill/SKILL.md", filewatch.MODIFIED)]
+
+    def test_a_file_new_in_a_target_that_held_nothing_accepted_is_created(self, docs, recorder, skill):
+        # Nothing in the target passes `accept` at start, so no file stands for the link; it must be watched
+        # anyway, or the first accepted file to appear there is never seen.
+        accept = lambda path: path.suffix == ".txt"  # noqa: E731 -- a one-line filter, named for the call below
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, accept=accept, **FAST):
+            (skill / "notes.txt").write_text("new")
+            assert recorder.wait_for(("skill/notes.txt", filewatch.CREATED)) == [("skill/notes.txt", filewatch.CREATED)]
+
+    def test_a_link_made_and_removed_while_watching(self, docs, recorder, skill, tmp_path):
+        other = tmp_path / "other"
+        other.mkdir()
+        (other / "SKILL.md").write_text("version one")
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, **FAST):
+            symlink_or_skip(docs / "other", other)
+            recorder.wait_for(("other/SKILL.md", filewatch.CREATED))
+            (other / "SKILL.md").write_text("version two, longer")  # followed from then on
+            recorder.wait_for(("other/SKILL.md", filewatch.MODIFIED))
+            (docs / "other").unlink()
+            assert recorder.wait_for(("other/SKILL.md", filewatch.DELETED)) == [("other/SKILL.md", filewatch.CREATED),
+                                                                                ("other/SKILL.md", filewatch.MODIFIED),
+                                                                                ("other/SKILL.md", filewatch.DELETED)]
+
+    def test_a_link_made_to_a_directory_holding_nothing_accepted_is_followed(self, docs, recorder, tmp_path):
+        # The link's arrival changes no file we report, so nothing but the link itself says to watch it.
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        (empty / "readme.md").write_text("not accepted")
+        accept = lambda path: path.suffix == ".txt"  # noqa: E731 -- as above
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, accept=accept, **FAST):
+            symlink_or_skip(docs / "later", empty)
+            time.sleep(10 * QUIET)  # the link's own event settles, reporting nothing
+            (empty / "notes.txt").write_text("new")
+            assert recorder.wait_for(("later/notes.txt", filewatch.CREATED)) == [("later/notes.txt", filewatch.CREATED)]
+
+    def test_a_link_back_to_the_watched_directory_is_not_followed(self, docs, recorder):
+        symlink_or_skip(docs / "loop", docs)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, recursive=True, **FAST)
+        watcher.start()  # returning at all is half the test
+        watcher.stop()
+        assert set(watcher.snapshot) == {pathlib.Path("a.md")}
+
+    def test_two_links_leading_into_each_other_are_walked_once_each(self, docs, recorder, tmp_path):
+        # `docs/out` -> `elsewhere`, and `elsewhere/back` -> `docs`. Neither is a link to its own ancestor
+        # as spelled, so only the resolved chain of where the walk is can see the cycle.
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "b.md").write_text("b")
+        symlink_or_skip(docs / "out", elsewhere)
+        symlink_or_skip(elsewhere / "back", docs)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, recursive=True, **FAST)
+        watcher.start()
+        watcher.stop()
+        assert set(watcher.snapshot) == {pathlib.Path("a.md"), pathlib.Path("out/b.md")}
+
+    def test_without_recursive_a_linked_directory_is_ignored(self, docs, recorder, skill):
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, **FAST)
+        watcher.start()
+        watcher.stop()
+        assert set(watcher.snapshot) == {pathlib.Path("a.md")}
+
+
 class TestRecursive:
     def test_a_directory_moved_in_brings_its_files(self, docs, recorder, tmp_path):
         # The kernel reports only the directory's move; whether the files inside are reported depends on the

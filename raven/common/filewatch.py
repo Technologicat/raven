@@ -58,9 +58,8 @@ class DirectoryWatcher:
     `accept`: which files count, called with the file's full path. Default: every file. Applied to the
               path in the watched directory, not to a symlink's target.
 
-    `recursive`: also watch subdirectories. A subdirectory that is a **symlink is not followed**, neither
-                 when scanning nor while watching: only symlinked *files* are. (Linking the watched
-                 directory itself somewhere is fine.)
+    `recursive`: also watch subdirectories, symlinked ones included, their files reported under the
+                 link's name. A link that leads back to a directory it is inside is not followed.
 
     `quiet_period`: seconds without new events before pending changes are reported. A save made of
                     several filesystem operations then arrives as one change, and a temporary file created
@@ -79,8 +78,9 @@ class DirectoryWatcher:
     # the directory goes quiet, each dirty path is stat'ed and compared with the snapshot, and the difference
     # is what gets reported. So the event sequence an editor or a sync tool happens to produce — create,
     # modify, move, delete, in any order and on any name — does not have to be interpreted, only noticed.
-    # A symlinked file's target lives elsewhere, and inotify on the directory sees nothing when it changes,
-    # so each target's directory gets a watch of its own, with a map from target back to link.
+    # A symlink's target lives elsewhere, and inotify on the directory sees nothing when it changes, so each
+    # target gets a watch of its own — a linked file its parent directory, a linked directory itself — and a
+    # map from target back to link turns an event there into the path under the link.
     def __init__(self,
                  directory: str | pathlib.Path,
                  *,
@@ -106,7 +106,9 @@ class DirectoryWatcher:
         self._first_dirty_time: float | None = None
         self._last_event_time = 0.0
         self._links: dict[pathlib.Path, set[pathlib.Path]] = {}  # resolved target -> relative link paths
-        self._target_watches: dict[pathlib.Path, watchdog.observers.api.ObservedWatch] = {}  # target dir -> watch
+        # (directory, recursive) -> watch. Touched only by `start`, before the settler exists, and then by the
+        # settler alone, so it needs no lock.
+        self._target_watches: dict[tuple[pathlib.Path, bool], watchdog.observers.api.ObservedWatch] = {}
         self._maybe_observer: watchdog.observers.Observer | None = None
         self._maybe_handler: _Handler | None = None
         self._maybe_settler: threading.Thread | None = None
@@ -139,10 +141,10 @@ class DirectoryWatcher:
         self._maybe_observer = observer
         self._maybe_handler = handler
 
-        current = self._scan()
+        current, links = self._walk()
         with self._lock:
             self._snapshot = dict(current)
-            self._update_links()
+        self._update_links(links)
         if known is not None:
             previous = {pathlib.Path(path): signature for path, signature in known.items()}
             for relative_path in sorted(previous.keys() | current.keys()):
@@ -177,7 +179,8 @@ class DirectoryWatcher:
         """Mark what `path` (absolute, as an event reported it) means for the files we follow."""
         absolute = pathlib.Path(path)
         # A link's target is keyed by its resolved path, and an event inside the watched directory may name it
-        # by the unresolved one, so look it up under both.
+        # by the unresolved one, so look it up under both. A target is a file, or a directory the event is
+        # somewhere inside, so every ancestor of the event's path is a candidate.
         spellings = {absolute}
         for base in (self.directory, self._resolved_directory):
             try:
@@ -185,8 +188,12 @@ class DirectoryWatcher:
                 break
             except ValueError:
                 continue
-        links = self._links  # replaced whole under the lock and never mutated, so reading it needs none
-        relatives = set().union(*(links.get(spelling, ()) for spelling in spellings))
+        links = self._links  # replaced whole and never mutated, so reading it needs no lock
+        relatives = set()
+        for spelling in spellings:
+            for target in (spelling, *spelling.parents):
+                for link in links.get(target, ()):
+                    relatives.add(link / spelling.relative_to(target))
         maybe_relative = self._relative(absolute)
         if maybe_relative is not None:
             relatives.add(maybe_relative)
@@ -251,8 +258,8 @@ class DirectoryWatcher:
             candidates.add(relative_path)
             candidates.update(path for path in known if relative_path in path.parents)
             full = self.directory / relative_path
-            if self.recursive and full.is_dir() and not full.is_symlink():
-                candidates.update(self._scan(full).keys())
+            if self.recursive and full.is_dir():
+                candidates.update(self._walk(full)[0].keys())
         changes = []
         for relative_path in sorted(candidates):
             new = self._signature_if_accepted(relative_path)
@@ -265,9 +272,11 @@ class DirectoryWatcher:
                     self._snapshot.pop(relative_path, None)
                 else:
                     self._snapshot[relative_path] = new
-        if changes:
-            with self._lock:
-                self._update_links()
+        # A link can come or go without any file changing — a linked directory that holds nothing we accept
+        # yet — so a dirty directory, or a dirty path that was a link, also brings the links up to date.
+        was_link = {link for links in self._links.values() for link in links}
+        if changes or any((self.directory / path).is_dir() or path in was_link for path in dirty):
+            self._update_links(self._walk(signatures=False)[1])
         for relative_path, kind in changes:
             if self._stopping:
                 return
@@ -282,20 +291,57 @@ class DirectoryWatcher:
 
     # ---- the directory as it is now
 
-    def _scan(self, top: pathlib.Path | None = None) -> dict[pathlib.Path, Signature]:
-        """The accepted files at or under `top` (default: the watched directory), with their signatures."""
+    def _walk(self,
+              top: pathlib.Path | None = None,
+              *,
+              signatures: bool = True) -> tuple[dict[pathlib.Path, Signature], dict[pathlib.Path, set[pathlib.Path]]]:
+        """The accepted files at or under `top` (default: the watched directory), and the symlinks on the way.
+
+        Returns `(files, links)`: `files` maps relative paths to signatures (empty unless `signatures`), and
+        `links` maps each link's resolved target to the relative paths of the links leading to it — linked
+        accepted files, and when recursive, linked directories.
+        """
         top = top if top is not None else self.directory
-        found = {}
-        for root, dirs, files in os.walk(top):  # does not descend into symlinked directories
+        files: dict[pathlib.Path, Signature] = {}
+        links: dict[pathlib.Path, set[pathlib.Path]] = {}
+        for root, dirs, filenames in os.walk(top, followlinks=self.recursive):
+            root_path = pathlib.Path(root)
             if not self.recursive:
                 dirs.clear()
-            for filename in files:
-                full = pathlib.Path(root) / filename
+            else:
+                # The cycle guard. A link to a directory that the walk is already inside — itself, or any
+                # directory on the way down to it — is not followed. Followed, it is walked again at every
+                # level until the OS refuses to resolve the path, and its files are reported once per level. What
+                # counts is where the walk *is*, link targets included, so the chain is resolved prefix by
+                # prefix. A link to anywhere else is followed, even into a directory reached another way:
+                # its files are then reported under both names, as a linked file is beside its target.
+                relative_root = root_path.relative_to(self.directory)
+                chain = {self._resolved_directory}
+                chain.update((self.directory / prefix).resolve()
+                             for prefix in (relative_root, *relative_root.parents) if prefix != pathlib.Path("."))
+                kept = []
+                for name in sorted(dirs):
+                    subdirectory = root_path / name
+                    if subdirectory.is_symlink():
+                        target = subdirectory.resolve()
+                        if target in chain:
+                            logger.debug(f"DirectoryWatcher._walk: instance '{self.directory}': not following '{subdirectory}', which leads back to '{target}'.")
+                            continue
+                        links.setdefault(target, set()).add(subdirectory.relative_to(self.directory))
+                    kept.append(name)
+                dirs[:] = kept
+            for filename in filenames:
+                full = root_path / filename
                 relative_path = full.relative_to(self.directory)
-                signature = self._signature_if_accepted(relative_path)
-                if signature is not None:
-                    found[relative_path] = signature
-        return found
+                if not self.accept(full):
+                    continue
+                if full.is_symlink():
+                    links.setdefault(full.resolve(), set()).add(relative_path)
+                if signatures:
+                    signature = signature_of(full)
+                    if signature is not None:
+                        files[relative_path] = signature
+        return files, links
 
     def _signature_if_accepted(self, relative_path: pathlib.Path) -> Signature | None:
         full = self.directory / relative_path
@@ -303,29 +349,42 @@ class DirectoryWatcher:
             return None
         return signature_of(full)
 
-    def _update_links(self) -> None:
-        """Bring the symlink-target watches up to date with the snapshot. Call with `self._lock` held."""
-        links: dict[pathlib.Path, set[pathlib.Path]] = {}
-        for relative_path in self._snapshot:
-            full = self.directory / relative_path
-            if full.is_symlink():
-                links.setdefault(full.resolve(), set()).add(relative_path)
+    def _update_links(self, links: dict[pathlib.Path, set[pathlib.Path]]) -> None:
+        """Adopt `links` (from `_walk`) and bring the target watches up to date with it.
+
+        Never call with `self._lock` held. Watchdog holds its own lock while it calls the event handler, which
+        takes ours, and `schedule` and `unschedule` take watchdog's — so holding ours here can deadlock.
+        """
         self._links = links
         if self._maybe_observer is None:
             return
-        # A target in a directory we already watch needs no watch of its own; its events arrive anyway, and
-        # `_mark` maps them back to the link.
-        wanted = {target.parent for target in links
-                  if not (target.parent == self._resolved_directory or
-                          (self.recursive and self._resolved_directory in target.parent.parents))}
-        for target_dir in wanted - self._target_watches.keys():
+        # A target already inside a watched tree needs no watch of its own: its events arrive anyway, and
+        # `_mark` maps them back to the link. Directories first, the shallowest first, so that one linked
+        # directory's watch can cover another's.
+        trees = [(self._resolved_directory, self.recursive)]
+        wanted: set[tuple[pathlib.Path, bool]] = set()
+        def covered(directory: pathlib.Path, *, recursive: bool) -> bool:
+            return any(directory == tree or (tree_recursive and tree in directory.parents)
+                       for tree, tree_recursive in trees
+                       if tree_recursive or not recursive)
+        directory_targets = sorted((target for target in links if target.is_dir()), key=lambda t: len(t.parts))
+        for target in directory_targets:
+            if not covered(target, recursive=True):
+                wanted.add((target, True))
+                trees.append((target, True))
+        for target in links:
+            if not target.is_dir() and not covered(target.parent, recursive=False):
+                wanted.add((target.parent, False))
+                trees.append((target.parent, False))
+        for key in wanted - self._target_watches.keys():
+            directory, recursive = key
             try:
-                self._target_watches[target_dir] = self._maybe_observer.schedule(self._maybe_handler, path=str(target_dir),
-                                                                                 recursive=False)
+                self._target_watches[key] = self._maybe_observer.schedule(self._maybe_handler, path=str(directory),
+                                                                          recursive=recursive)
             except OSError as exc:  # gone again, or unreadable: the link reads as whatever `stat` says
-                logger.warning(f"DirectoryWatcher._update_links: instance '{self.directory}': cannot watch '{target_dir}': {type(exc)}: {exc}")
-        for target_dir in self._target_watches.keys() - wanted:
-            self._maybe_observer.unschedule(self._target_watches.pop(target_dir))
+                logger.warning(f"DirectoryWatcher._update_links: instance '{self.directory}': cannot watch '{directory}': {type(exc)}: {exc}")
+        for key in self._target_watches.keys() - wanted:
+            self._maybe_observer.unschedule(self._target_watches.pop(key))
 
 
 def _difference(old: Signature | None, new: Signature | None) -> str | None:
