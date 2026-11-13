@@ -509,28 +509,7 @@ def _browse_combo(combo_tag, key):
     if key == dpg.mvKey_Escape:
         _give_keyboard_to_view()
         return True
-
-    current = dpg.get_value(combo_tag)
-    try:
-        index = choices.index(current)
-    except ValueError:
-        index = 0
-
-    if key == dpg.mvKey_Down:
-        new_index = min(index + 1, len(choices) - 1)
-    elif key == dpg.mvKey_Up:
-        new_index = max(index - 1, 0)
-    elif key == dpg.mvKey_Home:
-        new_index = 0
-    elif key == dpg.mvKey_End:
-        new_index = len(choices) - 1
-    else:
-        return False
-
-    dpg.set_value(combo_tag, choices[new_index])
-    if callback is not None:
-        callback(combo_tag, choices[new_index])
-    return True
+    return guiutils.browse_combo(combo_tag, key, choices=choices, callback=callback)
 
 
 def _check_file_reload() -> None:

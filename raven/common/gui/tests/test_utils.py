@@ -703,3 +703,57 @@ class TestShutdown:
             guiutils.shutdown(cancel_tasks=broken, release=self.phase("release"))
         assert [name for name, _ in self.calls] == ["release", "teardown"]
         assert "cancel_tasks raised" in caplog.text
+
+
+class TestBrowsingACombo:
+    CHOICES = ["shown", "grayed", "hidden"]
+
+    def test_up_and_down_step_by_one_and_stop_at_the_ends(self):
+        step = guiutils.step_choice
+        assert step(self.CHOICES, "grayed", dpg.mvKey_Down) == "hidden"
+        assert step(self.CHOICES, "grayed", dpg.mvKey_Up) == "shown"
+        assert step(self.CHOICES, "hidden", dpg.mvKey_Down) == "hidden"
+        assert step(self.CHOICES, "shown", dpg.mvKey_Up) == "shown"
+
+    def test_home_and_end_go_to_either_end(self):
+        assert guiutils.step_choice(self.CHOICES, "grayed", dpg.mvKey_Home) == "shown"
+        assert guiutils.step_choice(self.CHOICES, "grayed", dpg.mvKey_End) == "hidden"
+
+    def test_other_keys_and_no_choices_move_nothing(self):
+        assert guiutils.step_choice(self.CHOICES, "grayed", dpg.mvKey_Left) is None
+        assert guiutils.step_choice([], "grayed", dpg.mvKey_Down) is None
+
+    def test_a_current_value_not_among_the_choices_counts_as_the_first(self):
+        assert guiutils.step_choice(self.CHOICES, "sideways", dpg.mvKey_Down) == "grayed"
+
+    def test_a_step_sets_the_value_and_runs_the_combos_own_callback_as_a_click_would(self, dpg_context):
+        heard = []
+        with dpg.window():
+            combo = dpg.add_combo(items=self.CHOICES, default_value="shown",
+                                  callback=lambda sender, app_data: heard.append((sender, app_data)))
+        assert guiutils.browse_combo(combo, dpg.mvKey_Down)
+        assert dpg.get_value(combo) == "grayed"
+        assert heard == [(combo, "grayed")]
+
+    def test_at_an_end_the_key_is_taken_and_nothing_runs(self, dpg_context):
+        heard = []
+        with dpg.window():
+            combo = dpg.add_combo(items=self.CHOICES, default_value="hidden", callback=lambda: heard.append(1))
+        assert guiutils.browse_combo(combo, dpg.mvKey_Down), "an arrow at the end is still the combo's key"
+        assert heard == []
+        assert guiutils.browse_combo(combo, dpg.mvKey_Up)
+        assert heard == [1], "the control: a step that moves does run the callback"
+
+    def test_a_key_that_does_not_browse_is_left_for_others(self, dpg_context):
+        with dpg.window():
+            combo = dpg.add_combo(items=self.CHOICES, default_value="shown")
+        assert not guiutils.browse_combo(combo, dpg.mvKey_Escape)
+        assert dpg.get_value(combo) == "shown"
+
+    def test_given_choices_and_callback_take_precedence(self, dpg_context):
+        heard = []
+        with dpg.window():
+            combo = dpg.add_combo(items=["a"], default_value="x", callback=lambda: heard.append("own"))
+        guiutils.browse_combo(combo, dpg.mvKey_End, choices=["x", "y", "z"], callback=lambda: heard.append("given"))
+        assert dpg.get_value(combo) == "z"
+        assert heard == ["given"]

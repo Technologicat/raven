@@ -304,26 +304,9 @@ class DPGAudioInputPanel:
 
         Only when the chooser itself has the focus: the same keys scroll the chat when it does not.
         """
-        if dpg.get_focused_item() not in guiutils.item_identifiers("audio_input_device_combo"):  # tag
+        if not guiutils.has_focus("audio_input_device_combo"):  # tag
             return False
-        labels = list(dpg.get_item_configuration("audio_input_device_combo")["items"])  # tag
-        if not labels:
-            return False
-        try:
-            index = labels.index(dpg.get_value("audio_input_device_combo"))  # tag
-        except ValueError:
-            index = 0
-        if key == dpg.mvKey_Up:
-            index = max(index - 1, 0)
-        elif key == dpg.mvKey_Down:
-            index = min(index + 1, len(labels) - 1)
-        elif key == dpg.mvKey_Home:
-            index = 0
-        else:  # dpg.mvKey_End
-            index = len(labels) - 1
-        dpg.set_value("audio_input_device_combo", labels[index])  # tag  # fires no callback of its own
-        self._on_device_combo("audio_input_device_combo", labels[index])  # tag
-        return True
+        return guiutils.browse_combo("audio_input_device_combo", key, callback=self._on_device_combo)  # tag
 
     def toggle(self) -> None:
         """Open the panel if closed, close it if open. What the hotkey and the toolbar button call."""

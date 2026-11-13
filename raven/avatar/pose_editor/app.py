@@ -1387,23 +1387,6 @@ def pose_editor_hotkeys_callback(sender, app_data):
                                    gui_instance.output_index_choice: (gui_instance.output_index_choice_items, lambda sender, app_data: gui_instance.update_output())}
             for panel in gui_instance.morph_control_panels.values():
                 combobox_choice_map[panel.choice] = (panel.param_group_names, panel.on_choice_updated)
-        def browse(choice_widget, data):
-            choices, callback = data
-            index = choices.index(dpg.get_value(choice_widget))
-            if key == dpg.mvKey_Down:
-                new_index = min(index + 1, len(choices) - 1)
-            elif key == dpg.mvKey_Up:
-                new_index = max(index - 1, 0)
-            elif key == dpg.mvKey_Home:
-                new_index = 0
-            elif key == dpg.mvKey_End:
-                new_index = len(choices) - 1
-            else:
-                new_index = None
-            if new_index is not None:
-                dpg.set_value(choice_widget, choices[new_index])
-                if callback is not None:
-                    callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
         # Matched against every name DPG may answer with, because this map holds both kinds of widget: the
         # emotion and output-index combos carry tags, the morph panels' do not. `get_focused_item` returns
         # an alias for the first kind and an ID for the second, so the previous `get_item_alias` normalizing
@@ -1415,7 +1398,8 @@ def pose_editor_hotkeys_callback(sender, app_data):
                 if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
                     guiutils.focus_item(gui_instance.help_button)  # a button is the safe place to park focus
                 else:
-                    browse(choice_widget, choice_data)
+                    choices, callback = choice_data
+                    guiutils.browse_combo(choice_widget, key, choices=choices, callback=callback)
                 break
 
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)

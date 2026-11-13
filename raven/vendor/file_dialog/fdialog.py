@@ -3169,24 +3169,14 @@ class FileDialog:
 
     def _browse_type_filter(self, key: int) -> None:
         """Move the type filter by one of Up / Down / Home / End, and apply the result immediately."""
-        # The Raven combo idiom, copied rather than invented: a hotkey hands a combo the arrows, and the
-        # choices are stepped through with them. `raven-avatar-settings-editor` is the reference.
+        # The Raven combo idiom: a hotkey hands a combo the arrows, and the choices are stepped through with
+        # them (`guiutils.step_choice`, shared with every app's combos).
         #
         # Applying on every press is the point rather than a shortcut — watching the listing re-filter as
         # you go is how the right filter gets found — and it is also why Escape restores nothing here.
-        labels = self._filter_labels
-        if not labels:
-            return
-        index = labels.index(self.file_filter) if self.file_filter in labels else 0
-        if key == dpg.mvKey_Down:
-            index = min(index + 1, len(labels) - 1)
-        elif key == dpg.mvKey_Up:
-            index = max(index - 1, 0)
-        elif key == dpg.mvKey_Home:
-            index = 0
-        else:  # End
-            index = len(labels) - 1
-        self.set_type_filter(labels[index])
+        maybe_label = guiutils.step_choice(self._filter_labels, self.file_filter, key)
+        if maybe_label is not None:
+            self.set_type_filter(maybe_label)
 
     def show_file_dialog(self) -> None:
         # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean

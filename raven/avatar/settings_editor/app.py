@@ -1147,7 +1147,7 @@ class PostprocessorSettingsEditorGUI:
         return postprocessor_chain
 
     def on_send_emotion(self, sender, app_data):  # GUI event handler
-        # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
+        # `app_data` is the choice, whether clicked or stepped to with the arrow keys (`guiutils.browse_combo`).
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
@@ -1701,23 +1701,6 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             if combobox_choice_map is None:  # build on first use (now that `gui_instance` is available)
                 combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
                                        gui_instance.voice_choice: (gui_instance.voice_names, None)}
-            def browse(choice_widget, data):
-                choices, callback = data
-                index = choices.index(dpg.get_value(choice_widget))
-                if key == dpg.mvKey_Down:
-                    new_index = min(index + 1, len(choices) - 1)
-                elif key == dpg.mvKey_Up:
-                    new_index = max(index - 1, 0)
-                elif key == dpg.mvKey_Home:
-                    new_index = 0
-                elif key == dpg.mvKey_End:
-                    new_index = len(choices) - 1
-                else:
-                    new_index = None
-                if new_index is not None:
-                    dpg.set_value(choice_widget, choices[new_index])
-                    if callback is not None:
-                        callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
             # Matched against every name DPG may answer with (`guiutils.item_identifiers`), as the pose editor
             # does: `get_focused_item` answers with an alias for a tagged widget and an ID for an untagged one.
             focused_item = dpg.get_focused_item()
@@ -1726,7 +1709,8 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                     if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
                         guiutils.focus_item("fullscreen_button")  # tag  # a button is the safe place to park focus
                     else:
-                        browse(choice_widget, choice_data)
+                        choices, callback = choice_data
+                        guiutils.browse_combo(choice_widget, key, choices=choices, callback=callback)
                     break
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)

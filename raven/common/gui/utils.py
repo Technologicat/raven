@@ -37,6 +37,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "park_offscreen", "recenter_window",
 
            "snap_slider", "toggle_checkbox",
+           "COMBO_BROWSE_KEYS", "step_choice", "has_focus", "browse_combo",  # a combo driven from the keyboard
            "focus_item", "focus_arrived",  # a focus change, and where the keyboard is while one is in flight
            "release_caret", "set_input_text",
            "add_section_separator", "add_toolbar_separator",
@@ -53,7 +54,8 @@ import os
 import pathlib
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from unpythonic.env import env
 
@@ -1160,7 +1162,16 @@ def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool
     # sees the old value, and the row ends up showing the opposite of what just happened.
     value = not dpg.get_value(widget)
     dpg.set_value(widget, value)
+    _run_callback_as_a_click_would(widget, value, callback)
+    return value
 
+
+def _run_callback_as_a_click_would(widget: str | int, value: Any, callback: Callable | None) -> None:
+    """Run `callback`, or `widget`'s own `callback=` when it is `None`, as DPG does after a click sets `value`.
+
+    The callback receives its parameters filled positionally from `(sender, app_data, user_data)`, as many as its
+    signature declares. For `toggle_checkbox` and `browse_combo`.
+    """
     configuration = dpg.get_item_configuration(widget)
     if callback is None:
         callback = configuration.get("callback")
@@ -1176,7 +1187,60 @@ def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool
         available = (sender, value, configuration.get("user_data"))
         n_parameters = len(inspect.signature(callback).parameters)
         callback(*available[:n_parameters])
-    return value
+
+
+#: The keys that browse a combo while it has the keyboard: one step up or down, or to either end.
+COMBO_BROWSE_KEYS = (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End)
+
+
+def step_choice(choices: Sequence[str], current: str, key: int) -> str | None:
+    """The choice `key` moves to from `current`: Up and Down by one, stopping at the ends, Home and End to either end.
+
+    `None` when `key` is not one of `COMBO_BROWSE_KEYS`, or there are no choices. A `current` that is not among
+    `choices` counts as the first.
+    """
+    if key not in COMBO_BROWSE_KEYS or not choices:
+        return None
+    index = choices.index(current) if current in choices else 0
+    if key == dpg.mvKey_Up:
+        index = max(index - 1, 0)
+    elif key == dpg.mvKey_Down:
+        index = min(index + 1, len(choices) - 1)
+    elif key == dpg.mvKey_Home:
+        index = 0
+    else:  # End
+        index = len(choices) - 1
+    return choices[index]
+
+
+def has_focus(widget: str | int) -> bool:
+    """Whether `widget` (DPG tag or ID) has DPG's focus, whichever name DPG answers with (`item_identifiers`)."""
+    return dpg.get_focused_item() in item_identifiers(widget)
+
+
+def browse_combo(combo: str | int, key: int, *,
+                 choices: Sequence[str] | None = None,
+                 callback: Callable | None = None) -> bool:
+    """Move combo `combo` (DPG tag or ID) by `key` as Raven's apps do while a combo has the keyboard, and return
+    whether `key` was one that browses (`COMBO_BROWSE_KEYS`).
+
+    Deciding that the combo has the keyboard is the caller's (`has_focus` answers it for a combo browsed while
+    focused), and so is what Escape does, since where the keyboard goes back to differs by app.
+
+    `choices`: the combo's items, read off the combo when `None`.
+    `callback`: run when the value changes, or `None` to run the combo's own `callback=`, as a click would; as for
+                `toggle_checkbox`. At an end, where the key moves nothing, nothing runs.
+    """
+    if key not in COMBO_BROWSE_KEYS:
+        return False
+    if choices is None:
+        choices = list(dpg.get_item_configuration(combo)["items"])
+    current = dpg.get_value(combo)
+    new = step_choice(choices, current, key)
+    if new is not None and new != current:
+        dpg.set_value(combo, new)  # which fires no callback; the next line is what makes it a click
+        _run_callback_as_a_click_would(combo, new, callback)
+    return True
 
 # The programmatic focus change in flight, if any: `(identifiers of its target, deadline)`, the deadline as
 # `time.monotonic_ns()`. Set by `focus_item`, read and cleared by `focus_arrived`. One for the process, there
