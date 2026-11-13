@@ -883,7 +883,8 @@ with timer() as tim:
                                                    callback=lambda: apply_display_filters())
                 with dpg.tooltip("misc_mode_combo", tag="misc_mode_tooltip"):  # tag
                     dpg.add_text("How the records in Misc are shown: in colour, grayed out beneath the rest, or hidden.\n"
-                                 "[F4] next, [Shift+F4] previous",
+                                 "[F4] next, [Shift+F4] previous\n"
+                                 "[Ctrl+M] to focus; then Up, Down, Home, End to choose, Esc to leave",
                                  tag="misc_mode_tooltip_text")
                 # The explanation of both the readout and the cutoff, on the slider: a reader hovers a control, not a label.
                 with dpg.tooltip("purity_cutoff_slider", tag="purity_cutoff_tooltip"):  # tag
@@ -1062,6 +1063,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
                env(key_indent=0, key="F4", action_indent=0, action="Show Misc the next way", notes="Shown, grayed, hidden"),
                env(key_indent=1, key="Shift+F4", action_indent=1, action="Same, but the previous way", notes=""),
+               env(key_indent=1, key="Ctrl+M", action_indent=0, action="Focus the Misc selector", notes="Then Up, Down, Home, End"),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
                # The window's layout.
@@ -1472,6 +1474,14 @@ def hotkeys_callback(sender, app_data):
     # Tab moves the keyboard between the search field and the info panel, keeping what is typed, and Shift+Tab
     # does the same: with two places to be, both directions are the other one. Leaving parks focus where Enter
     # does, for the reason given there.
+    # While the Misc selector has the focus, the four keys that browse a combo are its, ahead of the info panel
+    # that uses the same keys, and Escape hands the keyboard back to where Enter and Tab park it.
+    elif (guiutils.has_focus("misc_mode_combo") and not (ctrl_pressed or shift_pressed) and  # tag
+          key in (*guiutils.COMBO_BROWSE_KEYS, dpg.mvKey_Escape)):
+        if key == dpg.mvKey_Escape:
+            guiutils.focus_item("clear_search_button")  # tag
+        else:
+            guiutils.browse_combo("misc_mode_combo", key)  # tag  # runs the combo's callback, as a click would
     elif key == dpg.mvKey_Tab and not ctrl_pressed:
         if dpg.is_item_active("search_field"):  # tag
             guiutils.focus_item("clear_search_button")  # tag
@@ -1539,6 +1549,8 @@ def hotkeys_callback(sender, app_data):
             show_open_file_dialog()
         elif key == dpg.mvKey_I:
             importer_gui.toggle_window()
+        elif key == dpg.mvKey_M:
+            gui_animation.give_focus("misc_mode_combo")  # tag
         elif key == dpg.mvKey_Home:
             plotter.reset_zoom()
         elif key == dpg.mvKey_N:
@@ -1690,6 +1702,7 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
 # nav focus to the first navigable item of a window by itself, so the field reports focused from the first
 # frame, and a focus-driven mark would be lit before anyone had touched it.
 keyboardmark.install_caret_follower(["search_field"])  # tag
+keyboardmark.install_focus_follower(["misc_mode_combo"])  # tag
 
 # Load the file optionally provided on the command line
 if opts.filename:

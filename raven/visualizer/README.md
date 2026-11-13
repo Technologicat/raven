@@ -459,7 +459,7 @@ HDBSCAN finds its clusters on the map itself, so with that method each cluster i
 
 ## Gray out or hide Misc
 
-The **Misc** selector, in the row above the plot, chooses how the records in *Misc* are shown: **shown** in colour, **grayed** out beneath everything else, or **hidden**. **F4** steps to the next choice, and **Shift+F4** back. Clusters that the purity cutoff shows as *Misc* go with it, so the two together let you set aside whatever you take to be noise.
+The **Misc** selector, in the row above the plot, chooses how the records in *Misc* are shown: **shown** in colour, **grayed** out beneath everything else, or **hidden**. **F4** steps to the next choice, and **Shift+F4** back; or **Ctrl+M** puts the keyboard on the selector, where the arrow keys, **Home** and **End** choose, and **Esc** leaves. Clusters that the purity cutoff shows as *Misc* go with it, so the two together let you set aside whatever you take to be noise.
 
 Graying out keeps the shape of the whole collection in view, while hiding leaves only the rest.
 
@@ -528,6 +528,7 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 | Key | Action |
 |---|---|
 | `F4` / `Shift+F4` | Show *Misc* the next / previous way: shown, grayed out, hidden |
+| `Ctrl+M` | Put the keyboard on the *Misc* selector: then `Up`, `Down`, `Home` and `End` choose, and `Esc` leaves it |
 
 ### Datasets and search
 

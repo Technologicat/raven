@@ -66,7 +66,7 @@
   - The importer measures it in the embedding space, whichever clustering method made the clusters. A dataset imported with an earlier version shows neither; importing it again adds them.
   - A slider beside it shows the clusters below a chosen purity as Misc, on the map and in the info panel, and back again as it moves. The selection is kept.
 - **Misc can be grayed out or hidden.** A selector above the plot shows the records in Misc in colour, grayed out beneath the rest, or not at all, together with any clusters the purity cutoff has moved there.
-  - **F4** and **Shift+F4** step through the three.
+  - **F4** and **Shift+F4** step through the three. **Ctrl+M** puts the keyboard on the selector, where the arrow keys, Home and End choose and Esc leaves, as with the combos in Raven's other apps.
   - While anything is grayed or hidden, a pill above the plot and the plot's title say how many records are in focus or on screen. Clicking the pill shows everything again.
 
 #### Raven-server
