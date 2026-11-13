@@ -114,6 +114,7 @@ with timer() as tim:
     from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
+    from ...common.image import utils as imageutils
     from ...common.hfutil import maybe_install_models
     from ...common.running_average import RunningAverage
     from ...common.video import compositor
@@ -1089,10 +1090,24 @@ class PoseEditorGUI:
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
             output_image = self.poser.pose(torch_source_image, posetensor, output_index)[0].float()
 
-            # [-1, 1] -> [0, 1]
-            output_image.add_(1.0)
-            output_image.mul_(0.5)
-            output_image[:3, :, :] = torch_linear_to_srgb(output_image[:3, :, :])  # apply gamma correction
+            # The outputs are the poser's intermediates as well as its result, and only the four-channel ones are
+            # images; the others are data, such as masks and flow fields. They also come in several sizes, and the
+            # texture takes exactly one.
+            #
+            # Out of place: the poser's outputs are not ours to modify. The THA3 modes cache the eyebrow
+            # decomposer's outputs while the input image stays the same, and some of those are among the outputs
+            # shown here, so converting one in place changes what every later render composes the face from.
+            if output_image.shape[0] == 4:
+                output_image = (output_image + 1.0) * 0.5  # [-1, 1] -> [0, 1]
+                output_image = torch.cat([torch_linear_to_srgb(output_image[:3, :, :]),  # apply gamma correction
+                                          output_image[3:, :, :]])
+            else:
+                output_image = imageutils.channels_to_rgba(output_image)
+            if output_image.shape[1:] != (self.image_size, self.image_size):
+                # Nearest-neighbour, so that a low-resolution intermediate shows its pixels as they are.
+                output_image = torch.nn.functional.interpolate(output_image.unsqueeze(0),
+                                                               size=(self.image_size, self.image_size),
+                                                               mode="nearest")[0]
 
             # reshape [c, h, w] -> [h, w, c]
             c, h, w = output_image.shape

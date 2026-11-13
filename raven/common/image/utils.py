@@ -8,7 +8,7 @@ output (e.g. DPG dynamic textures, the server-side avatar postprocessor).
 For image decoding / encoding, see `raven.common.image.codec`.
 """
 
-__all__ = ["ensure_rgba",
+__all__ = ["ensure_rgba", "channels_to_rgba",
            "np_to_tensor", "tensor_to_np", "tensor_to_dpg_flat",
 
            "fit_contain", "fit_cover", "letterbox"]
@@ -62,6 +62,33 @@ def ensure_rgba(image: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Tensor conversions
 # ---------------------------------------------------------------------------
+
+def channels_to_rgba(tensor: torch.Tensor) -> torch.Tensor:
+    """Show a `[c, h, w]` tensor of one to three channels of data — a mask, a flow field — as an opaque RGBA image.
+
+    Each channel is scaled to [0, 1] from its own minimum and maximum, so that whatever range the data is in, its
+    structure shows; a constant channel comes out black. One channel is shown as gray, two as red and green, three as
+    red, green and blue. Returns a `[4, h, w]` tensor in [0, 1], on the input's device.
+
+    Raises `ValueError` for a tensor of any other number of channels.
+    """
+    c, h, w = tensor.shape
+    if not 1 <= c <= 3:
+        raise ValueError(f"channels_to_rgba: expected 1 to 3 channels, got {c}")
+    flat = tensor.reshape(c, -1)
+    low = flat.min(dim=1).values.reshape(c, 1, 1)
+    span = (flat.max(dim=1).values.reshape(c, 1, 1) - low)
+    scaled = torch.where(span > 0, (tensor - low) / torch.where(span > 0, span, 1.0), 0.0)
+    if c == 1:
+        rgb = scaled.expand(3, h, w)
+    else:
+        # TODO: two channels as red and green are hard to tell apart with red-green colour blindness. Blue is the
+        # obvious replacement for one of them, but the eye is less sensitive to blue, so a channel shown in it
+        # would look weaker than the other while carrying the same weight.
+        rgb = torch.cat([scaled, torch.zeros(3 - c, h, w, dtype=scaled.dtype, device=scaled.device)])
+    alpha = torch.ones(1, h, w, dtype=scaled.dtype, device=scaled.device)
+    return torch.cat([rgb, alpha])
+
 
 def np_to_tensor(arr: np.ndarray,
                  device: Union[torch.device, str],

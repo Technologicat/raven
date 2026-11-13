@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from raven.common.image.utils import (
-    ensure_rgba, np_to_tensor, tensor_to_dpg_flat, letterbox,
+    ensure_rgba, channels_to_rgba, np_to_tensor, tensor_to_dpg_flat, letterbox,
 )
 from raven.common.image.lanczos import DEFAULT_ORDER
 
@@ -148,3 +148,30 @@ class TestLetterbox:
         t = torch.ones(1, 4, 50, 200, device=device)
         with pytest.raises(ValueError):
             letterbox(t, 64, order=DEFAULT_ORDER, bg_value=(0.0, 0.0, 0.0))
+
+
+class TestChannelsToRGBA:
+    def test_one_channel_is_gray_scaled_from_its_own_range(self):
+        mask = torch.tensor([[[2.0, 4.0], [6.0, 2.0]]])  # [1, 2, 2], in no particular range
+        out = channels_to_rgba(mask)
+        assert out.shape == (4, 2, 2)
+        assert torch.equal(out[0], out[1]) and torch.equal(out[1], out[2]), "gray: the same in R, G and B"
+        assert out[0].min() == 0.0 and out[0].max() == 1.0
+        assert out[0, 0, 1] == pytest.approx(0.5)
+        assert torch.all(out[3] == 1.0), "opaque"
+
+    def test_two_channels_are_red_and_green_each_from_its_own_range(self):
+        flow = torch.stack([torch.tensor([[-1.0, 1.0]]), torch.tensor([[10.0, 30.0]])])  # [2, 1, 2]
+        out = channels_to_rgba(flow)
+        assert out[0].tolist() == [[0.0, 1.0]]
+        assert out[1].tolist() == [[0.0, 1.0]], "scaled from its own range, not the first channel's"
+        assert torch.all(out[2] == 0.0), "no blue"
+
+    def test_a_constant_channel_comes_out_black(self):
+        out = channels_to_rgba(torch.full((1, 3, 3), 7.0))
+        assert torch.all(out[:3] == 0.0)
+        assert torch.all(torch.isfinite(out))
+
+    def test_other_channel_counts_are_refused(self):
+        with pytest.raises(ValueError, match="4"):
+            channels_to_rgba(torch.zeros(4, 2, 2))

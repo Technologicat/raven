@@ -231,6 +231,12 @@
   - Bold and italic, from LaTeX or HTML, now arrive as Markdown (`**bold**`, `*italic*`) rather than as `*bold*` and `/italic/`, so the LLM stages read them in the notation they know. Super- and subscripts, from either, become Unicode characters when every character in them has one (H₂O, x²), and are otherwise written as `M_{age}`: Unicode's sub- and superscripts are a partial alphabet, and a half-converted `Mₐgₑ` read worse.
 - **An import no longer crashes when the file yields more or fewer records than when it was last imported**, as it does when a parser repair recovers records. The embedding and keyword caches were judged by the file's date alone, and the 2D clustering then failed with an `IndexError`. A cache that does not describe the records now is computed again.
 
+#### Raven-avatar
+
+- **The pose editor's output index shows the poser's intermediate outputs correctly**, and walking through them no longer damages the character's face.
+  - The smaller intermediates fill the view at their own resolution, and those that are data rather than images (masks, flow fields) are shown in gray or in red and green.
+  - Before, they were written into the view at the wrong size, and showing some of them changed a layer the poser keeps between renders, which left the face washed out until the character was loaded again.
+
 #### Raven-pdf2bib
 
 - **An LLM backend failing mid-run no longer writes its error message into the BibTeX as a field.** It used to pass for an answer.
