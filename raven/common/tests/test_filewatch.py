@@ -10,6 +10,7 @@ import pytest
 from raven.common import filewatch
 
 QUIET = 0.1
+FAST = {"quiet_period": QUIET, "observer_timeout": QUIET}  # the observer's default second, on Windows, per event and per stop
 TIMEOUT = 10.0  # generous: macOS's FSEvents delivers late, and an absent event costs this much only on failure
 
 
@@ -61,12 +62,12 @@ def symlink_or_skip(link: pathlib.Path, target: pathlib.Path) -> None:
 
 class TestLiveChanges:
     def test_an_in_place_write_is_a_modification(self, docs, recorder):
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             (docs / "a.md").write_text("version two, longer")
             assert recorder.wait_for(("a.md", filewatch.MODIFIED)) == [("a.md", filewatch.MODIFIED)]
 
     def test_a_new_file_is_created_and_a_removed_one_deleted(self, docs, recorder):
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             (docs / "b.md").write_text("new")
             recorder.wait_for(("b.md", filewatch.CREATED))
             (docs / "b.md").unlink()
@@ -77,7 +78,7 @@ class TestLiveChanges:
     def test_a_save_by_rename_is_a_modification_of_the_original_only(self, docs, recorder, temporary_name):
         # The temporary file exists for a moment under a name `accept` may well take (the second case keeps
         # the extension), and is renamed away within the quiet period; only the original's change is real.
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             temporary = docs / temporary_name
             temporary.write_text("version two, longer")
             os.replace(temporary, docs / "a.md")
@@ -86,14 +87,14 @@ class TestLiveChanges:
     def test_a_backup_then_a_new_file_is_a_modification(self, docs, recorder):
         # The original renamed to a backup, then written afresh: Emacs' default way to save.
         accept = lambda path: path.suffix == ".md"  # noqa: E731 -- a one-line filter, named for the call below
-        with filewatch.watching(docs, on_changed=recorder, accept=accept, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, accept=accept, **FAST):
             os.replace(docs / "a.md", docs / "a.md~")
             (docs / "a.md").write_text("version two, longer")
             assert recorder.wait_for(("a.md", filewatch.MODIFIED)) == [("a.md", filewatch.MODIFIED)]
 
     def test_files_accept_turns_away_are_never_reported(self, docs, recorder):
         accept = lambda path: path.suffix == ".md"  # noqa: E731 -- as above
-        with filewatch.watching(docs, on_changed=recorder, accept=accept, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, accept=accept, **FAST):
             (docs / "notes.txt").write_text("not ours")
             (docs / "b.md").write_text("ours")
             assert recorder.wait_for(("b.md", filewatch.CREATED)) == [("b.md", filewatch.CREATED)]
@@ -110,12 +111,12 @@ class TestSymlinks:
         return target
 
     def test_editing_the_target_in_place_modifies_the_link(self, docs, recorder, linked):
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             linked.write_text("version two, longer")
             assert recorder.wait_for(("link.md", filewatch.MODIFIED)) == [("link.md", filewatch.MODIFIED)]
 
     def test_replacing_the_target_by_rename_modifies_the_link(self, docs, recorder, linked):
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             temporary = linked.parent / "tmpq8"
             temporary.write_text("version two, longer")
             os.replace(temporary, linked)
@@ -123,7 +124,7 @@ class TestSymlinks:
 
     def test_a_link_to_a_file_beside_it_follows_that_file(self, docs, recorder):
         symlink_or_skip(docs / "alias.md", docs / "a.md")
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             (docs / "a.md").write_text("version two, longer")
             seen = recorder.wait_for(("alias.md", filewatch.MODIFIED))
             assert sorted(seen) == [("a.md", filewatch.MODIFIED), ("alias.md", filewatch.MODIFIED)]
@@ -131,7 +132,7 @@ class TestSymlinks:
     def test_a_link_made_while_watching_is_followed_from_then_on(self, docs, recorder, tmp_path):
         target = tmp_path / "later.md"
         target.write_text("version one")
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, **FAST):
             symlink_or_skip(docs / "later.md", target)
             recorder.wait_for(("later.md", filewatch.CREATED))
             target.write_text("version two, longer")
@@ -143,7 +144,7 @@ class TestSymlinks:
         # relative, so they do not depend on which spelling of the directory an event used.
         slot = tmp_path / "slot"
         symlink_or_skip(slot, docs)
-        with filewatch.watching(slot, on_changed=recorder, quiet_period=QUIET):
+        with filewatch.watching(slot, on_changed=recorder, **FAST):
             (docs / "a.md").write_text("version two, longer")
             assert recorder.wait_for(("a.md", filewatch.MODIFIED)) == [("a.md", filewatch.MODIFIED)]
 
@@ -156,7 +157,7 @@ class TestRecursive:
         outside.mkdir()
         (outside / "one.md").write_text("1")
         (outside / "two.md").write_text("2")
-        with filewatch.watching(docs, on_changed=recorder, recursive=True, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, **FAST):
             os.replace(outside, docs / "batch")
             seen = recorder.wait_for(("batch/two.md", filewatch.CREATED))
             assert sorted(seen) == [("batch/one.md", filewatch.CREATED), ("batch/two.md", filewatch.CREATED)]
@@ -164,13 +165,13 @@ class TestRecursive:
     def test_a_directory_moved_out_takes_its_files(self, docs, recorder, tmp_path):
         (docs / "batch").mkdir()
         (docs / "batch" / "one.md").write_text("1")
-        with filewatch.watching(docs, on_changed=recorder, recursive=True, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=recorder, recursive=True, **FAST):
             os.replace(docs / "batch", tmp_path / "gone")
             assert recorder.wait_for(("batch/one.md", filewatch.DELETED)) == [("batch/one.md", filewatch.DELETED)]
 
     def test_without_recursive_a_subdirectory_is_ignored(self, docs, recorder):
         (docs / "sub").mkdir()
-        with filewatch.watching(docs, on_changed=recorder, quiet_period=QUIET) as watcher:
+        with filewatch.watching(docs, on_changed=recorder, **FAST) as watcher:
             (docs / "sub" / "deep.md").write_text("not followed")
             (docs / "b.md").write_text("followed")
             assert recorder.wait_for(("b.md", filewatch.CREATED)) == [("b.md", filewatch.CREATED)]
@@ -185,7 +186,7 @@ class TestOfflineChanges:
         known = {"a.md": (0.0, 1),          # a different signature: modified
                  "b.md": unchanged,          # the same: nothing
                  "gone.md": (0.0, 1)}        # absent now: deleted
-        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, quiet_period=QUIET)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, **FAST)
         watcher.start(known=known)
         try:
             # Reported before `start` returned, on this thread, so nothing needs waiting for.
@@ -201,13 +202,13 @@ class TestOfflineChanges:
         # A file restored from a backup goes back in time; "mtime increased" would miss it.
         current = filewatch.signature_of(docs / "a.md")
         known = {"a.md": (current[0] + 3600.0, current[1])}
-        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, quiet_period=QUIET)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, **FAST)
         watcher.start(known=known)
         watcher.stop()
         assert recorder.events.get_nowait() == ("a.md", filewatch.MODIFIED)
 
     def test_without_known_nothing_is_reported_at_start(self, docs, recorder):
-        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, quiet_period=QUIET)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, **FAST)
         watcher.start()
         watcher.stop()
         assert recorder.events.empty()
@@ -216,7 +217,7 @@ class TestOfflineChanges:
 
 class TestLifecycle:
     def test_nothing_is_reported_after_stop(self, docs, recorder):
-        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, quiet_period=QUIET)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=recorder, **FAST)
         watcher.start()
         (docs / "a.md").write_text("version two, longer")
         recorder.wait_for(("a.md", filewatch.MODIFIED))  # the apparatus reports while running...
@@ -232,7 +233,7 @@ class TestLifecycle:
         def stop_on_first(relative_path, kind):
             watcher.stop()  # from the watcher's own thread: must not wait for itself
             stopped.append(kind)
-        watcher = filewatch.DirectoryWatcher(docs, on_changed=stop_on_first, quiet_period=QUIET)
+        watcher = filewatch.DirectoryWatcher(docs, on_changed=stop_on_first, **FAST)
         watcher.start()
         (docs / "a.md").write_text("version two, longer")
         deadline = time.monotonic() + TIMEOUT
@@ -245,7 +246,7 @@ class TestLifecycle:
         def flaky(relative_path, kind):
             recorder(relative_path, kind)
             raise RuntimeError("a handler with a bug")
-        with filewatch.watching(docs, on_changed=flaky, quiet_period=QUIET):
+        with filewatch.watching(docs, on_changed=flaky, **FAST):
             (docs / "a.md").write_text("version two, longer")
             recorder.wait_for(("a.md", filewatch.MODIFIED))
             (docs / "b.md").write_text("still watching")

@@ -68,6 +68,10 @@ class DirectoryWatcher:
 
     `max_delay`: the most seconds a pending change waits, however busy the directory is.
 
+    `observer_timeout`: watchdog's own polling interval, in seconds. Its Windows backend delivers events only
+                        after this long without new ones, and stopping waits up to this long, so a smaller
+                        value is faster there at the price of more idle wakeups. Other backends barely notice.
+
     A file is modified when its mtime or size differs from the last one seen, either way: a file restored
     from a backup, with an older mtime, is a modification too.
     """
@@ -84,13 +88,15 @@ class DirectoryWatcher:
                  accept: Callable[[pathlib.Path], bool] | None = None,
                  recursive: bool = False,
                  quiet_period: float = 0.3,
-                 max_delay: float = 5.0) -> None:
+                 max_delay: float = 5.0,
+                 observer_timeout: float = 1.0) -> None:
         self.directory = common_utils.canonical_path(directory)  # not symlink-resolved: the name we were given
         self.on_changed = on_changed
         self.accept = accept if accept is not None else (lambda path: True)
         self.recursive = recursive
         self.quiet_period = quiet_period
         self.max_delay = max_delay
+        self.observer_timeout = observer_timeout
 
         self._resolved_directory = self.directory.resolve()  # where events can also arrive from
         self._lock = threading.Lock()
@@ -123,7 +129,7 @@ class DirectoryWatcher:
             raise RuntimeError("DirectoryWatcher.start: already started")
         self._resolved_directory = self.directory.resolve()
         handler = _Handler(self)
-        observer = watchdog.observers.Observer()
+        observer = watchdog.observers.Observer(timeout=self.observer_timeout)
         # The resolved directory, because watchdog's inotify backend does not follow a symlinked watch path,
         # and reports nothing at all for it. Resolved here, at start, so a link repointed later is not followed.
         observer.schedule(handler, path=str(self._resolved_directory), recursive=self.recursive)
