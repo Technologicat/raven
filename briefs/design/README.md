@@ -23,6 +23,10 @@ anything in one as settled.
   the console for what a screen and a pointer do better. Most of the machinery already exists, which is the
   surprising part.
 
+- **[`papers-infographic-sketch.md`](papers-infographic-sketch.md)** — an executive-summary graphic of
+  `raven.papers`: what the tools do, why, and where they sit in a researcher's workflow. The content and three
+  ways to draw it; audience, format and numbers open.
+
 - **[`constellation-architecture-sketch.md`](constellation-architecture-sketch.md)** — how Raven's parts talk
   to each other, and where the division-of-concerns lines fall. Opened because phone uploads and the
   Visualizer↔Librarian handoff turned out to need the same missing thing. The first two are blocked on it in

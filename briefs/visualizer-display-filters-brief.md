@@ -1,7 +1,8 @@
 # Brief: the Visualizer's display filters, starting with cluster purity
 
-*Status: decided 2026-11-11. Steps 1–3 built and their layout tuned the same day; step 4 next. Date filtering
-and recolouring are later work that reuses the layer from step 3.*
+*Status: decided 2026-11-11. Steps 1–3 built and their layout tuned the same day. Step 4's display half built
+2026-11-13 (4a below); its interaction half (4b) is next, then the shared pill (5). Date filtering and recolouring
+are later work that reuses the layer from step 3.*
 
 The Visualizer is an interactive view on the data, so the user should be able to set aside what they take to be
 noise, and later filter and recolour by other criteria (date, first author). This brief scopes the layer that
@@ -36,8 +37,21 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
      column): the short readout on the left, "Purity cutoff for Misc" and the slider flush right, and what both
      mean in the slider's tooltip, a control being what a reader hovers. The tooltip's cluster headers carry
      each cluster's purity, as the info panel's do.
-4. **Visibility: gray out or hide.** Each record is shown normally, grayed, or hidden. First use: a checkbox to
-   gray out or hide Misc.
+4. **Visibility: gray out or hide.** Each record is shown normally, grayed, or hidden. Two halves, a commit and a
+   look in the running app each:
+   - **4a, the display (built 2026-11-13).** `displaystate` carries a visibility per record. A Misc selector in the
+     row (a combo, *shown / grayed / hidden*, with F4 / Shift+F4 and Ctrl+M as Raven's combos have) grays out or
+     hides Misc, clusters below the purity cutoff included. Grayed records are one gray series created first, so
+     beneath everything in colour. The pill and the plot title say how many records are in focus (grayed) or on
+     screen (hidden), and the pill's click is Show all.
+   - **4b, the interaction (next).** Out of hover, brush and lasso, "select this cluster" and the info panel:
+     hidden records always, grayed ones unless a *grayed points selectable* checkbox is on, shown in the row only
+     while something is grayed. Graying or hiding records that are selected drops them from the selection as one
+     undoable step. Search counts what it cannot show, as *"7 matches, 3 hidden"*. About five sites across three
+     modules (the hover lookup, the selection tools, search), each with a test.
+5. **A shared pill widget, in `raven.common.gui`** (maintainer, 2026-11-13): after the Visualizer's pill, built
+   first to learn the shape of the common surface. Librarian's three status pills are app code too and would move
+   onto it.
 
 ## The rules
 
