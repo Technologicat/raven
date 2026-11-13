@@ -13,9 +13,9 @@ __all__ = ["OUTPUTS", "output_labels",
 import numpy as np
 import torch
 
+from ...common.image import colorspace
 from ...common.image import utils as imageutils
 from ...common.video import compositor
-from ...vendor.tha3.util import torch_linear_to_srgb
 
 
 #: What THA3's poser outputs are, in order: `(network, output)`. The poser returns the outputs of its five networks
@@ -79,7 +79,7 @@ def to_display_image(output: torch.Tensor, size: int) -> torch.Tensor:
     # in place would change what every later render composes the face from.
     if output.shape[0] == 4:
         image = (output + 1.0) * 0.5  # [-1, 1] -> [0, 1]
-        image = torch.cat([torch_linear_to_srgb(image[:3, :, :]), image[3:, :, :]])  # gamma correction, alpha as is
+        image = torch.cat([colorspace.linear_to_srgb(image[:3, :, :]), image[3:, :, :]])  # gamma correction, alpha as is
     else:
         image = imageutils.channels_to_rgba(output)
     if image.shape[1:] != (size, size):
