@@ -26,6 +26,7 @@
     - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
 - [Limitations](#limitations)
 - [Inside the poser: what the output indices show](#inside-the-poser-what-the-output-indices-show)
+- [Lipsync: how the mouth follows the speech](#lipsync-how-the-mouth-follows-the-speech)
 - [Codebase structure](#codebase-structure)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -476,6 +477,39 @@ The poser returns the networks' outputs in a fixed order, which is the same for 
 | 26 | eyebrow decomposer | background layer |
 | 27 | eyebrow decomposer | background layer alpha |
 | 28 | eyebrow decomposer | background layer color change |
+
+# Lipsync: how the mouth follows the speech
+
+This section describes the whole path, from text to a moving mouth, precisely enough to reimplement on another client. Raven's own client does it in Python; everything it sends and receives goes over Raven-server's web API, so another client can do the same.
+
+**1. Synthesize the speech, with timings.** `POST /api/tts/speak` with `"get_metadata": true` returns the audio as the response body, and the timing of each word in the custom header `x-word-timestamps`: a JSON list of `{"word", "phonemes", "start_time", "end_time"}`, the times in seconds from the start of the audio, `word` and `phonemes` URL-encoded (percent-escaped UTF-8). The phonemes are a string of IPA characters, stress marks included, such as `ɹˈizənəbli`. The timings are available in English only. The endpoint's docstring in [`raven.server.app`](../server/app.py) has the full input format.
+
+**2. Split each word's time between its phonemes.** Each character of `phonemes` gets an equal share of its word's time span, in order. A word with no phonemes, or without both timestamps, is skipped. This is `build_phoneme_stream` in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py), which is engine-neutral and small enough to port as it is.
+
+**3. Map each phoneme to a mouth shape.** The table `phoneme_to_morph`, in [`raven.client.tts`](../client/tts.py), maps each phoneme to one of six mouth morphs (`mouth_aaa_index`, `mouth_eee_index`, `mouth_iii_index`, `mouth_ooo_index`, `mouth_uuu_index`, `mouth_delta`) or to one of three commands:
+
+- `!close_mouth`: close the mouth (*b*, *p* and *m*, which are said with closed lips).
+- `!keep`: leave the mouth as it is (stress marks, the vowel extender, commas and other pausing punctuation).
+- `!maybe_close_mouth`: close the mouth if this slot lasts at least half a second, else as `!keep` (sentence-ending punctuation).
+
+A phoneme missing from the table is dropped, leaving a gap in the timeline, which also leaves the mouth as it is.
+
+**4. Play the audio, and follow it with a clock.** About every 10 ms, read the playback position, subtract the *video offset*, look up the phoneme slot at that time (a binary search on the start times; `phoneme_at` in the same module), and act on it:
+
+- **A mouth morph:** set it to 1 and the other five to 0.
+- **`!close_mouth`**, or **`!maybe_close_mouth`** on a long enough pause: set all six to 0.
+- **`!keep`**, or a gap: send nothing.
+- **Before the first phoneme:** send nothing. **After the last one**, while the audio still plays out: set all six to 0.
+
+The video offset, in seconds, compensates for the avatar's video arriving later than the audio: positive values shift the video later with respect to the audio, negative ones earlier. Raven-librarian's default is −0.8 s, and the right value depends on the setup.
+
+**5. Send the mouth to the server.** `POST /api/avatar/modify_overrides` with `{"instance_id": ..., "action": "set", "overrides": {"mouth_aaa_index": 1.0, "mouth_eee_index": 0.0, ...}}`, all six mouth morphs listed. This replaces those morphs' values in the animator's *target* pose; the animator then moves the current pose toward the target on every frame, so the server smooths the mouth's movement and the client can send plain 0s and 1s. Raven's client sends this on every tick that calls for it, as each call says "the mouth is like this now"; sending it only when the shape changes gives the same result with fewer requests.
+
+**6. When the speech ends, give the mouth back.** `POST /api/avatar/modify_overrides` with `"action": "unset"` and the six mouth morphs (the values are ignored) removes the overrides, and the animator's own mouth animation takes over again. Raven's client does this however playback ended, error included.
+
+`modify_overrides` touches only the morphs it lists, so other parts of a client can override other morphs or cels at the same time. Its sibling `set_overrides` replaces all overrides at once. The server's `/api/avatar/start_talking` is a different thing: a mouth that opens and closes at random, following no timings.
+
+The pieces, in Raven's own code: the timing math and the tick loop in [`raven.common.audio.speech.lipsync`](../common/audio/speech/lipsync.py); the avatar-specific part (the table, the tick callback, the cleanup) in `play_encoded_with_avatar_lipsync` in [`raven.client.tts`](../client/tts.py); how the server applies an override in `modify_overrides` and `render_animation_frame`, in [`raven.server.modules.avatar`](../server/modules/avatar.py).
 
 # Codebase structure
 
