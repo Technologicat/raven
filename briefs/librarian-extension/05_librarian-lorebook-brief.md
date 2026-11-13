@@ -52,18 +52,40 @@ would be knowledge left on the floor. So this clears the bar the project already
   text stays in the scan window, so a new term fires at the next user message; an edit followed directly by a
   reroll answers without the definition. "Save as a new branch" makes a fresh node, and that path scans.
 
-**To discuss before building** (listed 2026-11-12; the build follows the skills work, which landed that day):
+**Settled before building (maintainer, 2026-11-13). These win over the sections below as well.**
 
-1. **How far the assembler's first version goes.** The lorebook alone emitting candidates, or the clock and the
-   document search moved onto candidate records and a shared budget in the same pass. The second touches every
-   turn's prompt assembly.
-2. **Where entries come from.** The configured path the glossary is read from, the folder for single-entry
-   files, and the default header level.
-3. **The tool.** Its name (working name `look_up_term`), and what it answers for a near miss as against an
-   unknown term. The maintainer leans towards DWIM here (2026-11-12): offer the best candidates by edit distance.
-4. **The numbers.** Scan window, per-firing budget, per-chat cap and recursion depth, from proposed defaults.
-5. **The GUI and scripts.** A toggle in a row of toggles that is already full, a reload notice, and whether
-   scripts have the lorebook off by default, as they do MCP and skills.
+- **No assembler work in this build.** A definition is stored on the branch by `user_turn`, so the lorebook
+  never passes through `data_injects` and has no per-turn candidate to emit. What it shares with the clock and
+  the document search is `scaffold._synthetic_tool_exchange`, which becomes public for it. The candidate-record
+  interface moves to the Hindsight brief, where the first second ephemeral source arrives.
+- **One folder, `lorebook_dir`** (`librarian_userdata_dir / "lorebook"`, beside `skills_dir`). Every `.md` in it
+  is a source; the glossary is symlinked in, so there is no separate glossary-path setting. How a file splits:
+  - **A header whose section holds nothing before its first subheader** (whitespace and horizontal rules aside)
+    **is a grouping, not an entry.** The glossary's letter sections are groupings.
+  - **Of the h1s that are not groupings: exactly one is the collection title, and the h2s are the entries;
+    several are themselves the entries**, deeper headers then being body.
+  - **No headers:** one entry, titled by the filename.
+  - **A per-file override of the entry level** in config is the escape hatch for files this misreads. The rule
+    was checked against the glossary only.
+- **The watcher is event-driven** (`watchdog`), never polling. A shared component in `raven.common` reports
+  "this file changed" and handles moves (editors that save by writing a temp file and renaming it) and symlink
+  targets internally, the latter by watching each target's own directory. HybridIR moves onto it first, which
+  also gives it the `on_moved` it lacks; then the skills library, retiring its polling; then the lorebook.
+- **The name is *Lorebook*, and the tool `lorebook_lookup`**: the genre's term, which users of other frontends
+  already know. Its description says it holds only the terms the user has defined.
+- **A near miss in an explicit `lorebook_lookup` call is answered DWIM**: one candidate clearly ahead by edit
+  distance → its entry under its own title; otherwise the closest titles; nothing close → the term is not
+  defined there. The automatic trigger stays exact. The margin is calibrated on the real glossary.
+- **The numbers are config in `librarian/config.py`**, tunable through `overrides.json`. Starting values, from
+  the glossary (90 entries, median ~300 tokens, longest ~650, median one cross-reference): scan window the new
+  user message plus the 4 messages before it, per-firing budget 2,000 tokens, per-chat cap 8,000, recursion
+  depth 2.
+- **No GUI toggle in v0**: the lorebook is on whenever the folder has entries, like the clock. A toggle comes
+  with the system-prompt visibility toggle. A change on disk updates the tool's token-cost tooltip through
+  `on_changed`, as the skills library does.
+- **Scripts have it off by default**: `agent.turn(..., lorebook_enabled=False)`, mirroring `skills_enabled`.
+- **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
+  old text; documented, not fixed.
 
 ---
 
@@ -242,6 +264,10 @@ originating one. Which is itself rather on-theme.
 
 ## Context assembler (cross-cutting — bigger than the lorebook, but the lorebook must respect it)
 
+**Superseded for this build (2026-11-13):** the lorebook stores its definitions on the branch, so it emits
+no per-turn candidates and does not touch the assembler. The section stays as input to the Hindsight brief,
+which now owns the candidate-record interface as well as the ranking.
+
 This section is not a lorebook feature; it's the shared layer the lorebook must be *built as a
 client of*, so it's not retrofitted later. It's the real form of "factor, don't fork."
 
@@ -288,9 +314,9 @@ source competes for budget. Two briefs, one assembler, clean seam.
 ## Relationship to the other briefs
 
 Independent of the LM Studio compat work and the MCP client. Touches the same token-budget
-calibration (shared, not duplicated). Unlike MCP (external tools) and webfetch (a native tool),
-the lorebook is a *context-construction* feature — it shapes the prompt, it isn't a tool the
-model calls. Different layer entirely.
+calibration (shared, not duplicated). The lorebook is mainly a *context-construction* feature: it
+shapes the branch before the model is called. It also offers `lorebook_lookup`, which its stored
+definitions are staged as calls to, and which the model can call itself.
 
 Note: the LM Studio plugin (below) is a *second frontend* for the same lorebook, not an optional
 extra — Juha runs both Librarian and LM Studio standalone, so the lorebook missing from either
@@ -352,6 +378,8 @@ Scope and constraints:
 - Recursive triggering works and terminates on the glossary's cycles (visited-set; no double
   injection, no runaway).
 - Scanning covers user, assistant, and tool-response messages.
-- The injection path is shared with HybridIR, not a second parallel mechanism.
+- Definitions reach the model through `_synthetic_tool_exchange`, the path the clock and the document
+  search use, not through a second mechanism.
+- Saving an entry by temp file and rename, and editing the target of a symlinked source, both take effect.
 - The LM Studio plugin, on the same source files, produces equivalent injection to the native
   lorebook (same triggers fire, recursion included).
