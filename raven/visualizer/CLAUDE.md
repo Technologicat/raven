@@ -16,7 +16,7 @@ config.py         (~330)  — Configuration-as-code (import settings, models, GU
                             stopword lists are `raven.common.text.stopwords`.
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
-plotter.py        (~460)  — the scatter plot: dataset loading, plotter-space queries, the select brush,
+plotter.py        (~490)  — the scatter plot: dataset loading, plotter-space queries, the select brush,
                             refilling the series when the display state changes
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
@@ -26,8 +26,9 @@ search.py         (~150)  — the title scan, and the three GUI elements reporti
 importer_cli.py   (~140)  — `raven-importer` entry point
 llmclustering.py  (~240)  — `clustering_method = "llm"`: one LLM call groups a small corpus into named themes, laid
                             out as circles on a maximin Latin square
-displaystate.py    (~58)  — the label each record is shown with (`current_label_id`), as distinct from
-                            the importer's `cluster_id`; the purity cutoff. No DPG
+displaystate.py   (~120)  — what each record is shown as: its label (`current_label_id`), as distinct from
+                            the importer's `cluster_id`, and its visibility; the purity cutoff and the
+                            Misc mode. No DPG
 savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side), as JSON
 app_state.py       (~62)  — top-level app state containers
 ```
