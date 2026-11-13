@@ -54,11 +54,63 @@ class TestRelabelByPurity:
         assert [e.current_label_id for e in entries] == [0, 1]
 
 
+class TestMiscMode:
+    def test_misc_is_shown_as_the_mode_says_and_everything_else_in_full(self):
+        entries = entries_of(0, -1, 1, -1)
+        assert displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        assert [e.visibility for e in entries] == ["shown", "grayed", "shown", "grayed"]
+
+    def test_a_cluster_moved_to_misc_by_purity_goes_with_misc(self):
+        entries = entries_of(0, 1, -1)
+        displaystate.relabel_by_purity(entries, [0.9, 0.1], 0.5)
+        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
+        assert [e.visibility for e in entries] == ["shown", "hidden", "hidden"]
+
+    def test_showing_misc_again_restores_it(self):
+        entries = entries_of(0, -1)
+        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
+        assert displaystate.apply_misc_mode(entries, displaystate.SHOWN)
+        assert [e.visibility for e in entries] == ["shown", "shown"]
+        assert not displaystate.apply_misc_mode(entries, displaystate.SHOWN), "nothing changed, and it said so"
+
+    def test_an_unknown_mode_is_refused_by_name(self):
+        import pytest
+        with pytest.raises(ValueError, match="sideways"):
+            displaystate.apply_misc_mode(entries_of(0), "sideways")
+
+
+class TestSummary:
+    def test_with_everything_shown_there_is_nothing_to_say(self):
+        assert displaystate.summary(entries_of(0, -1)) is None
+
+    def test_grayed_records_are_still_on_screen_so_the_count_is_of_those_in_focus(self):
+        entries = entries_of(*([0] * 1422 + [-1] * 610))
+        displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        assert displaystate.summary(entries) == "1,422 of 2,032 in focus"
+
+    def test_hidden_records_are_not_shown_so_the_count_is_of_those_on_screen(self):
+        entries = entries_of(*([0] * 1422 + [-1] * 610))
+        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
+        assert displaystate.summary(entries) == "Showing 1,422 of 2,032"
+
+    def test_grayed_and_hidden_together_give_both_counts(self):
+        entries = entries_of(0, 0, -1, 1)
+        entries[2].visibility = displaystate.HIDDEN
+        entries[3].visibility = displaystate.GRAYED
+        assert displaystate.summary(entries) == "Showing 3 of 4, 2 in focus"
+
+
 class TestPointsByLabel:
     def test_records_are_grouped_by_the_label_shown_keeping_their_indices(self):
         entries = entries_of(0, 1, 0, 1, -1)
         displaystate.relabel_by_purity(entries, [0.9, 0.1], 0.5)
         assert displaystate.points_by_label(entries) == {0: [0, 2], -1: [1, 3, 4]}
+
+    def test_grayed_and_hidden_records_are_in_no_colour_series(self):
+        entries = entries_of(0, -1, 0, -1)
+        displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        assert displaystate.points_by_label(entries) == {0: [0, 2]}
+        assert displaystate.points_with_visibility(entries, displaystate.GRAYED) == [1, 3]
 
 
 class TestTheInfoPanelAndTooltipGroupByTheLabelShown:

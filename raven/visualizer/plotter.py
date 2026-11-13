@@ -16,7 +16,8 @@ Module-local state (the list of dynamically-created cluster-colour themes) stays
 encapsulated here; external cleanup goes through `clear_cluster_color_themes`.
 """
 
-__all__ = ["get_visible_datapoints",
+__all__ = ["GRAYED_SERIES", "GRAYED_COLOR",
+           "get_visible_datapoints",
            "get_data_idxs_at_mouse",
            "compute_highlight_alpha",
            "brush_outline_points",
@@ -58,6 +59,10 @@ gui_config = visualizer_config.gui_config
 
 # --------------------------------------------------------------------------------
 # Module-local state
+
+#: The tag of the series that draws grayed-out records, and its colour: neutral, and translucent like the others.
+GRAYED_SERIES = "my_scatter_series_grayed"  # tag
+GRAYED_COLOR = (128, 128, 128, 70)
 
 _cluster_color_themes = []  # DPG theme IDs of the per-cluster scatter-series colour themes; populated by `load_dataset`, consumed by `clear_cluster_color_themes`
 
@@ -379,6 +384,15 @@ def load_dataset(ds):
             datas.insert(0, (-1, [], []))
         ds.series_labels = [label for label, _, _ in datas]  # for `refresh_series`
 
+        # The grayed-out records, in one gray series, created first: series are drawn in the order they sit under
+        # the axis, so this one goes beneath everything in colour. Empty until a display filter grays something.
+        dpg.add_scatter_series([], [], tag=GRAYED_SERIES, parent="axis1", before="my_mouse_hover_scatter_series")
+        with dpg.theme(tag="my_plot_theme_grayed") as grayed_theme:
+            with dpg.theme_component(dpg.mvScatterSeries):
+                dpg.add_theme_color(dpg.mvPlotCol_Line, GRAYED_COLOR, category=dpg.mvThemeCat_Plots)
+        dpg.bind_item_theme(GRAYED_SERIES, grayed_theme)
+        _cluster_color_themes.append(grayed_theme)
+
         max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
             series_tag = f"my_scatter_series_{label}"  # tag
@@ -401,30 +415,43 @@ def load_dataset(ds):
             dpg.bind_item_theme(series_tag, series_theme)
             _cluster_color_themes.append(this_scatterplot_theme)
 
-        dpg.set_item_label("plot", f"Semantic map [{os.path.basename(ds.absolute_filename)}]")  # tag
+        ds.plot_label = f"Semantic map [{os.path.basename(ds.absolute_filename)}]"
+        dpg.set_item_label("plot", ds.plot_label)  # tag
+
+        # The display filters start from showing everything, as `displaystate.init` left the records. The purity
+        # readout and its slider need the purity the importer stores, so a dataset without it shows only the rest.
+        dpg.set_value("purity_cutoff_slider", 0)  # tag
+        dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
+        dpg.hide_item("filters_pill")  # tag
         maybe_purity_text = entry_renderer.format_dataset_purity(ds.file_content)
+        for item in ("dataset_purity_text", "purity_cutoff_controls"):  # tag
+            (dpg.show_item if maybe_purity_text is not None else dpg.hide_item)(item)
         if maybe_purity_text is not None:
             dpg.set_value("dataset_purity_text", maybe_purity_text)  # tag
-            dpg.set_value("purity_cutoff_slider", 0)  # tag  # every record under its own cluster, as `displaystate.init` left them
-            dpg.show_item("display_filters_group")  # tag
-        else:
-            dpg.hide_item("display_filters_group")  # tag
+        dpg.show_item("display_filters_group")  # tag
         reset_zoom()
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 
 def refresh_series(ds) -> None:
-    """Refill the scatter series of `ds` from each record's `current_label_id` (see `raven.visualizer.displaystate`).
+    """Refill the scatter series of `ds` from each record's `current_label_id` and `visibility` (see
+    `raven.visualizer.displaystate`), and put what is not in full colour into the plot's title.
 
-    The series are the ones `load_dataset` made, one per label the importer found plus Misc; a series whose label no
-    record currently has is emptied. The records' order, and so every `data_idx`, is untouched.
+    The series are the ones `load_dataset` made: one per label the importer found, plus Misc, plus one gray series for
+    the grayed records. A series whose label no shown record currently has is emptied, and hidden records are in none.
+    The records' order, and so every `data_idx`, is untouched.
     """
+    def points(idxs):
+        if not idxs:
+            return [[], []]
+        return [list(ds.sorted_lowdim_data[idxs, 0]), list(ds.sorted_lowdim_data[idxs, 1])]
+
     groups = displaystate.points_by_label(ds.sorted_entries)
     for label in ds.series_labels:
-        idxs = groups.get(label, [])
-        xs = list(ds.sorted_lowdim_data[idxs, 0]) if idxs else []
-        ys = list(ds.sorted_lowdim_data[idxs, 1]) if idxs else []
-        dpg.set_value(f"my_scatter_series_{label}", [xs, ys])  # tag
+        dpg.set_value(f"my_scatter_series_{label}", points(groups.get(label, [])))  # tag
+    dpg.set_value(GRAYED_SERIES, points(displaystate.points_with_visibility(ds.sorted_entries, displaystate.GRAYED)))
+    maybe_summary = displaystate.summary(ds.sorted_entries)
+    dpg.set_item_label("plot", ds.plot_label + (f" [{maybe_summary}]" if maybe_summary else ""))  # tag
 
 
 # --------------------------------------------------------------------------------

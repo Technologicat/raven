@@ -340,6 +340,53 @@ def reset_app_state(_update_gui=True):
         dpg.hide_item("display_filters_group")  # tag
 
 
+def apply_display_filters():
+    """Apply the display filters as their controls now stand, and redraw whatever shows the records.
+
+    The purity cutoff first, which decides what is labelled Misc, then how Misc is shown. See
+    `raven.visualizer.displaystate`.
+    """
+    ds = app_state.dataset
+    if ds is None:
+        return
+    relabelled = displaystate.relabel_by_purity(ds.sorted_entries,
+                                                getattr(ds.file_content, "cluster_purities", None),
+                                                dpg.get_value("purity_cutoff_slider") / 100)  # tag
+    restyled = displaystate.apply_misc_mode(ds.sorted_entries, dpg.get_value("misc_mode_combo"))  # tag
+    if not (relabelled or restyled):
+        return
+    plotter.refresh_series(ds)
+    maybe_summary = displaystate.summary(ds.sorted_entries)
+    if maybe_summary is not None:
+        dpg.configure_item("filters_pill_button", label=f"{maybe_summary} · Show all")  # tag
+        if displaystate.visibility_counts(ds.sorted_entries)[displaystate.HIDDEN]:
+            filters_pill_tooltip.text = "Some records are not shown at all. Click to show all of them."
+        else:
+            filters_pill_tooltip.text = "Not every record is shown in full colour. Click to show all of them."
+        dpg.show_item("filters_pill")  # tag
+    else:
+        dpg.hide_item("filters_pill")  # tag
+    info_panel.update()
+    annotation.update(force=True)
+
+
+def cycle_misc_mode(direction: int = 1) -> None:
+    """Show Misc the next way along `displaystate.MISC_MODES` (`direction` 1), or the previous one (-1). Hotkey handler."""
+    if app_state.dataset is None:
+        return
+    modes = displaystate.MISC_MODES
+    current = dpg.get_value("misc_mode_combo")  # tag
+    dpg.set_value("misc_mode_combo", modes[(modes.index(current) + direction) % len(modes)])  # tag
+    apply_display_filters()
+
+
+def show_all():
+    """Undo every display filter at once: the way back to seeing all the data."""
+    dpg.set_value("purity_cutoff_slider", 0)  # tag
+    dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
+    apply_display_filters()
+
+
 def open_file(filename):
     """Load new data into the GUI. Public API."""
     logger.info(f"open_file: Opening file '{filename}'.")
@@ -794,7 +841,7 @@ with timer() as tim:
                     dpg.bind_item_theme("search_field", "search_field_theme")  # tag
 
                 # Readouts about the dataset shown, and the controls that act on them. Above the plot, which fills
-                # the rest of the column. Hidden while nothing in it applies; `plotter.load_dataset` fills it.
+                # the rest of the column. Hidden while no dataset is loaded; `plotter.load_dataset` fills it.
                 # A table, so that the controls sit flush right: the first column stretches, and the second fits
                 # its content.
                 with dpg.table(tag="display_filters_group", header_row=False, show=False,
@@ -803,28 +850,41 @@ with timer() as tim:
                     dpg.add_table_column(width_stretch=True)
                     dpg.add_table_column(width_fixed=True)
                     with dpg.table_row():
-                        dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
                         with dpg.group(horizontal=True):
-
-                            def purity_cutoff_changed(sender, app_data):
-                                """Show the clusters below the chosen purity as Misc, and redraw what shows them."""
-                                ds = app_state.dataset
-                                if ds is None:
-                                    return
-                                if displaystate.relabel_by_purity(ds.sorted_entries,
-                                                                  getattr(ds.file_content, "cluster_purities", None),
-                                                                  app_data / 100):
-                                    plotter.refresh_series(ds)
-                                    info_panel.update()
-                                    annotation.update(force=True)
-                            dpg.add_text("Purity cutoff for Misc", color=(140, 140, 140), tag="purity_cutoff_label_text")
-                            dpg.add_slider_int(tag="purity_cutoff_slider",
-                                               min_value=0,
-                                               max_value=100,
-                                               default_value=0,
-                                               format="%d%%",
-                                               width=160,
-                                               callback=purity_cutoff_changed)
+                            dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
+                            # Says that not every record is in full colour, and is the way back: present exactly while
+                            # a display filter grays or hides something.
+                            with dpg.group(tag="filters_pill", horizontal=True, show=False):
+                                dpg.add_text(fa.ICON_FILTER, tag="filters_pill_icon")
+                                dpg.bind_item_font("filters_pill_icon", app_state.themes_and_fonts.icon_font_solid)  # tag
+                                dpg.add_button(label="", tag="filters_pill_button", callback=lambda: show_all())
+                                with dpg.theme(tag="filters_pill_theme"):
+                                    with dpg.theme_component(dpg.mvAll):
+                                        dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
+                                dpg.bind_item_theme("filters_pill", "filters_pill_theme")  # tag
+                                # Self-sizing, as its text follows whether records are grayed or hidden.
+                                filters_pill_tooltip = gui_tooltip.Tooltip("filters_pill_button", "")  # tag
+                        with dpg.group(horizontal=True):
+                            dpg.add_text("Misc", color=(140, 140, 140), tag="misc_mode_label_text")
+                            dpg.add_combo(items=list(displaystate.MISC_MODES),
+                                          default_value=displaystate.SHOWN,
+                                          tag="misc_mode_combo",
+                                          width=80,
+                                          callback=lambda: apply_display_filters())
+                            with dpg.group(tag="purity_cutoff_controls", horizontal=True):
+                                dpg.add_spacer(width=8)
+                                dpg.add_text("Purity cutoff for Misc", color=(140, 140, 140), tag="purity_cutoff_label_text")
+                                dpg.add_slider_int(tag="purity_cutoff_slider",
+                                                   min_value=0,
+                                                   max_value=100,
+                                                   default_value=0,
+                                                   format="%d%%",
+                                                   width=160,
+                                                   callback=lambda: apply_display_filters())
+                with dpg.tooltip("misc_mode_combo", tag="misc_mode_tooltip"):  # tag
+                    dpg.add_text("How the records in Misc are shown: in colour, grayed out beneath the rest, or hidden.\n"
+                                 "[F4] next, [Shift+F4] previous",
+                                 tag="misc_mode_tooltip_text")
                 # The explanation of both the readout and the cutoff, on the slider: a reader hovers a control, not a label.
                 with dpg.tooltip("purity_cutoff_slider", tag="purity_cutoff_tooltip"):  # tag
                     dpg.add_text(entry_renderer.PURITY_EXPLANATION, tag="purity_cutoff_tooltip_text")
@@ -1000,6 +1060,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # The plotter itself: what it shows, and stepping back through what was selected in it.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
+               env(key_indent=0, key="F4", action_indent=0, action="Show Misc the next way", notes="Shown, grayed, hidden"),
+               env(key_indent=1, key="Shift+F4", action_indent=1, action="Same, but the previous way", notes=""),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
                # The window's layout.
@@ -1436,6 +1498,8 @@ def hotkeys_callback(sender, app_data):
         else:
             if dpg.is_item_enabled("next_search_match_button"):  # tag
                 info_panel.scroll_to_next_search_match()
+    elif key == dpg.mvKey_F4:  # Shift goes backwards, as Shift+F3 does for search matches.
+        cycle_misc_mode(-1 if shift_pressed else 1)
     elif key == dpg.mvKey_F6:  # Use an F-key, because this too has Shift/Ctrl modes.
         info_panel.search_or_select_current_entry()
     elif key == dpg.mvKey_F7:  # Use an F-key, because this too needs selection mode modifiers.

@@ -34,6 +34,7 @@
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
     - [Put the info panel on the right](#put-the-info-panel-on-the-right)
     - [How tight the clusters are, and showing loose ones as Misc](#how-tight-the-clusters-are-and-showing-loose-ones-as-misc)
+    - [Gray out or hide Misc](#gray-out-or-hide-misc)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
 - [Limitations](#limitations)
@@ -455,6 +456,17 @@ The cutoff changes only what is shown. The dataset file is unchanged, and the sl
 
 HDBSCAN finds its clusters on the map itself, so with that method each cluster is one dense region of the map.
 
+
+## Gray out or hide Misc
+
+The **Misc** selector, in the row above the plot, chooses how the records in *Misc* are shown: **shown** in colour, **grayed** out beneath everything else, or **hidden**. **F4** steps to the next choice, and **Shift+F4** back. Clusters that the purity cutoff shows as *Misc* go with it, so the two together let you set aside whatever you take to be noise.
+
+Graying out keeps the shape of the whole collection in view, while hiding leaves only the rest.
+
+**Whenever records are grayed out or hidden, the app says so**: a pill beside the purity line reads, for example, *"1,422 of 2,032 in focus · Show all"* when records are grayed, or *"Showing 1,422 of 2,032"* when some are hidden. The plot's title carries the same count. **Click the pill to show everything again**: it resets the Misc selector and the purity cutoff at once. With everything shown, neither the pill nor the count appears.
+
+Like the purity cutoff, this changes only what is shown, and starts from showing everything whenever a dataset is loaded.
+
 A dataset imported before Raven measured purity shows neither the row nor the cluster purities. Importing it again adds them; the embeddings are cached beside the BibTeX file, so that is quick.
 
 
@@ -510,6 +522,12 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 | Key | Action |
 |---|---|
 | `Ctrl+Shift+P` | Move the info panel to the other side of the window |
+
+### What the plot shows
+
+| Key | Action |
+|---|---|
+| `F4` / `Shift+F4` | Show *Misc* the next / previous way: shown, grayed out, hidden |
 
 ### Datasets and search
 
