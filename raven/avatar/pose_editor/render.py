@@ -53,12 +53,16 @@ OUTPUTS = (("editor", "color changed image"),  # the final image, output 0
 
 
 def output_labels(n: int) -> list[str]:
-    """Labels for the poser's `n` outputs, as `"9: face morpher, eye alpha"`, or bare numbers if `n` is not the count
-    `OUTPUTS` describes (a model these names were not read from). `int(label.split(":")[0])` is the index either way.
+    """Labels for the poser's `n` outputs, as `"9: face morpher, eye alpha"`, output 0 also saying it is the final image.
+
+    Bare numbers if `n` is not the count `OUTPUTS` describes (a model these names were not read from).
+    `int(label.split(":")[0])` is the index either way.
     """
     if n != len(OUTPUTS):
         return [str(i) for i in range(n)]
-    return [f"{i}: {network}, {name}" for i, (network, name) in enumerate(OUTPUTS)]
+    labels = [f"{i}: {network}, {name}" for i, (network, name) in enumerate(OUTPUTS)]
+    labels[0] = f"0: final image ({OUTPUTS[0][0]}, {OUTPUTS[0][1]})"  # what anyone choosing it wants to know
+    return labels
 
 
 def to_display_image(output: torch.Tensor, size: int) -> torch.Tensor:

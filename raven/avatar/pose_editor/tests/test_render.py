@@ -94,6 +94,7 @@ class TestOutputNames:
     def test_labels_name_each_output_and_lead_with_its_index(self):
         labels = render.output_labels(len(render.OUTPUTS))
         assert labels[9] == "9: face morpher, eye alpha"
+        assert labels[0] == "0: final image (editor, color changed image)"
         assert [int(label.split(":")[0]) for label in labels] == list(range(len(render.OUTPUTS)))
 
     def test_a_model_with_another_count_gets_bare_numbers(self):

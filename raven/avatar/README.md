@@ -447,7 +447,7 @@ The poser returns the networks' outputs in a fixed order, which is the same for 
 
 | Index | Network | Output |
 |---|---|---|
-| 0 | editor | color changed image |
+| 0 | editor | color changed image: **the final image** |
 | 1 | editor | color change alpha |
 | 2 | editor | color change image |
 | 3 | editor | warped image |
