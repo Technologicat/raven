@@ -68,9 +68,11 @@ def output_labels(n: int) -> list[str]:
 def to_display_image(output: torch.Tensor, size: int) -> torch.Tensor:
     """One of the poser's outputs, `[c, h, w]`, as an RGBA image of `size` × `size` pixels in [0, 1], sRGB.
 
-    A four-channel output is an image in [-1, 1], linear intensity, and is converted as one. Any other is data, shown
-    through `raven.common.image.utils.channels_to_rgba`. Either is then scaled to `size`, nearest-neighbour, so that
-    a low-resolution intermediate shows its pixels as they are.
+    A four-channel output is an image in [-1, 1], linear intensity, and is converted as one. A two-channel output is a
+    grid change, a signed field, shown through `raven.common.image.utils.signed_channels_to_rgba`: no shift as gray,
+    the horizontal shift in red and the vertical in green. Any other is data, a mask, shown through `channels_to_rgba`.
+    Each is then scaled to `size`, nearest-neighbour, so that a low-resolution intermediate shows its pixels as they
+    are.
 
     Never modifies `output`.
     """
@@ -80,6 +82,8 @@ def to_display_image(output: torch.Tensor, size: int) -> torch.Tensor:
     if output.shape[0] == 4:
         image = (output + 1.0) * 0.5  # [-1, 1] -> [0, 1]
         image = torch.cat([colorspace.linear_to_srgb(image[:3, :, :]), image[3:, :, :]])  # gamma correction, alpha as is
+    elif output.shape[0] == 2:
+        image = imageutils.signed_channels_to_rgba(output)
     else:
         image = imageutils.channels_to_rgba(output)
     if image.shape[1:] != (size, size):

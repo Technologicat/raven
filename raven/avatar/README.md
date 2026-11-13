@@ -439,8 +439,8 @@ THA3 runs five networks in turn, each on its own part of the 512×512 character 
 The outputs come in a few kinds, and the names say which:
 
 - An **image** has four channels, RGBA.
-- An **alpha** is a mask saying where a network's change applies. A **color change** is the image of that change, and the two combine as `color change × alpha + image × (1 − alpha)`. The pose editor shows a single-channel output in gray.
-- A **grid change** is a warping field, two channels saying how far each pixel moves. The pose editor shows it in red and green.
+- An **alpha** is a mask saying where a network's change applies. A **color change** is the image of that change, and the two combine as `color change × alpha + image × (1 − alpha)`. The pose editor shows a single-channel output in gray, scaled from its own smallest value to its largest.
+- A **grid change** is a warping field, in two channels: for each pixel of the output, how far from its own position it reads its colour from in the input, horizontally in channel 0 and vertically in channel 1. It is a *backward* warp, applied by adding it to an identity grid and sampling with PyTorch's [`grid_sample`](https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html), in that function's normalized coordinates, where 1.0 is half the image's width or height. The pose editor shows the horizontal shift in red and the vertical in green, both on one symmetric scale: no shift is mid-gray (127 of 255), and the largest shift in the image, either way, reaches 0 or 255.
 
 The pose editor scales every output to the view's size, pixel for pixel, so a small intermediate shows its own resolution.
 

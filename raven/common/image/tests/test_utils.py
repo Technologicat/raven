@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from raven.common.image.utils import (
-    ensure_rgba, channels_to_rgba, np_to_tensor, tensor_to_dpg_flat, letterbox,
+    ensure_rgba, channels_to_rgba, signed_channels_to_rgba, np_to_tensor, tensor_to_dpg_flat, letterbox,
 )
 from raven.common.image.lanczos import DEFAULT_ORDER
 
@@ -175,3 +175,20 @@ class TestChannelsToRGBA:
     def test_other_channel_counts_are_refused(self):
         with pytest.raises(ValueError, match="4"):
             channels_to_rgba(torch.zeros(4, 2, 2))
+
+
+class TestSignedChannelsToRGBA:
+    def test_zero_is_mid_gray_and_the_largest_magnitude_reaches_the_ends(self):
+        field = torch.tensor([[[0.0, 0.2]], [[-0.1, 0.0]]])  # [2, 1, 2]: x shifts, y shifts
+        out = signed_channels_to_rgba(field)
+        assert out[0].tolist() == [[0.5, 1.0]], "x: no shift at mid-level, the largest at the top"
+        assert out[1].tolist() == [[pytest.approx(0.25), 0.5]], "y: on the same scale as x, not stretched to its own"
+        assert torch.all(out[2] == 0.5) and torch.all(out[3] == 1.0)
+
+    def test_no_displacement_at_all_is_gray(self):
+        out = signed_channels_to_rgba(torch.zeros(2, 2, 2))
+        assert torch.all(out[:3] == 0.5)
+
+    def test_other_channel_counts_are_refused(self):
+        with pytest.raises(ValueError, match="1"):
+            signed_channels_to_rgba(torch.zeros(1, 2, 2))

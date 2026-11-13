@@ -234,7 +234,7 @@
 #### Raven-avatar
 
 - **The pose editor's output index shows the poser's intermediate outputs correctly**, and walking through them no longer damages the character's face.
-  - The smaller intermediates fill the view at their own resolution, and those that are data rather than images (masks, flow fields) are shown in gray or in red and green.
+  - The smaller intermediates fill the view at their own resolution, and those that are data rather than images are shown as such: a mask in gray, and a warping field in red (horizontal) and green (vertical) around a mid-gray that means no shift.
   - Before, they were written into the view at the wrong size, and showing some of them changed a layer the poser keeps between renders, which left the face washed out in later renders.
 - **The pose editor's output index chooser names each output**, such as *"9: face morpher, eye alpha"*, where it showed bare numbers.
   - The avatar README has a new section on what the outputs are, with the whole table.

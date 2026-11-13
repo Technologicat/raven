@@ -8,7 +8,7 @@ output (e.g. DPG dynamic textures, the server-side avatar postprocessor).
 For image decoding / encoding, see `raven.common.image.codec`.
 """
 
-__all__ = ["ensure_rgba", "channels_to_rgba",
+__all__ = ["ensure_rgba", "channels_to_rgba", "signed_channels_to_rgba",
            "np_to_tensor", "tensor_to_np", "tensor_to_dpg_flat",
 
            "fit_contain", "fit_cover", "letterbox"]
@@ -88,6 +88,26 @@ def channels_to_rgba(tensor: torch.Tensor) -> torch.Tensor:
         rgb = torch.cat([scaled, torch.zeros(3 - c, h, w, dtype=scaled.dtype, device=scaled.device)])
     alpha = torch.ones(1, h, w, dtype=scaled.dtype, device=scaled.device)
     return torch.cat([rgb, alpha])
+
+
+def signed_channels_to_rgba(tensor: torch.Tensor) -> torch.Tensor:
+    """Show a `[2, h, w]` tensor of signed values centred on zero — a displacement field — as an opaque RGBA image.
+
+    Channel 0 is red and channel 1 green, on one shared, symmetric scale: zero is mid-level (127 of 255), and the
+    largest magnitude in either channel reaches 0 or 1. Blue is held at mid-level, so that no displacement shows as
+    neutral gray. An all-zero tensor comes out entirely gray. Returns a `[4, h, w]` tensor in [0, 1], on the input's
+    device.
+
+    Raises `ValueError` for a tensor without exactly two channels.
+    """
+    c, h, w = tensor.shape
+    if c != 2:
+        raise ValueError(f"signed_channels_to_rgba: expected 2 channels, got {c}")
+    magnitude = tensor.abs().max()
+    scaled = 0.5 + tensor / (2.0 * magnitude) if magnitude > 0 else torch.full_like(tensor, 0.5)
+    blue = torch.full((1, h, w), 0.5, dtype=tensor.dtype, device=tensor.device)
+    alpha = torch.ones(1, h, w, dtype=tensor.dtype, device=tensor.device)
+    return torch.cat([scaled, blue, alpha])
 
 
 def np_to_tensor(arr: np.ndarray,
