@@ -1702,7 +1702,7 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
 # nav focus to the first navigable item of a window by itself, so the field reports focused from the first
 # frame, and a focus-driven mark would be lit before anyone had touched it.
 keyboardmark.install_caret_follower(["search_field"])  # tag
-keyboardmark.install_focus_follower(["misc_mode_combo"])  # tag
+keyboardmark.install_focus_follower(["misc_mode_combo"], release_to="clear_search_button")  # tag  # where Esc parks too
 
 # Load the file optionally provided on the command line
 if opts.filename:

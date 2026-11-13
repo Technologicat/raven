@@ -515,9 +515,16 @@ def install_caret_follower(widgets: Sequence[str | int],
     return gui_animation.animator.add(_CaretFollower())
 
 
+#: How long after a click elsewhere the focus may take to come back to the combo, for `install_focus_follower`'s
+#: `release_to` to count it as that click's doing.
+_DROPDOWN_RETURN_NS = 300_000_000
+
+
 def install_focus_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
-                           thickness: int = 2) -> gui_animation.Animation:
+                           thickness: int = 2,
+                           *,
+                           release_to: str | int | None = None) -> gui_animation.Animation:
     """Mark whichever of `widgets` currently holds DPG's focus. One call per app.
 
     For the keyboard-browsable combos: an app that routes the arrow keys by asking `dpg.get_focused_item`
@@ -533,6 +540,9 @@ def install_focus_follower(widgets: Sequence[str | int],
     `widgets`: DPG tags or IDs. A widget carrying a theme of its own wants a `Mark` on its enclosing group
                instead — see `Mark` — which this cannot express, since the widget that takes the focus and
                the one that wears the mark are then two different items.
+    `release_to`: where to park the focus when a mouse button is pressed anywhere but on the one of `widgets`
+                  that has it — normally the same button Escape parks on. With `None`, a click on an empty
+                  spot leaves the combo focused, mark and arrow keys and all.
 
     Returns the animation driving it, for `gui_animation.animator.cancel` if it should ever stop. The marks
     it holds are detached when it is cancelled.
@@ -540,18 +550,73 @@ def install_focus_follower(widgets: Sequence[str | int],
     # Compared against *both* names DPG may answer with, since `get_focused_item` gives a tagged widget's
     # alias and an untagged one's ID. See `guiutils.item_identifiers`.
     marks = [(guiutils.item_identifiers(widget), Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
+    by_widget = list(zip(widgets, marks))
+    buttons = (dpg.mvMouseButton_Left, dpg.mvMouseButton_Right, dpg.mvMouseButton_Middle)
 
     class _FocusFollower(gui_animation.Animation):
         def __init__(self):
             # Ambient: it says where the keyboard is, not that anything is happening, so it must not hold
             # the frame rate up for as long as the app has a combo in it.
             super().__init__(ambient=True)
+            self.last_focused = None  # the last of `widgets` to have had the focus
+            self.pending = None  # `(widget, value, deadline_ns)`: a click closed that widget's dropdown
+            self.park_on_release = False  # a click went elsewhere; park once the mouse button is up
 
         def render_frame(self, t: int) -> sym:
             focused = dpg.get_focused_item()
+            if release_to is not None:
+                focused = self._release_on_click_elsewhere(focused, t)
             for identifiers, mark in marks:
                 mark.lit = guiutils.focus_arrived(identifiers, focused in identifiers, t)
             return gui_animation.action_continue
+
+        def _release_on_click_elsewhere(self, focused, t: int):
+            """Park the focus on `release_to` if a click went elsewhere than the focused one of `widgets`.
+            Returns what has the focus now, as far as this frame is concerned."""
+            # A click on an empty spot moves ImGui's focus nowhere, so the combo keeps it, and the arrow keys
+            # with it, though the user has visibly gone elsewhere (measured 2026-11-13, `dpg-notes.md`,
+            # "Keyboard input"). Two cases, as the focus is somewhere else while a combo's dropdown is open:
+            #
+            #   - The combo has the focus: a press anywhere but on it parks the focus, once the button is up.
+            #   - Its dropdown is open, and so has the focus: the press closes the dropdown, and ImGui hands the
+            #     focus back to the combo a frame or so later. A press that picks a choice does the same, so
+            #     what tells the two apart is the value: unchanged when the focus comes back means the click
+            #     went elsewhere, and only then is it parked. (Re-picking the current choice parks too.)
+            clicked = any(dpg.is_mouse_button_clicked(button) for button in buttons)
+            focused_widget = next((widget for widget, (identifiers, _mark) in by_widget if focused in identifiers), None)
+            # Parked once the button is up, not on the press: a `focus_item` made in the frame of the press did not
+            # take, the focus staying where it was (measured 2026-11-13). ImGui handling the press itself is the
+            # likely reason, not established.
+            if self.park_on_release:
+                if any(dpg.is_mouse_button_down(button) for button in buttons):
+                    return focused
+                self.park_on_release = False
+                if focused_widget is not None:
+                    guiutils.focus_item(release_to)
+                    self.pending = (focused_widget, dpg.get_value(focused_widget), t + _DROPDOWN_RETURN_NS)
+                    self.last_focused = None
+                    return None
+            if self.pending is not None:
+                widget, value, deadline = self.pending
+                if focused_widget is widget:
+                    self.pending = None
+                    if dpg.get_value(widget) == value:
+                        self.park_on_release = True
+                        return focused
+                elif t > deadline:
+                    self.pending = None
+            if clicked:
+                if focused_widget is not None:
+                    if not dpg.is_item_hovered(focused_widget):
+                        self.park_on_release = True
+                        return focused
+                elif self.last_focused is not None and not dpg.is_item_hovered(self.last_focused):
+                    # Nothing of ours has the focus, which is what an open dropdown looks like. If it was not
+                    # open, the focus is elsewhere for good, and the pending check simply expires.
+                    self.pending = (self.last_focused, dpg.get_value(self.last_focused), t + _DROPDOWN_RETURN_NS)
+            if focused_widget is not None:
+                self.last_focused = focused_widget
+            return focused
 
         def finish(self) -> None:
             for _identifiers, mark in marks:

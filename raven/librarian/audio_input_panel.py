@@ -170,7 +170,8 @@ class DPGAudioInputPanel:
         # focused button — Space to press it, Tab to the next — and this panel offers neither. Every
         # button here has a letter key instead, named on the button and on the help card.
         if self._focus_follower is None:
-            self._focus_follower = keyboardmark.install_focus_follower(["audio_input_device_combo"])  # tag
+            self._focus_follower = keyboardmark.install_focus_follower(["audio_input_device_combo"],  # tag
+                                                                        release_to="audio_input_measure_button")  # tag  # where Esc parks too
         # Park the keyboard on *Measure the room*, so the keys work without a click first. A button is a
         # safe home: `dpg.focus_item` moves focus to it without activating it, unlike a child window, and
         # DPG leaves ImGui's keyboard-nav activation off, so it ignores Space and Enter.

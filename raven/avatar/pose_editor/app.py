@@ -1505,7 +1505,8 @@ def _gui_release() -> None:
 # keypress; the morph panels are named too, being browsable the same way.
 keyboardmark.install_focus_follower([gui_instance.emotion_choice,
                                      gui_instance.output_index_choice] +
-                                    [panel.choice for panel in gui_instance.morph_control_panels.values()])
+                                    [panel.choice for panel in gui_instance.morph_control_panels.values()],
+                                    release_to=gui_instance.help_button)  # where Esc parks too
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)

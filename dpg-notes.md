@@ -1520,6 +1520,24 @@ text field it could reach. Found 2026-09-29; fixed by giving the toolbar row a s
 field in it, which the maintainer confirmed live in both directions. So a button used as a focus park wants
 a scope holding no text field, or only the one the park is meant to lead to.
 
+## A click on an empty spot leaves a combo focused, and a `focus_item` in the frame of a press does not take
+
+Measured 2026-11-13 on the pose editor, through its REPL. Three facts, each found by being wrong about it first:
+
+- **Clicking an empty spot moves the focus nowhere.** A combo that had the focus keeps it (`is_item_focused`, and
+  `get_focused_item` naming it), so a follower keeps its keyboard mark lit and the arrow keys go on browsing it,
+  though the user has visibly gone elsewhere. The same after a click in another panel of the same window.
+- **While a combo's dropdown is open, the combo is neither focused nor active**: the dropdown, a window of its own,
+  has the focus. A click that closes the dropdown, whether on a choice or on empty space, hands the focus back to
+  the combo a frame or so later.
+- **A `focus_item` called from the render loop in the frame of a mouse press did not take.** Recorded per frame
+  with an animation: the focus stayed on the combo throughout, with no change at all. ImGui's own handling of the
+  press is the likely reason, not established. Parking once all mouse buttons are up works.
+
+`raven.common.gui.keyboardmark.install_focus_follower(..., release_to=...)` is the remedy for every app with a
+keyboard-browsable combo: a press elsewhere parks the focus on `release_to` once the button is up, and an
+unchanged value when the focus comes back from a dropdown tells a click on empty space from a pick.
+
 ## `is_key_down` is sampled when the callback runs, not when the key was pressed
 
 Modifier state is read *inside* the handler, and handlers are dispatched per frame — so the answer

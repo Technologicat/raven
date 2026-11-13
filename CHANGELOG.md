@@ -265,6 +265,8 @@
 
 #### Constellation-wide
 
+- **Clicking elsewhere takes the keyboard off a combo.** In the apps whose combos the arrow keys browse (the Visualizer, both avatar editors, the XDot viewer and Raven-librarian's audio input panel), a combo that had the keyboard kept it, and its blue mark, after a click on an empty spot, so the arrow keys went on changing it.
+  - Picking a choice from the dropdown with the mouse still leaves the keyboard on the combo.
 - **Raven-server's `--secure` mode works with Raven's own apps.**
   - The apps sent the API key in a form the server could not read, so a secure server refused every request from them.
 - **Closing an app while a file dialog is open no longer risks a crash on the way out.**

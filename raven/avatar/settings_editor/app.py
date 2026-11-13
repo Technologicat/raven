@@ -1808,7 +1808,8 @@ gui_instance.current_input_image_path = _startup_input_image_path  # so that the
 # marked by its caret — so the marking rule is the routing rule, and DPG draws nothing of its own on any of
 # the three.
 keyboardmark.install_focus_follower([gui_instance.emotion_choice,
-                                     gui_instance.voice_choice])
+                                     gui_instance.voice_choice],
+                                    release_to="fullscreen_button")  # tag  # where Esc parks too
 keyboardmark.install_caret_follower(["speak_input_text"])  # tag
 api.avatar_start(avatar_instance_id)  # start the avatar rendering on the server...
 gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displaying the live video on the client
