@@ -763,7 +763,7 @@ class PoseEditorGUI:
         self.last_base_image = None
         self.last_celstack = None
         self.last_emotion_name = None
-        self.last_output_index = dpg.get_value(self.output_index_choice)
+        self.last_output_index = self.get_output_index()
         self.last_output_numpy_image = None
         self.render_needed = True
         self.torch_base_image = None  # The loaded character (base image).
@@ -899,8 +899,8 @@ class PoseEditorGUI:
                          tag="result_no_image_loaded_text")
 
             with dpg.group():
-                dpg.add_text("Output index [Ctrl+I] [meaning depends on the model]")
-                self.output_index_choice_items = [str(i) for i in range(self.poser.get_output_length())]
+                dpg.add_text("Output index [Ctrl+I]")
+                self.output_index_choice_items = poserender.output_labels(self.poser.get_output_length())
                 self.output_index_choice = dpg.add_combo(items=self.output_index_choice_items,
                                                          default_value=self.output_index_choice_items[0],
                                                          width=self.image_size - 16,
@@ -928,6 +928,10 @@ class PoseEditorGUI:
         """Give the keyboard to one morph panel's chooser, for the arrow keys to browse. No-op if this character has no such panel."""
         if category in self.morph_control_panels:
             guiutils.focus_item(self.morph_control_panels[category].choice)
+
+    def get_output_index(self) -> int:
+        """The poser output the chooser names, as an index; its labels read `"9: face morpher, eye alpha"`."""
+        return int(dpg.get_value(self.output_index_choice).split(":")[0])
 
     def focus_output_index(self) -> None:
         guiutils.focus_item(self.output_index_choice)
@@ -1090,7 +1094,7 @@ class PoseEditorGUI:
             else:
                 current_pose, current_celstack = self.get_current_pose()
 
-            output_index = int(dpg.get_value(self.output_index_choice))
+            output_index = self.get_output_index()
             if not self.render_needed:  # render can always be forced by setting `render_needed` (e.g. when loading a character)
                 if (self.last_pose is not None and
                         self.last_pose == current_pose and
@@ -1202,8 +1206,9 @@ class PoseEditorGUI:
                 celstack = emotion["cels"]
                 posedict = emotion["pose"]
                 pose = avatarutil.posedict_to_pose(posedict)
-                output_index = int(dpg.get_value(self.output_index_choice))
-                arr = self._render(celstack, pose, output_index)
+                output_index = self.get_output_index()
+                arr = poserender.render(self.poser, self.torch_base_image, self.torch_cels, celstack, pose, output_index,
+                                        device=self.device, dtype=self.dtype, size=self.image_size)
 
                 self.save_numpy_image(arr,
                                       celstack,

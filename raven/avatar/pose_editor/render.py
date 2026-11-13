@@ -7,7 +7,8 @@ in several sizes, and only the four-channel ones are images; the rest are data, 
 This module is part of the pose editor, and is licensed under the GNU AGPL, see `LICENSE`.
 """
 
-__all__ = ["to_display_image", "render"]
+__all__ = ["OUTPUTS", "output_labels",
+           "to_display_image", "render"]
 
 import numpy as np
 import torch
@@ -15,6 +16,49 @@ import torch
 from ...common.image import utils as imageutils
 from ...common.video import compositor
 from ...vendor.tha3.util import torch_linear_to_srgb
+
+
+#: What THA3's poser outputs are, in order: `(network, output)`. The poser returns the outputs of its five networks
+#: concatenated in this order (`Branch.all_outputs` in `tha3/poser/modes/*.py`, the same in all four modes), and each
+#: network names its own outputs by `*_INDEX` constants (in `tha3/nn/`). The names here are those, lowercased.
+OUTPUTS = (("editor", "color changed image"),  # the final image, output 0
+           ("editor", "color change alpha"),
+           ("editor", "color change image"),
+           ("editor", "warped image"),
+           ("editor", "grid change"),
+           ("rotator", "direct image"),
+           ("rotator", "warped image"),
+           ("rotator", "grid change"),
+           ("face morpher", "output image"),
+           ("face morpher", "eye alpha"),
+           ("face morpher", "eye color change"),
+           ("face morpher", "iris mouth image 1"),
+           ("face morpher", "iris mouth alpha"),
+           ("face morpher", "iris mouth color change"),
+           ("face morpher", "iris mouth image 0"),
+           ("eyebrow combiner", "eyebrow image"),
+           ("eyebrow combiner", "combine alpha"),
+           ("eyebrow combiner", "eyebrow image no combine alpha"),
+           ("eyebrow combiner", "morphed eyebrow layer"),
+           ("eyebrow combiner", "morphed eyebrow layer alpha"),
+           ("eyebrow combiner", "morphed eyebrow layer color change"),
+           ("eyebrow combiner", "warped eyebrow layer"),
+           ("eyebrow combiner", "morphed eyebrow layer grid change"),
+           ("eyebrow decomposer", "eyebrow layer"),
+           ("eyebrow decomposer", "eyebrow layer alpha"),
+           ("eyebrow decomposer", "eyebrow layer color change"),
+           ("eyebrow decomposer", "background layer"),
+           ("eyebrow decomposer", "background layer alpha"),
+           ("eyebrow decomposer", "background layer color change"))
+
+
+def output_labels(n: int) -> list[str]:
+    """Labels for the poser's `n` outputs, as `"9: face morpher, eye alpha"`, or bare numbers if `n` is not the count
+    `OUTPUTS` describes (a model these names were not read from). `int(label.split(":")[0])` is the index either way.
+    """
+    if n != len(OUTPUTS):
+        return [str(i) for i in range(n)]
+    return [f"{i}: {network}, {name}" for i, (network, name) in enumerate(OUTPUTS)]
 
 
 def to_display_image(output: torch.Tensor, size: int) -> torch.Tensor:

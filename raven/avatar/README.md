@@ -25,6 +25,7 @@
     - [Low VRAM - what to do?](#low-vram---what-to-do)
     - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
 - [Limitations](#limitations)
+- [Inside the poser: what the output indices show](#inside-the-poser-what-the-output-indices-show)
 - [Codebase structure](#codebase-structure)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -421,6 +422,60 @@ The model files are shared between the live animator and the standalone pose edi
 
 - This software is not compatible with characters created for VTuber software, such as Live2D. Rather, this is an independent exploration of somewhat similar functionality, for providing a live anime avatar for AI characters.
 
+
+# Inside the poser: what the output indices show
+
+The pose editor's **Output index** chooser (**Ctrl+I**) shows any of the poser's outputs: the final image, which is output 0, and the intermediate results of the networks that make it. They are a view into how THA3 works, and this section says what each is. For the design itself, see Pramook Khungurn's [THA3 technical report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html).
+
+THA3 runs five networks in turn, each on its own part of the 512×512 character image:
+
+1. The **eyebrow decomposer** separates the eyebrows from what is behind them, in a 128×128 crop around the eyebrows.
+2. The **eyebrow combiner** reshapes the eyebrows by the eyebrow pose, and puts them back over the background.
+3. The **face morpher** changes the eyes, the irises and the mouth by the face pose, in a 192×192 crop of the face with the reshaped eyebrows pasted in. The result is pasted back into the full image.
+4. The **rotator** turns the head, the neck and the body by the rotation pose, at half resolution (256×256).
+5. The **editor** refines the rotated result at full resolution. Its first output is the final image.
+
+The outputs come in a few kinds, and the names say which:
+
+- An **image** has four channels, RGBA.
+- An **alpha** is a mask saying where a network's change applies. A **color change** is the image of that change, and the two combine as `color change × alpha + image × (1 − alpha)`. The pose editor shows a single-channel output in gray.
+- A **grid change** is a warping field, two channels saying how far each pixel moves. The pose editor shows it in red and green.
+
+The pose editor scales every output to the view's size, pixel for pixel, so a small intermediate shows its own resolution.
+
+The poser returns the networks' outputs in a fixed order, which is the same for all four models (`standard_float`, `separable_float` and their half-precision versions). The names are the ones THA3's code gives them:
+
+| Index | Network | Output |
+|---|---|---|
+| 0 | editor | color changed image |
+| 1 | editor | color change alpha |
+| 2 | editor | color change image |
+| 3 | editor | warped image |
+| 4 | editor | grid change |
+| 5 | rotator | direct image |
+| 6 | rotator | warped image |
+| 7 | rotator | grid change |
+| 8 | face morpher | output image |
+| 9 | face morpher | eye alpha |
+| 10 | face morpher | eye color change |
+| 11 | face morpher | iris mouth image 1 |
+| 12 | face morpher | iris mouth alpha |
+| 13 | face morpher | iris mouth color change |
+| 14 | face morpher | iris mouth image 0 |
+| 15 | eyebrow combiner | eyebrow image |
+| 16 | eyebrow combiner | combine alpha |
+| 17 | eyebrow combiner | eyebrow image no combine alpha |
+| 18 | eyebrow combiner | morphed eyebrow layer |
+| 19 | eyebrow combiner | morphed eyebrow layer alpha |
+| 20 | eyebrow combiner | morphed eyebrow layer color change |
+| 21 | eyebrow combiner | warped eyebrow layer |
+| 22 | eyebrow combiner | morphed eyebrow layer grid change |
+| 23 | eyebrow decomposer | eyebrow layer |
+| 24 | eyebrow decomposer | eyebrow layer alpha |
+| 25 | eyebrow decomposer | eyebrow layer color change |
+| 26 | eyebrow decomposer | background layer |
+| 27 | eyebrow decomposer | background layer alpha |
+| 28 | eyebrow decomposer | background layer color change |
 
 # Codebase structure
 

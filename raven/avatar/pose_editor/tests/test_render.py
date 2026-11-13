@@ -67,3 +67,34 @@ class TestThePosersOutputsAreLeftAlone:
         image = poser.seen_inputs[0]
         assert image.min() >= -1.0 and image.max() <= 1.0
         assert image.min() < 0.0, "still in [0, 1]: the mapping to the poser's [-1, 1] did not happen"
+
+
+class TestOutputNames:
+    """`render.OUTPUTS` against the `*_INDEX` constants of the vendored THA3 networks, read as text (importing them
+    needs the `tha3` package at the top level, which only the app arranges)."""
+
+    NETWORKS = (("editor", "editor/editor_07.py"),
+                ("rotator", "two_algo_body_rotator/two_algo_face_body_rotator_05.py"),
+                ("face morpher", "face_morpher/face_morpher_09.py"),
+                ("eyebrow combiner", "eyebrow_morphing_combiner/eyebrow_morphing_combiner_03.py"),
+                ("eyebrow decomposer", "eyebrow_decomposer/eyebrow_decomposer_03.py"))
+
+    def constants(self, relpath):
+        import pathlib
+        import re
+        source = (pathlib.Path(render.__file__).resolve().parents[2] / "vendor" / "tha3" / "nn" / relpath).read_text()
+        found = sorted((int(index), name) for name, index in re.findall(r"^\s+(\w+)_INDEX = (\d+)", source, re.M))
+        assert [index for index, _ in found] == list(range(len(found))), f"{relpath}: indices not 0..n-1"
+        return [name.lower().replace("_", " ") for _, name in found]
+
+    def test_the_table_is_the_networks_outputs_in_the_posers_order(self):
+        expected = [(network, name) for network, relpath in self.NETWORKS for name in self.constants(relpath)]
+        assert list(render.OUTPUTS) == expected
+
+    def test_labels_name_each_output_and_lead_with_its_index(self):
+        labels = render.output_labels(len(render.OUTPUTS))
+        assert labels[9] == "9: face morpher, eye alpha"
+        assert [int(label.split(":")[0]) for label in labels] == list(range(len(render.OUTPUTS)))
+
+    def test_a_model_with_another_count_gets_bare_numbers(self):
+        assert render.output_labels(3) == ["0", "1", "2"]
