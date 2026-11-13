@@ -235,7 +235,7 @@
 
 - **The pose editor's output index shows the poser's intermediate outputs correctly**, and walking through them no longer damages the character's face.
   - The smaller intermediates fill the view at their own resolution, and those that are data rather than images (masks, flow fields) are shown in gray or in red and green.
-  - Before, they were written into the view at the wrong size, and showing some of them changed a layer the poser keeps between renders, which left the face washed out until the character was loaded again.
+  - Before, they were written into the view at the wrong size, and showing some of them changed a layer the poser keeps between renders, which left the face washed out in later renders.
 
 #### Raven-pdf2bib
 
