@@ -643,7 +643,11 @@ def stream_log(file: TextIO, label: str | None = None) -> Callable[[dict], sym]:
 
 
 def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
-        maybe_abort: netutil.Abort | None = None, on_progress: Callable | None = None) -> str:
+        maybe_abort: netutil.Abort | None = None, on_progress: Callable | None = None,
+        *,
+        thinking_enabled: bool = True,
+        staged_images: list[env] | None = None,
+        staged_files: list[env] | None = None) -> str:
     """Ask one question and get the answer text: no character, no tools, no retrieval, no history.
 
     `llm_settings`: as `turn`, which see.
@@ -654,6 +658,10 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
                   that setting, deliberately — see below.
 
     `maybe_abort`, `on_progress`: as `turn`, which see.
+
+    `thinking_enabled`: as `turn`, which see. `False` makes a thinking model answer straight away.
+
+    `staged_images`, `staged_files`: images and documents attached to the question, as `turn`, which see.
 
     Returns the reply text, with nothing else around it.
 
@@ -666,13 +674,20 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
     PATH` on any tool built over this keeps it. `ask_record` returns the trace instead of logging it,
     for a caller that wants to keep it beside its results rather than in a log file.
     """
-    return ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress).reply or ""
+    return ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress,
+                      thinking_enabled=thinking_enabled,
+                      staged_images=staged_images,
+                      staged_files=staged_files).reply or ""
 
 
 def ask_record(llm_settings: env, prompt: str,
                max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
                maybe_abort: netutil.Abort | None = None,
-               on_progress: Callable | None = None) -> TurnRecord:
+               on_progress: Callable | None = None,
+               *,
+               thinking_enabled: bool = True,
+               staged_images: list[env] | None = None,
+               staged_files: list[env] | None = None) -> TurnRecord:
     """`ask`, but handing back the whole record rather than only the reply text.
 
     Arguments and failure behaviour are `ask`'s, which see — a cap on the reply by default, and the
@@ -695,8 +710,11 @@ def ask_record(llm_settings: env, prompt: str,
     # times without anyone watching.
     record = turn(llm_settings,
                   prompt,
+                  staged_images=staged_images,
+                  staged_files=staged_files,
                   use_character_card=False,
                   tools_enabled=False,
+                  thinking_enabled=thinking_enabled,
                   internet_enabled=False,
                   docs_enabled=False,
                   markup=None,
@@ -720,7 +738,11 @@ def ask_until(llm_settings: env, prompt: str,
               label: str = "ask_until",
               max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS,
               maybe_abort: netutil.Abort | None = None,
-              on_progress: Callable | None = None) -> tuple[list[TurnRecord], bool]:
+              on_progress: Callable | None = None,
+              *,
+              thinking_enabled: bool = True,
+              staged_images: list[env] | None = None,
+              staged_files: list[env] | None = None) -> tuple[list[TurnRecord], bool]:
     """`ask_record`, asked again while the reply fails `accept`, up to `attempts` times in all.
 
     `accept`: a check on the reply text. The default accepts any reply that is not blank, which is the
@@ -744,7 +766,10 @@ def ask_until(llm_settings: env, prompt: str,
         raise ValueError(f"ask_until: `attempts` must be at least 1, got {attempts}")
     records = []
     for attempt in range(1, attempts + 1):
-        records.append(ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress))
+        records.append(ask_record(llm_settings, prompt, max_tokens, maybe_abort, on_progress,
+                                  thinking_enabled=thinking_enabled,
+                                  staged_images=staged_images,
+                                  staged_files=staged_files))
         if records[-1].truncated:
             logger.warning(f"{label}: reply cut off at the token cap at attempt {attempt} of {attempts}")
             continue

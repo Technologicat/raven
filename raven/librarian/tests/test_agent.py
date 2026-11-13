@@ -763,6 +763,46 @@ class TestAskRecord:
         with pytest.raises(netutil.Aborted):
             agent.ask(llm_settings, "Question?", maybe_abort=handle)
 
+    def test_thinking_can_be_turned_off_from_every_entry_point(self, monkeypatch, llm_settings):
+        seen = []
+
+        def fake_invoke(**kw):
+            seen.append(kw["thinking_enabled"])
+            return make_invoke_result(content="an answer")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        agent.ask(llm_settings, "Question?")
+        assert seen == [True], "the default thinks, so this fixture can tell an argument dropped on the way"
+        seen.clear()
+        agent.ask(llm_settings, "Question?", thinking_enabled=False)
+        agent.ask_record(llm_settings, "Question?", thinking_enabled=False)
+        agent.ask_until(llm_settings, "Question?", thinking_enabled=False)
+        assert seen == [False, False, False]
+
+    def test_an_attached_document_reaches_the_wire(self, monkeypatch, llm_settings):
+        # A one-shot question about a paper, without the caller pasting the paper into the prompt.
+        from unpythonic.env import env  # noqa: PLC0415 -- only the attachment tests build a staged entry
+
+        def fake_invoke(**kw):
+            kw["on_prompt_ready"](llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                       continue_=kw["continue_"],
+                                                                       datastore=kw["datastore"]))
+            return make_invoke_result(content="47.2 kWh/kg")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        def staged():
+            return env(raw=b"The Kelvin-7 stack recorded 47.2 kWh/kg at nominal load.",
+                       name="kelvin7.txt", provenance_url=None, provenance_source="user_attachment")
+
+        def wire_of(record):
+            return "\n".join(chatutil.content_to_text(message.get("content")) for message in record.prompts[-1])
+
+        assert "47.2 kWh/kg" not in wire_of(agent.ask_record(llm_settings, "What does this say?")), \
+            "the figure is in the prompt without the attachment, so this fixture cannot see one arrive"
+        assert "47.2 kWh/kg" in wire_of(agent.ask_record(llm_settings, "What does this say?", staged_files=[staged()]))
+        records, _accepted = agent.ask_until(llm_settings, "What does this say?", staged_files=[staged()])
+        assert "47.2 kWh/kg" in wire_of(records[-1])
+
 
 class TestAskUntil:
     """`ask_record`, asked again while the reply fails a check."""

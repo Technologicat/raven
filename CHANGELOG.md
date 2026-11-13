@@ -50,6 +50,7 @@
   - The setting is named only when it is the one that applied; a limit a script chose is shown without it.
   - Unset, the limit is the model's context length. The README's *Configuration* says how to set it.
   - For scripts, `agent.TurnRecord.truncated` says the same, `agent.ask_until` does not accept such a reply however its text reads, and `agent.turn` takes a `max_tokens` of its own.
+- **A one-shot question from a script can skip thinking, and carry attachments.** `agent.ask`, `agent.ask_record` and `agent.ask_until` take `thinking_enabled`, `staged_images` and `staged_files`, as `agent.turn` does.
 
 #### Raven-visualizer
 
