@@ -96,9 +96,9 @@ would be knowledge left on the floor. So this clears the bar the project already
   increased", which missed a file restored from a backup). Symlinked files are followed, and under
   `recursive=True` so are symlinked subdirectories (a link leading back into the walk is not) — needed because
   skills are typically linked in as folders from a repository.
-  - **Progress (2026-11-13):** `filewatch` landed, and HybridIR is on it. **Next: the skills library**, which
-    retires `SkillLibrary`'s polling and the `skills_poll_interval` setting (watch `skills_dir` recursively,
-    accepting `<folder>/SKILL.md` only); then the lorebook itself.
+  - **Progress (2026-11-16):** every watcher in Librarian is on `filewatch` — HybridIR, the skills library,
+    the prompt files (`llmclient.watch_prompt_files`) and `mcp.json` — and none polls any more. A watched
+    folder that is missing is created when watching starts. **Next: the lorebook itself.**
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
