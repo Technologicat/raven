@@ -201,6 +201,30 @@ Independent of the above, and it survived the fix because it was never really ab
 
 (Live case 2026-08-31: a `git stash push` on four named paths aborted for exactly that reason; the check that followed silently measured the already-fixed tree, and concluded the opposite of the truth.)
 
+### Two sessions at once: a worktree each, and run the worktree's code by module
+
+When two sessions work on Raven at the same time, each works in a git worktree of its own under
+`.claude/worktrees/` (gitignored), on a branch of its own. The stash stack is shared between them, which is
+one more reason for the section above.
+
+**There is one venv, the main tree's, and its editable install points at the main tree.** What that means
+for which code runs (checked 2026-11-16):
+
+- **`python` and `pytest`, run from the worktree's root, import the worktree's code**, since the current
+  directory comes first on `sys.path`.
+- **The console scripts — `raven-librarian`, `raven-server` and the rest — import the main tree's**,
+  whichever directory they are started from: a script's `sys.path` starts at its own `bin/`, so `raven`
+  resolves through the editable install. A live test of worktree code launched that way tests `main`
+  instead, and nothing says so.
+
+So launch from the worktree's root by module: `python -m raven.librarian.app`, `python -m raven.server.app`,
+and so on (`[project.scripts]` in `pyproject.toml` names each entry point's module). Those modules run the
+app in their body, so `-m` starts it, the `main` they define being an empty stub for the console script.
+Two apps running at once still need separate `--repl` ports; see *`--repl`* below.
+
+To land a worktree's commits, rebase the branch onto `origin/main` and push it there: `git push origin
+HEAD:main`, keeping `main` linear.
+
 Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 
 ```bash
