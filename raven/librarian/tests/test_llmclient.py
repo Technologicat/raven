@@ -3782,6 +3782,56 @@ class TestPromptReloader:
         assert settings.system_prompt == "Fixed now."
 
 
+class TestPromptWatcher:
+    """`watch_prompt_files`: the reloader driven by events, for a long-lived frontend."""
+
+    @pytest.fixture
+    def settings(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(llmclient.librarian_config, "user_prompts_dir", tmp_path / "user_prompts")
+        return llmclient.configure(model_info=env(label="m", model_id="m", context_length=4096, is_vlm=False, loaded=True),
+                                   backend_flavor="generic", backend_url="http://x", quiet=True)
+
+    @staticmethod
+    def _wait_until(predicate, timeout=10.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.05)
+        return False
+
+    def test_an_edit_reaches_the_settings_and_is_announced(self, settings):
+        calls = []
+        stop = llmclient.watch_prompt_files(settings, on_changed=lambda: calls.append(settings.system_prompt))
+        try:
+            (llmclient.librarian_config.user_prompts_dir / "system.md").write_text("You are a test.", encoding="utf-8")
+            assert self._wait_until(lambda: calls), "the edit was never announced"
+            assert calls == ["You are a test."], "announced before the settings had the new text, or more than once"
+        finally:
+            stop()
+            stop()  # a second stop is harmless
+
+    def test_a_save_by_rename_is_seen(self, settings):
+        calls = []
+        stop = llmclient.watch_prompt_files(settings, on_changed=lambda: calls.append(1))
+        try:
+            directory = llmclient.librarian_config.user_prompts_dir
+            (directory / "tmpq8").write_text("Saved the way most editors save.", encoding="utf-8")
+            os.replace(directory / "tmpq8", directory / "system.md")
+            assert self._wait_until(lambda: calls)
+            assert settings.system_prompt == "Saved the way most editors save."
+        finally:
+            stop()
+
+    def test_a_missing_user_prompt_folder_is_created(self, settings):
+        assert not llmclient.librarian_config.user_prompts_dir.exists()
+        stop = llmclient.watch_prompt_files(settings, on_changed=lambda: None)
+        try:
+            assert llmclient.librarian_config.user_prompts_dir.is_dir()
+        finally:
+            stop()
+
+
 class TestBackendFacts:
     """`reconnect` and `follow_model_swap` write what the backend determines, and nothing else."""
     _FIRST = env(label="small", model_id="small", context_length=4096, is_vlm=False, loaded=True)

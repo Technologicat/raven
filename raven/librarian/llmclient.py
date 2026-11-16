@@ -27,7 +27,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
            # For frontends that open a window whether or not a backend answers
            "backend_unreachable", "backend_has_no_model", "backend_ready",
            "connect", "describe_backend_status", "backend_status", "reconnect", "follow_model_swap",
-           "make_prompt_reloader", "configure",
+           "make_prompt_reloader", "watch_prompt_files", "configure",
 
            # Counting what a prompt costs
            "wait_for_tokenizer", "count_tokens", "count_tools_tokens", "tool_cost_by_group",
@@ -77,6 +77,7 @@ from unpythonic.env import env
 
 
 from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
+from ..common import filewatch
 from ..common import netutil
 from ..common import text as common_text
 from ..common import utils
@@ -975,6 +976,65 @@ def make_prompt_reloader(settings: env) -> Callable[[], bool]:
             logger.info(f"reload_if_changed: prompt files changed on disk; reloaded {changed}.")
         return bool(changed)
     return reload_if_changed
+
+
+def watch_prompt_files(settings: env, on_changed: Callable[[], None]) -> Callable[[], None]:
+    """Follow the prompt files, keeping `settings` up to date with them as `make_prompt_reloader` does.
+
+    `on_changed`: 0-argument callable, called on a watcher's thread after an edit changed a text in `settings`.
+
+    Watches the shipped and the user's prompt folders, and the character's and the user's cards, wherever
+    those are. The user's prompt folder is created if it is missing.
+
+    Returns a function that stops the watching, safe to call more than once.
+    """
+    reload_if_changed = make_prompt_reloader(settings)
+    # The files are spread over several directories, one watcher each, so two can report at once. One at a
+    # time through the reload and the caller's handler, which typically writes to the chat datastore.
+    lock = threading.Lock()
+    def changed(relative_path: pathlib.Path, kind: str) -> None:
+        with lock:
+            if not reload_if_changed():
+                return
+            try:
+                on_changed()
+            except Exception as exc:  # noqa: BLE001 -- the caller's handler must not stop the watching
+                logger.error(f"watch_prompt_files: ignoring exception from `on_changed`: {type(exc)}: {exc}")
+
+    if not librarian_config.user_prompts_dir.is_dir():
+        logger.info(f"watch_prompt_files: '{librarian_config.user_prompts_dir}' does not exist; creating it.")
+        utils.create_directory(librarian_config.user_prompts_dir)
+    filenames_by_directory: dict[pathlib.Path, set[str] | None] = {librarian_config.prompts_dir: None,  # None: every `.md`
+                                                                   librarian_config.user_prompts_dir: None}
+    cards = []
+    character = avatar_characters.find(settings.char)
+    if character is not None and character.card_path is not None:
+        cards.append(character.card_path)
+    profile = userprofile.find(settings.user)
+    if profile is not None and profile.card_path is not None:
+        cards.append(profile.card_path)
+    for card in cards:
+        directory = card.parent
+        if directory not in filenames_by_directory:
+            filenames_by_directory[directory] = set()
+        if filenames_by_directory[directory] is not None:
+            filenames_by_directory[directory].add(card.name)
+
+    def accept_for(maybe_filenames: set[str] | None) -> Callable[[pathlib.Path], bool]:
+        if maybe_filenames is None:
+            return lambda path: path.suffix == ".md"
+        return lambda path: path.name in maybe_filenames
+
+    watchers = []
+    for directory, maybe_filenames in filenames_by_directory.items():
+        watcher = filewatch.DirectoryWatcher(directory, on_changed=changed, accept=accept_for(maybe_filenames))
+        watcher.start()
+        watchers.append(watcher)
+
+    def stop() -> None:
+        for watcher in reversed(watchers):
+            watcher.stop()
+    return stop
 
 def configure(model_info: env,
               backend_flavor: str,

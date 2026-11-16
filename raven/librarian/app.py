@@ -3764,7 +3764,7 @@ def _gui_cancel_tasks() -> None:
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
-    prompt_reload_task_manager.clear(wait=False)  # stop watching the prompt files (it writes to the datastore)
+    stop_prompt_watch()  # stop watching the prompt files (it writes to the datastore); waits for a reload in progress
     composer_notice_task_manager.clear(wait=False)  # take down any notice (it resizes the composer)
     panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
     server_status_task_manager.clear(wait=False)  # stop watching Raven-server (it writes into the utility panel's row)
@@ -3809,7 +3809,6 @@ def _gui_release() -> None:
     skill_library.shutdown()
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)
-    prompt_reload_task_manager.clear(wait=True)
     composer_notice_task_manager.clear(wait=True)
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
@@ -4027,17 +4026,15 @@ else:
     def stop_autosave(wait: bool = True) -> None:
         pass
 
-prompt_reload_task_manager = bgtask.TaskManager(name="librarian_prompt_reload",
-                                                mode="sequential",
-                                                executor=bg)
-def _prompt_reload_task(task_env: env) -> None:
-    """Follow edits to the prompt files. Existing chats keep their prompt; a new chat starts under the new one."""
-    reload_if_changed = llmclient.make_prompt_reloader(llm_settings)
-    while not (task_env.cancelled or guiutils.is_shutting_down()):
-        time.sleep(librarian_config.prompt_files_poll_interval)
-        if reload_if_changed():
-            appstate.refresh_new_chat_nodes(llm_settings, datastore, app_state)
-            _show_composer_notice("Prompts updated. New chats will use them.")
+def _on_prompts_changed() -> None:
+    """An edit to the prompt files reached `llm_settings`. Existing chats keep their prompt; a new chat starts under the new one."""
+    if guiutils.is_shutting_down():
+        return
+    appstate.refresh_new_chat_nodes(llm_settings, datastore, app_state)
+    _show_composer_notice("Prompts updated. New chats will use them.")
+
+def stop_prompt_watch() -> None:  # until `_finish_startup` starts the watch
+    pass
 
 def _start_panel_occupancy_watch() -> None:
     """Start watching who should hold the avatar's panel. Supersedes a watch already running."""
@@ -4075,7 +4072,8 @@ def _finish_startup(sender, app_data) -> None:
     _start_server_status_poll(delay_first_probe=True)
     _refresh_mcp_status()  # for what the servers did before the GUI existed
     _refresh_skills_status()
-    prompt_reload_task_manager.submit(_prompt_reload_task, env())
+    global stop_prompt_watch
+    stop_prompt_watch = llmclient.watch_prompt_files(llm_settings, on_changed=_on_prompts_changed)
 
     # The blue that says where the keyboard is, on the composer and on the search field. A *caret* follower,
     # not a focus one: ImGui gives nav focus to the first navigable item of a window by itself, so the composer
