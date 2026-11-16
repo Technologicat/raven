@@ -27,6 +27,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     highlight series, the cluster colormap, the pills.
   - This also makes the colours configurable, which the Visualizer's list asked for separately.
   - The Visualizer's colormap needs a range per background: the item on its dark end, under the Visualizer.
+  - **Density, as a second option beside the colours** (2026-11-16): where Raven looks busy to a newcomer, the
+    difference from a professionally designed app is spacing and type, not colour. Raven already follows the
+    convention that colour switches on only when something has something to say, as an app like MS Teams does
+    (maintainer). The levers are DPG's style variables (frame padding, item spacing, the text sizes), settable in
+    one place at bootup, so a roomier layout can come with the light theme and the dense one stay the default.
 
 - **[High]** Usable by non-technical users. Visitors at Yrityspäivä (2026-10-08) wanted to try Raven and were not technical types (maintainer). Three parts, together more important for practical value than the PyPI upload; placement in the roadmap is open (`briefs/roadmap.md`).
   - Server autostart, last one out turns off the lights: `briefs/server-autostart-brief.md`.
