@@ -29,7 +29,6 @@ import json
 import logging
 import pathlib
 import re
-import threading
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -37,6 +36,8 @@ import yaml
 from unpythonic import dyn
 from unpythonic.env import env
 
+from ..common import filewatch
+from ..common import utils as common_utils
 from . import config as librarian_config
 from . import llmtools
 
@@ -190,8 +191,7 @@ class SkillLibrary:
         self._skills: dict[str, Skill] = {}
         self._problems: dict[str, str] = {}
         self._registered = False
-        self._maybe_watcher: threading.Thread | None = None
-        self._stop = threading.Event()
+        self._maybe_watcher: filewatch.DirectoryWatcher | None = None
 
     def _get_skill_names(self) -> list[str]:
         """Copy, so that a caller cannot edit the library's record."""
@@ -206,20 +206,28 @@ class SkillLibrary:
     def start(self, *, watch: bool = False) -> None:
         """Find the skills, and add the activation tool to the settings if there are any.
 
-        `watch`: follow changes to the directory. For a long-lived frontend. A script leaves this off, so that
-                 what it offers cannot change during a run.
+        `watch`: follow changes to the directory, creating it if it is missing. For a long-lived frontend. A
+                 script leaves this off, so that what it offers cannot change during a run.
         """
-        signature = self._signature()  # before reading, so that an edit right after the read is seen
-        self._refresh()
         if watch:
-            self._maybe_watcher = threading.Thread(target=self._watch, args=(signature,), name="skill_library_watcher", daemon=True)
-            self._maybe_watcher.start()
+            if not self.directory.is_dir():  # a watcher needs something to watch; empty, it shows where skills go
+                logger.info(f"SkillLibrary.start: '{self.directory}' does not exist; creating it.")
+                common_utils.create_directory(self.directory)
+            # Started before the first read, so that an edit right after the read is seen. A skill is
+            # `<folder>/SKILL.md`, the folder often a link to a repository, hence recursive. Its other files
+            # are read at activation, so only a `SKILL.md` changes what is offered.
+            watcher = filewatch.DirectoryWatcher(self.directory,
+                                                 on_changed=lambda relative_path, kind: self._on_file_changed(),
+                                                 accept=lambda path: self._is_skill_file(path, watched=watcher.directory),
+                                                 recursive=True)
+            watcher.start()
+            self._maybe_watcher = watcher
+        self._refresh()
 
     def shutdown(self) -> None:
         """Remove the tool from the settings, and stop following the directory. Safe to call more than once."""
-        self._stop.set()
         if self._maybe_watcher is not None:
-            self._maybe_watcher.join(timeout=2 * librarian_config.skills_poll_interval)
+            self._maybe_watcher.stop()
             self._maybe_watcher = None
         self._skills = {}
         self._install()
@@ -241,36 +249,29 @@ class SkillLibrary:
         llmtools.replace_tools(settings, previous_names=previous, specs=specs, entrypoints=entrypoints)
         self._registered = bool(self._skills)
 
-    def _signature(self) -> tuple:
-        def stamp(path: pathlib.Path) -> tuple:
-            try:
-                info = path.stat()
-                return (str(path), info.st_mtime_ns, info.st_size)
-            except OSError:  # deleted between the listing and now
-                return (str(path), None, None)
-        return tuple(sorted(stamp(path) for path in self.directory.glob(f"*/{_SKILL_FILE}")))
+    @staticmethod
+    def _is_skill_file(path: pathlib.Path, *, watched: pathlib.Path) -> bool:
+        """Whether `path`, a file under the directory `watched`, is a skill's `<folder>/SKILL.md`."""
+        relative_path = path.relative_to(watched)
+        return len(relative_path.parts) == 2 and relative_path.name == _SKILL_FILE
 
     def _catalog(self) -> list[tuple[str, str]]:
         return [(skill.name, skill.description) for skill in self._skills.values()]
 
-    def _watch(self, signature: tuple) -> None:
-        while not self._stop.wait(librarian_config.skills_poll_interval):
-            current = self._signature()
-            if current == signature:
-                continue
-            signature = current
-            catalog = self._catalog()
+    def _on_file_changed(self) -> None:
+        """Read the skills again after a `SKILL.md` changed. On the watcher's thread."""
+        catalog = self._catalog()
+        try:
+            self._refresh()
+        except Exception:  # noqa: BLE001 -- the next change to the directory gets another try
+            logger.exception("SkillLibrary: re-reading the skills failed")
+            return
+        # An edit to a skill's body needs no notice, the body being read at activation.
+        if self._catalog() != catalog and self.on_changed is not None:
             try:
-                self._refresh()
-            except Exception:  # noqa: BLE001 -- the next change to the directory gets another try
-                logger.exception("SkillLibrary: re-reading the skills failed")
-                continue
-            # An edit to a skill's body needs no notice, the body being read at activation.
-            if self._catalog() != catalog and self.on_changed is not None:
-                try:
-                    self.on_changed()
-                except Exception:  # noqa: BLE001 -- a frontend's handler must not stop the watcher
-                    logger.exception("SkillLibrary: ignoring exception from `on_changed`")
+                self.on_changed()
+            except Exception:  # noqa: BLE001 -- a frontend's handler must not stop the watcher
+                logger.exception("SkillLibrary: ignoring exception from `on_changed`")
 
     def _activate(self, name: str, file: str | None = None) -> str | tuple[str, dict[str, str]]:
         """The activation tool: the instructions of skill `name`, or one of its bundled files."""

@@ -170,7 +170,7 @@ Everything sits under `librarian_config.librarian_userdata_dir` — `~/.config/r
 | `rag_index/` | the built RAG index (`llm_database_dir`) |
 | `api_key.txt` | optional; used if present |
 | `mcp.json` | optional; the MCP servers whose tools the LLM may use (`mcpclient.load_config`) |
-| `skills/` | optional; one folder per agent skill (`skills.scan`) |
+| `skills/` | one folder per agent skill, often a link to one kept elsewhere (`skills.scan`); created empty by the apps if missing, which then follow it |
 | `mcp_logs/` | what each stdio MCP server wrote to its stderr, one file per server, rewritten at each start |
 
 **`chat.json`'s on-disk shape is a flat mapping of node ID → node, with no wrapper key.** Not `{"nodes": {...}}` — the top level *is* the node dict, even though the in-memory attribute is `PersistentForest.nodes`. Node IDs look like `gensym#forest-node:<uuid>`. Within a node, `node["data"]` maps revision → payload, so a script that wants "the message" has to pick a revision (or iterate all of them, which is what the sidecar GC mark phase does). Worth knowing before writing any ad-hoc script against the file: assuming a `"nodes"` key silently yields zero nodes rather than an error.

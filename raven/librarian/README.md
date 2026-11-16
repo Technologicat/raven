@@ -562,7 +562,9 @@ description: Check and tidy a list of citations against the document database. U
 
 The AI sees each skill's name and description, and reads the instructions when it decides that a task matches. To ask for one yourself, start a message with `/tidy-citations`; the rest of the message is sent as usual. Further Markdown files in the folder can be referred to from the instructions, and the AI can read them too.
 
-The **Skills** toggle (`Alt+K`) switches them on or off. Changes are picked up while the app runs. Scripts bundled with a skill are not run.
+A skill's folder can be a link to one kept elsewhere, such as in a repository of your own. The app creates `skills/` when it starts, if it is missing.
+
+The **Skills** toggle (`Alt+K`) switches them on or off. Changes are picked up while the app runs, linked folders included. Scripts bundled with a skill are not run.
 
 From a script, skills are available inside a `with skills.loaded(llm_settings):` block, and `agent.turn` offers them when given `skills_enabled=True`.
 

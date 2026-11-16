@@ -240,10 +240,6 @@ class TestUserActivation:
 
 
 class TestWatching:
-    @pytest.fixture
-    def quick_polls(self, monkeypatch):
-        monkeypatch.setattr(skills.librarian_config, "skills_poll_interval", 0.05)
-
     @staticmethod
     def _wait_until(predicate, timeout=10.0) -> bool:
         deadline = time.monotonic() + timeout
@@ -253,7 +249,7 @@ class TestWatching:
             time.sleep(0.02)
         return False
 
-    def test_a_new_skill_appears_and_is_announced(self, settings, root, quick_polls):
+    def test_a_new_skill_appears_and_is_announced(self, settings, root):
         _write_skill(root, "alpha")
         calls = []
         library = skills.SkillLibrary(settings, directory=root, on_changed=lambda: calls.append(1))
@@ -267,7 +263,7 @@ class TestWatching:
         finally:
             library.shutdown()
 
-    def test_an_edit_to_a_body_is_not_announced(self, settings, root, quick_polls):
+    def test_an_edit_to_a_body_is_not_announced(self, settings, root):
         _write_skill(root, "alpha")
         calls = []
         library = skills.SkillLibrary(settings, directory=root, on_changed=lambda: calls.append(1))
@@ -280,7 +276,7 @@ class TestWatching:
         finally:
             library.shutdown()
 
-    def test_the_first_skill_makes_the_tool_appear(self, settings, root, quick_polls):
+    def test_the_first_skill_makes_the_tool_appear(self, settings, root):
         root.mkdir()
         library = skills.SkillLibrary(settings, directory=root)
         library.start(watch=True)
@@ -291,7 +287,38 @@ class TestWatching:
         finally:
             library.shutdown()
 
-    def test_a_script_does_not_follow_the_directory(self, settings, root, quick_polls):
+    def test_an_edit_in_a_linked_skill_folder_is_seen(self, settings, root, tmp_path):
+        # The usual way to install a skill kept in a repository: link its folder in.
+        kept_elsewhere = _write_skill(tmp_path / "repository", "alpha")
+        root.mkdir()
+        try:
+            (root / "alpha").symlink_to(kept_elsewhere)
+        except OSError as exc:  # Windows without the privilege
+            pytest.skip(f"cannot create symlinks here: {exc}")
+        calls = []
+        library = skills.SkillLibrary(settings, directory=root, on_changed=lambda: calls.append(1))
+        library.start(watch=True)
+        try:
+            assert "alpha" in settings.skill_names
+            _write_skill(tmp_path / "repository", "alpha", description="Does another thing. Use when told.")
+            assert self._wait_until(lambda: calls), "an edited description in the linked folder was not announced"
+            assert "Does another thing" in _spec(settings)["function"]["description"]
+        finally:
+            library.shutdown()
+
+    def test_watching_creates_a_missing_directory_and_a_script_does_not(self, settings, root):
+        with skills.loaded(settings, directory=root):
+            assert not root.exists()
+        library = skills.SkillLibrary(settings, directory=root)
+        library.start(watch=True)
+        try:
+            assert root.is_dir()
+            _write_skill(root, "alpha")
+            assert self._wait_until(lambda: "alpha" in settings.skill_names)
+        finally:
+            library.shutdown()
+
+    def test_a_script_does_not_follow_the_directory(self, settings, root):
         _write_skill(root, "alpha")
         with skills.loaded(settings, directory=root):
             _write_skill(root, "beta")
