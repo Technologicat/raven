@@ -47,7 +47,9 @@ from mcpyrate import colorizer
 from unpythonic import dyn
 from unpythonic.env import env
 
+from ..common import filewatch
 from ..common import netutil
+from ..common import utils as common_utils
 from ..common.async_bridge import AsyncBridge
 from . import config as librarian_config
 from . import llmtools
@@ -317,7 +319,8 @@ class MCPClient:
         self.on_status_changed = on_status_changed
         self.on_reloaded = on_reloaded
         self._maybe_bridge: AsyncBridge | None = None
-        self._maybe_watcher: asyncio.Task | None = None
+        self._maybe_watcher: filewatch.DirectoryWatcher | None = None
+        self._config_seen = b""  # the config file's content as last acted on
         self._servers: list[_Server] = []
         self._problems: dict[str, str] = {}
         self._entrypoints: dict[str, Callable] = {}
@@ -394,7 +397,11 @@ class MCPClient:
         await self._connect_servers(self._servers, timeout)
         self._refresh_tools()
         if maybe_signature is not None:
-            self._maybe_watcher = asyncio.get_running_loop().create_task(self._watch_config(maybe_signature))
+            self._start_watching(maybe_signature)
+            # An edit made while the servers connected, acted on before `start` returns. Awaited rather than
+            # spawned: spawned, it would read the file at some moment after `start` returned, and could catch a
+            # write half done. Edits from here on reach the watcher, which waits for the file to go quiet.
+            await self._reload_if_changed()
 
     async def _connect_servers(self, servers: list[_Server], timeout: float) -> None:
         await asyncio.gather(*(self._connect(server, timeout) for server in servers))
@@ -582,6 +589,9 @@ class MCPClient:
         `timeout`: seconds to allow. Default is `librarian_config.mcp_shutdown_timeout`.
         """
         timeout = timeout if timeout is not None else librarian_config.mcp_shutdown_timeout
+        watcher, self._maybe_watcher = self._maybe_watcher, None
+        if watcher is not None:  # first, so that no reload is spawned onto a bridge going away
+            watcher.stop()
         bridge, self._maybe_bridge = self._maybe_bridge, None
         if bridge is not None:
             try:
@@ -593,8 +603,6 @@ class MCPClient:
         self._install([], {}, {})
 
     async def _stop_all(self, timeout: float) -> None:
-        if self._maybe_watcher is not None:
-            self._maybe_watcher.cancel()
         await self._stop_servers(self._servers, timeout)
 
     @staticmethod
@@ -619,18 +627,39 @@ class MCPClient:
         except OSError:
             return b""
 
-    async def _watch_config(self, signature: bytes) -> None:
-        while True:
-            await asyncio.sleep(librarian_config.mcp_config_poll_interval)
-            current = self._config_signature()
-            if current != signature:
-                signature = current
-                try:
-                    logger.info(f"MCPClient: '{self.config_file}' changed; reloading the MCP servers.")
-                    if await self._sync_with_config():
-                        self._call_handler(self.on_reloaded)
-                except Exception:  # noqa: BLE001 -- the next change to the file gets another try
-                    logger.exception("MCPClient: reloading the MCP servers failed")
+    def _start_watching(self, signature: bytes) -> None:
+        """Follow the config file from now on. On the bridge's loop, once the servers have connected.
+
+        `signature`: the file's content when `start` read it, what `_reload_if_changed` compares against.
+        """
+        config_file = self.config_file.expanduser()
+        if not config_file.parent.is_dir():  # a watcher needs something to watch
+            common_utils.create_directory(config_file.parent)
+        bridge = self._maybe_bridge
+        def changed(relative_path: pathlib.Path, kind: str) -> None:  # on the watcher's thread
+            with contextlib.suppress(RuntimeError):  # the bridge has been shut down, and the reload with it
+                bridge.spawn(self._reload_if_changed())
+        self._config_seen = signature
+        watcher = filewatch.DirectoryWatcher(config_file.parent,
+                                             on_changed=changed,
+                                             accept=lambda path: path.name == config_file.name)
+        watcher.start()
+        self._maybe_watcher = watcher
+
+    async def _reload_if_changed(self) -> None:
+        """Bring the servers in line with the config file, if its content changed since it was last acted on."""
+        # The check and the update happen before the first `await`, so two reloads spawned in quick
+        # succession cannot both act on the same edit: the loop runs one coroutine at a time.
+        current = self._config_signature()
+        if current == self._config_seen:
+            return
+        self._config_seen = current
+        try:
+            logger.info(f"MCPClient: '{self.config_file}' changed; reloading the MCP servers.")
+            if await self._sync_with_config():
+                self._call_handler(self.on_reloaded)
+        except Exception:  # noqa: BLE001 -- the next change to the file gets another try
+            logger.exception("MCPClient: reloading the MCP servers failed")
 
     def retry_stopped(self) -> None:
         """Try the servers that were left stopped again, in the background, with a fresh allowance of retries.

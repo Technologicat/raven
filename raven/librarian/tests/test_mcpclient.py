@@ -1,6 +1,7 @@
 """Tests for `raven.librarian.mcpclient`, against a real MCP server over real transports."""
 
 import json
+import os
 import pathlib
 import socket
 import subprocess
@@ -489,10 +490,6 @@ class TestRetryStopped:
 
 
 class TestLiveReload:
-    @pytest.fixture
-    def quick_polls(self, monkeypatch):
-        monkeypatch.setattr(mcpclient.librarian_config, "mcp_config_poll_interval", 0.05)
-
     @staticmethod
     def _wait_until(predicate, timeout=15.0) -> bool:
         deadline = time.monotonic() + timeout
@@ -503,7 +500,7 @@ class TestLiveReload:
         return False
 
     @pytest.fixture
-    def watching(self, settings, tmp_path, quick_polls):
+    def watching(self, settings, tmp_path):
         def start(servers=None):
             config = tmp_path / "mcp.json"
             if servers is not None:
@@ -544,6 +541,30 @@ class TestLiveReload:
         _write_config(config, {"one": _stdio_entry(env={"RAVEN_MCP_TEST": "new"})})
         assert self._wait_until(lambda: _call(settings, "one__getenv", name="RAVEN_MCP_TEST")[0] == "new")
 
+    def test_a_save_by_rename_is_seen(self, watching, settings, tmp_path):
+        # How most editors save: the new content goes into a temporary file, which is renamed over the config.
+        client, config = watching({"one": _stdio_entry()})
+        temporary = _write_config(tmp_path / "mcp.json.tmp", {"one": _stdio_entry(), "two": _stdio_entry()})
+        os.replace(temporary, config)
+        assert self._wait_until(lambda: "two__echo" in client.tool_names)
+
+    def test_rewriting_the_same_content_is_not_a_reload(self, tmp_path, settings):
+        # A file touched or saved unchanged is not reloaded. (An unchanged server would be kept running by a
+        # reload anyway, so what this saves is the reload itself, which is what the handler counts.)
+        config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
+        reloads = []
+        client = mcpclient.MCPClient(settings, config_file=config, on_reloaded=lambda: reloads.append(1))
+        client.start(watch=True)
+        try:
+            _write_config(config, {"one": _stdio_entry()})  # same content, new mtime
+            time.sleep(1.0)  # past the watcher's quiet period, so the rewrite is settled on its own
+            _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})  # then a real change, to wait on
+            assert self._wait_until(lambda: "two__echo" in client.tool_names), "the reload did not happen, so this fixture cannot tell a skipped reload from no watching"
+            time.sleep(0.5)
+            assert reloads == [1], "the unchanged rewrite was reloaded too"
+        finally:
+            client.shutdown()
+
     def test_the_file_appearing_starts_servers(self, watching, settings):
         client, config = watching(None)
         assert client.tool_names == frozenset()
@@ -561,7 +582,7 @@ class TestLiveReload:
         assert self._wait_until(lambda: "" in client.problems)
         assert _call(settings, "one__echo", text="still here")[0] == "still here"
 
-    def test_the_handlers_are_told_of_a_reload(self, tmp_path, settings, quick_polls):
+    def test_the_handlers_are_told_of_a_reload(self, tmp_path, settings):
         config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
         status_calls, reload_calls = [], []
         client = mcpclient.MCPClient(settings, config_file=config,
@@ -576,7 +597,7 @@ class TestLiveReload:
         finally:
             client.shutdown()
 
-    def test_a_script_does_not_follow_the_file(self, tmp_path, settings, quick_polls):
+    def test_a_script_does_not_follow_the_file(self, tmp_path, settings):
         config = _write_config(tmp_path / "mcp.json", {"one": _stdio_entry()})
         with mcpclient.connected(settings, config_file=config) as client:
             _write_config(config, {"one": _stdio_entry(), "two": _stdio_entry()})
