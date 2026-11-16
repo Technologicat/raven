@@ -90,6 +90,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import keyboardmark
     from ..common.gui import messagebox
+    from ..common.gui import pill
     from ..common.gui import filedrop
     from ..common.gui import qroverlay
     from ..common.gui import tooltip as gui_tooltip
@@ -276,29 +277,6 @@ with timer() as tim:
     with dpg.theme(tag="my_attachment_error_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
-
-    # Themes for the LLM backend status pill above the composer (`_refresh_backend_status_pill`). Its own
-    # pulsator rather than the INDEXING one, for the reason that one is separate from the mic's: a pulsation whose
-    # phase another owner may reset is a pulsation that jumps.
-    #
-    # Split steady/pulsating the same way the indicator rows are, and for the same reason — the icon pulsates to
-    # say "act on me", the sentence beside it stays at full alpha because a sentence is too long to read
-    # inside one cycle. The same caution orange for both bad states: which of the two it is, and what to do
-    # about it, is what the words are for.
-    with dpg.theme(tag="my_pulsating_caution_backend_theme"):
-        with dpg.theme_component(dpg.mvAll):
-            pulsating_caution_backend_color = dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
-        pulsating_caution_backend_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
-                                                                      theme_color_widget=pulsating_caution_backend_color)
-        gui_animation.animator.add(pulsating_caution_backend_glow)
-    with dpg.theme(tag="my_steady_caution_backend_theme"):
-        with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
-    # The connected state, which appears only to announce itself and then leaves. Steady on both widgets:
-    # nothing here is asking to be acted on.
-    with dpg.theme(tag="my_steady_green_backend_theme"):
-        with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (96, 224, 96))
 
     # The thought bubble's cloud, in the same color the thinking trace is written in — so the cloud and what
     # it hides are visibly the same thing, whether or not the trace is open.
@@ -671,8 +649,6 @@ backend_status_task_manager = bgtask.TaskManager(name="librarian_backend_status"
                                                  mode="sequential",
                                                  executor=bg)
 
-_backend_pill_shown = False  # mirrors the row's visibility; `_refresh_composer_layout` sizes the field from it
-
 def _describe_backend_status(status: sym) -> tuple[str, str, str]:
     """Return `(icon, label, tooltip)` for the composer's status row in `status`.
 
@@ -702,19 +678,17 @@ def _describe_backend_status(status: sym) -> tuple[str, str, str]:
             f"LLM backend connected{model_suffix}",
             f"{headline}\n\nClick to check again.")
 
-_mcp_pill_shown = False  # likewise, for the pill offering to retry stopped MCP servers
-_composer_notice_shown = False  # likewise, for the transient notice in the same row
-
 def _refresh_mcp_status_pill() -> None:
     """Show the pill offering to retry the MCP servers that were left stopped, or hide it if there are none."""
-    global _mcp_pill_shown
     stopped = mcp_client.stopped_servers
     if stopped:
         plural_s = common_text.plural_s(len(stopped))
-        dpg.configure_item("mcp_status_button", label=f"MCP: {len(stopped)} server{plural_s} stopped. Click to try again.")  # tag
         problems = mcp_client.problems
-        mcp_status_tooltip.text = "\n".join(f"{name}: {problems.get(name, 'stopped')}" for name in stopped)
-    _mcp_pill_shown = bool(stopped)
+        mcp_pill.set(label=f"MCP: {len(stopped)} server{plural_s} stopped. Click to try again.",
+                     icon=fa.ICON_PLUG_CIRCLE_XMARK,
+                     tooltip="\n".join(f"{name}: {problems.get(name, 'stopped')}" for name in stopped),
+                     kind=pill.ALERT)
+    mcp_pill.shown = bool(stopped)
     _refresh_composer_layout()
 
 composer_notice_task_manager = bgtask.TaskManager(name="librarian_composer_notice",
@@ -723,28 +697,25 @@ composer_notice_task_manager = bgtask.TaskManager(name="librarian_composer_notic
 
 def _show_composer_notice(text: str) -> None:
     """Show `text` for a few seconds in the status row above the composer."""
-    global _composer_notice_shown
     if guiutils.is_shutting_down() or not dpg.does_item_exist("composer_notice_button"):  # tag
         return
-    dpg.configure_item("composer_notice_button", label=text)  # tag
-    _composer_notice_shown = True
+    composer_notice_pill.set(label=text, kind=pill.OK)
+    composer_notice_pill.shown = True
     _refresh_composer_layout()
     def linger(task_env: env) -> None:
-        global _composer_notice_shown
         deadline = time.monotonic() + _COMPOSER_NOTICE_LINGER_S
         while time.monotonic() < deadline:
             if task_env.cancelled or guiutils.is_shutting_down():
                 return  # a newer notice owns the row now, or the app is going away
             time.sleep(_BACKEND_POLL_TICK_S)
-        _composer_notice_shown = False
+        composer_notice_pill.shown = False
         _refresh_composer_layout()
     composer_notice_task_manager.submit(linger, env())
 
 def _dismiss_composer_notice() -> None:
     """Take the notice down now."""
-    global _composer_notice_shown
     composer_notice_task_manager.clear(wait=False)
-    _composer_notice_shown = False
+    composer_notice_pill.shown = False
     _refresh_composer_layout()
 
 def _refresh_tool_cost_tooltips() -> None:
@@ -760,27 +731,18 @@ def _refresh_tool_cost_tooltips() -> None:
 
 def _refresh_backend_status_pill(status: sym) -> None:
     """Put `status` into the composer's status row, and show the row."""
-    global _backend_pill_shown
     icon, label, caption = _describe_backend_status(status)
-    dpg.set_value("backend_status_icon", icon)  # tag
-    dpg.configure_item("backend_status_button", label=label)  # tag
-    # Through the flash rather than around it: clicking the pill flashes "Checking the LLM backend…" into
-    # this same tooltip, and the probe it starts usually answers inside that second. A plain write would be
-    # put back by the flash when it ends, leaving the tooltip describing the state before the click.
-    gui_animation.set_text_under_flash(backend_status_tooltip, caption)
-    if status is llmclient.backend_ready:
-        dpg.bind_item_theme("backend_status_icon", "my_steady_green_backend_theme")  # tag
-        dpg.bind_item_theme("backend_status_button", "my_steady_green_backend_theme")  # tag
-    else:
-        dpg.bind_item_theme("backend_status_icon", "my_pulsating_caution_backend_theme")  # tag
-        dpg.bind_item_theme("backend_status_button", "my_steady_caution_backend_theme")  # tag
-    _backend_pill_shown = True
+    # The caption goes through the flash rather than around it (`Pill.set` does this): clicking the pill flashes
+    # "Checking the LLM backend…" into this same tooltip, and the probe it starts usually answers inside that
+    # second. A plain write would be put back by the flash when it ends.
+    backend_pill.set(label=label, icon=icon, tooltip=caption,
+                     kind=pill.OK if status is llmclient.backend_ready else pill.ALERT)
+    backend_pill.shown = True
     _refresh_composer_layout()
 
 def _hide_backend_status_pill() -> None:
     """Take the composer's status row down, giving the text field its height back."""
-    global _backend_pill_shown
-    _backend_pill_shown = False
+    backend_pill.shown = False
     _refresh_composer_layout()
 
 def _backend_status_poll_task(task_env: env) -> None:
@@ -915,22 +877,12 @@ def _refresh_server_status_pill(available: bool) -> None:
     """
     global _server_status_pill_w
     icon, label, caption = _describe_server_status(available)
-    dpg.set_value("server_status_icon", icon)  # tag
-    dpg.configure_item("server_status_button", label=label)  # tag
-    # Through the flash rather than around it, as the backend row does: a click flashes its own message into
-    # this tooltip, and a plain write would be put back when the flash ended.
-    gui_animation.set_text_under_flash(server_status_tooltip, caption)
-    if available:
-        dpg.bind_item_theme("server_status_icon", "my_steady_green_backend_theme")  # tag
-        dpg.bind_item_theme("server_status_button", "my_steady_green_backend_theme")  # tag
-    else:
-        dpg.bind_item_theme("server_status_icon", "my_pulsating_caution_backend_theme")  # tag
-        dpg.bind_item_theme("server_status_button", "my_steady_caution_backend_theme")  # tag
+    server_pill.set(label=label, icon=icon, tooltip=caption, kind=pill.OK if available else pill.ALERT)
     # The two captions differ in width, and a caption is laid out only by drawing it. So it is drawn once just
     # past the panel's right edge, where the child window clips it, then measured and moved into place.
     panel_w, _ = guiutils.get_widget_size("mode_toggle_controls")  # tag
     dpg.set_item_pos("server_status_pill", (panel_w, dpg.get_item_pos("server_status_pill")[1]))  # tag
-    dpg.show_item("server_status_pill")  # tag
+    server_pill.shown = True
     guiutils.split_frame(operation="_refresh_server_status_pill: measuring the caption", required=False)
     pill_w, _ = guiutils.get_widget_size("server_status_pill")  # tag
     if pill_w:
@@ -940,7 +892,7 @@ def _refresh_server_status_pill(available: bool) -> None:
 def _hide_server_status_pill() -> None:
     """Take the utility panel's server row down."""
     with guiutils.nonexistent_ok():
-        dpg.hide_item("server_status_pill")  # tag
+        server_pill.shown = False
 
 def _server_status_poll_task(task_env: env) -> None:
     """Watch Raven-server for the whole session, and put the row up when it goes away.
@@ -994,7 +946,7 @@ def _request_server_recheck() -> None:
     gui_animation.flash_button(button="server_status_button",  # tag
                                message="Checking Raven-server...",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip=server_status_tooltip)
+                               tooltip=server_pill.tooltip)
     _start_server_status_poll(delay_first_probe=False)
 
 def _request_backend_reconnect() -> None:
@@ -1002,7 +954,7 @@ def _request_backend_reconnect() -> None:
     gui_animation.flash_button(button="backend_status_button",  # tag
                                message="Checking the LLM backend...",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip=backend_status_tooltip)
+                               tooltip=backend_pill.tooltip)
     _start_backend_status_poll(delay_first_probe=False)
 
 def _refresh_composer_layout() -> None:
@@ -1019,11 +971,7 @@ def _refresh_composer_layout() -> None:
     """
     attachments_shown = bool(staged_images or staged_files)
     field_h = gui_config.chat_field_h
-    for flag, widget in ((_backend_pill_shown, "backend_status_pill"),  # tag
-                         (_mcp_pill_shown, "mcp_status_pill"),  # tag
-                         (_composer_notice_shown, "composer_notice_button")):  # tag
-        dpg.configure_item(widget, show=flag)
-    if _backend_pill_shown or _mcp_pill_shown or _composer_notice_shown:
+    if backend_pill.shown or mcp_pill.shown or composer_notice_pill.shown:
         dpg.show_item("composer_status_row")  # tag
         field_h -= gui_config.chat_backend_pill_h
     else:
@@ -1697,38 +1645,18 @@ with timer() as tim:
                         # Above the field rather than beside the send button, because it is a precondition
                         # for the whole composer rather than a property of one control — and here it is in
                         # the reader's eye on the way to the thing they are about to type into.
-                        #
-                        # The icon is a plain text widget and only the label is a button, so the leftmost
-                        # ~23 px of the row do not respond to a click. The alternative is no icon: DPG draws
-                        # an item's label in one font, and the app font has no warning glyph (the same
-                        # constraint that decides the jump-to-latest pill's font — see `chat_controller`).
-                        # An icon that reads at a glance is worth more than those pixels.
                         with dpg.group(tag="composer_status_row", horizontal=True, show=False):
-                            with dpg.group(tag="backend_status_pill", horizontal=True, show=False):
-                                dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="backend_status_icon")
-                                dpg.bind_item_font("backend_status_icon", themes_and_fonts.icon_font_solid)  # tag
-                                dpg.add_button(label="",
-                                               callback=lambda: _request_backend_reconnect(),
-                                               tag="backend_status_button")
-                                # Self-sizing, because this caption is rewritten on every status change and
-                                # again by the click flash — and a `dpg.tooltip` is drawn once at its previous
-                                # size each time that happens.
-                                backend_status_tooltip = gui_tooltip.Tooltip("backend_status_button", "")  # tag
-
-                            with dpg.group(tag="mcp_status_pill", horizontal=True, show=False):
-                                dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="mcp_status_icon")
-                                dpg.bind_item_font("mcp_status_icon", themes_and_fonts.icon_font_solid)  # tag
-                                dpg.bind_item_theme("mcp_status_icon", "my_pulsating_caution_backend_theme")  # tag
-                                dpg.add_button(label="",
-                                               callback=lambda: _retry_stopped_mcp_servers(),
-                                               tag="mcp_status_button")
-                                dpg.bind_item_theme("mcp_status_button", "my_steady_caution_backend_theme")  # tag
-                                mcp_status_tooltip = gui_tooltip.Tooltip("mcp_status_button", "")  # tag
-
-                            # A button for its rounded background, matching the pills beside it. As a button
-                            # looks clickable, clicking it takes the notice down early.
-                            dpg.add_button(label="", callback=lambda: _dismiss_composer_notice(), tag="composer_notice_button", show=False)
-                            dpg.bind_item_theme("composer_notice_button", "my_steady_green_backend_theme")  # tag
+                            backend_pill = pill.Pill(tag="backend_status",
+                                                     icon_font=themes_and_fonts.icon_font_solid,
+                                                     callback=lambda: _request_backend_reconnect())
+                            mcp_pill = pill.Pill(tag="mcp_status",
+                                                 icon_font=themes_and_fonts.icon_font_solid,
+                                                 callback=lambda: _retry_stopped_mcp_servers())
+                            # A transient notice, with no icon. As a pill looks clickable, clicking it takes the
+                            # notice down early.
+                            composer_notice_pill = pill.Pill(tag="composer_notice",
+                                                             icon_font=themes_and_fonts.icon_font_solid,
+                                                             callback=lambda: _dismiss_composer_notice())
 
                         def send_message_to_ai_callback() -> None:
                             # Grab and strip the message. The trailing newline the multiline widget inserts on the
@@ -2257,17 +2185,9 @@ with timer() as tim:
                     # Parked at the bottom right of the panel rather than following the status indicators, so
                     # that it does not jump about as they come and go, and stays clear of them however many are
                     # lit. Positioned by `_place_server_status_pill`.
-                    with dpg.group(tag="server_status_pill", show=False):  # tag
-                        with dpg.group(horizontal=True):
-                            dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="server_status_icon")  # tag
-                            dpg.bind_item_font("server_status_icon", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.add_button(label="",
-                                           callback=lambda: _request_server_recheck(),
-                                           tag="server_status_button")  # tag
-                            # Self-sizing, for the same reason as the backend row's: the caption is
-                            # rewritten on every status change and again by the click flash, and a
-                            # `dpg.tooltip` would be drawn at its previous size each time that happened.
-                            server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
+                    server_pill = pill.Pill(tag="server_status",
+                                            icon_font=themes_and_fonts.icon_font_solid,
+                                            callback=lambda: _request_server_recheck())
 
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
         # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
@@ -2540,7 +2460,7 @@ def update_animations():
     # The LLM backend's status row comes back up when a turn finds the backend unable to answer: the turn's
     # model check (`llmclient.follow_model_swap`) records that in the settings, and this notices it. Two
     # attribute reads, no request; the poll it starts is what probes, and takes the row down again.
-    if not _backend_pill_shown and not guiutils.is_shutting_down():
+    if not backend_pill.shown and not guiutils.is_shutting_down():
         maybe_bad_status = llmclient.backend_status(llm_settings)
         if maybe_bad_status is not llmclient.backend_ready:
             _refresh_backend_status_pill(maybe_bad_status)

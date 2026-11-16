@@ -1,8 +1,8 @@
 # Brief: the Visualizer's display filters, starting with cluster purity
 
-*Status: decided 2026-11-11. Steps 1–3 built and their layout tuned the same day. Step 4's display half built
-2026-11-13 (4a below); its interaction half (4b) is next, then the shared pill (5). Date filtering and recolouring
-are later work that reuses the layer from step 3.*
+*Status: decided 2026-11-11. Steps 1–3 built and their layout tuned the same day; step 4's display half (4a)
+2026-11-13; its interaction half (4b) and the shared pill (5) 2026-11-16, all five live-tested. Date filtering
+and recolouring are later work that reuses the layer from step 3.*
 
 The Visualizer is an interactive view on the data, so the user should be able to set aside what they take to be
 noise, and later filter and recolour by other criteria (date, first author). This brief scopes the layer that
@@ -60,7 +60,15 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
        filter state, which would roll the filters back along with an older plain selection change.
 5. **A shared pill widget, in `raven.common.gui`** (maintainer, 2026-11-13): after the Visualizer's pill, built
    first to learn the shape of the common surface. Librarian's three status pills are app code too and would move
-   onto it.
+   onto it. Settled 2026-11-16 (maintainer):
+   - `raven.common.gui.pill.Pill`: an icon, a button carrying the label, a self-sizing tooltip on the button,
+     and a `shown` property the layout code reads instead of mirroring it in a flag of its own.
+   - Three kinds: *ok* (green, steady), *alert* (caution colour, the icon pulsing: act on me) and *notice*
+     (caution colour, steady: read this, nothing is wrong). The themes and the pulsator are shared, so pills
+     alerting side by side pulse in phase.
+   - The Visualizer's filter pill is a *notice*: a display filter is a state the user chose.
+   - Librarian's transient notice in the composer row becomes a pill too, with no icon (`icon=None`).
+   - Placement, the click action, the captions and the click flash stay with the app.
 
 ## The rules
 

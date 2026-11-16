@@ -114,6 +114,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import keyboardmark
     from ..common.gui import messagebox
+    from ..common.gui import pill
     from ..common.gui import filedrop
     from ..common.gui import qroverlay
     from ..common.gui import tooltip as gui_tooltip
@@ -370,14 +371,14 @@ def apply_display_filters():
     plotter.refresh_series(ds)
     maybe_summary = displaystate.summary(ds.sorted_entries)
     if maybe_summary is not None:
-        dpg.configure_item("filters_pill_button", label=f"{maybe_summary} · Show all")  # tag
         if displaystate.visibility_counts(ds.sorted_entries)[displaystate.HIDDEN]:
-            filters_pill_tooltip.text = "Some records are not shown at all. Click to show all of them."
+            caption = "Some records are not shown at all. Click to show all of them."
         else:
-            filters_pill_tooltip.text = "Not every record is shown in full colour. Click to show all of them."
-        dpg.show_item("filters_pill")  # tag
+            caption = "Not every record is shown in full colour. Click to show all of them."
+        filters_pill.set(label=f"{maybe_summary} · Show all", icon=fa.ICON_FILTER, tooltip=caption, kind=pill.NOTICE)
+        filters_pill.shown = True
     else:
-        dpg.hide_item("filters_pill")  # tag
+        filters_pill.shown = False
     # Whether grayed records can be selected is a question only while some are grayed. Disabled rather than hidden
     # otherwise, so that the row does not shift under the combo beside it.
     any_grayed = displaystate.visibility_counts(ds.sorted_entries)[displaystate.GRAYED] > 0
@@ -870,16 +871,9 @@ with timer() as tim:
                             dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
                             # Says that not every record is in full colour, and is the way back: present exactly while
                             # a display filter grays or hides something.
-                            with dpg.group(tag="filters_pill", horizontal=True, show=False):
-                                dpg.add_text(fa.ICON_FILTER, tag="filters_pill_icon")
-                                dpg.bind_item_font("filters_pill_icon", app_state.themes_and_fonts.icon_font_solid)  # tag
-                                dpg.add_button(label="", tag="filters_pill_button", callback=lambda: show_all())
-                                with dpg.theme(tag="filters_pill_theme"):
-                                    with dpg.theme_component(dpg.mvAll):
-                                        dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
-                                dpg.bind_item_theme("filters_pill", "filters_pill_theme")  # tag
-                                # Self-sizing, as its text follows whether records are grayed or hidden.
-                                filters_pill_tooltip = gui_tooltip.Tooltip("filters_pill_button", "")  # tag
+                            filters_pill = pill.Pill(tag="filters",
+                                                     icon_font=app_state.themes_and_fonts.icon_font_solid,
+                                                     callback=lambda: show_all())
                         with dpg.group(horizontal=True):
                             dpg.add_text("Misc", color=(140, 140, 140), tag="misc_mode_label_text")
                             dpg.add_combo(items=list(displaystate.MISC_MODES),

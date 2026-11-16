@@ -213,6 +213,8 @@
 
 #### Raven-librarian
 
+- **Clicking the LLM backend pill flashes it**, as clicking the Raven-server pill does.
+  - While the backend was not answering, the pill was re-set after each retry, and that cut the click's flash short before it showed.
 - **Loading a second model in LM Studio no longer moves Librarian onto it.** In v0.2.10, a model loaded beside the one in use, and listed before it, became the model the next turn asked. Now the model in use stays in use while it is loaded unchanged; another model appearing does not count as a change. The same applies to a `raven.librarian.sweep` batch, which a second model no longer stops.
 - **A message spoken into the microphone is sent with the attachments staged for it.** Before, it went out without them, and they stayed in the strip to be sent with the next message.
   - A spoken message now also waits, as a typed one does, while the AI is still writing or an attached document is still being read. The transcript goes into the message field, to be sent from there.
