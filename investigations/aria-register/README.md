@@ -452,7 +452,7 @@ checked against a blind sample:
 **Next: a blind sample of these replies**, aimed at both sides of v6's line, rated by the maintainer — the
 check these grades have not had, and the measure of what leaving landing out of the grade costs.
 
-Written 2026-10-28: `blind-sample-17.md` (30 replies, `--seed 17 --aim register-judged-f3b3c874.jsonl`; key
+Written 2026-10-28: `blind-sample-17.md` (21 replies, `--seed 17 --aim register-judged-f3b3c874.jsonl`; key
 in `blind-key-17.json`, both local). Once rated, `judge_register.py register-prompts2-7e8dd60a.jsonl
 --blind-check blind-sample-17.md` compares v6 with the ratings.
 
@@ -507,6 +507,51 @@ no documents and no internet. `sweep.fingerprint` can now hash the tool specific
 `llmclient.offered_tools`), and **this probe does not pass them**, so its ledgers keep the fingerprints they ran under and a
 change to those two tools' descriptions would not start a new one. Passing them would, once, for every prompt set. New
 tools, MCP ones included, do not reach these runs while that restriction stands.
+
+### The fourth blind sample (rated 2026-11-16)
+
+`blind-sample-17.md`, 21 replies from the second prompt set, rated by the maintainer **with comments rather
+than grades**: compressing them to yes or no loses the nuance (maintainer). So the table groups the comments,
+and v6's grades sit beside them, unblinded afterwards:
+
+| what the comment says | replies | conditions | v6 |
+|---|---|---|---|
+| yes, and funny | R03, R08 (units for a quick question), R20 ("Canberra. Not Sydney.") | `plain`, `card_off`, `card_on` | all `clear` |
+| yes or possibly yes: direct, no humour, "the case doesn't need it" | R01, R02, R05, R13, R14, R16, R19 | all three | 3 `clear`, 4 `borderline` |
+| borderline: the humour hinges on landing, or the reply reads serious | R04, R07, R17 | `card_on`, `plain`, `card_off` | all `clear` |
+| borderline: too confrontational | R06, R15 (fix the bug, no code given) | both `card_on` | `clear`, `borderline` |
+| no: an earnest reply to an absurd question, missing the point | R11, R18, R21 (be on time for yesterday's meeting) | `plain`, `card_off`, `card_on` | 2 `borderline`, 1 `clear` |
+| no new information: the fifth or sixth reply to one prompt | R09, R10, R12 | `card_off`, `card_off`, `card_on` | 2 `clear`, 1 `borderline` |
+
+1. **What the hand rates highly does not follow the user card here**: the three clear yeses are one per
+   condition. That fits `creative` being the model's (step 1, above), and it weakens step 2's provisional
+   reading that the tone paragraph carries the voice, which rests on v6's `clear` counts.
+2. **Plain directness counts as the voice by hand.** The rubric takes directness as one of three forms of wit,
+   carried by understatement; the comments credit a direct, useful reply with no humour in it, where
+   humour is not called for.
+3. **v6 credits what the hand calls the miss, on the absurd prompt.** "You can't." is directness to the
+   judge; to the maintainer the question was a joke, and the reply should have played along. Telling that a
+   speaker has shifted gears from one line needs knowing the speaker, which a standalone prompt does not
+   give the model.
+4. **The boundary between the edge and too much edge may not be well defined at all** (maintainer, on R06).
+5. **Open questions the ratings raised**: whether length should count, as the situation sometimes warrants
+   thoroughness; and familiarity again, the replies to one prompt reading as repeats by the fifth.
+
+**How to measure from here, under discussion (2026-11-16):**
+
+- **Two axes instead of one grade** (agreed): directness, including going too far into confrontation, and
+  humour that lands.
+- **Ranking within a prompt**, one reply per condition shuffled together, makes familiarity help rather than
+  hurt; it also costs more of the rater's attention per sample than isolated ratings (maintainer).
+- **The absurd prompts stay**, with a preceding turn that sets up the banter, to see what context changes:
+  responding to absurd humour dropped into a conversation is part of the voice, and dropping them would
+  lose it (maintainer).
+- **A humour test the maintainer has run on models since 2023–24**, as a candidate for the humour axis: an
+  absurd press release from paleontologists announcing the *steganosaur*, which had stayed hidden until now;
+  and a product announcement from the 2030s for *AGItater*, the personal AI that extols the virtues of
+  potatoes to the unsuspecting user. Being framed as humour requests, they do not test whether the model
+  notices a change of gears.
+- **Perhaps no further tuning of the judge**: the comparison step 4 needs can be ranked by hand.
 
 ### Notes for the prompt rewrite (the maintainer, 2026-10-21)
 
