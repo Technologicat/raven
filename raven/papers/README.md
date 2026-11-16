@@ -8,6 +8,11 @@
 
 Thirteen command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, repairing what the databases hand you, and setting aside what is not about your topic. One more is for afterwards: checking that what you wrote still matches the corpus it came from.
 
+<p align="center">
+<img src="../../img/raven-papers-infographic.png" alt="The paper tools as a metro map: an arXiv line and a database line merge at deduplication, run on through filling in abstracts, setting aside what cannot be screened and LLM screening, and branch out to the Visualizer, Librarian and a reference check. Bars below show the record count falling at each stage, and five cards say why: auditable, reproducible, your criteria, local and private, agent-friendly." width="800"/> <br/>
+<i>The tools in the order a review uses them.</i>
+</p>
+
 **This manual documents the rules the tools apply** — what counts as the same paper, when a record is dropped, what a merge keeps. For the pipeline itself, in the order you would run it, see [*Command-line tools*](../../README.md#command-line-tools) in the main README.
 
 **It is written for an LLM agent as much as for you.** A tool here can just as well be run by asking an agent to do it — *"deduplicate this export, fill in the abstracts, and screen it against this topic"* — and an agent reads this manual to find out how. Point yours at this file.
