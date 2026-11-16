@@ -15,7 +15,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     out there), and the REPL can change them in a running app; so a screenshot of the plot alone, cropped, and
     possibly embedded in the Visualizer's infographic (maintainer). Viridis's yellow end has little contrast on
     white, which the screenshot will show.
-  - **Infographics of what Raven-visualizer and Raven-librarian are for**, in the style of the paper tools' one
+  - **Infographics of what Raven-visualizer and Raven-librarian are for, also by Wednesday 2026-11-18**, in the
+    style of the paper tools' one
     (`img/raven-papers-infographic.svg`, designed in `briefs/design/papers-infographic-sketch.md`).
 
 - **[Medium]** A light theme, as an option across the constellation (maintainer, 2026-11-16). Some readers
