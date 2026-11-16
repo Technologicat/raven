@@ -113,6 +113,31 @@ class TestPointsByLabel:
         assert displaystate.points_with_visibility(entries, displaystate.GRAYED) == [1, 3]
 
 
+class TestWhatCanBeInteractedWith:
+    def mixed(self):
+        entries = entries_of(0, 0, -1, 1)
+        entries[1].visibility = displaystate.GRAYED
+        entries[2].visibility = displaystate.HIDDEN
+        return entries
+
+    def test_only_records_in_full_colour_by_default(self):
+        assert list(displaystate.interactable(self.mixed(), range(4), grayed_selectable=False)) == [0, 3]
+
+    def test_grayed_records_too_when_asked_for_but_never_hidden_ones(self):
+        assert list(displaystate.interactable(self.mixed(), range(4), grayed_selectable=True)) == [0, 1, 3]
+
+    def test_the_order_given_is_kept(self):
+        # The hover tooltip lists records nearest first, so a filter must not re-sort them.
+        assert list(displaystate.interactable(self.mixed(), [3, 1, 0], grayed_selectable=True)) == [3, 1, 0]
+
+    def test_nothing_left_is_still_an_index_array(self):
+        result = displaystate.interactable(self.mixed(), [1, 2], grayed_selectable=False)
+        assert len(result) == 0
+        assert result.dtype.kind == "i", "an empty float array raises when used to slice with"
+
+    def test_on_screen_is_everything_but_the_hidden(self):
+        assert list(displaystate.on_screen(self.mixed(), range(4))) == [0, 1, 3]
+
 class TestTheInfoPanelAndTooltipGroupByTheLabelShown:
     def test_a_demoted_clusters_records_are_listed_under_misc(self):
         entries = entries_of(0, 1, 1)

@@ -188,8 +188,8 @@ class RecordingDPG:
 
 
 def make_entry(title, cluster_id, data_idx, **fields):
-    return env(title=title, cluster_id=cluster_id, current_label_id=cluster_id, data_idx=data_idx,
-               author="Author, An", year="2024", **fields)
+    return env(title=title, cluster_id=cluster_id, current_label_id=cluster_id, visibility="shown",
+               data_idx=data_idx, author="Author, An", year="2024", **fields)
 
 
 @pytest.fixture
@@ -215,6 +215,7 @@ def gui(monkeypatch):
                make_entry("Something else entirely", cluster_id=1, data_idx=2)]
     dataset = env(sorted_entries=entries)
     monkeypatch.setattr(app_state, "dataset", dataset, raising=False)
+    monkeypatch.setattr(app_state, "grayed_selectable", False, raising=False)
 
     # Read as an argument to the acknowledgment flash, so it has to exist even though the flash is stubbed.
     # Normally created by `build_header`, which these tests do not run.
@@ -459,6 +460,15 @@ class TestSelectingAWholeCluster:
         assert sorted(data_idxs) == [0, 1], "both entries of cluster 0, and neither of cluster 1"
         assert mode == "replace"
 
+    def test_a_record_of_the_cluster_that_cannot_be_interacted_with_is_left_out(self, gui, monkeypatch):
+        # The control is the test above: the same cluster, everything in colour, selects both.
+        app_state.dataset.sorted_entries[1].visibility = "grayed"
+        info_panel.select_cluster_by_id(0, "replace")
+        assert list(gui.selections[0][0]) == [0]
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        info_panel.select_cluster_by_id(0, "replace")
+        assert sorted(gui.selections[1][0]) == [0, 1], "and taken in once grayed records are selectable"
+
     def test_the_combine_mode_is_passed_through_rather_than_decided_here(self, gui):
         # Negative control for the mode in the test above: it is the caller's, so a cluster can be added to
         # or subtracted from a selection being built up.
@@ -479,7 +489,7 @@ class TestSelectingAWholeCluster:
         be_current(monkeypatch, 12)  # the entry in cluster 1
         info_panel.select_current_cluster()
         data_idxs, _, _ = gui.selections[0]
-        assert data_idxs == [2]
+        assert list(data_idxs) == [2]
 
     def test_selecting_the_current_cluster_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
         be_current(monkeypatch, None)

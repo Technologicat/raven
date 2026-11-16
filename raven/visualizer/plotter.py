@@ -80,7 +80,8 @@ _select_radius_last_scale_y = None  # ...and y
 # Plotter-space queries
 
 def get_visible_datapoints(dataset: env | None = None) -> np.ndarray:
-    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter.
+    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter, of those that
+    can be interacted with (`displaystate.interactable`).
 
     `dataset`: the dataset to query. Defaults to the live `app_state.dataset`. Pass an explicitly captured
                snapshot to keep the result consistent with other dataset reads in the same operation, so a
@@ -106,11 +107,13 @@ def get_visible_datapoints(dataset: env | None = None) -> np.ndarray:
     filtymax = dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
     filty = filtymin * filtymax
     filt = filtx * filty
-    return np.where(filt)[0]
+    return displaystate.interactable(dataset.sorted_entries, np.where(filt)[0],
+                                     grayed_selectable=app_state.grayed_selectable)
 
 
 def get_data_idxs_at_mouse(dataset: env | None = None) -> np.ndarray:
-    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor.
+    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor, of those
+    that can be interacted with (`displaystate.interactable`), nearest first.
 
     `dataset`: the dataset to query. Defaults to the live `app_state.dataset`. Background workers pass an
                explicitly captured snapshot, so that a concurrent `open_file` swap can't make this read and
@@ -150,7 +153,8 @@ def get_data_idxs_at_mouse(dataset: env | None = None) -> np.ndarray:
     # Filter for data points within the maximum allowed pixel distance (selection brush size).
     filt = (pixel_distance <= gui_config.selection_brush_radius_pixels)
 
-    return data_idxs[filt]
+    return displaystate.interactable(dataset.sorted_entries, data_idxs[filt],
+                                     grayed_selectable=app_state.grayed_selectable)
 
 
 def compute_highlight_alpha(x, n_data, n_many):
@@ -422,6 +426,9 @@ def load_dataset(ds):
         # readout and its slider need the purity the importer stores, so a dataset without it shows only the rest.
         dpg.set_value("purity_cutoff_slider", 0)  # tag
         dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
+        dpg.set_value("grayed_selectable_checkbox", False)  # tag
+        app_state.grayed_selectable = False
+        dpg.disable_item("grayed_selectable_checkbox")  # tag
         dpg.hide_item("filters_pill")  # tag
         maybe_purity_text = entry_renderer.format_dataset_purity(ds.file_content)
         for item in ("dataset_purity_text", "purity_cutoff_controls"):  # tag

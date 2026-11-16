@@ -38,6 +38,7 @@ empty or missing: it names the code that has to have run first.
 | `mouse_inside_plot_widget`       | callable → bool             | `app.py` event-handlers section       | Whether the mouse cursor is over the plotter.                  |
 | `search_string_box`              | `box(str)`                  | `app.py` search section               | Boxed current search string (empty when no search active).     |
 | `search_result_data_idxs_box`    | `box(np.ndarray)`           | `app.py` search section               | Boxed indices (into `sorted_*`) of items matching the search.  |
+| `grayed_selectable`              | `bool`                      | `app.py` display filters, `plotter.load_dataset` | Whether grayed records can be hovered and selected (`displaystate.interactable`). |
 | `selection_changed`              | `bool`                      | `raven.visualizer.selection`          | Set when the selection changes; cleared by the info panel once it has finalized an update. Used for scroll anchoring. |
 | `selection_anchor_data_idxs_set` | `set[int]`                  | `raven.visualizer.selection`          | Items common to the previous and current selection, so they can serve as scroll anchors. Indices into `sorted_*`. |
 | `update_mouse_hover`             | callable                    | `raven.visualizer.annotation.update`  | Submit a plotter-tooltip refresh. Published by `annotation`.   |

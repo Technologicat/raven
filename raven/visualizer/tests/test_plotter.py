@@ -27,6 +27,7 @@ plotter = pytest.importorskip("raven.visualizer.plotter")
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
 from raven.visualizer import config as visualizer_config  # noqa: E402 -- ditto
+from raven.visualizer import displaystate  # noqa: E402 -- ditto
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 
 gui_config = visualizer_config.gui_config
@@ -211,6 +212,7 @@ def gui(monkeypatch):
     """Replaces the plotter's DPG binding with a stand-in whose viewport and mouse a test can place."""
     fake_dpg = RecordingDPG(plotter.dpg)
     monkeypatch.setattr(plotter, "dpg", fake_dpg)
+    monkeypatch.setattr(app_state, "grayed_selectable", False, raising=False)
     return fake_dpg
 
 
@@ -360,6 +362,37 @@ class TestWhichDatapointsAreUnderTheMouse:
 
 def outline(radius_pixels=10.0, scale_x=1.0, scale_y=1.0, center=(0.0, 0.0)):
     return np.array(plotter.brush_outline_points(center, radius_pixels, scale_x, scale_y))
+
+
+class TestOnlyWhatCanBeInteractedWithIsFound:
+    """Hover, the brush, right-click and "select visible" all find records through these two queries, so a record
+    a display filter takes out of interaction is out of all four here. `displaystate.interactable` is the rule."""
+
+    @staticmethod
+    def outlier(dataset):
+        return next(entry for entry in dataset.sorted_entries if entry.title == "The outlier")
+
+    def test_a_grayed_record_under_the_mouse_is_not_found(self, dataset, brush):
+        # The control is `test_the_datapoint_under_the_mouse_is_found`: the same spot, in full colour.
+        self.outlier(dataset).visibility = displaystate.GRAYED
+        assert len(points_at_mouse(dataset, brush, (30.0, 300.0))) == 0
+
+    def test_a_grayed_record_is_found_when_grayed_records_are_selectable(self, dataset, brush, monkeypatch):
+        self.outlier(dataset).visibility = displaystate.GRAYED
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        assert len(points_at_mouse(dataset, brush, (30.0, 300.0))) == 1
+
+    def test_a_hidden_record_is_never_found(self, dataset, brush, monkeypatch):
+        self.outlier(dataset).visibility = displaystate.HIDDEN
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        assert len(points_at_mouse(dataset, brush, (30.0, 300.0))) == 0
+
+    def test_select_visible_skips_what_cannot_be_interacted_with(self, gui, dataset, monkeypatch):
+        gui.axis_limits = {"axis0": (0.0, 1000.0), "axis1": (0.0, 1000.0)}
+        self.outlier(dataset).visibility = displaystate.GRAYED
+        assert len(plotter.get_visible_datapoints(dataset=dataset)) == 4, "all five but the grayed one"
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        assert len(plotter.get_visible_datapoints(dataset=dataset)) == 5, "the grayed one too, once selectable"
 
 
 class TestTheSelectRadiusBrushOutline:

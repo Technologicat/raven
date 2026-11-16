@@ -24,6 +24,7 @@ selection = pytest.importorskip("raven.visualizer.selection")
 from unpythonic import unbox  # noqa: E402 -- after importorskip by design
 from unpythonic.env import env  # noqa: E402 -- ditto
 
+from raven.visualizer import displaystate  # noqa: E402 -- ditto
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 
 UNDO_BUTTON = "selection_undo_button"  # tag
@@ -89,8 +90,11 @@ def gui(monkeypatch):
     monkeypatch.setattr(selection, "dpg", fake_dpg)
 
     # Six data points on a diagonal, so an assertion about the highlight can name which ones it got.
-    dataset = env(sorted_lowdim_data=np.array([[float(i), float(10 * i)] for i in range(6)]))
+    dataset = env(sorted_lowdim_data=np.array([[float(i), float(10 * i)] for i in range(6)]),
+                  sorted_entries=[env(cluster_id=0) for _ in range(6)])
+    displaystate.init(dataset.sorted_entries)
     monkeypatch.setattr(app_state, "dataset", dataset, raising=False)
+    monkeypatch.setattr(app_state, "grayed_selectable", False, raising=False)
 
     info_panel = Recorder()
     mouse_hover = Recorder()
@@ -409,3 +413,96 @@ class TestKeyboardModifiersCombineMode:
         assert selection.keyboard_state_to_mode() == "add"
         gui.dpg.keys_down = {gui.dpg.mvKey_LControl}
         assert selection.keyboard_state_to_mode() == "subtract"
+
+
+class TestUndoArrivesAtWhatCanBeSelectedNow:
+    """The history records what was selected; a step through it brings back only what can be interacted with now,
+    so the selection never holds a record a display filter has since grayed out or hidden."""
+
+    @staticmethod
+    def set_visibility(data_idx, visibility):
+        app_state.dataset.sorted_entries[data_idx].visibility = visibility
+
+    def test_a_record_hidden_since_is_left_out(self, gui):
+        # The control is `test_undo_restores_exactly_the_previous_selection`: the same steps, nothing hidden.
+        selection.update([0, 1, 2])
+        selection.update([3, 4], mode="replace")
+        self.set_visibility(1, displaystate.HIDDEN)
+        selection.undo()
+        assert current_selection() == {0, 2}
+
+    def test_shown_again_it_comes_back_with_a_later_step(self, gui):
+        selection.update([0, 1, 2])
+        selection.update([3, 4], mode="replace")
+        self.set_visibility(1, displaystate.HIDDEN)
+        selection.undo()
+        self.set_visibility(1, displaystate.SHOWN)
+        selection.redo()
+        selection.undo()
+        assert current_selection() == {0, 1, 2}
+
+    def test_a_grayed_record_comes_back_while_grayed_records_are_selectable(self, gui, monkeypatch):
+        selection.update([0, 1, 2])
+        selection.update([3, 4], mode="replace")
+        self.set_visibility(1, displaystate.GRAYED)
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        selection.undo()
+        assert current_selection() == {0, 1, 2}
+
+
+class TestAFilterChangeIsNotAStep:
+    """Graying out or hiding records takes them out of the selection without recording anything in the undo
+    history, so the history still holds them, and showing them again brings them back."""
+
+    @staticmethod
+    def set_visibility(data_idxs, visibility):
+        for data_idx in data_idxs:
+            app_state.dataset.sorted_entries[data_idx].visibility = visibility
+
+    def test_graying_takes_records_out_and_showing_brings_them_back(self, gui):
+        selection.update([0, 1, 2])
+        self.set_visibility([1], displaystate.GRAYED)
+        assert selection.refilter()
+        assert current_selection() == {0, 2}
+        self.set_visibility([1], displaystate.SHOWN)
+        assert selection.refilter()
+        assert current_selection() == {0, 1, 2}
+
+    def test_records_set_aside_survive_an_undo_and_a_redo(self, gui):
+        # Reported 2026-11-16: with the drop recorded as a step, undo and redo lost the grayed records for good.
+        selection.update([4])
+        selection.update([0, 1, 2])
+        self.set_visibility([1, 2], displaystate.GRAYED)
+        selection.refilter()
+        selection.undo()
+        selection.redo()
+        self.set_visibility([1, 2], displaystate.SHOWN)
+        selection.refilter()
+        assert current_selection() == {0, 1, 2}
+
+    def test_a_filter_change_leaves_undo_where_it_was(self, gui):
+        selection.update([0, 1, 2])
+        self.set_visibility([1], displaystate.HIDDEN)
+        selection.refilter()
+        selection.undo()
+        assert current_selection() == set(), "one step back is the start of history, not the selection before hiding"
+
+    def test_committing_the_filtered_selection_records_nothing(self, gui):
+        # The mouse release commits whatever is selected; it must not turn the filtered set into a step.
+        selection.update([0, 1, 2])
+        self.set_visibility([1], displaystate.GRAYED)
+        selection.refilter()
+        assert selection.commit_change_to_undo_history() is False
+
+    def test_the_next_change_builds_on_what_is_shown(self, gui):
+        selection.update([0, 1, 2])
+        self.set_visibility([1], displaystate.HIDDEN)
+        selection.refilter()
+        selection.update([3], mode="add")
+        self.set_visibility([1], displaystate.SHOWN)
+        selection.refilter()
+        assert current_selection() == {0, 2, 3}, "a record hidden when the selection changed stays out of it"
+
+    def test_nothing_set_aside_means_nothing_to_do(self, gui):
+        selection.update([0, 1, 2])
+        assert selection.refilter() is False

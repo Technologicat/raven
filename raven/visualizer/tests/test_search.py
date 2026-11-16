@@ -20,6 +20,7 @@ from unpythonic import unbox  # noqa: E402 -- after importorskip by design
 from unpythonic.env import env  # noqa: E402 -- ditto
 
 from raven.common import utils as common_utils  # noqa: E402 -- ditto
+from raven.visualizer import displaystate  # noqa: E402 -- ditto
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 
 SEARCH_FIELD = "search_field"  # tag
@@ -47,7 +48,8 @@ class RecordingDPG:
 
 def make_entry(title):
     """One entry, with the normalized title the scan actually looks at."""
-    return env(title=title, normalized_title=common_utils.normalize_search_string(title.strip()))
+    return env(title=title, normalized_title=common_utils.normalize_search_string(title.strip()),
+               visibility=displaystate.SHOWN)
 
 
 TITLES = ["Photocatalytic degradation of methanol",
@@ -67,6 +69,7 @@ def gui(monkeypatch, dataset):
     fake_dpg = RecordingDPG(search.dpg)
     monkeypatch.setattr(search, "dpg", fake_dpg)
     monkeypatch.setattr(app_state, "dataset", dataset, raising=False)
+    monkeypatch.setattr(app_state, "grayed_selectable", False, raising=False)
     monkeypatch.setattr(app_state, "update_info_panel", lambda **kwargs: None, raising=False)
     monkeypatch.setattr(app_state, "update_mouse_hover", lambda **kwargs: None, raising=False)
     return env(dpg=fake_dpg, dataset=dataset)
@@ -171,6 +174,26 @@ class TestReportingTheAnswer:
         # Negative control for the plural: a counter that always said "matches" would satisfy the test above.
         run_search(gui, "methanol")
         assert gui.dpg.values[HEADER] == "[1 match]"
+
+    def test_the_header_names_the_matches_a_display_filter_hides(self, gui):
+        # The control is `test_the_header_counts_the_matches`: the same query, nothing hidden.
+        gui.dataset.sorted_entries[3].visibility = displaystate.HIDDEN
+        run_search(gui, "cat")
+        assert gui.dpg.values[HEADER] == "[2 matches, 1 hidden]"
+
+    def test_a_hidden_match_is_not_drawn_and_a_grayed_one_is(self, gui):
+        gui.dataset.sorted_entries[0].visibility = displaystate.GRAYED
+        gui.dataset.sorted_entries[3].visibility = displaystate.HIDDEN
+        run_search(gui, "cat")
+        xs, _ys = gui.dpg.values[RESULTS_SERIES]
+        assert xs == [0.0], "the grayed match at x=0 is on screen; the hidden one at x=3 is not"
+
+    def test_selecting_the_matches_takes_only_what_can_be_interacted_with(self, gui, monkeypatch):
+        gui.dataset.sorted_entries[0].visibility = displaystate.GRAYED
+        run_search(gui, "cat")
+        assert list(search.interactable_matches()) == [3]
+        monkeypatch.setattr(app_state, "grayed_selectable", True, raising=False)
+        assert list(search.interactable_matches()) == [0, 3], "the grayed match too, once selectable"
 
     def test_the_header_says_so_when_a_search_found_nothing(self, gui):
         run_search(gui, "superconductivity")

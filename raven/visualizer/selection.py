@@ -4,6 +4,11 @@ Handles the undo/redo stack, the four selection combine modes (`replace`, `add`,
 `subtract`, `intersect`), the highlight scatter series update, and the
 keyboard-modifier → mode mapping.
 
+The undo history records what was selected, display filters notwithstanding. The selection itself is the history's
+current entry less what cannot be interacted with now (`raven.visualizer.displaystate.interactable`), so graying out
+or hiding records takes them out of the selection without recording a step, and showing them again brings them
+back (`refilter`). The next change the user makes to the selection builds on what is shown.
+
 Module-local state (the undo stack and the undo cursor) stays encapsulated here —
 only `app_state.selection_data_idxs_box` (the current selection) and
 `app_state.selection_changed` / `app_state.selection_anchor_data_idxs_set` (scroll-
@@ -12,7 +17,7 @@ anchoring handshake with the info panel) are cross-module visible.
 
 __all__ = ["reset_undo_history",
            "commit_change_to_undo_history",
-           "undo", "redo",
+           "refilter", "undo", "redo",
            "update",
            "update_highlight",
            "keyboard_state_to_mode"]
@@ -27,6 +32,7 @@ from ..common import navhistory
 from ..common import utils as common_utils
 
 from .app_state import app_state
+from . import displaystate
 from . import word_cloud
 
 # --------------------------------------------------------------------------------
@@ -66,12 +72,17 @@ def _update_undo_buttons():
 def commit_change_to_undo_history():
     """Update the selection undo history, and update the state of the undo/redo GUI buttons.
 
-    If the current selection is the same as that at the current position in the undo stack,
-    then do nothing.
+    If the current selection is the same as that at the current position in the undo stack, as the display filters
+    now show it, then do nothing.
 
     Return whether a commit was actually needed.
     """
-    if not _history.commit(unbox(app_state.selection_data_idxs_box)):
+    current = unbox(app_state.selection_data_idxs_box)
+    # Against the entry as filtered: otherwise the mouse release, which commits whatever is selected, would record
+    # the filtered selection as a step of its own, and the records a filter set aside would be gone from it.
+    if set(current) == set(_interactable(_history.current)):
+        return False
+    if not _history.commit(current):
         return False
     _update_undo_buttons()
     return True
@@ -86,21 +97,44 @@ def _go(step):
     if not step():
         return False
     _update_undo_buttons()
+    # Wait, because undo/redo may be clicked or hotkeyed several times in quick succession.
+    _show(_interactable(_history.current), wait=True)
+    return True
 
+
+def refilter() -> bool:
+    """Show the selection the undo history holds, less what the display filters now take out of interaction.
+
+    Call when a display filter changes. Records nothing in the history, so records grayed out or hidden leave the
+    selection, and come back into it when shown again. Returns whether the selection changed.
+    """
+    new_selection_data_idxs = _interactable(_history.current)
+    if set(new_selection_data_idxs) == set(unbox(app_state.selection_data_idxs_box)):
+        return False
+    _show(new_selection_data_idxs, wait=False)
+    return True
+
+
+def _interactable(data_idxs):
+    """Those of `data_idxs` the display filters let be selected now."""
+    if app_state.dataset is None:
+        return data_idxs
+    return displaystate.interactable(app_state.dataset.sorted_entries, data_idxs,
+                                     grayed_selectable=app_state.grayed_selectable)
+
+
+def _show(new_selection_data_idxs, *, wait: bool) -> None:
+    """Make `new_selection_data_idxs` the selection, and update what shows it, without touching the history."""
     old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    new_selection_data_idxs = _history.current
-
     app_state.selection_data_idxs_box << new_selection_data_idxs
 
     app_state.selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
     app_state.selection_changed = True
 
     update_highlight()
-    # Wait, because undo/redo may be clicked or hotkeyed several times in quick succession.
-    app_state.update_info_panel(wait=True)
-    app_state.update_mouse_hover(force=True, wait=True)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
-    return True
+    app_state.update_info_panel(wait=wait)
+    app_state.update_mouse_hover(force=True, wait=wait)
+    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=wait)
 
 
 def undo():

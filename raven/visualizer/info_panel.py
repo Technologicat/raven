@@ -123,6 +123,7 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor import DearPyGui_Markdown as dpg_markdown
 
 from . import config as visualizer_config
+from . import displaystate
 from . import entry_renderer
 from . import selection
 from .app_state import app_state
@@ -994,7 +995,7 @@ def scroll_to_top_of_current_cluster():
 
 
 def select_cluster_by_id(cluster_id, mode):
-    """Select all data in cluster `cluster_id`.
+    """Select all data in cluster `cluster_id` that can be interacted with (`displaystate.interactable`).
 
     `mode`: the combine mode, one of those `selection.update` accepts. Handlers get it from
             `selection.keyboard_state_to_mode`, which is where Shift/Ctrl/Ctrl+Shift are read.
@@ -1005,8 +1006,10 @@ def select_cluster_by_id(cluster_id, mode):
     the moment of the gesture. A handler reads it and passes it down; this then works the same whenever
     it is called, including from anywhere that does not run in the event dispatch.
     """
-    data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.current_label_id == cluster_id]
-    selection.update(data_idxs, mode, wait=False)
+    entries = app_state.dataset.sorted_entries
+    data_idxs = [data_idx for data_idx, entry in enumerate(entries) if entry.current_label_id == cluster_id]
+    selection.update(displaystate.interactable(entries, data_idxs, grayed_selectable=app_state.grayed_selectable),
+                     mode, wait=False)
 
 
 def select_current_cluster():

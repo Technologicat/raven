@@ -48,7 +48,16 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
      hidden records always, grayed ones unless a *grayed points selectable* checkbox is on, shown in the row only
      while something is grayed. Graying or hiding records that are selected drops them from the selection as one
      undoable step. Search counts what it cannot show, as *"7 matches, 3 hidden"*. About five sites across three
-     modules (the hover lookup, the selection tools, search), each with a test.
+     modules (the hover lookup, the selection tools, search), each with a test. Settled 2026-11-16 (maintainer):
+     - Unchecking *grayed points selectable* drops grayed records from the selection too, like graying does. The
+       checkbox is always in the row, disabled while nothing is grayed, so that the row does not shift.
+     - A grayed search match keeps the search highlight, being on screen; selecting the search results takes
+       only what can be interacted with, and the count names hidden matches only.
+     - **The undo history keeps the raw selection, and the filters apply on the fly** (after live testing):
+       a filter change records nothing, so records grayed or hidden leave the selection and come back when
+       shown again; the next selection change builds on what is shown. The first version recorded the drop as
+       a step, and undo and redo then lost the records for good. Rejected too: undo entries carrying the
+       filter state, which would roll the filters back along with an older plain selection change.
 5. **A shared pill widget, in `raven.common.gui`** (maintainer, 2026-11-13): after the Visualizer's pill, built
    first to learn the shape of the common surface. Librarian's three status pills are app code too and would move
    onto it.
@@ -66,8 +75,8 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
 - **Only what is in full colour can be interacted with**: hover, brush and lasso, the info panel. Graying out is
   a soft hide, for focusing on what is not grayed. A live toggle makes grayed points interactive again, for
   "wait, why is this one grayed out?".
-- **Hidden points cannot be interacted with at all.** Hiding records that are selected drops them from the
-  selection, as one undoable step, so Ctrl+Z restores both.
+- **Hidden points cannot be interacted with at all.** Hiding records that are selected takes them out of the
+  selection, and showing them again brings them back (step 4b).
 - **Search counts what it cannot show**: *"7 matches, 3 hidden"*, as the "…N more" boxes in Librarian's chat
   graph do. A search on a filtered view must not silently find less than the data holds.
 

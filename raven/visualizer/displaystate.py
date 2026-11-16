@@ -12,14 +12,20 @@ Record indices never move. A `data_idx` indexes the `sorted_*` arrays, sorted by
 dataset loads, and the selection, the hover lookup, search and the info panel all hold one; so a filter regroups
 records by changing labels, and the plot is refilled from those groups (`points_by_label`), never re-sorted.
 
+Only records in full colour can be interacted with — hovered, selected, listed in the info panel — plus the grayed
+ones when the user asks for them (`interactable`). Hidden records are not on screen at all (`on_screen`).
+
 No DPG here: `raven.visualizer.plotter.refresh_series` is what puts the groups on screen.
 """
 
 __all__ = ["SHOWN", "GRAYED", "HIDDEN", "MISC_MODES",
            "init", "relabel_by_purity", "apply_misc_mode",
-           "points_by_label", "points_with_visibility", "visibility_counts", "summary"]
+           "points_by_label", "points_with_visibility", "visibility_counts", "summary",
+           "interactable", "on_screen"]
 
 import collections
+
+import numpy as np
 
 SHOWN = "shown"
 GRAYED = "grayed"
@@ -116,3 +122,24 @@ def summary(entries) -> str | None:
     if counts[GRAYED]:
         return f"{counts[SHOWN]:,} of {total:,} in focus"
     return None
+
+
+def interactable(entries, data_idxs, *, grayed_selectable: bool) -> np.ndarray:
+    """Those of `data_idxs` that can be hovered and selected: the `SHOWN` ones, and the `GRAYED` ones too if
+    `grayed_selectable`. Never the `HIDDEN` ones.
+
+    `entries`: `dataset.sorted_entries`, whose positions are the `data_idx` values.
+    `data_idxs`: indices into `entries`, in any iterable; their order is kept.
+
+    Returns an `np.ndarray` of indices, of the dtype NumPy slices with even when empty.
+    """
+    allowed = (SHOWN, GRAYED) if grayed_selectable else (SHOWN,)
+    return np.array([data_idx for data_idx in data_idxs if entries[data_idx].visibility in allowed], dtype=np.int64)
+
+
+def on_screen(entries, data_idxs) -> np.ndarray:
+    """Those of `data_idxs` that are drawn at all, in colour or grayed: every one but the `HIDDEN` ones.
+
+    Same arguments and return value as `interactable`.
+    """
+    return interactable(entries, data_idxs, grayed_selectable=True)

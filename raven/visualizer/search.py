@@ -4,6 +4,10 @@ Owns the search state — the query and the indices it matched — the scan that
 three GUI elements that report them: the plotter's search-result highlight series, the "Search" header
 that doubles as a match counter, and the colour of the search field itself.
 
+A match among records a display filter hides is still a match: it is counted, as hidden, and not drawn. A
+grayed one is on screen, so it is drawn; selecting the matches takes only what can be interacted with
+(`interactable_matches`).
+
 `find_matches` is the scan, and it touches no GUI: what the Visualizer counts as a match can be stated,
 and changed, without one. The rest of this module is what shows the answer.
 
@@ -21,6 +25,8 @@ __all__ = ["search_string_box",
            "search_result_data_idxs_box",
            "find_matches",
            "update",
+           "interactable_matches",
+           "format_match_count",
            "search_field_callback",
            "update_field_color"]
 
@@ -36,6 +42,7 @@ from unpythonic import box, unbox
 from ..common import utils as common_utils
 
 from .app_state import app_state
+from . import displaystate
 
 # --------------------------------------------------------------------------------
 # Public state
@@ -108,18 +115,19 @@ def update(wait=True):
     search_result_data_idxs_box << search_result_data_idxs
 
     if len(search_result_data_idxs):
-        # Highlight the search result data points (by plotting them as another series on top).
-        dpg.set_value("my_search_results_scatter_series", [list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 0]),  # tag
-                                                           list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 1])])
+        # Highlight the search result data points (by plotting them as another series on top): those on screen.
+        drawn = displaystate.on_screen(app_state.dataset.sorted_entries, search_result_data_idxs)
+        dpg.set_value("my_search_results_scatter_series", [list(app_state.dataset.sorted_lowdim_data[drawn, 0]),  # tag
+                                                           list(app_state.dataset.sorted_lowdim_data[drawn, 1])])
         # Re-use the "Search" header to show the number of matches.
-        plural_s = "es" if len(search_result_data_idxs) != 1 else ""
-        dpg.set_value("search_header_text", f"[{len(search_result_data_idxs)} match{plural_s}]")  # tag
+        dpg.set_value("search_header_text", format_match_count(len(search_result_data_idxs),  # tag
+                                                               len(search_result_data_idxs) - len(drawn)))
     else:
         dpg.set_value("my_search_results_scatter_series", [[], []])  # tag
         if not search_string:  # Search not active, restore the "Search" header
             dpg.set_value("search_header_text", "Search")  # tag  # TODO: DRY duplicate definitions for labels
         else:  # Search active, but no matches
-            dpg.set_value("search_header_text", "[no matches]")  # tag
+            dpg.set_value("search_header_text", format_match_count(0, 0))  # tag
 
     # Update tooltip and info panel to update the highlight status.
     # TODO: Currently, this may cause the set of data points considered to be under the mouse cursor to change
@@ -127,6 +135,25 @@ def update(wait=True):
     #       If the plot mouse position is one frame out of date (update order?), that would explain it.
     app_state.update_info_panel(wait=wait)
     app_state.update_mouse_hover(force=True, wait=wait)
+
+
+def interactable_matches() -> np.ndarray:
+    """The current matches that can be hovered and selected (`displaystate.interactable`): what selecting the
+    search results selects."""
+    matches = unbox(search_result_data_idxs_box)
+    if app_state.dataset is None:
+        return common_utils.make_blank_index_array()
+    return displaystate.interactable(app_state.dataset.sorted_entries, matches,
+                                     grayed_selectable=app_state.grayed_selectable)
+
+
+def format_match_count(n_matches: int, n_hidden: int) -> str:
+    """The "Search" header's text for a search with `n_matches` matches, `n_hidden` of them hidden by a display
+    filter: `"[7 matches, 3 hidden]"`, or `"[no matches]"`."""
+    if not n_matches:
+        return "[no matches]"
+    text = f"[{n_matches} {'match' if n_matches == 1 else 'matches'}"  # plural
+    return text + (f", {n_hidden} hidden]" if n_hidden else "]")
 
 
 def search_field_callback(sender, app_data, user_data):

@@ -340,6 +340,18 @@ def reset_app_state(_update_gui=True):
         dpg.hide_item("display_filters_group")  # tag
 
 
+app_state.grayed_selectable = False
+
+
+def set_grayed_selectable(selectable: bool) -> None:
+    """Let grayed records be hovered and selected, or not. Callback of the checkbox in the display-filter row."""
+    if app_state.dataset is None:
+        return
+    app_state.grayed_selectable = selectable
+    selection.refilter()
+    annotation.update(force=True)
+
+
 def apply_display_filters():
     """Apply the display filters as their controls now stand, and redraw whatever shows the records.
 
@@ -366,8 +378,12 @@ def apply_display_filters():
         dpg.show_item("filters_pill")  # tag
     else:
         dpg.hide_item("filters_pill")  # tag
-    info_panel.update()
-    annotation.update(force=True)
+    # Whether grayed records can be selected is a question only while some are grayed. Disabled rather than hidden
+    # otherwise, so that the row does not shift under the combo beside it.
+    any_grayed = displaystate.visibility_counts(ds.sorted_entries)[displaystate.GRAYED] > 0
+    (dpg.enable_item if any_grayed else dpg.disable_item)("grayed_selectable_checkbox")  # tag
+    selection.refilter()
+    app_state.update_search()  # redraws the matches on screen and recounts the hidden ones; updates the info panel and tooltip
 
 
 def cycle_misc_mode(direction: int = 1) -> None:
@@ -721,8 +737,8 @@ with timer() as tim:
                                  tag="selection_redo_tooltip_text")
 
                 def select_search_results():
-                    """Select all datapoints matching the current search."""
-                    selection.update(unbox(search.search_result_data_idxs_box),
+                    """Select all datapoints matching the current search, of those that can be interacted with."""
+                    selection.update(search.interactable_matches(),
                                      selection.keyboard_state_to_mode())
                 dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS,
                                tag="select_search_results_button",
@@ -871,6 +887,12 @@ with timer() as tim:
                                           tag="misc_mode_combo",
                                           width=80,
                                           callback=lambda: apply_display_filters())
+                            dpg.add_checkbox(label="Grayed points selectable",
+                                             tag="grayed_selectable_checkbox",
+                                             default_value=False,
+                                             enabled=False,
+                                             callback=lambda sender, app_data: set_grayed_selectable(app_data))
+                            dpg.bind_item_theme("grayed_selectable_checkbox", "disablable_widget_theme")  # tag
                             with dpg.group(tag="purity_cutoff_controls", horizontal=True):
                                 dpg.add_spacer(width=8)
                                 dpg.add_text("Purity cutoff for Misc", color=(140, 140, 140), tag="purity_cutoff_label_text")
@@ -881,6 +903,10 @@ with timer() as tim:
                                                    format="%d%%",
                                                    width=160,
                                                    callback=lambda: apply_display_filters())
+                with dpg.tooltip("grayed_selectable_checkbox", tag="grayed_selectable_tooltip"):  # tag
+                    dpg.add_text("Let the grayed records be hovered and selected, like those in colour.\n"
+                                 "Available while some records are grayed out.",
+                                 tag="grayed_selectable_tooltip_text")
                 with dpg.tooltip("misc_mode_combo", tag="misc_mode_tooltip"):  # tag
                     dpg.add_text("How the records in Misc are shown: in colour, grayed out beneath the rest, or hidden.\n"
                                  "[F4] next, [Shift+F4] previous\n"

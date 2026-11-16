@@ -69,6 +69,8 @@
 - **Misc can be grayed out or hidden.** A selector above the plot shows the records in Misc in colour, grayed out beneath the rest, or not at all, together with any clusters the purity cutoff has moved there.
   - **F4** and **Shift+F4** step through the three. **Ctrl+M** puts the keyboard on the selector, where the arrow keys, Home and End choose and Esc leaves, as with the combos in Raven's other apps.
   - While anything is grayed or hidden, a pill above the plot and the plot's title say how many records are in focus or on screen. Clicking the pill shows everything again.
+  - Only records in colour can be hovered and selected. Selected records that are grayed out or hidden leave the selection, and come back when shown again, unless the selection has changed meanwhile. A **Grayed points selectable** checkbox lets the grayed ones be hovered and selected too.
+  - Search still counts the matches it cannot show, as in *"[7 matches, 3 hidden]"*.
 
 #### Raven-server
 
