@@ -463,7 +463,11 @@ The **Misc** selector, in the row above the plot, chooses how the records in *Mi
 
 Graying out keeps the shape of the whole collection in view, while hiding leaves only the rest.
 
-**Only records in colour can be hovered and selected.** The grayed-out and hidden ones stay out of the hover tooltip, the selection brush, *select visible* and *select this cluster*. Graying or hiding records that are selected takes them out of the selection, and showing them again brings them back; undo and redo keep them too. **Changing the selection in between ends that**: a new selection is built from what is on screen, so if you brush in more records while some are grayed out, say, the grayed ones stay out of the selection when you show them again. While records are grayed out, the **Grayed points selectable** checkbox beside the selector makes them hoverable and selectable as well, for asking why one of them is grayed.
+**Only records in colour can be hovered and selected.** The grayed-out and hidden ones stay out of the hover tooltip, the selection brush, *select visible* and *select this cluster*. Graying or hiding records that are selected takes them out of the selection, and showing them again brings them back; undo and redo keep them too.
+
+**Changing the selection in between ends that**: a new selection is built from what is on screen, so if you brush in more records while some are grayed out, say, the grayed ones stay out of the selection when you show them again.
+
+While records are grayed out, the **Grayed points selectable** checkbox beside the selector makes them hoverable and selectable as well, for asking why one of them is grayed.
 
 **Search still finds every match**: one among hidden records is counted but not drawn, as in *"[7 matches, 3 hidden]"*, and one among grayed records is highlighted like any other. Selecting the matches takes only those that can be selected.
 
