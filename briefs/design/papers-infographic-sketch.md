@@ -5,7 +5,8 @@ are useful, and how they fit a researcher's workflow, ideally a pretty one. The 
 2026-11-16 (below, under Open), and the graphic was drawn the same day: `img/raven-papers-infographic.svg`, the
 source, edited by hand or in Inkscape, and its PNG export beside it, which the README shows. A Claude-ism in the
 first draft's agent card ("run the tools from their manuals") was reworded to "the manuals are written for it",
-which does not claim an agent integration Raven does not ship (maintainer).*
+which does not claim an agent integration Raven does not ship (maintainer). Infographics of the Visualizer and
+Librarian in the same style are wanted next (`TODO.md`, Cross-cutting).*
 
 ## What it would say
 

@@ -8,6 +8,23 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Cross-cutting
 
+- **[High]** Material for an executive summary (maintainer, 2026-11-16):
+  - **A light-background Visualizer plot, by Wednesday 2026-11-18.** Managers and funders expect a light theme (a
+    coworker's observation). Until the light theme below exists, the cheap route is drawing the dataset's map
+    outside the app: its 2D coordinates and cluster labels are in the dataset file, and matplotlib draws them on
+    white in a few lines. A light theme for the plotter alone, set through the REPL, is the other route.
+  - **Infographics of what Raven-visualizer and Raven-librarian are for**, in the style of the paper tools' one
+    (`img/raven-papers-infographic.svg`, designed in `briefs/design/papers-infographic-sketch.md`).
+
+- **[Medium]** A light theme, as an option across the constellation (maintainer, 2026-11-16). Some readers
+  require one (above); the maintainer works in the dark one, which stays the default. M or L:
+  - **Raven's dark theme leans on DPG's default**, and DPG's default colours cannot be queried, so which theme
+    items a light theme must override is unknown until someone goes through them.
+  - **The theme itself can mostly be injected at `guiutils.bootup`.** What needs its own pass is every colour
+    Raven chose to fit the dark default: the caution and attention colours, the keyboard mark, the flashes, the
+    highlight series, the cluster colormap, the pills.
+  - This also makes the colours configurable, which the Visualizer's list asked for separately.
+
 - **[High]** Usable by non-technical users. Visitors at Yrityspäivä (2026-10-08) wanted to try Raven and were not technical types (maintainer). Three parts, together more important for practical value than the PyPI upload; placement in the roadmap is open (`briefs/roadmap.md`).
   - Server autostart, last one out turns off the lights: `briefs/server-autostart-brief.md`.
   - Settings dialogs, so nobody edits JSON or `config.py` by hand: "User-level settings" under Librarian below.
@@ -157,9 +174,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. **The hard part is done**: `raven.common.gui.filedrop` shipped 2026-08-10 and is wired into all six GUI apps, so the paths arrive; what is left for Visualizer is deciding what a dropped file *means* here (open a dataset? add to the current one?) and handling the unsupported-file case. The mechanism and its one real constraint — the callback runs on the render thread, so no `split_frame` and therefore no modal messagebox inside it — are in `dpg-notes.md`; the probes are in `investigations/dpg-dnd/`.
 
-- **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering.
-
-- **[Low]** Make all colors configurable. Requires customizing every colorable DPG item (can't query default theme colors). All custom colors are currently chosen to fit DPG's default color scheme.
+- **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering. Scoped in `briefs/visualizer-filter-by-date-and-recolour-brief.md`.
 
 - **[Low]** Convert filter to selection and vice versa (useful e.g. to select all items from 2020–2024, then invert).
 
