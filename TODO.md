@@ -26,6 +26,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     Raven chose to fit the dark default: the caution and attention colours, the keyboard mark, the flashes, the
     highlight series, the cluster colormap, the pills.
   - This also makes the colours configurable, which the Visualizer's list asked for separately.
+  - The Visualizer's colormap needs a range per background: the item on its dark end, under the Visualizer.
 
 - **[High]** Usable by non-technical users. Visitors at Yrityspäivä (2026-10-08) wanted to try Raven and were not technical types (maintainer). Three parts, together more important for practical value than the PyPI upload; placement in the roadmap is open (`briefs/roadmap.md`).
   - Server autostart, last one out turns off the lights: `briefs/server-autostart-brief.md`.
@@ -176,6 +177,13 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. **The hard part is done**: `raven.common.gui.filedrop` shipped 2026-08-10 and is wired into all six GUI apps, so the paths arrive; what is left for Visualizer is deciding what a dropped file *means* here (open a dataset? add to the current one?) and handling the unsupported-file case. The mechanism and its one real constraint — the callback runs on the render thread, so no `split_frame` and therefore no modal messagebox inside it — are in `dpg-notes.md`; the probes are in `investigations/dpg-dnd/`.
 
+- **[Medium]** The colormap's dark end is lost against the dark plot background (a coworker's observation, 2026-11-16).
+  Keep Viridis, or another perceptually uniform map: its lightness rises steadily, which is what fixes `jet`
+  (maintainer). What is wrong is only that one end of it is close to the background: dark purple on the dark plot,
+  and the yellow end will be on a light one. `plotter.colormap_position` puts Misc (label -1) at 0 and spreads the
+  clusters above it, so Misc and the lowest-numbered clusters take the darkest colours.
+  - Cost S: a range setting (say `plotter_colormap_range=(0.2, 1.0)` on dark, about `(0.0, 0.85)` on light) and
+    one line in `colormap_position`; choosing the bound wants screenshots side by side.
 - **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering. Scoped in `briefs/visualizer-filter-by-date-and-recolour-brief.md`.
 
 - **[Low]** Convert filter to selection and vice versa (useful e.g. to select all items from 2020–2024, then invert).
