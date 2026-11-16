@@ -42,6 +42,8 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
   opened and not yet discussed.
 - **A light theme across the constellation**, with a roomier layout as an option, starting with a UI design
   session on the principles listed there: `TODO.md`, Cross-cutting. M or L.
+- **Datasets of 100k records in the Visualizer**: level-of-detail rendering for the plot, on the model of
+  Barnes–Hut chunking. `TODO.md`, the Visualizer's display section.
 - **The pipeline figure's redraw**, for 0.2.12 or 0.2.13: `TODO.md`, the figure and screenshot sweep.
 
 ## Waiting on a decision

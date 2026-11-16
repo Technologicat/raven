@@ -200,6 +200,13 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   clusters above it, so Misc and the lowest-numbered clusters take the darkest colours.
   - Cost S: a range setting (say `plotter_colormap_range=(0.2, 1.0)` on dark, about `(0.0, 0.85)` on light) and
     one line in `colormap_position`; choosing the bound wants screenshots side by side.
+- **[Medium]** Datasets of 100k records (coworkers' request, 2026-11-16). DPG cannot draw a scatter that large at an
+  interactive frame rate (maintainer), so the plot needs level-of-detail rendering: zoomed out, dense regions
+  drawn as aggregates, and individual points only where the view is close enough to tell them apart. The
+  maintainer's model is the chunking of astronomical gravity simulations, as in the Barnes–Hut tree
+  ([Barnes and Hut, 1986](https://en.wikipedia.org/wiki/Barnes%E2%80%93Hut_simulation)), which treats a distant
+  cluster of bodies as one. What else 100k touches is not yet surveyed: the importer's stages, the hover and
+  search queries, the info panel.
 - **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering. Scoped in `briefs/visualizer-filter-by-date-and-recolour-brief.md`.
 
 - **[Low]** Convert filter to selection and vice versa (useful e.g. to select all items from 2020–2024, then invert).
