@@ -209,6 +209,18 @@ class TestVisibility:
         assert not tip._shown and tip not in tooltip_module._visible
         assert not dpg.is_item_shown(tip.window)
 
+    def test_a_tooltip_with_nothing_to_say_stays_down(self, target):
+        # The control is the test above: the same hover, with a caption, shows the tooltip.
+        tip = Tooltip(target, "")
+        tip._on_hover(None, None, None)
+        assert not tip._shown and not dpg.is_item_shown(tip.window)
+
+    def test_text_on_its_way_counts_as_something_to_say(self, target):
+        tip = Tooltip(target, "")
+        tip.text = "arriving"
+        tip._on_hover(None, None, None)
+        assert tip._shown
+
     def test_the_updater_takes_down_a_tooltip_whose_target_vanished(self, target):
         """The case with no un-hover event to rely on: nothing will ever report the mouse leaving.
 

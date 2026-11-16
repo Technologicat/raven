@@ -424,6 +424,10 @@ class Tooltip:
         if self._shown:
             return
         with self._text_lock:
+            upcoming = self._pending_text
+        if not (self.text if upcoming is None else upcoming):
+            return  # nothing to say: an empty caption would come up as an empty box
+        with self._text_lock:
             in_flight = self._pending_text is not None or self._settle_countdown
             settle = self._resize_on_show and not in_flight
             self._resize_on_show = False
