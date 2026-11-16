@@ -1,8 +1,8 @@
 # Brief: the Visualizer's display filters, starting with cluster purity
 
-*Status: decided 2026-11-11. Steps 1–3 built and their layout tuned the same day; step 4's display half (4a)
-2026-11-13; its interaction half (4b) and the shared pill (5) 2026-11-16, all five live-tested. Date filtering
-and recolouring are later work that reuses the layer from step 3.*
+*Status: done 2026-11-16. Decided 2026-11-11; steps 1–3 built and their layout tuned the same day; step 4's
+display half (4a) 2026-11-13; its interaction half (4b) and the shared pill (5) 2026-11-16, all five
+live-tested. The later work on the same layer has a brief of its own (the last section).*
 
 The Visualizer is an interactive view on the data, so the user should be able to set aside what they take to be
 noise, and later filter and recolour by other criteria (date, first author). This brief scopes the layer that
@@ -90,8 +90,6 @@ cutoff can be derived, and none is shipped. The GUI states purity in words and l
 
 ## Later, on the same layer
 
-- **Date range filtering**: a minimum and maximum year, grayed or hidden outside it.
-- **Recolouring** by other criteria (date, first author): another way of filling the series from
-  `current_label_id`-style per-record state.
-- **Storing the embeddings in the dataset** (they are in the importer's cache file today), the first time a
-  feature needs them at load time.
+Date-range filtering, recolouring by other criteria, and storing the embeddings in the dataset moved to their own
+brief, [`visualizer-filter-by-date-and-recolour-brief.md`](../visualizer-filter-by-date-and-recolour-brief.md),
+when this one closed (2026-11-16).
