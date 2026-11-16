@@ -313,6 +313,8 @@ class TestWatching:
         library.start(watch=True)
         try:
             assert root.is_dir()
+            assert (root / "README.md").read_text(encoding="utf-8").startswith("# Put your agent skills")
+            assert library.skill_names == [] and not library.problems, "the README was taken for a skill"
             _write_skill(root, "alpha")
             assert self._wait_until(lambda: "alpha" in settings.skill_names)
         finally:

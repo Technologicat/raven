@@ -920,6 +920,28 @@ class TestChunkifyText:
         assert chunks[0]["text"] == ""
 
 
+class TestCreateDirectory:
+    def test_it_creates_the_parents_too(self, tmp_path):
+        for spelling in (str(tmp_path / "a" / "b"), tmp_path / "c" / "d"):
+            utils.create_directory(spelling)
+            assert pathlib.Path(spelling).is_dir()
+        assert not (tmp_path / "a" / "b" / "README.md").exists(), "no `readme`, no README"
+
+    def test_a_readme_is_written_into_a_directory_it_creates(self, tmp_path):
+        utils.create_directory(tmp_path / "new", readme="Put your things here.")
+        assert (tmp_path / "new" / "README.md").read_text(encoding="utf-8") == "Put your things here."
+
+    def test_an_existing_directory_is_left_as_it_is(self, tmp_path):
+        # Its owner may have edited the README, or deleted it on purpose; neither is undone.
+        (tmp_path / "edited").mkdir()
+        (tmp_path / "edited" / "README.md").write_text("My notes.", encoding="utf-8")
+        (tmp_path / "deleted").mkdir()
+        utils.create_directory(tmp_path / "edited", readme="Put your things here.")
+        utils.create_directory(tmp_path / "deleted", readme="Put your things here.")
+        assert (tmp_path / "edited" / "README.md").read_text(encoding="utf-8") == "My notes."
+        assert not (tmp_path / "deleted" / "README.md").exists()
+
+
 class TestUserDirectory:
     """Finding the user's Pictures directory when it is not called "Pictures".
 

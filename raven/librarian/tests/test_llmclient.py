@@ -3825,9 +3825,14 @@ class TestPromptWatcher:
 
     def test_a_missing_user_prompt_folder_is_created(self, settings):
         assert not llmclient.librarian_config.user_prompts_dir.exists()
+        before = settings.system_prompt
         stop = llmclient.watch_prompt_files(settings, on_changed=lambda: None)
         try:
             assert llmclient.librarian_config.user_prompts_dir.is_dir()
+            readme = (llmclient.librarian_config.user_prompts_dir / "README.md").read_text(encoding="utf-8")
+            assert str(llmclient.librarian_config.prompts_dir) in readme, "the README should say where the shipped prompts are"
+            assert llmclient.make_prompt_reloader(settings)() is False and settings.system_prompt == before, \
+                "the README was taken for a prompt"
         finally:
             stop()
 

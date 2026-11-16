@@ -111,9 +111,17 @@ def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: 
 #     except FileNotFoundError:
 #         pass
 
-def create_directory(path: Union[str, pathlib.Path]) -> None:
+def create_directory(path: Union[str, pathlib.Path], *, readme: str | None = None) -> None:
+    """Create the directory `path`, with its parents, if it does not exist.
+
+    `readme`: text for a `README.md` written into the directory, saying what it is for. Written only when this
+              call creates the directory, so a README its owner has edited or deleted stays that way.
+    """
     p = pathlib.Path(path).expanduser().resolve()
+    existed = p.is_dir()
     pathlib.Path.mkdir(p, parents=True, exist_ok=True)
+    if readme is not None and not existed:
+        (p / "README.md").write_text(readme, encoding="utf-8")
 
 # On Windows, a file another program holds open — an antivirus scanner looking at what was just written, a search
 # indexer, a sync client — cannot be replaced for as long as it is held, and `os.replace` raises `PermissionError`.

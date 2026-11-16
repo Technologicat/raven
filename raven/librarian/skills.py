@@ -44,6 +44,17 @@ from . import llmtools
 logger = logging.getLogger(__name__)
 
 _SKILL_FILE = "SKILL.md"
+
+_SKILLS_README = """# Put your agent skills for Raven-librarian here
+
+Each skill is a folder, named for the skill, holding a `SKILL.md` in the Agent Skills format
+(https://agentskills.io). A folder can be a link to one kept elsewhere, such as in a repository of your own.
+
+How to write one, and how the AI uses it: the *Skills* section of Librarian's README,
+https://github.com/Technologicat/raven/blob/main/raven/librarian/README.md#skills
+
+Changes are picked up while Librarian runs. This file is not a skill, and you can delete it.
+"""
 _MAX_NAME_LENGTH = 64
 _MAX_LISTED_RESOURCES = 50
 
@@ -212,7 +223,7 @@ class SkillLibrary:
         if watch:
             if not self.directory.is_dir():  # a watcher needs something to watch; empty, it shows where skills go
                 logger.info(f"SkillLibrary.start: '{self.directory}' does not exist; creating it.")
-                common_utils.create_directory(self.directory)
+                common_utils.create_directory(self.directory, readme=_SKILLS_README)
             # Started before the first read, so that an edit right after the read is seen. A skill is
             # `<folder>/SKILL.md`, the folder often a link to a repository, hence recursive. Its other files
             # are read at activation, so only a `SKILL.md` changes what is offered.

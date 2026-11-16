@@ -978,6 +978,19 @@ def make_prompt_reloader(settings: env) -> Callable[[], bool]:
     return reload_if_changed
 
 
+_USER_PROMPTS_README = """# Put your prompts for Raven-librarian here
+
+A Markdown file here replaces the shipped prompt of the same name: a `system.md` here is used instead of the
+shipped `system.md`. It replaces the shipped text rather than adding to it, so a copy of the shipped file is
+the place to start.
+
+The shipped prompts are in `{shipped}`. The `README.md` there says what each one is for and which template
+variables a prompt may use; it is also at
+https://github.com/Technologicat/raven/blob/main/raven/librarian/prompts/README.md
+
+Edits are picked up while Librarian runs. This file is not a prompt, and you can delete it.
+"""
+
 def watch_prompt_files(settings: env, on_changed: Callable[[], None]) -> Callable[[], None]:
     """Follow the prompt files, keeping `settings` up to date with them as `make_prompt_reloader` does.
 
@@ -1003,7 +1016,7 @@ def watch_prompt_files(settings: env, on_changed: Callable[[], None]) -> Callabl
 
     if not librarian_config.user_prompts_dir.is_dir():
         logger.info(f"watch_prompt_files: '{librarian_config.user_prompts_dir}' does not exist; creating it.")
-        utils.create_directory(librarian_config.user_prompts_dir)
+        utils.create_directory(librarian_config.user_prompts_dir, readme=_USER_PROMPTS_README.format(shipped=librarian_config.prompts_dir))
     filenames_by_directory: dict[pathlib.Path, set[str] | None] = {librarian_config.prompts_dir: None,  # None: every `.md`
                                                                    librarian_config.user_prompts_dir: None}
     cards = []
