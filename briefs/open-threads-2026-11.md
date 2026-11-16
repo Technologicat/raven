@@ -15,9 +15,10 @@ has the entry.
      rerolled, adapted from `img/chattree-diagram.svg`.
    - Around it, what feeds the answers: the user's documents (hybrid search), web search and tools,
      attachments, and the optional voiced avatar.
-   - "Why" cards along the bottom: a local LLM, nothing leaves the machine unless asked, every branch kept, and
-     possibly "answers cite their sources", which needs checking against what Librarian shows before it goes
-     on the graphic.
+   - "Why" cards along the bottom: a local LLM, nothing leaves the machine unless asked, every branch kept. Not
+     "answers cite their sources": Librarian stores the search matches in a reply's metadata and does not cite
+     them in the reply yet (maintainer, 2026-11-16). Citations are filed in `TODO.md`, "Inline citations,
+     validated".
 2. **The light-background Visualizer plot**, together with the maintainer: the plotter's colours set through the
    REPL (they are settings already), a screenshot of the plot, cropped. The colormap range fix (below) first, if
    there is time, as Viridis's yellow end is weak on white.
