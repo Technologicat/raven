@@ -33,7 +33,12 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     (maintainer). The levers are DPG's style variables (frame padding, item spacing, the text sizes), settable in
     one place at bootup, so a roomier layout can come with the light theme and the dense one stay the default.
   - **Start with a UI design session, with mockups side by side** (maintainer, 2026-11-16), on the principles
-    the GUI follows (Tufte's, Nielsen's). On its list: the Visualizer's vertical toolbar, which looks odd to
+    the GUI follows: Tufte's and Nielsen's, and those the code and docs already state: reward the curious reader
+    without punishing the casual one (hotkeys in tooltips, F1 cards); keyboard first, with the keyboard mark
+    showing where the keys go; leaving "you see all the data" is always visible; colour only when something
+    has something to say; nothing jumps (a row that appears takes its height from a field, not from the panels);
+    status only when something is wrong; acknowledgment by a flash rather than a dialog; and grammatical
+    user-facing text (`raven-style-guide.md`). On its list: the Visualizer's vertical toolbar, which looks odd to
     newcomers. It is vertical because vertical space is what a widescreen lacks (maintainer), as in the rails of
     Teams, VS Code or Inkscape, so what to look at is how it is drawn: its grouping, the unlabelled icons, its
     alignment with the plot and the panel beside it, its width against its spacing.
