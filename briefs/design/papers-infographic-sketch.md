@@ -1,8 +1,11 @@
 # Sketch: an infographic of `raven.papers`
 
 *Status: requested 2026-11-13 (maintainer): an executive-summary graphic of what the paper tools can do, why they
-are useful, and how they fit a researcher's workflow, ideally a pretty one. Nothing below is decided; it is the
-starting point for the discussion, with its open questions at the end.*
+are useful, and how they fit a researcher's workflow, ideally a pretty one. The open questions were settled on
+2026-11-16 (below, under Open), and the graphic was drawn the same day: `img/raven-papers-infographic.svg`, the
+source, edited by hand or in Inkscape, and its PNG export beside it, which the README shows. A Claude-ism in the
+first draft's agent card ("run the tools from their manuals") was reworded to "the manuals are written for it",
+which does not claim an agent integration Raven does not ship (maintainer).*
 
 ## What it would say
 
@@ -40,10 +43,11 @@ agent-friendly (an agent can run it, from the manuals); the PRISMA flowchart's n
 
 A and B combine: the metro map, with a small funnel inset.
 
-## Open
+## Open, and settled (maintainer, 2026-11-16)
 
-- **Audience**: the team, funders, or researchers new to the tools?
-- **Format**: an A4 page, a slide, or a web page?
-- **The funnel's numbers**: the AOKK run's are the team's own; a graphic going further would want made-up or
-  anonymised ones.
-- **Production**: a layout drafted as editable SVG (Inkscape) or a web page; a polished design is a pass of its own.
+- **Audience**: researchers new to the tools, and management too: aimed at researchers, trimmed if it needs to
+  be. Tool names stay, as some detail gives the diagram credibility.
+- **Format**: SVG, horizontal rather than A4, as the main targets are Raven's README and PowerPoint slides; so
+  16:9. On a solid light background, which GitHub's dark mode would otherwise turn unreadable.
+- **The funnel's numbers**: illustrative, labelled as such.
+- **The look**: the metro map (A), with the funnel (B) as bars under its trunk line.

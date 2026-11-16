@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <style>
+    .sans { font-family: 'Open Sans', Helvetica, Arial, sans-serif; }
+    .mono { font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace; }
+    .kicker { font-size: 18px; font-weight: 700; letter-spacing: 3px; fill: #0f766e; }
+    .title { font-size: 40px; font-weight: 700; fill: #1f2933; }
+    .subtitle { font-size: 20px; fill: #52606d; }
+    .zone { font-size: 17px; font-weight: 700; fill: #8a8174; letter-spacing: 1px; }
+    .tool { font-size: 15px; font-weight: 700; fill: #1f2933; }
+    .caption { font-size: 14px; fill: #52606d; }
+    .badge { font-size: 14px; font-weight: 700; fill: #ffffff; }
+    .count { font-size: 16px; font-weight: 700; fill: #0f766e; }
+    .countlabel { font-size: 13px; fill: #52606d; }
+    .cardtitle { font-size: 18px; font-weight: 700; fill: #1f2933; }
+    .cardtext { font-size: 14px; fill: #52606d; }
+    .footer { font-size: 12px; fill: #8a8174; }
+    .line { fill: none; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+    .station { fill: #ffffff; stroke-width: 5; }
+  </style>
+
+  <!-- Card -->
+  <rect x="8" y="8" width="1584" height="884" rx="24" fill="#fbfaf7" stroke="#e2ddd3" stroke-width="2"/>
+
+  <!-- Heading -->
+  <text x="60" y="56" class="sans kicker">RAVEN.PAPERS</text>
+  <text x="60" y="100" class="sans title">From database exports to a reading list</text>
+  <text x="60" y="134" class="sans subtitle">The part of a literature review that comes before reading, with a record of every decision.</text>
+
+  <!-- Zones -->
+  <rect x="48" y="160" width="432" height="540" rx="14" fill="#f3f0e9"/>
+  <rect x="990" y="160" width="210" height="540" rx="14" fill="#f3f0e9"/>
+  <text x="64" y="188" class="sans zone">1 · GATHER</text>
+  <text x="496" y="188" class="sans zone">2 · CLEAN</text>
+  <text x="1006" y="188" class="sans zone">3 · SCREEN</text>
+  <text x="1216" y="188" class="sans zone">4 · EXPLORE AND WRITE</text>
+
+  <!-- Lines -->
+  <path class="line" stroke="#b31b1b" d="M 132 300 H 400 C 450 300, 460 390, 510 390"/>
+  <path class="line" stroke="#2b6cb0" d="M 132 480 H 400 C 450 480, 460 390, 510 390"/>
+  <path class="line" stroke="#0f766e" d="M 505 390 H 1185"/>
+  <path class="line" stroke="#6b46c1" d="M 1180 390 C 1240 390, 1250 290, 1310 290 H 1460"/>
+  <path class="line" stroke="#c05621" d="M 1180 390 H 1460"/>
+  <path class="line" stroke="#4a5568" d="M 1180 390 C 1240 390, 1250 490, 1310 490 H 1460"/>
+
+  <!-- Line badges -->
+  <rect x="48" y="286" width="84" height="28" rx="14" fill="#b31b1b"/>
+  <text x="90" y="305" class="sans badge" text-anchor="middle">arXiv</text>
+  <rect x="34" y="466" width="98" height="28" rx="14" fill="#2b6cb0"/>
+  <text x="83" y="485" class="sans badge" text-anchor="middle">Databases</text>
+
+  <!-- arXiv stations -->
+  <circle class="station" stroke="#b31b1b" cx="185" cy="300" r="12"/>
+  <text x="185" y="272" class="mono tool" text-anchor="middle">raven-arxiv-search</text>
+  <text x="185" y="333" class="sans caption" text-anchor="middle">search arXiv</text>
+  <circle class="station" stroke="#b31b1b" cx="385" cy="300" r="12"/>
+  <text x="385" y="272" class="mono tool" text-anchor="middle">raven-arxiv2bib</text>
+  <text x="385" y="333" class="sans caption" text-anchor="middle">BibTeX and</text>
+  <text x="385" y="351" class="sans caption" text-anchor="middle">full texts</text>
+
+  <!-- Database stations -->
+  <circle class="station" stroke="#2b6cb0" cx="165" cy="480" r="12"/>
+  <text x="165" y="452" class="mono tool" text-anchor="middle">raven-wos2bib &amp; co.</text>
+  <text x="165" y="513" class="sans caption" text-anchor="middle">database exports</text>
+  <text x="165" y="531" class="sans caption" text-anchor="middle">into BibTeX</text>
+  <circle class="station" stroke="#2b6cb0" cx="345" cy="480" r="12"/>
+  <text x="345" y="452" class="mono tool" text-anchor="middle">raven-fixbib</text>
+  <text x="345" y="513" class="sans caption" text-anchor="middle">repair what</text>
+  <text x="345" y="531" class="sans caption" text-anchor="middle">exports get wrong</text>
+
+  <!-- Trunk stations -->
+  <rect class="station" stroke="#1f2933" x="562" y="376" width="36" height="28" rx="12"/>
+  <text x="580" y="360" class="mono tool" text-anchor="middle">raven-deduplicate</text>
+  <text x="580" y="426" class="sans caption" text-anchor="middle">merge one paper</text>
+  <text x="580" y="444" class="sans caption" text-anchor="middle">found twice</text>
+  <circle class="station" stroke="#0f766e" cx="760" cy="390" r="12"/>
+  <text x="760" y="360" class="mono tool" text-anchor="middle">raven-fillbib</text>
+  <text x="760" y="426" class="sans caption" text-anchor="middle">fill in missing</text>
+  <text x="760" y="444" class="sans caption" text-anchor="middle">abstracts</text>
+  <circle class="station" stroke="#0f766e" cx="920" cy="390" r="12"/>
+  <text x="920" y="360" class="mono tool" text-anchor="middle">raven-siftbib</text>
+  <text x="920" y="426" class="sans caption" text-anchor="middle">set aside the</text>
+  <text x="920" y="444" class="sans caption" text-anchor="middle">unscreenable</text>
+  <circle class="station" stroke="#0f766e" cx="1095" cy="390" r="12"/>
+  <text x="1095" y="360" class="mono tool" text-anchor="middle">raven-scopebib</text>
+  <text x="1095" y="426" class="sans caption" text-anchor="middle">an LLM screens,</text>
+  <text x="1095" y="444" class="sans caption" text-anchor="middle">you review it</text>
+
+  <!-- Termini -->
+  <circle class="station" stroke="#6b46c1" cx="1460" cy="290" r="14"/>
+  <circle fill="#6b46c1" cx="1460" cy="290" r="5"/>
+  <text x="1460" y="262" class="mono tool" text-anchor="middle">Raven-visualizer</text>
+  <text x="1460" y="324" class="sans caption" text-anchor="middle">a semantic map of it</text>
+  <circle class="station" stroke="#c05621" cx="1460" cy="390" r="14"/>
+  <circle fill="#c05621" cx="1460" cy="390" r="5"/>
+  <text x="1460" y="362" class="mono tool" text-anchor="middle">Raven-librarian</text>
+  <text x="1460" y="424" class="sans caption" text-anchor="middle">ask the documents</text>
+  <circle class="station" stroke="#4a5568" cx="1460" cy="490" r="14"/>
+  <circle fill="#4a5568" cx="1460" cy="490" r="5"/>
+  <text x="1460" y="462" class="mono tool" text-anchor="middle">raven-checkrefs</text>
+  <text x="1460" y="524" class="sans caption" text-anchor="middle">check your references</text>
+
+  <!-- Funnel: records left after each stage, illustrative -->
+  <text x="64" y="614" class="sans cardtitle">Records left</text>
+  <text x="64" y="636" class="sans cardtext">a typical run,</text>
+  <text x="64" y="654" class="sans cardtext">illustrative numbers</text>
+  <line x1="410" y1="664" x2="1130" y2="664" stroke="#d3ccbf" stroke-width="2"/>
+  <rect x="412" y="574" width="56" height="90" rx="4" fill="#0f766e" fill-opacity="0.35"/>
+  <text x="440" y="566" class="sans count" text-anchor="middle">12,400</text>
+  <text x="440" y="684" class="sans countlabel" text-anchor="middle">exported</text>
+  <rect x="552" y="599" width="56" height="65" rx="4" fill="#0f766e" fill-opacity="0.35"/>
+  <text x="580" y="591" class="sans count" text-anchor="middle">8,900</text>
+  <text x="580" y="684" class="sans countlabel" text-anchor="middle">unique</text>
+  <rect x="892" y="605" width="56" height="59" rx="4" fill="#0f766e" fill-opacity="0.35"/>
+  <text x="920" y="597" class="sans count" text-anchor="middle">8,100</text>
+  <text x="920" y="684" class="sans countlabel" text-anchor="middle">screenable</text>
+  <rect x="1067" y="656" width="56" height="8" rx="2" fill="#0f766e" fill-opacity="0.6"/>
+  <text x="1095" y="648" class="sans count" text-anchor="middle">1,150</text>
+  <text x="1095" y="684" class="sans countlabel" text-anchor="middle">in scope</text>
+
+  <!-- Why -->
+  <g class="sans">
+    <rect x="48" y="716" width="284" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="68" y="752" class="cardtitle">Auditable</text>
+    <text x="68" y="778" class="cardtext">Every merge, removal and hold</text>
+    <text x="68" y="798" class="cardtext">has its reason in a table.</text>
+
+    <rect x="352" y="716" width="284" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="372" y="752" class="cardtitle">Reproducible</text>
+    <text x="372" y="778" class="cardtext">A run file repeats a run;</text>
+    <text x="372" y="798" class="cardtext">saved answers replay it.</text>
+
+    <rect x="656" y="716" width="284" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="676" y="752" class="cardtitle">Your criteria</text>
+    <text x="676" y="778" class="cardtext">Screening applies your own</text>
+    <text x="676" y="798" class="cardtext">definition of scope, in one file.</text>
+
+    <rect x="960" y="716" width="284" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="980" y="752" class="cardtitle">Local and private</text>
+    <text x="980" y="778" class="cardtext">Runs on your own machine,</text>
+    <text x="980" y="798" class="cardtext">with a local LLM.</text>
+
+    <rect x="1264" y="716" width="284" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="1284" y="752" class="cardtitle">Agent-friendly</text>
+    <text x="1284" y="778" class="cardtext">Ask an AI agent to run them:</text>
+    <text x="1284" y="798" class="cardtext">the manuals are written for it.</text>
+  </g>
+
+  <text x="60" y="868" class="sans footer">The tools are in raven.papers; Raven-visualizer and Raven-librarian are Raven's other apps.</text>
+</svg>
