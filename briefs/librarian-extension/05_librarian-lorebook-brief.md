@@ -123,7 +123,13 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **A term written in another form than its title's does not fire** — accepted for a retooled phrase used in its
   everyday sense ("a lint rule" fires *Lint rule*), which is the associative mismatch a person would make too.
 
-**Open, to decide next (raised 2026-11-16): inflection.** Whole-word matching misses every inflected form:
+**Inflection: decided (a), matching on the lemma or the surface form (maintainer, 2026-11-16).** The server
+dependency costs nothing, Librarian needing Raven-server anyway. **First, an experiment:** run the glossary's
+titles and a sample of their real uses, English and Finnish, through `hybridir.keyword_tokens` and see what the
+lemmatizer makes of the coinages (*fup*, *duolect*, *co-pter*, *co-*) — whether the surface-form half has to
+cover for it, and whether the suspended hyphen survives spaCy's tokenizer. The options, as they were weighed:
+
+Whole-word matching misses every inflected form:
 "hydra taxes" in English, and in Finnish nearly every occurrence (*duolektin*, *duolektissa*, …). The *Aliases*
 section's "don't auto-derive morphological variants" was written with English in mind. Options:
 
