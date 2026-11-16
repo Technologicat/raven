@@ -102,6 +102,25 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
+**Settled against the real glossary (maintainer, 2026-11-16).** These refine *Matching is smart-case* and
+*Aliases* below.
+
+- **A title's first character is sentence case, not a signal.** Smart case reads the rest: `Hydra tax` matches
+  "hydra tax", `EQ curve` keeps `EQ` exact, `True Name` is `true` forgiving and `Name` exact. Every glossary
+  title is sentence-cased, so reading the first letter as intent would make most entries fire only at the start
+  of a sentence.
+  - **Single-word titles get no exception.** Considered and rejected: a capitalized single-word title matching
+    only as written. The glossary's 24 single-word titles are its coinages, and in its own prose and the chat
+    log they are written lowercase about 87 times against about 19 capitalized, nearly all of those
+    sentence-initial. A term that must match exactly can get a per-entry opt-in if one ever turns up.
+- **Parentheses in a header are aliases, comma-separated, always.** `## Digital nature reserve (for prose
+  basilisks)` gets the alias "for prose basilisks", which is accepted: the phrase is written essentially only
+  about that entry. Considered and rejected: a single-word-items heuristic, and no aliases in v0.
+- **A word keeps a trailing hyphen when nothing word-like follows it** (a suspended hyphen), so the key `co-`
+  matches a literal "co-" and neither "co-pter" nor "CO". Curly apostrophes are read as straight ones.
+- **`README.md` in the lorebook folder is not a source**, and the folder's own README, written when the app
+  creates it, opens with what goes there ("Put your … here").
+
 ---
 
 ## Design constraints (from the field, confirmed)
