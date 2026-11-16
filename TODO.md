@@ -10,9 +10,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[High]** Material for an executive summary (maintainer, 2026-11-16):
   - **A light-background Visualizer plot, by Wednesday 2026-11-18.** Managers and funders expect a light theme (a
-    coworker's observation). Until the light theme below exists, the cheap route is drawing the dataset's map
-    outside the app: its 2D coordinates and cluster labels are in the dataset file, and matplotlib draws them on
-    white in a few lines. A light theme for the plotter alone, set through the REPL, is the other route.
+    coworker's observation). The plotter's background and grid colours are already settings
+    (`plotter_background_color`, `plotter_grid_color` in `raven/visualizer/config.py`, with a light pair commented
+    out there), and the REPL can change them in a running app; so a screenshot of the plot alone, cropped, and
+    possibly embedded in the Visualizer's infographic (maintainer). Viridis's yellow end has little contrast on
+    white, which the screenshot will show.
   - **Infographics of what Raven-visualizer and Raven-librarian are for**, in the style of the paper tools' one
     (`img/raven-papers-infographic.svg`, designed in `briefs/design/papers-infographic-sketch.md`).
 
