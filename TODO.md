@@ -32,6 +32,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     convention that colour switches on only when something has something to say, as an app like MS Teams does
     (maintainer). The levers are DPG's style variables (frame padding, item spacing, the text sizes), settable in
     one place at bootup, so a roomier layout can come with the light theme and the dense one stay the default.
+  - **Start with a UI design session, with mockups side by side** (maintainer, 2026-11-16), on the principles
+    the GUI follows (Tufte's, Nielsen's). On its list: the Visualizer's vertical toolbar, which looks odd to
+    newcomers. It is vertical because vertical space is what a widescreen lacks (maintainer), as in the rails of
+    Teams, VS Code or Inkscape, so what to look at is how it is drawn: its grouping, the unlabelled icons, its
+    alignment with the plot and the panel beside it, its width against its spacing.
 
 - **[High]** Usable by non-technical users. Visitors at Yrityspäivä (2026-10-08) wanted to try Raven and were not technical types (maintainer). Three parts, together more important for practical value than the PyPI upload; placement in the roadmap is open (`briefs/roadmap.md`).
   - Server autostart, last one out turns off the lights: `briefs/server-autostart-brief.md`.
