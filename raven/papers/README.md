@@ -9,7 +9,7 @@
 Thirteen command-line tools for the part of a literature review that happens before anyone reads anything: finding the papers, fetching them, repairing what the databases hand you, and setting aside what is not about your topic. One more is for afterwards: checking that what you wrote still matches the corpus it came from.
 
 <p align="center">
-<img src="../../img/raven-papers-infographic.png" alt="The paper tools as a metro map: an arXiv line and a database line merge at deduplication, run on through filling in abstracts, setting aside what cannot be screened and LLM screening, and branch out to the Visualizer, Librarian and a reference check. Bars below show the record count falling at each stage, and five cards say why: auditable, reproducible, your criteria, local and private, agent-friendly." width="800"/> <br/>
+<img src="../../img/raven-papers-infographic.png" alt="The paper tools as a metro map: an arXiv line and a database line merge at deduplication, run on through filling in abstracts, setting aside what cannot be screened and LLM screening, and branch out to the Visualizer, Librarian and a reference check. Bars below show the record count falling at each stage, and five cards say why: &quot;Auditable&quot;, &quot;Reproducible&quot;, &quot;Your criteria&quot;, &quot;Local and private&quot; and &quot;Agent-friendly&quot;." width="800"/> <br/>
 <i>The tools in the order a review uses them.</i>
 </p>
 

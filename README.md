@@ -95,7 +95,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 ## Raven-papers: Prepare a literature corpus
 
-<a href="raven/papers/README.md"><img src="img/raven-papers-infographic.png" alt="The paper tools as a metro map: an arXiv line and a database line merge at deduplication, run on through filling in abstracts, setting aside what cannot be screened and LLM screening, and branch out to the Visualizer, Librarian and a reference check. Bars below show the record count falling at each stage, and five cards say why: auditable, reproducible, your criteria, local and private, agent-friendly." width="800"/></a>
+<a href="raven/papers/README.md"><img src="img/raven-papers-infographic.png" alt="The paper tools as a metro map: an arXiv line and a database line merge at deduplication, run on through filling in abstracts, setting aside what cannot be screened and LLM screening, and branch out to the Visualizer, Librarian and a reference check. Bars below show the record count falling at each stage, and five cards say why: &quot;Auditable&quot;, &quot;Reproducible&quot;, &quot;Your criteria&quot;, &quot;Local and private&quot; and &quot;Agent-friendly&quot;." width="800"/></a>
 
 - **Documentation**: [Paper tools manual](raven/papers/README.md), which documents the rules each tool applies. For which tool to reach for, and in what order, see [*Building a bibliography*](#building-a-bibliography).
 - **Goal**: Turn what the databases hand you into a corpus worth screening, and say exactly what was done to it on the way.
