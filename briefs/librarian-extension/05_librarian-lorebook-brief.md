@@ -120,6 +120,21 @@ would be knowledge left on the floor. So this clears the bar the project already
   matches a literal "co-" and neither "co-pter" nor "CO". Curly apostrophes are read as straight ones.
 - **`README.md` in the lorebook folder is not a source**, and the folder's own README, written when the app
   creates it, opens with what goes there ("Put your … here").
+- **A term written in another form than its title's does not fire** — accepted for a retooled phrase used in its
+  everyday sense ("a lint rule" fires *Lint rule*), which is the associative mismatch a person would make too.
+
+**Open, to decide next (raised 2026-11-16): inflection.** Whole-word matching misses every inflected form:
+"hydra taxes" in English, and in Finnish nearly every occurrence (*duolektin*, *duolektissa*, …). The *Aliases*
+section's "don't auto-derive morphological variants" was written with English in mind. Options:
+
+- **(a) Match on the lemma or the surface form**, through `hybridir.keyword_tokens`' spaCy pipeline (via
+  raven-server), as RAG keyword search does. Deterministic for a given model version; spaCy has Finnish. Cost:
+  medium — the scan then needs the server or local spaCy, and a per-message cache. The surface-form half covers
+  coinages the lemmatizer mangles. **The lean.**
+- **(b) A stemmer** (Snowball has Finnish): local and cheap, but cruder and more prone to false positives.
+- **(c) Aliases per inflected form**: workable for an English plural, hopeless for Finnish.
+
+The core is shaped for (a): `find_matches` works on a word list, so lemmas would slot in at tokenization.
 
 ---
 
