@@ -123,6 +123,28 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **A term written in another form than its title's does not fire** — accepted for a retooled phrase used in its
   everyday sense ("a lint rule" fires *Lint rule*), which is the associative mismatch a person would make too.
 
+**Inflection, reopened 2026-11-17: step back and weigh the options before installing anything.** The English
+probe is done (`investigations/lorebook-lemmas/`): spaCy's errors are all misses, its tokens are not the
+matcher's words, and English prose barely inflects these terms. Finnish is where it pays, and the maintainer
+asked whether spaCy's Finnish (lemma accuracy 82.8% `sm`, 86.4% `lg`, per token on UD Finnish TDT) is good
+enough, whether anything more accurate exists, and whether the English edge cases (*hydra taxes → taxis*) are
+solvable at all. To weigh, next session:
+
+- **(a) Lemmatize the text with spaCy**, as decided below: per-turn cost, errors as misses, Finnish at 83–86%.
+  English `en_core_web_sm` has no trained lemmatizer (lookup tables and POS rules, no published lemma accuracy,
+  tagger 97.3%); `en_core_web_trf`'s better tagger would fix some tag-driven errors and not table gaps.
+- **(b) A stronger Finnish lemmatizer** — Stanza, the Turku neural parser pipeline, Trankit; Omorfi or Voikko,
+  rule-based analysers that are dictionary-bound and so weak on coinages. Published figures for the neural ones
+  are recalled as mid-90s on UD Finnish TDT but **not verified**; whatever is chosen, measure it on our own
+  Finnish samples of the coinages rather than trusting the published numbers.
+- **(c) Expand the keys instead of lemmatizing the text.** Generate each entry's inflected forms once, when the
+  entry is loaded, cached by content hash, and keep the matcher purely surface-based: no lemmatizer at scan
+  time, deterministic, and the per-turn cost unchanged. The forms can come from a rule library, or from the LLM,
+  which is the best lemmatizer available for coinages and would be asked once per entry rather than once per
+  turn. The list could be written beside the source for the author to read and correct. Open questions: Finnish
+  has hundreds of forms per word, so a stem-and-suffix pattern may beat a list; and it needs the backend at load
+  time.
+
 **Inflection: decided (a), matching on the lemma or the surface form (maintainer, 2026-11-16).** The server
 dependency costs nothing, Librarian needing Raven-server anyway. **First, an experiment:** run the glossary's
 titles and a sample of their real uses, English and Finnish, through `hybridir.keyword_tokens` and see what the
