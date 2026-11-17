@@ -13,7 +13,7 @@ The data stays out of git, in `00_stuff/rawdata/biology_geography_health_educati
 | Stage | Records | Tool | What happened |
 |---|---|---|---|
 | 1. Search | 119 | Scopus | Documents published 2000–2024, searched in English between 18 May and 13 June 2025, with a hierarchical keyword strategy (single terms up to Boolean combinations); from the manuscript |
-| 2. Clean | 119 → 118 | not recorded | A hand-made stub removed (placeholder title, placeholder key); two records with improvised citation keys given proper ones |
+| 2. Clean | 119 → 118 | not recorded | The record template, included by accident, removed; two records with improvised citation keys given proper ones |
 | 3. Deduplicate | 118 → 117 | `raven-deduplicate` | One paper exported twice under the same key |
 | 4. Fill abstracts | 117 | `raven-fillbib`, inside the screening run (`--fill`) | From Crossref, by DOI: 2 truncated abstracts completed; all 117 have an abstract; 5 differ from Crossref's text |
 | 5. Screen | 117 → 73 removed, 8 to a person, 36 kept | `raven-scopebib` | LLM-assisted screening against a written definition of scope |
@@ -25,10 +25,11 @@ The 117 is the figure the manuscript gives after its screening phase (95 article
 ### 2–3. Cleaning and deduplication
 
 No log of the cleaning step survives; what it did is read from the citation keys of the files before and after it. The
-raw file is not a pure export. Two records carried the placeholder key `doi-numero`: the stub the cleaning removed,
-whose title is a placeholder too, and Cooke et al. (2011), which reached the final 40; both look added by hand (*Open*,
-below). A third, Øvrebø (2015), was keyed by its Scopus record's URL, having no DOI, which suggests it came from the
-export. The
+raw file held one record that is not a study: the template the records were filled in from, placeholders only,
+included by accident and removed at cleaning; not reported in the paper (the authors, 2026-11-17). Two records had
+improvised keys for want of a DOI: Cooke et al. (2011), a search result with no DOI, whose record is in QUT's
+repository (<https://eprints.qut.edu.au/41660/>) with no fulltext found online; and Øvrebø (2015), keyed by its Scopus
+record's URL. The
 deduplication audit beside the deduplicated file was regenerated on 2026-11-17: the one present until then said nothing
 was merged and did not describe the file beside it, while a fresh run of `raven-deduplicate` on the clean file gives the
 deduplicated file's 117, with the merge recorded.
@@ -67,6 +68,14 @@ what produced them, and how this differs from the multi-run method in that bundl
 Clustering by embedding was tried first and found no cluster in the 40, in high dimensions or in 2D
 (`../../briefs/review-automation-brief.md`, item 10).
 
+### Checking the manuscript's reference list
+
+`raven-checkrefs` on `04b-final.bib` against the manuscript of 2026-11-17: **all 40 studies are in its reference list**,
+35 matched by DOI and 5 by title, with no near-miss to check by hand. Its 77 other entries are the remaining candidates of
+the 117, which the list still carries, and six numbered section headings the parser took for entries. Whether an earlier
+check was run, against the authors' list of 2026-10-26, is not recorded; this one stands in for it, on the final set. The
+audit is not kept: it changes nothing, and the command repeats it.
+
 ### Corrections to the final bibliography
 
 Two, in `04b-final.bib` only, recorded in `../llm-thematic-grouping/README.md` under *The final clustering*: a year, by
@@ -92,12 +101,9 @@ maintainer's hunch about how fast the Qwen family's capability progresses (2026-
 
 ## Open
 
-- **The search**: the query itself, and the record counts of the manuscript's identification phase.
-- **The records added by hand**: where they came from, and on what grounds they were added. One of them reached the
-  final 40: Cooke et al. (2011), which has no DOI. Whether Øvrebø (2015) came from the export, as its Scopus key
-  suggests.
-- **`raven-checkrefs` against the study list**, decided on 2026-11-02 to catch slips like those found in the two earlier
-  papers' lists: whether it was run.
+The search is reported as the manuscript has it, which is all that was recorded of it: not a full PRISMA report, and
+not needing one (the authors, 2026-11-17).
+
 - **The word clouds** (above).
 - **The countries and educational levels** of the 40 (the manuscript's per-country table): by hand, or by the fulltext
   tool planned in the review-automation brief (item 8).
