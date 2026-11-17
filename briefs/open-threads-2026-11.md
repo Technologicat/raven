@@ -36,6 +36,9 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
 
 ## Ready to pick up, no deadline
 
+- **The health-education study's methods section**: the final clustering is decided (the seven themes of the
+  topic-aim import, 2026-11-17; `investigations/llm-thematic-grouping/README.md`, *The final clustering*). Next,
+  gathering what is written about the processing that took the data from the search to the 40 studies.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
@@ -49,10 +52,6 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
 
 ## Waiting on a decision
 
-- **The health-education study's final clustering**: compare the two LLM-clustered datasets imported on
-  2026-11-11 (no aim, 4 themes; the topic line as aim, 7 themes), and decide the final clustering by hand
-  from them (maintainer, 2026-11-17). `investigations/llm-thematic-grouping/README.md`, *As an import method*;
-  the datasets are in the study's raw-data folder, with their import logs.
 - **Aria's voice: how to measure from here.** Settled: two axes, and the absurd prompts kept with a setup turn.
   Open: ranking within a prompt against its cost in the rater's attention; the steganosaur and AGItater
   humour tests; whether to skip further judge tuning and go to step 4, the candidate card compared by hand.

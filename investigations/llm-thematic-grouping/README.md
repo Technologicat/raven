@@ -169,3 +169,34 @@ study's 40 final studies, the same model, against this bundle's five no-aim runs
 So both the aim and the wording move the grain; dropping the review's "table of thematic clusters" took the generic
 prompt below this bundle's range, and putting that cue back, without the claim that the collection is a review, returns it
 to the range's low end. One run each, against a spread of 4 to 6 here, so read the differences as leads.
+
+## The final clustering (decided 2026-11-17)
+
+**The health-education study's themes are the seven of the importer run with the topic line as its aim**, over the 40
+final studies: `visualizer-llm-topic.pickle` in `scopebib-2026-10-29e/`, written 2026-11-11 at 11:36. Decided by the
+study's authors, who compared it with the four-theme run without an aim (`visualizer-llm.pickle`) and read every abstract:
+the themes, and the studies placed under each, stand as the model gave them.
+
+1. Conceptual foundations for integrating health and sustainability in education
+2. Implementation and sustainability of school-based health and sustainability programs
+3. Curriculum content, policy frameworks, and whole-school approaches
+4. Teacher education and higher education for health and sustainability
+5. Program evaluations and empirical interventions in school settings
+6. Health education in diverse, global, and under-resourced contexts
+7. Pedagogical strategies, instructional methods, and technology in health education
+
+**What produced it**, for the methods section:
+
+- **Input**: run e's `04b-final.bib`, the 40 studies the screening kept.
+- **Tool**: `raven-importer` with `clustering_method = "llm"`, at commit `69da540e`: the prompt as written in `4e02bcd0`,
+  generic rather than framed as a review, and without the grain cue that `2f24c548` added twenty minutes after this run.
+- **Aim**: the topic line, `aim-topic.txt`: *"Sustainability education in health education, at primary and secondary
+  schools and in teacher education."* The log does not record it; the file's name and the table above do.
+- **Model**: Qwen 3.8 27B, `q4_k_xl`, on LM Studio. One run, a prompt of 13,009 tokens, about four minutes; no repair
+  turn. The reasoning effort and thinking budget are not recorded for this run (the bundle's own runs used `xhigh` and 12k).
+- **Placement**: one theme per study; no study left over.
+
+**This is not the route `METHOD.md` describes.** The catalogue (its steps 2 to 5) was built and applied on this set
+(*Results*, above), but the final themes come from one run, checked against every abstract by people, in place of runs
+pooled and placed again under an edited catalogue. A methods section should say which, and that the agreement figures
+above describe the method's run-to-run variation rather than the chosen run.

@@ -8,6 +8,9 @@ little. The scripts are in this bundle, and `README.md` holds the measurements.
 3 and 5, and the check against published tables, are not done yet. So this describes the method as designed, and the
 sentences under *What was measured* are the only ones resting on data.
 
+**2026-11-17**: the health-education study did not take this route to its final themes. They are one run of the
+importer's `llm` method, read through against every abstract by the authors; `README.md`, *The final clustering*.
+
 ## The problem it answers
 
 Run a model several times over the same studies and it returns different groupings, each with its own strengths: a
