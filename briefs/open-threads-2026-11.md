@@ -6,6 +6,10 @@ off when it closes, and delete the file when it is empty.*
 
 ## Due Wednesday 2026-11-18: material for an executive summary
 
+**State at the end of 2026-11-17**: item 1's draft is done and waiting for the maintainer's comments:
+`img/raven-librarian-infographic.svg`, not yet embedded anywhere; its PNG is made once it is agreed, as the papers
+one's was (`inkscape … --export-width=3200`). Items 2 and 3 are not started.
+
 The audience is managers and funders, alongside researchers; they expect a light theme. `TODO.md`, Cross-cutting,
 has the entry.
 
@@ -38,7 +42,9 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
 
 - **The health-education study's methods section**: a free-form description of the processing, in English, for the
   authors to write the manuscript's section from. The record it draws on, with the decisions settled on 2026-11-17 and
-  what is still open, is `investigations/health-education-review/README.md`.
+  what is still open, is `investigations/health-education-review/README.md`; its *Open* section is the next steps:
+  the methods description itself, two small fixes in the manuscript's Table 5, and matching the three reviews'
+  study lists against the fulltext set that arrived on 2026-11-17.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.

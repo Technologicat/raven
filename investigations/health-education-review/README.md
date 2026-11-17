@@ -104,6 +104,17 @@ maintainer's hunch about how fast the Qwen family's capability progresses (2026-
 The search is reported as the manuscript has it, which is all that was recorded of it: not a full PRISMA report, and
 not needing one (the authors, 2026-11-17).
 
+- **The free-form methods description**, from this record, for the authors to write the manuscript's section from; in
+  English. Proposed as `METHODS-DRAFT.md` in this bundle, the location not yet confirmed.
+- **The manuscript's Table 5 now holds the clusters** (2026-11-17), with the Visualizer's 0-based numbers (#0 to #6),
+  checked against `klusterit-taulukko.md`: the same 40 studies in the same clusters and order. Five two-author
+  citations still read "and" where the paper settled on "&", and cluster #1's topic may be missing a space
+  ("school-basedhealth"), unless that is a line break the text extraction drops.
+- **The fulltexts**: the set for all three reviews arrived on 2026-11-17, one folder with subfolders, in the maintainer's
+  downloads (`~/Downloads/papers/biology_and_geography_education/`). It may hold papers added later that are in no
+  dataset. Next, on another day: match the study lists of the three reviews against it. This is what the per-country
+  table (below) and the content analysis of the review-automation brief (items 8 and 11) read from.
+
 - **The word clouds** (above).
 - **The countries and educational levels** of the 40 (the manuscript's per-country table): by hand, or by the fulltext
   tool planned in the review-automation brief (item 8).

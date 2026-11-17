@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <style>
+    .sans { font-family: 'Open Sans', Helvetica, Arial, sans-serif; }
+    .mono { font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace; }
+    .kicker { font-size: 18px; font-weight: 700; letter-spacing: 3px; fill: #c05621; }
+    .title { font-size: 40px; font-weight: 700; fill: #1f2933; }
+    .subtitle { font-size: 20px; fill: #52606d; }
+    .zone { font-size: 17px; font-weight: 700; fill: #8a8174; letter-spacing: 1px; }
+    .itemtitle { font-size: 17px; font-weight: 700; fill: #1f2933; }
+    .itemtext { font-size: 14px; fill: #52606d; }
+    .node { font-size: 13px; fill: #1f2933; }
+    .nodedim { font-size: 13px; fill: #8a8174; }
+    .tag { font-size: 12px; font-weight: 700; fill: #ffffff; letter-spacing: 1px; }
+    .note { font-size: 14px; fill: #52606d; }
+    .cardtitle { font-size: 18px; font-weight: 700; fill: #1f2933; }
+    .cardtext { font-size: 14px; fill: #52606d; }
+    .footer { font-size: 12px; fill: #8a8174; }
+    .edge { fill: none; stroke-width: 4; stroke-linecap: round; }
+  </style>
+
+  <!-- Card -->
+  <rect x="8" y="8" width="1584" height="884" rx="24" fill="#fbfaf7" stroke="#e2ddd3" stroke-width="2"/>
+
+  <!-- Heading -->
+  <text x="60" y="56" class="sans kicker">RAVEN-LIBRARIAN</text>
+  <text x="60" y="100" class="sans title">Talk with your documents, and keep every branch</text>
+  <text x="60" y="134" class="sans subtitle">For the few hundred papers that screening leaves: still more than anyone can read.</text>
+
+  <!-- Left: what the AI draws on -->
+  <rect x="48" y="160" width="420" height="530" rx="14" fill="#f3f0e9"/>
+  <text x="64" y="188" class="sans zone">WHAT THE AI CAN DRAW ON</text>
+  <g class="sans">
+    <circle cx="82" cy="240" r="18" fill="#0f766e"/>
+    <text x="82" y="246" class="tag" text-anchor="middle">D</text>
+    <text x="114" y="236" class="itemtitle">Your documents</text>
+    <text x="114" y="258" class="itemtext">Hybrid search, by meaning and by keyword,</text>
+    <text x="114" y="276" class="itemtext">over your own collection</text>
+
+    <circle cx="82" cy="350" r="18" fill="#2b6cb0"/>
+    <text x="82" y="356" class="tag" text-anchor="middle">W</text>
+    <text x="114" y="346" class="itemtitle">The web</text>
+    <text x="114" y="368" class="itemtext">Search and read pages, when you switch</text>
+    <text x="114" y="386" class="itemtext">the Internet toggle on</text>
+
+    <circle cx="82" cy="460" r="18" fill="#6b46c1"/>
+    <text x="82" y="466" class="tag" text-anchor="middle">A</text>
+    <text x="114" y="456" class="itemtitle">Attachments</text>
+    <text x="114" y="478" class="itemtext">Images, on a vision model, and documents,</text>
+    <text x="114" y="496" class="itemtext">on any model</text>
+
+    <circle cx="82" cy="570" r="18" fill="#4a5568"/>
+    <text x="82" y="576" class="tag" text-anchor="middle">T</text>
+    <text x="114" y="566" class="itemtitle">Tools you add</text>
+    <text x="114" y="588" class="itemtext">MCP servers for new capabilities, and</text>
+    <text x="114" y="606" class="itemtext">skills: procedures written in Markdown</text>
+  </g>
+
+  <!-- Arrow from the left column into the tree -->
+  <path d="M 472 410 H 528" fill="none" stroke="#c9c1b3" stroke-width="3"/>
+  <path d="M 528 402 L 540 410 L 528 418 Z" fill="#c9c1b3"/>
+
+  <!-- Centre: the branching chat -->
+  <text x="800" y="188" class="sans zone" text-anchor="middle">ONE CHAT, MANY BRANCHES</text>
+
+  <!-- Edges: muted first, then the active path on top -->
+  <path class="edge" stroke="#dcd3c3" d="M 799 410 C 820 410, 815 300, 841 300"/>
+  <path class="edge" stroke="#dcd3c3" d="M 799 410 C 820 410, 815 520, 841 520"/>
+  <path class="edge" stroke="#dcd3c3" d="M 939 300 H 961"/>
+  <path class="edge" stroke="#dcd3c3" d="M 939 520 H 961"/>
+  <path class="edge" stroke="#dcd3c3" d="M 939 410 C 950 410, 950 450, 961 450"/>
+  <path class="edge" stroke="#c05621" d="M 659 410 H 701"/>
+  <path class="edge" stroke="#c05621" d="M 799 410 H 841"/>
+  <path class="edge" stroke="#c05621" d="M 939 410 C 950 410, 950 370, 961 370"/>
+
+  <!-- Nodes -->
+  <g class="sans">
+    <rect x="561" y="391" width="98" height="38" rx="12" fill="#fde7d6" stroke="#c05621" stroke-width="3"/>
+    <text x="610" y="415" class="node" text-anchor="middle">System</text>
+    <rect x="701" y="391" width="98" height="38" rx="12" fill="#fde7d6" stroke="#c05621" stroke-width="3"/>
+    <text x="750" y="415" class="node" text-anchor="middle">AI: Hello!</text>
+
+    <rect x="841" y="281" width="98" height="38" rx="12" fill="#f3f0e9" stroke="#dcd3c3" stroke-width="3"/>
+    <text x="890" y="305" class="nodedim" text-anchor="middle">You: Sum…</text>
+    <rect x="841" y="391" width="98" height="38" rx="12" fill="#fde7d6" stroke="#c05621" stroke-width="3"/>
+    <text x="890" y="415" class="node" text-anchor="middle">You: Why…</text>
+    <rect x="841" y="501" width="98" height="38" rx="12" fill="#f3f0e9" stroke="#dcd3c3" stroke-width="3"/>
+    <text x="890" y="525" class="nodedim" text-anchor="middle">You: Com…</text>
+
+    <rect x="961" y="281" width="98" height="38" rx="12" fill="#f3f0e9" stroke="#dcd3c3" stroke-width="3"/>
+    <text x="1010" y="305" class="nodedim" text-anchor="middle">AI: …</text>
+    <rect x="961" y="351" width="98" height="38" rx="12" fill="#fde7d6" stroke="#c05621" stroke-width="3"/>
+    <text x="1010" y="375" class="node" text-anchor="middle">AI: Because…</text>
+    <rect x="961" y="431" width="98" height="38" rx="12" fill="#f3f0e9" stroke="#dcd3c3" stroke-width="3"/>
+    <text x="1010" y="455" class="nodedim" text-anchor="middle">AI: It is…</text>
+    <rect x="961" y="501" width="98" height="38" rx="12" fill="#f3f0e9" stroke="#dcd3c3" stroke-width="3"/>
+    <text x="1010" y="525" class="nodedim" text-anchor="middle">AI: …</text>
+
+    <!-- Tags -->
+    <rect x="1018" y="340" width="52" height="20" rx="10" fill="#c05621"/>
+    <text x="1044" y="354" class="tag" text-anchor="middle">HEAD</text>
+    <rect x="1030" y="420" width="66" height="20" rx="10" fill="#8a8174"/>
+    <text x="1063" y="434" class="tag" text-anchor="middle">REROLL</text>
+  </g>
+
+  <text x="810" y="590" class="sans note" text-anchor="middle">Each message is a node in a tree. Rerolling a reply</text>
+  <text x="810" y="610" class="sans note" text-anchor="middle">or editing a question adds a branch, and the old one</text>
+  <text x="810" y="630" class="sans note" text-anchor="middle">stays, to come back to whenever you like.</text>
+
+  <!-- Right: how you talk with it -->
+  <rect x="1132" y="160" width="420" height="530" rx="14" fill="#f3f0e9"/>
+  <text x="1148" y="188" class="sans zone">HOW YOU TALK WITH IT</text>
+  <g class="sans">
+    <circle cx="1166" cy="240" r="18" fill="#c05621"/>
+    <text x="1166" y="246" class="tag" text-anchor="middle">K</text>
+    <text x="1198" y="236" class="itemtitle">By typing</text>
+    <text x="1198" y="258" class="itemtext">The usual chat, with Markdown and code,</text>
+    <text x="1198" y="276" class="itemtext">and the model's thinking a click away</text>
+
+    <circle cx="1166" cy="350" r="18" fill="#c05621"/>
+    <text x="1166" y="356" class="tag" text-anchor="middle">V</text>
+    <text x="1198" y="346" class="itemtitle">By voice</text>
+    <text x="1198" y="368" class="itemtext">Speak your question; an animated avatar</text>
+    <text x="1198" y="386" class="itemtext">answers aloud, its lips in sync</text>
+
+    <circle cx="1166" cy="460" r="18" fill="#c05621"/>
+    <text x="1166" y="466" class="tag" text-anchor="middle">S</text>
+    <text x="1198" y="456" class="itemtitle">With subtitles</text>
+    <text x="1198" y="478" class="itemtext">The spoken reply as text, machine-</text>
+    <text x="1198" y="496" class="itemtext">translated into your language if you like</text>
+
+    <circle cx="1166" cy="570" r="18" fill="#c05621"/>
+    <text x="1166" y="576" class="tag" text-anchor="middle">G</text>
+    <text x="1198" y="566" class="itemtitle">Through the chat graph</text>
+    <text x="1198" y="588" class="itemtext">The whole tree drawn out: look at any</text>
+    <text x="1198" y="606" class="itemtext">branch, and switch to it</text>
+  </g>
+
+  <!-- Why -->
+  <g class="sans">
+    <rect x="48" y="716" width="360" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="68" y="752" class="cardtitle">Local</text>
+    <text x="68" y="778" class="cardtext">Any OpenAI-compatible LLM, running</text>
+    <text x="68" y="798" class="cardtext">on your own machine.</text>
+
+    <rect x="428" y="716" width="360" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="448" y="752" class="cardtitle">Private</text>
+    <text x="448" y="778" class="cardtext">Voice is never recorded to disk, and</text>
+    <text x="448" y="798" class="cardtext">the web is used only when you allow it.</text>
+
+    <rect x="808" y="716" width="360" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="828" y="752" class="cardtitle">Nothing lost</text>
+    <text x="828" y="778" class="cardtext">Every reroll, edit and side question</text>
+    <text x="828" y="798" class="cardtext">stays in the tree.</text>
+
+    <rect x="1188" y="716" width="360" height="110" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="1208" y="752" class="cardtitle">Scriptable</text>
+    <text x="1208" y="778" class="cardtext">Run a turn from your own Python, with</text>
+    <text x="1208" y="798" class="cardtext">the same documents, tools and tree.</text>
+  </g>
+
+  <text x="60" y="868" class="sans footer">Raven-librarian is one of Raven's apps, and runs with Raven-server beside it.</text>
+</svg>
