@@ -49,6 +49,10 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
 
 ## Waiting on a decision
 
+- **The health-education study's final clustering**: compare the two LLM-clustered datasets imported on
+  2026-11-11 (no aim, 4 themes; the topic line as aim, 7 themes), and decide the final clustering by hand
+  from them (maintainer, 2026-11-17). `investigations/llm-thematic-grouping/README.md`, *As an import method*;
+  the datasets are in the study's raw-data folder, with their import logs.
 - **Aria's voice: how to measure from here.** Settled: two axes, and the absurd prompts kept with a setup turn.
   Open: ranking within a prompt against its cost in the rater's attention; the steganosaur and AGItater
   humour tests; whether to skip further judge tuning and go to step 4, the candidate card compared by hand.
