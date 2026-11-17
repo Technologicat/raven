@@ -148,6 +148,10 @@ solvable at all. To weigh, next session:
     *juoksentelisinkohan*, "I wonder if I should run around aimlessly", one word. So for Finnish a key wants to
     become a stem plus any ending, with the stem's own variants under consonant gradation, rather than a list
     of forms.
+  - **Look at Voikko** (maintainer, 2026-11-17): its spellchecker handles inflected Finnish well, accepting
+    *juoksentelisinkohan* as correctly spelled. Its analyser should also give base forms, which would make it a
+    lemmatizer for (b) or a stem source for (c). To check: what it does with a word outside its lexicon (the
+    coinages), and whether it installs on Windows and macOS, being a system library rather than a wheel.
 - **VRAM is a constraint on all three** (maintainer, 2026-11-17): anything Raven-server serves competes for it
   with the avatar, TTS, STT and the rest, and a single modest GPU is a supported setup. So a heavier lemmatizer
   in (a) or (b) is a cost per hardware tier, and the tiered configuration — planned, not built; the hardware
