@@ -144,6 +144,10 @@ solvable at all. To weigh, next session:
   turn. The list could be written beside the source for the author to read and correct. Open questions: Finnish
   has hundreds of forms per word, so a stem-and-suffix pattern may beat a list; and it needs the backend at load
   time. **The maintainer leans this way (2026-11-17)**; to discuss first thing next session.
+  - **Finnish is agglutinative, so a list cannot cover it** (maintainer, 2026-11-17): suffixes stack, as in
+    *juoksentelisinkohan*, "I wonder if I should run around aimlessly", one word. So for Finnish a key wants to
+    become a stem plus any ending, with the stem's own variants under consonant gradation, rather than a list
+    of forms.
 - **VRAM is a constraint on all three** (maintainer, 2026-11-17): anything Raven-server serves competes for it
   with the avatar, TTS, STT and the rest, and a single modest GPU is a supported setup. So a heavier lemmatizer
   in (a) or (b) is a cost per hardware tier, and the tiered configuration — planned, not built; the hardware
