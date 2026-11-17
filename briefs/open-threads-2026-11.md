@@ -37,8 +37,17 @@ a 2× PNG beside it); its design record is `briefs/design/papers-infographic-ske
 ## Ready to pick up, no deadline
 
 - **The health-education study's methods section**: the final clustering is decided (the seven themes of the
-  topic-aim import, 2026-11-17; `investigations/llm-thematic-grouping/README.md`, *The final clustering*). Next,
-  gathering what is written about the processing that took the data from the search to the 40 studies.
+  topic-aim import, 2026-11-17; `investigations/llm-thematic-grouping/README.md`, *The final clustering*). Next, a
+  free-form description of the whole processing, in English, from which the authors write the manuscript's section;
+  the draft's current methods text is the geography study's, kept as a template (maintainer, 2026-11-17). Settled
+  for it the same day:
+  - **The screening is described as LLM-assisted, with human decisions**; the selection flowchart gains its numbers.
+  - **The abstract fill from Crossref is reported.**
+  - **The embedding pipeline's description goes**, replaced by the LLM grouping of the final set.
+  - **A word cloud of the final 40**, and possibly one of the full 117 beside it, for comparison.
+  - **Two-author citations take "&"** throughout the paper.
+  - **The Qwen 3.6 run is not part of this study**: a model comparison for AOKK's choice of model, scored against
+    this study's hand decisions (`investigations/aokk-corpus-scope/README.md`).
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
