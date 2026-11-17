@@ -196,6 +196,14 @@ the themes, and the studies placed under each, stand as the model gave them.
   turn. The reasoning effort and thinking budget are not recorded for this run (the bundle's own runs used `xhigh` and 12k).
 - **Placement**: one theme per study; no study left over.
 
+**Corrections to `04b-final.bib` after the fact** (2026-11-17), from the export's metadata; the files before it in the
+pipeline still carry the export's values, and the clustering is unaffected:
+
+- **Wiecha et al.: 2004, not 2025**, by its DOI (`10.1093/jpepsy/jsh050`, *Journal of Pediatric Psychology* 29, 467–474,
+  per Crossref). The other 37 records with a DOI agree with Crossref on the year; the two without one (Cooke et al. 2011,
+  Øvrebø 2015) were not checked this way.
+- **Mannix-McNamara**, not "Mannix-Mc Namara" (the authors, from the chapter).
+
 **This is not the route `METHOD.md` describes.** The catalogue (its steps 2 to 5) was built and applied on this set
 (*Results*, above), but the final themes come from one run, checked against every abstract by people, in place of runs
 pooled and placed again under an edited catalogue. A methods section should say which, and that the agreement figures
