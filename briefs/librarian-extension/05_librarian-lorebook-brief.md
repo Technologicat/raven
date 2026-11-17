@@ -143,7 +143,7 @@ solvable at all. To weigh, next session:
   which is the best lemmatizer available for coinages and would be asked once per entry rather than once per
   turn. The list could be written beside the source for the author to read and correct. Open questions: Finnish
   has hundreds of forms per word, so a stem-and-suffix pattern may beat a list; and it needs the backend at load
-  time.
+  time. **The maintainer leans this way (2026-11-17)**; to discuss first thing next session.
 - **VRAM is a constraint on all three** (maintainer, 2026-11-17): anything Raven-server serves competes for it
   with the avatar, TTS, STT and the rest, and a single modest GPU is a supported setup. So a heavier lemmatizer
   in (a) or (b) is a cost per hardware tier, and the tiered configuration — planned, not built; the hardware
