@@ -144,6 +144,11 @@ solvable at all. To weigh, next session:
   turn. The list could be written beside the source for the author to read and correct. Open questions: Finnish
   has hundreds of forms per word, so a stem-and-suffix pattern may beat a list; and it needs the backend at load
   time.
+- **VRAM is a constraint on all three** (maintainer, 2026-11-17): anything Raven-server serves competes for it
+  with the avatar, TTS, STT and the rest, and a single modest GPU is a supported setup. So a heavier lemmatizer
+  in (a) or (b) is a cost per hardware tier, and the tiered configuration — planned, not built; the hardware
+  tiers are sketched in `briefs/reference/model-lineup-autumn-2026.md` — would have to choose it. spaCy `sm`
+  runs fine on CPU. (c) adds nothing resident: it borrows the LLM that is loaded anyway.
 
 **Inflection: decided (a), matching on the lemma or the surface form (maintainer, 2026-11-16).** The server
 dependency costs nothing, Librarian needing Raven-server anyway. **First, an experiment:** run the glossary's
