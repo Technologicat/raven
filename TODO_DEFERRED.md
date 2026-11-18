@@ -27,6 +27,24 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Stock-take of the backend-specific features, for strata and gufo
+
+*Cluster: llmclient · Cost: M · Gate: none; strata and gufo both running on the LAN · Filed: 2026-11-18 · See also: "Upgrade oobabooga and re-check Raven's ooba support", "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`"*
+
+Raven now talks to two more OpenAI-compatible backends, [strata](https://github.com/Niko1221/Strata) and [gufo](https://github.com/gufo-org/gufo), and `detect_backend_flavor` files both under "generic", so they get none of the backend-specific handling. That handling lives in four places in `llmclient`, each currently for LM Studio or oobabooga only:
+
+- **Model info** (`resolve_model_info`): the loaded model's id, context length and load settings, and whether several are loaded. LM Studio answers from `/api/v1/models`, oobabooga from `/v1/internal/model/info`.
+- **LM Studio's parallel-slot warning** (`_warn_if_lmstudio_parallel`).
+- **The `continue` flag**, oobabooga only (`backend_supports_continue`).
+- **Exact token counts** from the backend: oobabooga's token-count endpoint. Everything else uses a local tokenizer (`llm_tokenizer_path`) or a character-ratio estimate.
+
+What each new backend offers, as far as checked (gufo 0.34.0, 2026-11-18):
+
+- **gufo** implements llama-server's status endpoints: `/tokenize` (exact counts, raw text without the chat template), `/props` (model alias, `total_slots`, per-session `n_ctx`, default sampling), `/slots` (per-session processing state), and Prometheus `/metrics`. `/v1/models` also reports `context_length` and `input_modalities`, i.e. whether images are accepted. Thinking per request is `reasoning_effort` (`none` to turn it off).
+- **strata**: not checked yet. It serves OpenAI- and Anthropic-compatible APIs; what else it exposes is the first question.
+
+So the likely shape is a llama-server flavor (detected by `/props`), which would cover gufo and plain llama.cpp servers alike, and a strata flavor if strata turns out to have its own endpoints. The parallel-slot warning has an analogue in gufo's `total_slots`, and image support could come from `input_modalities` instead of staying unknown.
+
 ## Per-call approval for MCP tools
 
 *Cluster: librarian-mcp · Cost: M, and the UX is the work · Gate: UX design; wanted soon after the MCP client · Filed: 2026-11-10 · See also: `briefs/librarian-extension/04_librarian-mcp-client-brief.md`*
