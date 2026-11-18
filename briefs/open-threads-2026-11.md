@@ -11,8 +11,9 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 ## Ready to pick up, no deadline
 
-- **The health-education study's methods section**: a free-form description of the processing, in English, for the
-  authors to write the manuscript's section from. The record it draws on, with the decisions settled on 2026-11-17 and
+- **The health-education study's methods section, next (from 2026-11-19)**: a free-form description of the
+  processing, in English, for the authors to write the manuscript's section from, as
+  `investigations/health-education-review/METHODS-DRAFT.md`. The record it draws on, with the decisions settled on 2026-11-17 and
   what is still open, is `investigations/health-education-review/README.md`; its *Open* section is the next steps:
   the methods description itself, two small fixes in the manuscript's Table 5, and matching the three reviews'
   study lists against the fulltext set that arrived on 2026-11-17.

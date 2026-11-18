@@ -105,7 +105,7 @@ The search is reported as the manuscript has it, which is all that was recorded 
 not needing one (the authors, 2026-11-17).
 
 - **The free-form methods description**, from this record, for the authors to write the manuscript's section from; in
-  English. Proposed as `METHODS-DRAFT.md` in this bundle, the location not yet confirmed.
+  English. In `METHODS-DRAFT.md` in this bundle (agreed 2026-11-18); next, from 2026-11-19.
 - **The manuscript's Table 5 now holds the clusters** (2026-11-17), with the Visualizer's 0-based numbers (#0 to #6),
   checked against `klusterit-taulukko.md`: the same 40 studies in the same clusters and order. Five two-author
   citations still read "and" where the paper settled on "&", and cluster #1's topic may be missing a space
