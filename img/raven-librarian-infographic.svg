@@ -120,7 +120,7 @@
     <text x="1166" y="356" class="tag" text-anchor="middle">V</text>
     <text x="1198" y="346" class="itemtitle">By voice</text>
     <text x="1198" y="368" class="itemtext">Speak your question; an animated avatar</text>
-    <text x="1198" y="386" class="itemtext">answers aloud, its lips in sync</text>
+    <text x="1198" y="386" class="itemtext">answers aloud</text>
 
     <circle cx="1166" cy="460" r="18" fill="#c05621"/>
     <text x="1166" y="466" class="tag" text-anchor="middle">S</text>

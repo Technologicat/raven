@@ -9,6 +9,11 @@
 <i>Raven-librarian is a multiversal LLM frontend with a local-first focus and a talking AI avatar.</i>
 </p>
 
+<p align="center">
+<img src="../../img/raven-librarian-infographic.png" alt="Raven-librarian at a glance: a branching chat in the centre, the active path in colour and the side branches muted, with a rerolled reply as a sibling. On the left, what the AI can draw on: your documents by hybrid search, the web, attachments, and tools you add through MCP servers and skills. On the right, how you talk with it: typing, voice with an animated avatar answering aloud, subtitles with translation, and the chat graph. Along the bottom, four cards: &quot;Local&quot;, &quot;Private&quot;, &quot;Nothing lost&quot; and &quot;Scriptable&quot;." width="800"/> <br/>
+<i>What it draws on, and how you talk with it.</i>
+</p>
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 

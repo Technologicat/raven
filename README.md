@@ -116,6 +116,8 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 <img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian, with the AI avatar" height="200"/> <img src="img/screenshot-librarian-graph.png" alt="Screenshot of Raven-librarian, with the chat graph" height="200"/>
 
+<a href="raven/librarian/README.md"><img src="img/raven-librarian-infographic.png" alt="Raven-librarian at a glance: a branching chat in the centre, the active path in colour and the side branches muted, with a rerolled reply as a sibling. On the left, what the AI can draw on: your documents by hybrid search, the web, attachments, and tools you add through MCP servers and skills. On the right, how you talk with it: typing, voice with an animated avatar answering aloud, subtitles with translation, and the chat graph. Along the bottom, four cards: &quot;Local&quot;, &quot;Private&quot;, &quot;Nothing lost&quot; and &quot;Scriptable&quot;." width="800"/></a>
+
 - **Documentation**: [Librarian user manual](raven/librarian/README.md), which opens with a [quickstart](raven/librarian/README.md#quickstart) — what to start, and in which order.
 - **Goal**: Pick up where *Visualizer*'s screening leaves off — a few hundred papers, still far more than anyone can read. Talk with a local LLM for synthesis, clarifications, speculation, ...
   - **Status**: :white_check_mark: Fully operational, and under active development — the GUI app `raven-librarian` is what we use day to day. A command-line client `raven-minichat` shares the same backend (note that the GUI app has more features).
