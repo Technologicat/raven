@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1600" height="900" viewBox="0 0 1600 900">
+  <style>
+    .sans { font-family: 'Open Sans', Helvetica, Arial, sans-serif; }
+    .kicker { font-size: 18px; font-weight: 700; letter-spacing: 3px; fill: #6b46c1; }
+    .title { font-size: 40px; font-weight: 700; fill: #1f2933; }
+    .subtitle { font-size: 20px; fill: #52606d; }
+    .zone { font-size: 17px; font-weight: 700; fill: #8a8174; letter-spacing: 1px; }
+    .itemtitle { font-size: 17px; font-weight: 700; fill: #1f2933; }
+    .itemtext { font-size: 14px; fill: #52606d; }
+    .tag { font-size: 12px; font-weight: 700; fill: #ffffff; letter-spacing: 1px; }
+    .caption { font-size: 13px; fill: #8a8174; }
+    .cardtitle { font-size: 18px; font-weight: 700; fill: #1f2933; }
+    .cardtext { font-size: 14px; fill: #52606d; }
+    .footer { font-size: 12px; fill: #8a8174; }
+  </style>
+
+  <!-- Card -->
+  <rect x="8" y="8" width="1584" height="884" rx="24" fill="#fbfaf7" stroke="#e2ddd3" stroke-width="2"/>
+
+  <!-- Heading -->
+  <text x="60" y="56" class="sans kicker">RAVEN-VISUALIZER</text>
+  <text x="60" y="100" class="sans title">Take 10,000 studies, find the ones worth reading</text>
+  <text x="60" y="134" class="sans subtitle">A map of a literature search, where studies about the same thing land near each other.</text>
+
+  <!-- Left: from BibTeX to a map -->
+  <rect x="48" y="160" width="372" height="530" rx="14" fill="#f3f0e9"/>
+  <text x="64" y="188" class="sans zone">FROM BIBTEX TO A MAP</text>
+  <path d="M 84 236 V 636" fill="none" stroke="#6b46c1" stroke-width="8" stroke-linecap="round"/>
+  <g class="sans">
+    <circle cx="84" cy="236" r="11" fill="#ffffff" stroke="#6b46c1" stroke-width="5"/>
+    <text x="110" y="232" class="itemtitle">Your bibliography</text>
+    <text x="110" y="254" class="itemtext">A BibTeX file of search results,</text>
+    <text x="110" y="272" class="itemtext">titles and abstracts</text>
+
+    <circle cx="84" cy="336" r="11" fill="#ffffff" stroke="#6b46c1" stroke-width="5"/>
+    <text x="110" y="332" class="itemtitle">Meaning, as numbers</text>
+    <text x="110" y="354" class="itemtext">Each study embedded by a language</text>
+    <text x="110" y="372" class="itemtext">model, so similar texts lie close</text>
+
+    <circle cx="84" cy="436" r="11" fill="#ffffff" stroke="#6b46c1" stroke-width="5"/>
+    <text x="110" y="432" class="itemtitle">Clusters</text>
+    <text x="110" y="454" class="itemtext">Studies grouped by what they are</text>
+    <text x="110" y="472" class="itemtext">about, found automatically</text>
+
+    <circle cx="84" cy="536" r="11" fill="#ffffff" stroke="#6b46c1" stroke-width="5"/>
+    <text x="110" y="532" class="itemtitle">A map</text>
+    <text x="110" y="554" class="itemtext">The whole collection laid out in 2D,</text>
+    <text x="110" y="572" class="itemtext">neighbours kept together</text>
+
+    <circle cx="84" cy="636" r="11" fill="#ffffff" stroke="#6b46c1" stroke-width="5"/>
+    <text x="110" y="632" class="itemtitle">Keywords</text>
+    <text x="110" y="654" class="itemtext">Each cluster described in a few</text>
+    <text x="110" y="672" class="itemtext">words, to read the map by</text>
+  </g>
+
+  <!-- Centre: the map -->
+  <rect x="438" y="158" width="724" height="529" rx="10" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+  <image x="440" y="160" width="720" height="525" xlink:href="visualizer-plot-light.png" href="visualizer-plot-light.png" preserveAspectRatio="xMidYMid meet"/>
+  <text x="800" y="705" class="sans caption" text-anchor="middle">About 12,000 studies on hydrogen production. Colours are clusters; the gray points belong to none.</text>
+
+  <!-- Right: what you do with it -->
+  <rect x="1180" y="160" width="372" height="530" rx="14" fill="#f3f0e9"/>
+  <text x="1196" y="188" class="sans zone">WHAT YOU DO WITH IT</text>
+  <g class="sans">
+    <circle cx="1214" cy="236" r="18" fill="#6b46c1"/>
+    <text x="1214" y="242" class="tag" text-anchor="middle">S</text>
+    <text x="1246" y="232" class="itemtitle">Search</text>
+    <text x="1246" y="254" class="itemtext">Type, and the matching titles</text>
+    <text x="1246" y="272" class="itemtext">light up on the map</text>
+
+    <circle cx="1214" cy="336" r="18" fill="#6b46c1"/>
+    <text x="1214" y="342" class="tag" text-anchor="middle">B</text>
+    <text x="1246" y="332" class="itemtitle">Select</text>
+    <text x="1246" y="354" class="itemtext">Brush over an area, or take</text>
+    <text x="1246" y="372" class="itemtext">a whole cluster at once</text>
+
+    <circle cx="1214" cy="436" r="18" fill="#6b46c1"/>
+    <text x="1214" y="442" class="tag" text-anchor="middle">R</text>
+    <text x="1246" y="432" class="itemtitle">Read</text>
+    <text x="1246" y="454" class="itemtext">The selection's abstracts, grouped</text>
+    <text x="1246" y="472" class="itemtext">by cluster, beside the map</text>
+
+    <circle cx="1214" cy="536" r="18" fill="#6b46c1"/>
+    <text x="1214" y="542" class="tag" text-anchor="middle">W</text>
+    <text x="1246" y="532" class="itemtitle">See the words</text>
+    <text x="1246" y="554" class="itemtext">A word cloud of whatever</text>
+    <text x="1246" y="572" class="itemtext">is selected</text>
+
+    <circle cx="1214" cy="636" r="18" fill="#6b46c1"/>
+    <text x="1214" y="642" class="tag" text-anchor="middle">F</text>
+    <text x="1246" y="632" class="itemtitle">Set noise aside</text>
+    <text x="1246" y="654" class="itemtext">Gray out or hide the studies</text>
+    <text x="1246" y="672" class="itemtext">that fit no cluster</text>
+  </g>
+
+  <!-- Why -->
+  <g class="sans">
+    <rect x="48" y="724" width="360" height="104" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="68" y="758" class="cardtitle">Local and private</text>
+    <text x="68" y="784" class="cardtext">Runs on your own machine, with no</text>
+    <text x="68" y="804" class="cardtext">cloud service in the loop.</text>
+
+    <rect x="428" y="724" width="360" height="104" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="448" y="758" class="cardtitle">At scale</text>
+    <text x="448" y="784" class="cardtext">Ten thousand studies and more,</text>
+    <text x="448" y="804" class="cardtext">on one map.</text>
+
+    <rect x="808" y="724" width="360" height="104" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="828" y="758" class="cardtitle">Honest about filters</text>
+    <text x="828" y="784" class="cardtext">Whatever is grayed out or hidden,</text>
+    <text x="828" y="804" class="cardtext">the map says so.</text>
+
+    <rect x="1188" y="724" width="360" height="104" rx="14" fill="#ffffff" stroke="#e2ddd3" stroke-width="2"/>
+    <text x="1208" y="758" class="cardtitle">Keyboard first</text>
+    <text x="1208" y="784" class="cardtext">Most actions have a key, and F1</text>
+    <text x="1208" y="804" class="cardtext">lists them.</text>
+  </g>
+
+  <text x="60" y="868" class="sans footer">Raven-visualizer is one of Raven's apps; raven.papers can prepare the bibliography it reads.</text>
+</svg>

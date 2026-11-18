@@ -9,6 +9,11 @@
 <i>12 000 studies on a semantic map. Items matching your search terms are highlighted as you type.</i>
 </p>
 
+<p align="center">
+<img src="../../img/raven-visualizer-infographic.png" alt="Raven-visualizer at a glance: a semantic map of about 12,000 studies at the centre, clusters in colour and the studies that fit no cluster in gray. On the left, how a bibliography becomes the map: titles and abstracts embedded by a language model, grouped into clusters, laid out in 2D, and described by keywords. On the right, what you do with it: search, select, read the abstracts by cluster, see a word cloud, and set noise aside. Along the bottom, four cards: &quot;Local and private&quot;, &quot;At scale&quot;, &quot;Honest about filters&quot; and &quot;Keyboard first&quot;." width="800"/> <br/>
+<i>How a bibliography becomes the map, and what you do with it.</i>
+</p>
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 

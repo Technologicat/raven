@@ -8,19 +8,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Cross-cutting
 
-- **[High]** Material for an executive summary (maintainer, 2026-11-16):
-  - **A light-background Visualizer plot, by Wednesday 2026-11-18.** Managers and funders expect a light theme (a
-    coworker's observation). The plotter's background and grid colours are already settings
-    (`plotter_background_color`, `plotter_grid_color` in `raven/visualizer/config.py`, with a light pair commented
-    out there), and the REPL can change them in a running app; so a screenshot of the plot alone, cropped, and
-    possibly embedded in the Visualizer's infographic (maintainer). Viridis's yellow end has little contrast on
-    white, which the screenshot will show.
-  - **Infographics of what Raven-visualizer and Raven-librarian are for, also by Wednesday 2026-11-18**, in the
-    style of the paper tools' one
-    (`img/raven-papers-infographic.svg`, designed in `briefs/design/papers-infographic-sketch.md`).
-
 - **[Medium]** A light theme, as an option across the constellation (maintainer, 2026-11-16). Some readers
-  require one (above); the maintainer works in the dark one, which stays the default. M or L:
+  require one (managers and funders, a coworker's observation); the maintainer works in the dark one, which stays the default. M or L:
   - **Raven's dark theme leans on DPG's default**, and DPG's default colours cannot be queried, so which theme
     items a light theme must override is unknown until someone goes through them.
   - **The theme itself can mostly be injected at `guiutils.bootup`.** What needs its own pass is every colour
@@ -200,6 +189,9 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   clusters above it, so Misc and the lowest-numbered clusters take the darkest colours.
   - Cost S: a range setting (say `plotter_colormap_range=(0.2, 1.0)` on dark, about `(0.0, 0.85)` on light) and
     one line in `colormap_position`; choosing the bound wants screenshots side by side.
+  - **Seen on white, 2026-11-18**, for the executive summary's plot (`img/visualizer-plot-light.png`): the yellow end held
+    up better than expected, and with Misc grayed its dark purple was gone from the view, the clusters standing out
+    against the gray. So graying Misc answers much of this for a light screenshot; the dark theme's case stands.
 - **[Medium]** Datasets of 100k records (coworkers' request, 2026-11-16). DPG cannot draw a scatter that large at an
   interactive frame rate (maintainer), so the plot needs level-of-detail rendering: zoomed out, dense regions
   drawn as aggregates, and individual points only where the view is close enough to tell them apart. The
