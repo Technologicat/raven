@@ -2285,6 +2285,12 @@ def serialize_history_for_wire(settings: env,
                     part = chatutil.image_content_part(imagestore.sidecar_url_to_data_url(datastore, url))
                 new_content.append(part)
         message["content"] = new_content
+        # Every stored message carries a `tool_calls` list, empty on all but an assistant message asking for
+        # tools. The OpenAI schema has the field on assistant messages only, and some backends refuse a request
+        # that has it anywhere else, even empty (gufo: "'tool_calls' is only valid as an array on assistant
+        # messages"); so it goes on the wire only where it has calls in it.
+        if message["role"] != "assistant" or not message.get("tool_calls"):
+            message.pop("tool_calls", None)
     return history
 
 def _describe_strict_template_violations(history: list[dict]) -> list[str]:

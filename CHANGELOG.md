@@ -218,6 +218,7 @@
 
 #### Raven-librarian
 
+- **Works with LLM backends that check the message format strictly**, such as gufo. Every message went out with an empty `tool_calls` list, which the OpenAI format allows on the AI's messages only, and such a backend refused every request.
 - **Clicking the LLM backend pill flashes it**, as clicking the Raven-server pill does.
   - While the backend was not answering, the pill was re-set after each retry, and that cut the click's flash short before it showed.
 - **Loading a second model in LM Studio no longer moves Librarian onto it.** In v0.2.10, a model loaded beside the one in use, and listed before it, became the model the next turn asked. Now the model in use stays in use while it is loaded unchanged; another model appearing does not count as a change. The same applies to a `raven.librarian.sweep` batch, which a second model no longer stops.

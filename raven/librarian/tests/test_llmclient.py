@@ -1133,12 +1133,12 @@ class TestOneShotRequest:
 
         agent.ask_record(invoke_settings, "Extract the keywords.")
 
-        # A one-shot runs without the character card, so the task carries no persona prefix.
+        # A one-shot runs without the character card, so the task carries no persona prefix. And no `tool_calls`
+        # field, which belongs on an assistant message only.
         task = "Extract the keywords."
         assert sent["json"] == {"stream": True,
                                 "messages": [{"role": "user",
-                                              "content": [{"type": "text", "text": task}],
-                                              "tool_calls": []}],
+                                              "content": [{"type": "text", "text": task}]}],
                                 "continue_": False,
                                 "max_tokens": agent.DEFAULT_MAX_REPLY_TOKENS,
                                 "stream_options": {"include_usage": True}}
@@ -2552,6 +2552,19 @@ class TestSerializeHistoryForWire:
         history = _history("hello")
         llmclient.serialize_history_for_wire(self.settings, history, continue_=False)
         assert history[0]["content"] == [chatutil.text_content_part("hello")]  # deep-copied; original untouched
+
+    def test_tool_calls_go_on_the_wire_only_where_there_are_calls(self):
+        # Some backends refuse a request with `tool_calls` on anything but an assistant message, even empty.
+        settings = env(personas={}, context_length=10000, tokens_per_character=0.25, retain_thinking=True)
+        call = {"id": "c1", "type": "function", "function": {"name": "get_current_time", "arguments": "{}"}}
+        history = [chatutil.create_chat_message(llm_settings=settings, role=role, add_persona=False, text=text, tool_calls=calls)
+                   for role, text, calls in [("system", "Be brief.", None), ("user", "Time?", None),
+                                             ("assistant", "", [call]), ("tool", "noon", None),
+                                             ("assistant", "It is noon.", None)]]
+        assert all("tool_calls" in message for message in history), "the stored form carries the field everywhere, so this fixture can see it dropped"
+        out = llmclient.serialize_history_for_wire(settings, history, continue_=False)
+        assert [message.get("tool_calls") for message in out] == [None, None, [call], None, None]
+        assert ["tool_calls" in message for message in out] == [False, False, True, False, False]
 
     def test_a_fetched_page_is_ceilinged_where_an_attachment_is_not(self, tmp_path, monkeypatch):
         # The whole point of putting `source` on the part: the wire builder gets bare messages, so without
