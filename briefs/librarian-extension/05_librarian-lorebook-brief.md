@@ -82,6 +82,18 @@ would be knowledge left on the floor. So this clears the bar the project already
   the glossary (90 entries, median ~300 tokens, longest ~650, median one cross-reference): scan window the new
   user message plus the 4 messages before it, per-firing budget 2,000 tokens, per-chat cap 8,000, recursion
   depth 2.
+- **First end-to-end run, headless, on Flash Next (2026-11-19)**: `agent.turn` with the real glossary. Definitions
+  fired and were used (a backlog question got *hydra tax*, *attention rent* and two linked entries, and the
+  reply built on them). It also found a wire bug, since fixed: every message carried `tool_calls: []`, which gufo
+  refuses off an assistant message. **Two problems with `lorebook_lookup`, to decide (2026-11-20):**
+  - **The near-miss answer is too eager.** Asked by meaning, the model tried twelve terms; three unrelated ones
+    came back as "the closest is" with the full entry (*introspection → Miroconnection*, *meta-attention →
+    Attention rent*). difflib's default cutoff (0.6) sits among them: one-letter typos of every title score
+    0.857 and up (median 0.966), the model's failed queries 0.667 and down. A cutoff in that gap (0.8) would
+    separate them; the step-2 sweep had tried typos only.
+  - **The model searches by meaning, the tool by spelling.** *Endognosis*'s own text mentions *introspection*,
+    the first term tried. Answering an unknown term with the entries whose content mentions it ("not an entry,
+    but mentioned in *Endognosis*") would have found it at once, deterministically.
 - **A switch after all** (maintainer, 2026-11-19, reversing "no GUI toggle in v0"): `app_state["lorebook_enabled"]`,
   on by default, which the controller passes to the prefill, the user turn, the AI turn and the retry, and
   `!lorebook` in minichat beside `!skills`. **The GUI placement is open**, the toolbar's row of toggles being
