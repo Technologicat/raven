@@ -33,3 +33,16 @@ configures (`en_core_web_sm` 3.8.0, spaCy 3.8.18), loaded in-process — the sam
 - **In real English prose the gain is small**: across the 9 documents, lemmas add one match the words miss
   ("confabulations"). These terms are seldom inflected in English, so the payoff is expected in Finnish, which
   this probe cannot yet test — only `en_core_web_sm` is installed.
+
+## Voikko on Finnish (2026-11-19)
+
+`probe_voikko.py` asks Voikko's analyser (`libvoikko1` 4.3.2, `voikko-fi` 2.5, the system packages) through
+`ctypes`, so it needs no Python binding. `results-voikko.txt` is its output.
+
+- **Perfect on Finnish words, however agglutinated**: *juoksentelisinkohan → juoksennella*, *kissoillammekin →
+  kissa*, *verottajalta → verottaja*, and compounds of dictionary words (*kaksikielisyysongelmassa*).
+- **Nothing at all for a word outside its dictionary** — no analysis, and the spellchecker rejects it: the
+  Finnish-shaped coinages (*duolektissa*, *hydraveron*, *hydra* being unknown to it) and the glossary's English
+  terms inflected as Finnish speakers inflect loans (*duolectissa*, *co-pterin*, *sporkilla*, *botwallin*).
+- So it cannot lemmatize a lorebook's terms, which are coinages by nature, and it has no generation call to
+  produce their forms either.
