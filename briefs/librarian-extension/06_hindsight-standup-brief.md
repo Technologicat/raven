@@ -952,8 +952,25 @@ the code.
   latest-commitment-wins, which may be exactly what we want, with no tree-shaped consolidation needed. This
   is inference; the sibling-branch scenario below is the test.
   - It also settles *when to pay for processing*: once per committed node, not per message written.
-- **Open: the last reply of a chat.** Nobody continues from it, yet it is often the answer that mattered.
-  Committing whichever branch is current when the chat goes idle is a candidate rule.
+- **The last reply of a chat needs an idle rule.** Nobody continues from it, yet it is often the answer that
+  mattered, and not every user closes with a message that would commit it (Juha, 2026-11-19). Candidates:
+  commit the current leaf after a stretch of inactivity, or when the user opens another chat or closes
+  Librarian. Committing is idempotent, so a later continuation from the same node does no harm.
+- **The unit of retention: not the single message** (Juha, 2026-11-19). Information that only emerges across
+  several messages, a decision proposed, qualified and confirmed turns apart, would be lost between
+  per-message extractions: a memory-storage case of *concurrent ravioli*, every unit fine and the fact in the
+  composition. What retain does, read in the code at `a830db0` (`engine/retain/fact_extraction.py`):
+  - A conversation is accepted as a list of turns and chunked at turn boundaries, at most
+    `HINDSIGHT_API_RETAIN_CHUNK_SIZE` characters per chunk, default **3,000** (about 750 tokens). A turn longer
+    than that is split as text.
+  - Each chunk is extracted by its own LLM call, with its index, the total count and a document-level `context`
+    string; neighbouring chunks are not shown to it.
+  - So the candidate unit is **the committed path as one conversation document**, re-ingested as it grows
+    (delta re-ingest re-extracts only changed chunks), with the chunk size raised far enough to hold whole
+    exchanges, which gufo's 256 Ki context makes affordable, and the `context` string carrying a running
+    summary of the chat.
+  - **Open: committing a second branch** gives a second document sharing the first one's prefix, so facts in
+    the prefix are extracted twice. How well consolidation merges such duplicates is unknown.
 - **Open: two committed siblings that disagree.** If the user continued from both, latest commitment wins.
   Whether that is right, or whether such pairs should be kept apart by branch tags, is open.
 - **The test, for step 1 of *Snowball control*:** the same question answered differently in two rerolls, both
