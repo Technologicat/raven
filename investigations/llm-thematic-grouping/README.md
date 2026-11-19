@@ -31,6 +31,10 @@ no cluster at all in a set of forty.
     script at `66c6cea8`). `--guidance FILE` adds an instruction of the user's own, and a reply with slips
     gets a repair turn naming each one, up to two, built on the original prompt so the backend's prefix cache
     covers it.
+  - `--dataset PICKLE` repeats a grouping the Visualizer importer made: the entries come from that import's
+    dataset, as the model saw them, and the prompt is the importer's, pinned in the script as of `69da540e`
+    (added 2026-11-19, to measure the variation of the prompt the health-education study used). Checked that
+    day: rebuilt in the adopted run's order, the prompt counts 13,009 tokens, as that run's log does.
 - **`compare_groupings.py`** — how far the runs agree, pairwise, at the theme and the sub-theme level: the
   omega index (Collins & Dent 1988) over every placement, and the adjusted Rand index on primary placements.
   The omega index is the ARI generalized to groupings where a study sits in several groups, and equals it
@@ -208,3 +212,49 @@ pipeline still carry the export's values, and the clustering is unaffected:
 (*Results*, above), but the final themes come from one run, checked against every abstract by people, in place of runs
 pooled and placed again under an edited catalogue. A methods section should say which, and that the agreement figures
 above describe the method's run-to-run variation rather than the chosen run.
+
+## Next: does this scale to a couple of thousand records? (opened 2026-11-19)
+
+**The question.** The AOKK review wants to explore LLM-based grouping for its final keeps: of the order of 2,000
+records, whatever its rules settle on (`../aokk-corpus-scope/README.md`, the meeting of 2026-11-19).
+
+- **Can it scale from 40 to 2,000, and how?**
+- **Empirically, what do the results look like?**
+- **Does it give a better report than the semantic map's clusters did?**
+
+**Why, from the series so far** (the maintainer, 2026-11-19). The machine-made clusters of the earlier studies
+needed work by hand:
+- In biology, the clusters themselves needed tweaking.
+- In geography, the clusters were fine as themes, but studies had to be moved between them.
+- In health education, the authors reviewed this bundle's grouping and agreed with all of it. But that was 40
+  records.
+
+**The larger question behind it: is the semantic map useful at all, beyond a topic analysis?**
+
+**An idea to try: the map bootstraps the themes.** The map's clusters seed the LLM grouping's themes, and the LLM
+allocates the studies. That would help exactly where the themes are good and the studies misplaced, which is the
+geography case.
+
+**And it changes the scaling problem** (the maintainer, 2026-11-19). Putting every title in one prompt was for the
+inductive step: the model has to see all the data to find the themes in it. If the map does that work, the model
+enters with the bins already made, and allocating records to them can go in batches, as a sweep. What it inherits is
+the map's themes, which is the biology case. A possible middle step keeps the induction with the model: show it each
+map cluster as its keywords and a sample of its titles, small enough for one prompt, and have it merge, split and
+rename themes before the allocation starts. **To be tried when we get there** (the maintainer, 2026-11-19).
+
+**Batching keeps the reasons.** With the records split into batches, each call has room for a one-sentence reason
+per placement, which the maintainer wants kept for debugging (2026-11-19). So the reply-size figures below apply
+only to a single-prompt design.
+
+**The design is to be discussed before anything is built** (the maintainer, 2026-11-19). One candidate, from the
+meeting: phase 1 groups by titles alone, all of them in one prompt, with a confidence per placement, setting aside
+what a title cannot place; phase 2 assigns the set-aside records to phase 1's themes from their abstracts. The first
+test would be whether a prompt of a couple of thousand titles gives coherent themes at all.
+
+Sizes, from the prompt as it stands, for that discussion:
+- **The prompt is cheap.** A title with its number is a few tens of tokens, so 2,000 of them make a prompt of the
+  order of 50k tokens.
+- **The reply is not.** The current shape asks for a one-sentence reason per placement, at roughly 30 tokens each.
+  At 2,000 records that is some 60k tokens of reply, against the importer's reply cap of 16k
+  (`MAX_REPLY_TOKENS`). So phase 1 needs a leaner reply: a theme and a confidence per record, with no reason.
+- **Phase 2 is a sweep**, like the screening's stages, so it can resume and keep a ledger.

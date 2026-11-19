@@ -33,6 +33,11 @@ about, and one theme per research question would be a coding of the studies inst
 model is told nothing about the review but that it is one. `--guidance` adds an instruction of the user's
 own. The same seeds are used whatever the condition, so a run of one condition shows the records in the same
 order as the same-numbered run of another.
+
+`--dataset PICKLE` repeats a grouping made by the Visualizer importer (`clustering_method = "llm"`) instead:
+the entries come from the dataset that import wrote, which holds them as the model saw them, cleaned by the
+importer; and the prompt is the importer's, as `IMPORT_PROMPT` pins it. The `.bib` then only supplies the
+citation keys, matched by title. This measures the run-to-run variation of the prompt a study actually used.
 """
 
 import argparse
@@ -119,6 +124,29 @@ It has these problems:
 Answer again with the whole corrected JSON, in the same shape, and nothing else.
 """
 
+#: The Visualizer importer's grouping prompt, with `--dataset`: `raven.visualizer.llmclustering.PROMPT` as of
+#: commit `69da540e`, the version the health-education study's adopted grouping was made with. A copy, so that
+#: a later change to the importer cannot change what this measures. The item format is `import_item`.
+IMPORT_PROMPT = """You are helping to make sense of a collection of research papers.{aim}
+
+Below are all {n} papers in the collection, numbered, each with its authors, year, title and abstract.
+
+Group the papers into themes by what they are about.{aim_note} Choose the themes the material itself suggests; how many is up to you.
+
+Place every paper at least once. A paper that genuinely belongs under two themes may be placed under both, but treat that as the exception. For each placement, give a one-sentence reason why the paper belongs there. Mark exactly one placement of each paper as its primary one: where it belongs most.
+
+Answer with JSON only, in this shape:
+
+{{"themes": [{{"name": "...", "description": "one sentence", "papers": [{{"item": 1, "primary": true, "reason": "..."}}]}}]}}
+
+The papers:
+
+{papers}
+"""
+IMPORT_AIM = " The collection's aim:\n\n{aim}"
+IMPORT_AIM_NOTE = (" The aim is context: it says what the collection is about, but do not make one theme per part of"
+                   " the aim.")
+
 #: How many repair turns a run may take before what remains is fixed up and recorded.
 MAX_REPAIRS = 2
 
@@ -159,6 +187,33 @@ def study_item(i: int, study: env) -> str:
     return "\n".join(lines)
 
 
+def load_dataset_studies(dataset_path: pathlib.Path, bib_path: pathlib.Path) -> list[env]:
+    """The entries of a Visualizer dataset, in its order, as `load_studies` gives a `.bib`'s, plus `author` and
+    `year` as the importer formatted them. Each is given its citation key from `bib_path` by its title.
+
+    Raises `ValueError` when a title matches no record of `bib_path`, or several.
+    """
+    with open(dataset_path, "rb") as f:
+        entries = pickle.load(f)["vis_data"]
+    keys_by_title: dict[str, list[str]] = {}
+    for study in load_studies(bib_path):
+        keys_by_title.setdefault(study.title.casefold(), []).append(study.key)
+    out = []
+    for entry in entries:
+        maybe_keys = keys_by_title.get(entry.title.casefold(), [])
+        if len(maybe_keys) != 1:
+            raise ValueError(f"'{entry.title}' matches {len(maybe_keys)} records of {bib_path.name}, not one")
+        out.append(env(key=maybe_keys[0], citation=f"{entry.author} ({entry.year})", title=entry.title,
+                       keywords="", abstract=entry.abstract or "", author=entry.author, year=entry.year))
+    return out
+
+
+def import_item(i: int, study: env) -> str:
+    """Study `study` as the importer's prompt shows it, numbered `i` from 1 (`llmclustering._paper_item`)."""
+    return (f"[{i}] {study.author or 'Anonymous'} ({study.year or 'n.d.'}). {study.title}\n"
+            f"Abstract: {study.abstract or '(none)'}")
+
+
 def run_order(n: int, seed: int) -> list[int]:
     """The order of `n` studies in the run with `seed`: a shuffle of `range(n)`."""
     order = list(range(n))
@@ -175,7 +230,13 @@ def load_catalogue(path: pathlib.Path) -> list[dict]:
 
 
 def prompt_for(maybe_aim: str | None, maybe_guidance: str | None, studies: list[env], order: list[int], *,
-               maybe_catalogue: list[dict] | None = None) -> str:
+               maybe_catalogue: list[dict] | None = None, import_prompt: bool = False) -> str:
+    if import_prompt:
+        aim = (maybe_aim or "").strip()
+        return IMPORT_PROMPT.format(aim=IMPORT_AIM.format(aim=aim) if aim else "",
+                                    aim_note=IMPORT_AIM_NOTE if aim else "",
+                                    n=len(studies),
+                                    papers="\n\n".join(import_item(i, studies[j]) for i, j in enumerate(order, start=1)))
     if maybe_catalogue is not None:
         return APPLY_PROMPT.format(aim=AIM.format(aim=maybe_aim.strip()) if maybe_aim else "",
                                    guidance=GUIDANCE.format(guidance=maybe_guidance.strip()) if maybe_guidance else "",
@@ -222,7 +283,9 @@ def read_grouping(reply: str, studies: list[env], order: list[int], *,
         if maybe_catalogue is not None and theme.get("name") not in {t["name"] for t in maybe_catalogue} | {NONE_THEME}:
             problems.append(f"theme '{theme.get('name')}' is not one of the review's themes; use their names exactly")
         subthemes = []
-        given = theme["subthemes"] if "subthemes" in theme else [{"name": "", "studies": theme.get("studies", [])}]
+        # "papers" is the importer's prompt's word for the same list (`IMPORT_PROMPT`).
+        given = (theme["subthemes"] if "subthemes" in theme
+                 else [{"name": "", "studies": theme.get("studies", theme.get("papers", []))}])
         for subtheme in given:
             placed = []
             for study in subtheme.get("studies", []):
@@ -439,6 +502,9 @@ def main() -> int:
     parser.add_argument("--catalogue", default=None, metavar="FILE",
                         help="place the studies under these fixed themes instead of finding themes: JSON, as "
                              "build_catalogue.py writes")
+    parser.add_argument("--dataset", default=None, metavar="PICKLE",
+                        help="repeat an importer grouping: group this Visualizer dataset's entries with the importer's "
+                             "prompt (IMPORT_PROMPT); the .bib then only supplies the citation keys")
     parser.add_argument("--runs", type=int, default=5, help="how many runs (default: 5)")
     parser.add_argument("--out-dir", default=None,
                         help="where the outputs go (default: llm-grouping/<condition>/ beside the .bib)")
@@ -458,10 +524,14 @@ def main() -> int:
     maybe_guidance = pathlib.Path(opts.guidance).read_text(encoding="utf-8") if opts.guidance else None
     condition = ((pathlib.Path(opts.aim).stem if opts.aim else "no-aim") +
                  (f"+{pathlib.Path(opts.guidance).stem}" if opts.guidance else "") +
-                 (f"+{pathlib.Path(opts.catalogue).stem}" if opts.catalogue else ""))
+                 (f"+{pathlib.Path(opts.catalogue).stem}" if opts.catalogue else "") +
+                 ("+import-prompt" if opts.dataset else ""))
+    if opts.dataset and (opts.guidance or opts.catalogue):
+        parser.error("--dataset repeats the importer's prompt, which has no place for --guidance or --catalogue")
     maybe_catalogue = load_catalogue(pathlib.Path(opts.catalogue)) if opts.catalogue else None
     out_dir = pathlib.Path(opts.out_dir) if opts.out_dir else bib_path.parent / "llm-grouping" / condition
-    studies = load_studies(bib_path)
+    maybe_dataset_path = pathlib.Path(opts.dataset).resolve() if opts.dataset else None
+    studies = load_dataset_studies(maybe_dataset_path, bib_path) if maybe_dataset_path else load_studies(bib_path)
     keys = [s.key for s in studies]
     print(f"{len(studies)} studies from {bib_path.name}")
 
@@ -480,7 +550,10 @@ def main() -> int:
                            "repair": REPAIR, "max_repairs": MAX_REPAIRS, "max_tokens": MAX_TOKENS,
                            "studies": hashlib.sha256(bib_path.read_bytes()).hexdigest(),
                            "sampler": {k: llm_settings.request_data.get(k) for k in ("temperature", "min_p", "top_p", "top_k")},
-                           **({"apply_prompt": APPLY_PROMPT, "catalogue": maybe_catalogue} if maybe_catalogue else {})},
+                           **({"apply_prompt": APPLY_PROMPT, "catalogue": maybe_catalogue} if maybe_catalogue else {}),
+                           **({"import_prompt": IMPORT_PROMPT, "import_aim": IMPORT_AIM, "import_aim_note": IMPORT_AIM_NOTE,
+                               "entries": hashlib.sha256(maybe_dataset_path.read_bytes()).hexdigest()}
+                              if maybe_dataset_path else {})},
                           sort_keys=True)
     ledger = sweep.Ledger(out_dir, "grouping", sweep.fingerprint(llm_settings, material, declared=opts.declare))
     print(f"instrument {ledger.fingerprint} -> {ledger.path}")
@@ -491,7 +564,8 @@ def main() -> int:
                   maybe_abort: netutil.Abort | None) -> tuple[dict, list[agent.TurnRecord]]:
         (run_id, seed), = batch
         order = run_order(len(studies), seed)
-        prompt = prompt_for(maybe_aim, maybe_guidance, studies, order, maybe_catalogue=maybe_catalogue)
+        prompt = prompt_for(maybe_aim, maybe_guidance, studies, order, maybe_catalogue=maybe_catalogue,
+                            import_prompt=maybe_dataset_path is not None)
         with stream_path.open("a", encoding="utf-8") as stream:
             outcome, records = ask_with_repairs(settings, prompt, studies, order, maybe_abort=maybe_abort,
                                                 stream=stream, label=run_id, maybe_catalogue=maybe_catalogue)
