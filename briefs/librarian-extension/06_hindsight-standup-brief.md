@@ -955,7 +955,8 @@ the code.
 - **The last reply of a chat needs an idle rule.** Nobody continues from it, yet it is often the answer that
   mattered, and not every user closes with a message that would commit it (Juha, 2026-11-19). Candidates:
   commit the current leaf after a stretch of inactivity, or when the user opens another chat or closes
-  Librarian. Committing is idempotent, so a later continuation from the same node does no harm.
+  Librarian (Juha: "could work"). Committing is idempotent, so a later continuation from the same node does
+  no harm.
 - **The unit of retention: not the single message** (Juha, 2026-11-19). A single message may not have enough
   context to be interpretable as it stands; what it means lies in the messages around it. The sharpest case
   is a rationale and a question followed by "yes, please": the reply alone says nothing, and the pair is a
