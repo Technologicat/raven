@@ -91,6 +91,11 @@ keep the export's values, by decision.
 - **The embedding pipeline's description goes**, replaced by the LLM grouping of the final set.
 - **A word cloud of the final 40**, and possibly one of the full 117 beside it for comparison.
 - **Two-author citations take "&"** throughout the paper.
+- **The same caveat about PRISMA as the AOKK review's** (the maintainer, 2026-11-19): screening and eligibility
+  as one step, with full texts consulted as needed, and criteria refined during it, so exploratory rather than
+  confirmatory. Written out in `METHODS-DRAFT.md`, *How the process differs from PRISMA*.
+- **The run-to-run variation is reported** (2026-11-19), with the caveat that it was measured on the development
+  prompt.
 
 ## Not part of this study
 
@@ -104,6 +109,15 @@ maintainer's hunch about how fast the Qwen family's capability progresses (2026-
 The search is reported as the manuscript has it, which is all that was recorded of it: not a full PRISMA report, and
 not needing one (the authors, 2026-11-17).
 
+- **Two more exclusions, not yet identified** (2026-11-19): the coauthor excluded two studies on closer reading, and
+  which two is not yet known. When it is, every count downstream of 40 changes: the flowchart, Table 5, the cluster
+  table `klusterit-taulukko.md`, `04b-final.bib`, `exclusion-grounds.md` (their reasons) and `METHODS-DRAFT.md`.
+  The themes stay as they are, already in the manuscript, so the clustering is not rerun (the authors, 2026-11-19).
+  The manuscript snapshot of 2026-11-17 has Table 5 but predates these two; a later snapshot's Table 5, compared
+  against `klusterit-taulukko.md`, would name them, if the coauthor has removed them there.
+- **Raven 0.2.11 is released before the paper comes out**, so that the paper can cite a released version
+  (the maintainer, 2026-11-19). Both runs used 0.2.11 in development; the citation can name the release, with the
+  commits (screening `run.toml`, grouping `69da540e`) for exactness.
 - **The free-form methods description**, from this record, for the authors to write the manuscript's section from; in
   English. In `METHODS-DRAFT.md` in this bundle (agreed 2026-11-18); next, from 2026-11-19.
 - **The manuscript's Table 5 now holds the clusters** (2026-11-17), with the Visualizer's 0-based numbers (#0 to #6),
