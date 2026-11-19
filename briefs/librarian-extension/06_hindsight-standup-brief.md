@@ -956,10 +956,11 @@ the code.
   mattered, and not every user closes with a message that would commit it (Juha, 2026-11-19). Candidates:
   commit the current leaf after a stretch of inactivity, or when the user opens another chat or closes
   Librarian. Committing is idempotent, so a later continuation from the same node does no harm.
-- **The unit of retention: not the single message** (Juha, 2026-11-19). Information that only emerges across
-  several messages, a decision proposed, qualified and confirmed turns apart, would be lost between
-  per-message extractions: a memory-storage case of *concurrent ravioli*, every unit fine and the fact in the
-  composition. What retain does, read in the code at `a830db0` (`engine/retain/fact_extraction.py`):
+- **The unit of retention: not the single message** (Juha, 2026-11-19). A single message may not have enough
+  context to be interpretable as it stands; what it means lies in the messages around it. The sharpest case
+  is a rationale and a question followed by "yes, please": the reply alone says nothing, and the pair is a
+  decision. Extracted one message at a time, such meaning is lost between the extractions: a memory-storage
+  case of *concurrent ravioli*, every unit fine and the meaning in the composition. What retain does, read in the code at `a830db0` (`engine/retain/fact_extraction.py`):
   - A conversation is accepted as a list of turns and chunked at turn boundaries, at most
     `HINDSIGHT_API_RETAIN_CHUNK_SIZE` characters per chunk, default **3,000** (about 750 tokens). A turn longer
     than that is split as text.
