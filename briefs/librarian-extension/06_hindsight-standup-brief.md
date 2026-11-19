@@ -1001,6 +1001,26 @@ the code.
   retained.
 - Editing a committed node stays as decided on 2026-10-09: delete its document and retain it again.
 
+### Idea: Hindsight as memory for Claude Code (2026-11-19)
+
+Not part of Librarian, but the same server. Claude Code's own file-based memory is machine-local, and the
+fleet is worked on from several machines, so it goes unused in favour of checked-in files. A Hindsight
+running on the home LAN, reached over MCP, would give a memory shared across machines.
+
+- **The weak point is the road.** When the local AI server travels along, as it has to the travel location,
+  Hindsight goes with it; the gap is the trips without it.
+- **No inbound ports on the home router**, which as far as Juha knows no longer gets firmware updates. Plain
+  WireGuard needs one, so it is out. An overlay such as Tailscale (WireGuard underneath) needs none, both ends
+  connecting outwards, at the price of trusting its coordination service, a third party, with who can reach
+  the home network.
+- **The checked-in files stay authoritative.** Memory is a recall aid, as the global `CLAUDE.md` already
+  arranges for Claude Code's own memory, so an outage costs convenience and no rule lives only in Hindsight
+  (Juha: "that could help").
+- **It would be one more LAN service, holding the most personal data in the fleet**, so it falls under the
+  fleet-wide item on dependency updates and security alerts in the dotclaude repo's `TODO_DEFERRED.md`.
+- **A lead:** Hindsight's README has a section on coding agents, and its repository a
+  `docker/docker-compose/claude-code` setup; neither read yet.
+
 ---
 
 ## 3. Snowball control
