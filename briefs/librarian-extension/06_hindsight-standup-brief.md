@@ -966,6 +966,14 @@ the code.
     than that is split as text.
   - Each chunk is extracted by its own LLM call, with its index, the total count and a document-level `context`
     string; neighbouring chunks are not shown to it.
+  - **No sliding window, by design.** The text splitter is pinned to `chunk_overlap=0` and the conversation
+    chunker carries nothing over, because chunk boundaries are the content hashes that delta re-ingest
+    matches against. A sliding window is what solved the lost-at-a-seam problem in Raven's hybridir; here it
+    would have to come from our side.
+  - **Candidate: the preceding turns as each chunk's `context`.** The prompt presents `Context:` before
+    `Content:` and uses it as background (it decides, for instance, who the first-person speaker is), but
+    nothing tells the model not to extract from it. Test whether facts in the carried-over turns get
+    extracted twice.
   - So the candidate unit is **the committed path as one conversation document**, re-ingested as it grows
     (delta re-ingest re-extracts only changed chunks), with the chunk size raised far enough to hold whole
     exchanges, which gufo's 256 Ki context makes affordable, and the `context` string carrying a running
