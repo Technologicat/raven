@@ -51,4 +51,7 @@ against the whole map filtered by year. Does the comparison reveal anything new 
 
 ## Open
 
-Everything above, starting with which of the three comes first.
+**Date-range filtering comes first** (the maintainer, 2026-11-19): it is next for the AOKK review, together with
+the year criterion in `raven-siftbib`. Recolouring and the embeddings in the dataset come later, and everything
+about the filter itself is still to be discussed: what happens to records with no year, and how two filters
+combine.
