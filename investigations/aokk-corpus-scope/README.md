@@ -1026,6 +1026,10 @@ interaction with the AI counts; the removals look right, and the keeps are too m
 left open. Further: full texts are to be judged by an LLM with a subset checked by hand, a second model family is to
 read the removals, and more rated records are wanted from both removals and keeps once the rules are frozen again.
 
+**The full texts are retrieved automatically where they are open** (decided by the team; recorded 2026-11-19): those
+behind neither a bot check nor a paywall. The rest are listed rather than fetched by other means. The fetcher is
+planned in `TODO.md`, *Per-study attributes from the fulltext*, which the health-education review needs as well.
+
 **The two rules**, added to `aokk.scope.toml`, among the removals: `study_kind` anything but `empirical` (a
 `not_stated` is left to the other rules), and `agent_kind = adaptive`. Applied to the full run from its saved answers alone
 (`AOKK/scopebib-2026-11-11-rules-v2/`, run with the full run's `run.toml` and a closed backend port, so that any
@@ -1045,6 +1049,48 @@ reads it back.
 and tightening them may need more than rules over today's fields: a new field, or a reworded test or extractor
 question, changes the fingerprint and is answered afresh. GPU time is the only cost, and the final set comes out more
 precise. The keep sample's ratings decide which, before v2 is frozen.
+
+## The meeting of 2026-11-19: the corpus's edges, trends, and how the method differs from PRISMA
+
+**Two corrections to the corpus**, settling questions in `multisource/README.md` (gitignored), *Where the records
+came from*:
+
+- **ERIC: 247 records, as Zotero has it.** The chart's 248 was a clerical error, and so were the 46 it marked as
+  lost at export, so nothing is missing from ERIC. The chart has been corrected.
+- **The excluded ProQuest collection is out**, and with it the 713 corpus records that exist only as copies from it
+  (`multisource/excluded-library-only-keys.txt`). Which search produced that collection is no longer known, so it
+  has no audit trail. It was meant to have been removed at an early stage, and reached the corpus by being included
+  by accident in the Zotero export that was fed to `raven-scopebib`. They come out before the next full run.
+
+**The span, and a new question: trends.** The corpus is meant to cover the start of 2022 to spring 2026. ChatGPT was
+released in November 2022, so that span holds nearly the whole history of the topic. That makes an analysis of how
+the topics have changed over the years possible, giving an overview of how AI agents have been used in education.
+
+- **Records from before 2022 are strays** the search engines returned against the search's limits. They are
+  removed by sifting. `raven-siftbib` cannot yet say "year at least 2022"; see `TODO.md`, *Papers tooling*.
+- **Year-specific maps** are wanted, by either of two routes: sift by year and import each slice with the existing
+  importer, or filter the full dataset by year live in the Visualizer. The second is
+  `../../briefs/visualizer-filter-by-date-and-recolour-brief.md`.
+- **Grouping the final keeps by LLM**, of the order of 2,000 records, is to be explored, and whether it reports
+  better than the map's clusters: `../llm-thematic-grouping/README.md`, *Next: does this scale to a couple of
+  thousand records?* Design to be discussed first.
+
+**Full texts** (decided earlier; see the 11.11 section): retrieved for the final keeps, the records that go on
+to the detailed analysis. That is likely a substantial subset of the kept and the held together. That the fetcher
+sends the corpus's DOIs to an outside service is fine by the maintainer, to be confirmed with the team at the next
+meeting.
+
+**For the methods section: the process differs substantially from PRISMA** (the team's discussion):
+
+- **Screening and eligibility are one step, not two.** Some of the human decisions looked at the full text where
+  the abstract did not settle it, fetched as needed.
+- **PRISMA assumes otherwise**: that screening is basic mechanical filtering (which is what was feasible when
+  PRISMA 2020 was written), that every full text is retrieved and examined, and that full texts are retrieved only
+  once screening is complete.
+- **The screening rules were not fixed in advance.** They were iterated interactively within that combined loop,
+  so the approach is exploratory rather than confirmatory.
+- **And the rules may have been shaped by human decisions made against a full text**, which a report of the method
+  should say.
 
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 

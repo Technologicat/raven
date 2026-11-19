@@ -17,6 +17,8 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   what is still open, is `investigations/health-education-review/README.md`; its *Open* section is the next steps:
   the methods description itself, two small fixes in the manuscript's Table 5, and matching the three reviews'
   study lists against the fulltext set that arrived on 2026-11-17.
+- **Release 0.2.11 before the health-education paper comes out**, so that its methods can cite a released
+  version (2026-11-19). No date yet; it follows the paper's schedule. The `release` skill has the process.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
@@ -37,5 +39,8 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 ## Waiting on others
 
-- **The AOKK scoping review**: the team's ratings of the keep sample and their decisions on the open record
-  groups, then rules v2 and probably a new LLM run. `investigations/aokk-corpus-scope/README.md`.
+- **The AOKK scoping review**: the team's ratings of the keep sample, then rules v2 and probably a new LLM run.
+  The meeting of 2026-11-19 settled the corpus's edges (the excluded ProQuest collection out, ERIC at 247) and
+  asked for year-based work: a year criterion in `raven-siftbib` (S, ready to build), year-specific maps compared with live
+  year filtering, and whether LLM grouping scales to the final keeps (about 2,000), design to be discussed first. `investigations/aokk-corpus-scope/README.md`, that meeting's
+  section, points to each.

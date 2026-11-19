@@ -8,6 +8,20 @@ The display filters gave each record a label it is shown with (`current_label_id
 grayed, hidden), kept in `raven.visualizer.displaystate`, separately from what the importer found. The two uses
 so far are the purity cutoff and the Misc selector. This brief is for the next uses of the same layer.
 
+## Wanted by the AOKK review (2026-11-19)
+
+Year-specific maps, to see how the topics changed from 2022 to 2026
+(`investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-19). Two routes, and the team named both:
+
+- **Prefilter, then import**: sift the bibliography by year and import each slice. It needs no new Visualizer code,
+  only a year criterion in `raven-siftbib` (`TODO.md`, *Papers tooling*). Each slice is its own map, with clusters
+  of its own, so the slices' clusters do not correspond to each other.
+- **Filter live**: candidate 1 below, over one map of the whole corpus. The clusters stay the same across years,
+  which is what a comparison over time wants.
+
+**Both, and the difference between them, is the point** (the maintainer, 2026-11-19): independent maps per year
+against the whole map filtered by year. Does the comparison reveal anything new about the data?
+
 ## What is already there
 
 - **The layer**: `displaystate`, with `interactable` deciding what can be hovered and selected; the plot is
