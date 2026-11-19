@@ -871,6 +871,61 @@ Checked against the docs that day: [observations](https://hindsight.vectorize.io
   How the UX handles that is open.
 - **Open: should a subagent see the orchestrator's memory bank?** Both choices can be argued for.
 
+### Checked 2026-11-19: Hindsight's paper and code, and the alternatives
+
+Read in full: the paper ([arXiv 2512.12818](https://arxiv.org/abs/2512.12818), v1, 2025-12-14) and the code at
+commit `a830db0` (release v1.2.1, 2026-11-10). **Decided (maintainer): Hindsight first**, with the two tests
+below built into the standup's evaluation.
+
+- **TEMPR, as published:** four channels in parallel (semantic vectors, BM25, spreading activation over the
+  graph, temporal), fused with RRF at k = 60, then a cross-encoder reranker, then a token budget.
+- **Changing facts.** The paper has no mechanism for world facts that stop being true: a memory records when
+  it happened and when it was mentioned, not until when it held; "time-aware belief revision" is future work.
+  The code has since added three things:
+  - the reflect prompts make the latest-mentioned fact authoritative when facts about the same facet
+    conflict, except that a decision is replaced only by a later decision with its own rationale;
+  - superseded or contradicted observations are deleted (`engine/memories/base.py`);
+  - anything citing facts that no longer exist is flagged as resting on retracted ones
+    (`engine/reflect/retractions.py`).
+  
+  There is still no explicit validity interval on a fact; supersession is an LLM's judgement from mention
+  times. This matters for scientific use as much as for personal memory (raised by Qwen 3.8 Flash-Next in a
+  discussion of memory architectures, 2026-11-18). **Juha's reading (2026-11-19): what the code already does
+  for superseding and provenance may well be sufficient for us**, which is what the stale-memory scenarios in
+  step 1 of *Snowball control* are to find out.
+- **Provenance**, absent from the paper, is in the code: each fact carries the `document_id` and `chunk_id` it
+  was extracted from, and consolidated observations list their source chunks.
+- **The reranker is a pothole until measured on memory data.** The paper used
+  `cross-encoder/ms-marco-MiniLM-L6-v2`; the default is now `hindsight-ai/hs-rerank-1` (114 M parameters,
+  fine-tuned from `jhu-clsp/mmBERT-small`, MIT, eight languages, not Finnish; training data unstated).
+  - **Our own result points against it:** [`investigations/retrieval/REPORT.md`](../../investigations/retrieval/REPORT.md)
+    tested that same ms-marco model and `bge-reranker-base` on three corpora, and reranking the *fused* list
+    was the worst placement on all of them, with the best documents' rank getting worse. That is where
+    Hindsight reranks: after RRF.
+  - **The report's lead may apply less here:** it suspects a domain mismatch, short training queries against
+    long conversational inputs. Memory facts are short extracted statements. A hypothesis to test, not a
+    reason to expect a win.
+  - **hs-rerank-1's model card cannot settle it.** Its benchmark table (October 2026, the vendor's own)
+    compares rerankers with each other over a first-stage top 100, never against no reranking.
+  - **The test is a configuration switch:** `HINDSIGHT_API_RERANKER_PROVIDER=rrf` keeps the fused order and
+    disables neural reranking. Run the same queries over the same bank with and without it.
+- **The LLM endpoint.** The brief assumes LM Studio on the dev machine. gufo on the local AI server is now an
+  OpenAI-compatible option on the LAN (`HINDSIGHT_API_LLM_PROVIDER=openai`, base URL `http://<ai server>:8080/v1`),
+  and Hindsight's ports (8888 API, 9999 UI) clash with nothing there. Where Hindsight itself runs is open.
+- **Docker or podman.** The fleet uses podman; Hindsight's README gives `docker run` and Docker Compose.
+  Whether they run unchanged under podman is the first thing to try.
+- **The field, briefly.** Self-reported benchmark figures cluster near 90 % on LongMemEval: Hindsight 91.4 %
+  (Vectorize claims 94.6 %), Zep 90.2 % by its own report. Two 2026 research systems are built around the gaps
+  above, provenance and fact validity:
+  - **SodaMem** ([arXiv 2608.08055](https://arxiv.org/abs/2608.08055)): facts with occurrence time, mention
+    time and validity, joined by SUPERSEDES / CONTRADICTS / UPDATES edges; 92.8 % on LongMemEval-S, self-graded.
+    Installable: [SodaMem/SodaMem](https://github.com/SodaMem/SodaMem), Apache-2.0, an MCP server, SQLite;
+    the paper ran it on DeepSeek's API, and whether it takes a local endpoint is unchecked. Quiet since
+    2026-08-19. **The comparison candidate**, if it can be pointed at gufo.
+  - **Eywa** ([arXiv 2605.30771](https://arxiv.org/abs/2605.30771)): evidence stored before facts are derived,
+    retrieval with no LLM calls; 88.2 % on LongMemEval-S. No installable code found, only published benchmark
+    runs.
+
 ---
 
 ## 3. Snowball control
@@ -881,6 +936,9 @@ Suggested order, each step independently useful and falling back cleanly on fail
    `BAAI/bge-small-en-v1.5` on first run), LM Studio for the LLM. Verify retain/recall
    round-trip over HTTP. Done = working Hindsight container, end-to-end memory operations,
    nothing leaves the machine. This is the prerequisite for everything that follows.
+   **Also measure, before the decision gate** (see *Checked 2026-11-19* above): recall with the
+   default reranker against `HINDSIGHT_API_RERANKER_PROVIDER=rrf`, and a few stale-memory scenarios
+   (a fact stated, then changed) to see whether the old value comes back.
 
 2. **Hindsight ↔ LM Studio over Hindsight's local MCP server** — quick backend-hosted-MCP
    path. The model talks directly to Hindsight as an MCP tool; zero Raven changes. **Test
