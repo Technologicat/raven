@@ -44,5 +44,7 @@ configures (`en_core_web_sm` 3.8.0, spaCy 3.8.18), loaded in-process — the sam
 - **Nothing at all for a word outside its dictionary** — no analysis, and the spellchecker rejects it: the
   Finnish-shaped coinages (*duolektissa*, *hydraveron*, *hydra* being unknown to it) and the glossary's English
   terms inflected as Finnish speakers inflect loans (*duolectissa*, *co-pterin*, *sporkilla*, *botwallin*).
+- **Its wordlist is incomplete, as wordlists are**: *hydra*, a word in ordinary Finnish use, is unknown to it
+  on its own, capitalized or not. So a word it does not know is not thereby a coinage.
 - So it cannot lemmatize a lorebook's terms, which are coinages by nature, and it has no generation call to
   produce their forms either.

@@ -123,6 +123,35 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **A term written in another form than its title's does not fire** — accepted for a retooled phrase used in its
   everyday sense ("a lint rule" fires *Lint rule*), which is the associative mismatch a person would make too.
 
+**Inflection: decided (c), the keys expanded by the LLM (maintainer, 2026-11-19).** Supersedes the "decided
+(a)" paragraph further down; the options as weighed follow this one.
+
+- **Per word of each key, two kinds of expansion**: `forms`, whole words (*fup → fups, fupped*), and `stems`,
+  matched as the stem followed by any letters (*duolekt-*, and *duolect-* for the loan in English spelling),
+  the only shape that survives Finnish agglutination. Words, not phrases, so multi-word terms keep matching in
+  any order.
+- **Matching**: a key word matches a text word that is equal under smart case, or is one of its `forms`, or is
+  one of its `stems` followed by letters. An exact (case-sensitive) key word still matches only as written.
+- **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`.
+  **Cached by the term** (title and aliases), not the body, so editing a definition asks nothing. The cache is
+  machinery, not meant to be edited: the author's way to add a form is an alias in the header. With the backend
+  down, titles and aliases match and the expansions arrive once it answers.
+- **Languages are a setting**, `lorebook_languages`, English and Finnish by default; the prompt asks for loan
+  forms too (*duolectissa*), Finnish speakers inflecting English terms.
+- **A stem's false positives need a guard derived rather than tuned**: there is no Finnish corpus to calibrate
+  on, the maintainer's working material being English. Proposed: a stem must share at least its word's length
+  minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
+  (*kaupunki → kaupungissa* keeps *kaupun-*). A stem failing it is dropped, which can only cost a miss.
+- **The Finnish the LLM writes is unmeasured.** Qwens from 3.5 on read Finnish well; writing it has been broken
+  at the 30B class, and whether Flash Next does better is part of a broader Finnish evaluation, not this
+  feature's. Generated stems inherit that uncertainty.
+- **Raven-server's footprint is unchanged**: the expansion uses the LLM that is loaded anyway, where (a) or (b)
+  would add models to the server, in RAM or VRAM.
+- **Voikko stays out of v0.** Probed (`investigations/lorebook-lemmas/`): perfect on dictionary words however
+  agglutinated, nothing for anything outside its wordlist — every coinage, and even *hydra*.
+- **Order**: step 2 (the `Lorebook` class, watcher, `lorebook_lookup`) with exact matching first; the expansion as
+  a step of its own after it.
+
 **Inflection, reopened 2026-11-17: step back and weigh the options before installing anything.** The English
 probe is done (`investigations/lorebook-lemmas/`): spaCy's errors are all misses, its tokens are not the
 matcher's words, and English prose barely inflects these terms. Finnish is where it pays, and the maintainer
