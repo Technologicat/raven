@@ -931,6 +931,36 @@ below built into the standup's evaluation.
     retrieval with no LLM calls; 88.2 % on LongMemEval-S. No installable code found, only published benchmark
     runs.
 
+### Memory in a chat tree: commitment (discussed 2026-11-19)
+
+The *Forming memories* question above, worked through. A chat is a tree whose branches the user may treat as
+equally valid, in the spirit of Janus's multiverse reading of LLM output
+([Simulators](https://www.lesswrong.com/posts/vJFdjigzmcXMhNTsx/simulators), 2022). Hindsight assumes one
+timeline: when facts conflict, the latest mention wins and the contradicted observation is deleted. Between
+sibling branches there is nothing to resolve, so consolidating them as if one superseded the other would be
+a category error, and the deletion would destroy one of them. Hindsight's tools do not fit a tree either:
+branch tags separate recall but not consolidation, one `observation_scopes` scope or bank per branch
+multiplies with every reroll, and facts in a shared prefix belong to every branch below them. What it would
+need is a tree-shaped "later", a fact superseding only its own ancestors, and there is nothing like it in
+the code.
+
+- **Memory implies commitment** (Qwen 3.8 Flash-Next, paraphrased by Juha, 2026-11-19). The tree stays a space
+  of possibilities, kept and browsable; memory records what was committed. Two models for two things.
+- **Required, whatever the backend (Juha, 2026-11-19): a reroll nobody continued from never enters memory.**
+- **Retain at commitment, not at writing.** A node is retained when the user continues from it. Hindsight's
+  mention time then becomes the commitment time, and its latest-mention-wins rule becomes
+  latest-commitment-wins, which may be exactly what we want, with no tree-shaped consolidation needed. This
+  is inference; the sibling-branch scenario below is the test.
+  - It also settles *when to pay for processing*: once per committed node, not per message written.
+- **Open: the last reply of a chat.** Nobody continues from it, yet it is often the answer that mattered.
+  Committing whichever branch is current when the chat goes idle is a candidate rule.
+- **Open: two committed siblings that disagree.** If the user continued from both, latest commitment wins.
+  Whether that is right, or whether such pairs should be kept apart by branch tags, is open.
+- **The test, for step 1 of *Snowball control*:** the same question answered differently in two rerolls, both
+  retained, then what consolidation keeps; and the same with the rule above, where only the continued one is
+  retained.
+- Editing a committed node stays as decided on 2026-10-09: delete its document and retain it again.
+
 ---
 
 ## 3. Snowball control
