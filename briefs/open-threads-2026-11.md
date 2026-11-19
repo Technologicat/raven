@@ -4,6 +4,10 @@
 their head. It points at where each thread's detail lives; it is not the place for that detail. Take an item
 off when it closes, and delete the file when it is empty.*
 
+## Done 2026-11-19: the health-education methods draft, first version
+
+See *Waiting on others* for what it still needs.
+
 ## Done 2026-11-18: material for an executive summary
 
 The three infographics are in `img/` and embedded in the README and the apps' manuals (papers, Librarian,
@@ -11,12 +15,10 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 ## Ready to pick up, no deadline
 
-- **The health-education study's methods section, next (from 2026-11-19)**: a free-form description of the
-  processing, in English, for the authors to write the manuscript's section from, as
-  `investigations/health-education-review/METHODS-DRAFT.md`. The record it draws on, with the decisions settled on 2026-11-17 and
-  what is still open, is `investigations/health-education-review/README.md`; its *Open* section is the next steps:
-  the methods description itself, two small fixes in the manuscript's Table 5, and matching the three reviews'
-  study lists against the fulltext set that arrived on 2026-11-17.
+- **Matching the three reviews' study lists against the fulltext set** that arrived on 2026-11-17:
+  `investigations/health-education-review/README.md`, *Open*. Also what the per-country table reads from.
+- **Backend flavors for gufo and strata**, with a reasoning-effort setting and its selector in Librarian: built
+  and tested on the local AI server. `TODO_DEFERRED.md`, the stock-take item.
 - **Release 0.2.11 before the health-education paper comes out**, so that its methods can cite a released
   version (2026-11-19). No date yet; it follows the paper's schedule. The `release` skill has the process.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
@@ -38,6 +40,12 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   `investigations/aria-register/README.md`, *The fourth blind sample*.
 
 ## Waiting on others
+
+- **The health-education methods description**: first draft done and reviewed on 2026-11-19
+  (`investigations/health-education-review/METHODS-DRAFT.md`), with the run-to-run variation measured on the
+  adopted prompt. Waiting on the coauthor for the two further exclusions, the reasons for the authors' own ten
+  exclusions if the flowchart keeps the breakdown, and the word clouds. Two small fixes in the manuscript's
+  Table 5 are noted in the study's README.
 
 - **The AOKK scoping review**: the team's ratings of the keep sample, then rules v2 and probably a new LLM run.
   The meeting of 2026-11-19 settled the corpus's edges (the excluded ProQuest collection out, ERIC at 247) and
