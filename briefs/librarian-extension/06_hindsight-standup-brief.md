@@ -918,7 +918,12 @@ below built into the standup's evaluation.
   OpenAI-compatible option on the LAN (`HINDSIGHT_API_LLM_PROVIDER=openai`, base URL `http://<ai server>:8080/v1`),
   and Hindsight's ports (8888 API, 9999 UI) clash with nothing there. Where Hindsight itself runs is open.
 - **Docker or podman.** The fleet uses podman; Hindsight's README gives `docker run` and Docker Compose.
-  Whether they run unchanged under podman is the first thing to try.
+  Whether they run unchanged under podman is the first thing to try. Every flag in the README's `docker run`
+  (`-it`, `--pull always`, `--name`, `-p`, `-e`, a named volume for its embedded Postgres) exists in podman
+  with the same meaning, so it probably does. One known difference: rootless podman honours
+  `--restart unless-stopped` only while podman runs, so coming back after a reboot needs a systemd unit or the
+  user-level `podman-restart.service`. The repo's `docker/docker-compose/local-llm` setup would go through
+  `podman compose`. To be confirmed in a session of its own, in this repo.
 - **The field, briefly.** Self-reported benchmark figures cluster near 90 % on LongMemEval: Hindsight 91.4 %
   (Vectorize claims 94.6 %), Zep 90.2 % by its own report. Two 2026 research systems are built around the gaps
   above, provenance and fact validity:
@@ -965,6 +970,14 @@ the code.
   - A conversation is accepted as a list of turns and chunked at turn boundaries, at most
     `HINDSIGHT_API_RETAIN_CHUNK_SIZE` characters per chunk, default **3,000** (about 750 tokens). A turn longer
     than that is split as text.
+  - **A long reply split across chunks is the worry (Juha, 2026-11-19), and it is worse than it looks.** The
+    splitter prefers paragraph breaks, line breaks, then sentence ends, and cuts mid-word only as a last
+    resort; but an oversized turn is split as its JSON serialization, where newlines are escaped to the two
+    characters `\n`, so the paragraph and line-break separators never match and the cuts fall at `. `, or
+    inside code at worse places. Only the first fragment carries `"role"`, so the later ones presumably reach
+    the extractor with no speaker (inferred, not tested). Remedies on our side: raise
+    `HINDSIGHT_API_RETAIN_CHUNK_SIZE` and `HINDSIGHT_API_RETAIN_STRUCTURED_CHUNK_SIZE` until turns fit whole, or
+    split very long replies ourselves at paragraph boundaries into several turns with the same role.
   - Each chunk is extracted by its own LLM call, with its index, the total count and a document-level `context`
     string; neighbouring chunks are not shown to it.
   - **No sliding window, by design.** The text splitter is pinned to `chunk_overlap=0` and the conversation
