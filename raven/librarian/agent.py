@@ -300,6 +300,7 @@ def turn(llm_settings: env,
          internet_enabled: bool = False,
          mcp_enabled: bool = False,
          skills_enabled: bool = False,
+         lorebook_enabled: bool = False,
          docs_enabled: bool = True,
          on_progress: Callable | None = None,
          docs_query: str | None | sym = from_user_message,
@@ -471,6 +472,11 @@ def turn(llm_settings: env,
     `skills_enabled`: Whether the agent skills are offered, and `/skill-name` honoured. **`False` by default**,
                       likewise. They exist in `llm_settings` only inside `with skills.loaded(llm_settings):`.
 
+    `lorebook_enabled`: Whether the lorebook's definitions are given and `lorebook_lookup` offered. **`False` by
+                        default**, likewise. It exists in `llm_settings` only inside
+                        `with lorebook.loaded(llm_settings):`. With `tools_enabled=False` nothing is given either,
+                        the definitions being calls to that tool.
+
     `docs_enabled`: Whether the documents are in play at all. `False` withdraws the document tools and
                     suppresses the automatic search whatever `docs_query` says.
 
@@ -561,7 +567,8 @@ def turn(llm_settings: env,
                                           staged_images=staged_images,
                                           staged_files=staged_files,
                                           add_persona=use_character_card,
-                                          skills_enabled=skills_enabled)
+                                          skills_enabled=skills_enabled,
+                                          lorebook_enabled=lorebook_enabled and tools_enabled)
         if skills_enabled and docs_query == user_message_text:  # the text sent may have started with a `/skill-name`
             docs_query = chatutil.latest_user_message_text(datastore, head_node_id)
     started_from_node_id = head_node_id
@@ -580,6 +587,7 @@ def turn(llm_settings: env,
                                      internet_enabled=internet_enabled,
                                      mcp_enabled=mcp_enabled,
                                      skills_enabled=skills_enabled,
+                                     lorebook_enabled=lorebook_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,
                                      docs_query=docs_query,

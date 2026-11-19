@@ -109,6 +109,7 @@ with timer() as tim:
     from . import hybridir
     from . import imagestore
     from . import llmclient
+    from . import lorebook
     from . import mcpclient
     from . import skills
     from . import textfilestore
@@ -485,6 +486,18 @@ skill_library = skills.SkillLibrary(llm_settings, on_changed=_on_skills_changed)
 skill_library.start(watch=True)
 for _skill_folder, _skill_problem in skill_library.problems.items():
     print(colorizer.colorize(f"Skill '{_skill_folder}': {_skill_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
+
+def _on_lorebook_changed() -> None:
+    if guiutils.is_shutting_down() or "chat_controller" not in globals():  # going away, or not built yet
+        return
+    chat_controller.update_context_fill_indicator()  # the lookup tool comes and goes with the entries
+    count = len(user_lorebook.entries)
+    _show_composer_notice(f"Lorebook reloaded: {count} {'entry' if count == 1 else 'entries'}.")  # plural
+
+user_lorebook = lorebook.Lorebook(llm_settings, on_changed=_on_lorebook_changed)
+user_lorebook.start(watch=True)
+for _lorebook_file, _lorebook_problem in user_lorebook.problems.items():
+    print(colorizer.colorize(f"Lorebook '{_lorebook_file}': {_lorebook_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
 
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
 # and write it back at exit, so running both means the later exit silently discards the other's session.
@@ -3727,6 +3740,7 @@ def _gui_release() -> None:
     chat_controller.shutdown()
     # After the chat, so that a turn in flight keeps its tools; before the wait, as it interrupts a start in progress.
     skill_library.shutdown()
+    user_lorebook.shutdown()
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)
     composer_notice_task_manager.clear(wait=True)

@@ -46,6 +46,8 @@ _DEFAULT_FLAGS = {  # Whether a thinking model may reason before it answers. On 
                   "mcp_enabled": True,
                   # Whether the LLM may use the agent skills, if any are installed.
                   "skills_enabled": True,
+                  # Whether the lorebook's definitions are given to the LLM, and it may look terms up there.
+                  "lorebook_enabled": True,
                   "docs_enabled": True,
                   # Whether each turn begins with a search of the documents for the user's message. Only
                   # meaningful while `docs_enabled`; off, the AI can still search them with its own tools.

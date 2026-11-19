@@ -82,9 +82,11 @@ would be knowledge left on the floor. So this clears the bar the project already
   the glossary (90 entries, median ~300 tokens, longest ~650, median one cross-reference): scan window the new
   user message plus the 4 messages before it, per-firing budget 2,000 tokens, per-chat cap 8,000, recursion
   depth 2.
-- **No GUI toggle in v0**: the lorebook is on whenever the folder has entries, like the clock. A toggle comes
-  with the system-prompt visibility toggle. A change on disk updates the tool's token-cost tooltip through
-  `on_changed`, as the skills library does.
+- **A switch after all** (maintainer, 2026-11-19, reversing "no GUI toggle in v0"): `app_state["lorebook_enabled"]`,
+  on by default, which the controller passes to the prefill, the user turn, the AI turn and the retry, and
+  `!lorebook` in minichat beside `!skills`. **The GUI placement is open**, the toolbar's row of toggles being
+  full; to think through together (2026-11-20). A change on disk refreshes the context-fill readout and shows
+  a composer notice through `on_changed`, as the skills library does.
 - **Scripts have it off by default**: `agent.turn(..., lorebook_enabled=False)`, mirroring `skills_enabled`.
   - **`agent.ask` has no lorebook**, the lorebook being retrieval-shaped and `ask` having neither retrieval nor
     history. The lorebook module exposes its scan as a pure function from text to matched entries, which a

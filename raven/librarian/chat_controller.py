@@ -2192,7 +2192,8 @@ class DPGChatController:
                                                    documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
                                                    internet_available=self.app_state["internet_enabled"],
                                                    mcp_available=self.app_state["mcp_enabled"],
-                                                   skills_available=self.app_state["skills_enabled"])
+                                                   skills_available=self.app_state["skills_enabled"],
+                                                   lorebook_available=self.app_state["lorebook_enabled"])
 
     def _offered_tools_tokens(self) -> int:
         """How much of the context window the tools on offer take up. Not part of the stored messages."""
@@ -2477,9 +2478,10 @@ class DPGChatController:
                                               user_message_text=text,
                                               staged_images=staged_images,
                                               staged_files=staged_files,
-                                              skills_enabled=self.app_state["skills_enabled"])
+                                              skills_enabled=self.app_state["skills_enabled"],
+                                              lorebook_enabled=self.app_state["lorebook_enabled"])
         branch = self.datastore.linearize_up(new_head_node_id)
-        new_nodes = branch[branch.index(self.app_state["HEAD"]) + 1:]  # more than one if the message activated a skill
+        new_nodes = branch[branch.index(self.app_state["HEAD"]) + 1:]  # more than one if the message activated a skill or fired lorebook entries
         self.app_state["HEAD"] = new_head_node_id  # update HEAD before the AI turn reads it as the parent
         for node_id in new_nodes:
             self.view.add_complete_message(node_id)
@@ -3028,6 +3030,7 @@ class DPGChatController:
                                                             internet_enabled=self.app_state["internet_enabled"],
                                                             mcp_enabled=self.app_state["mcp_enabled"],
                                                             skills_enabled=self.app_state["skills_enabled"],
+                                                            lorebook_enabled=self.app_state["lorebook_enabled"],
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=(docs_query if self.app_state["autosearch_enabled"] else None),
@@ -3045,6 +3048,7 @@ class DPGChatController:
                                                                      internet_enabled=self.app_state["internet_enabled"],
                                                                      mcp_enabled=self.app_state["mcp_enabled"],
                                                                      skills_enabled=self.app_state["skills_enabled"],
+                                                                     lorebook_enabled=self.app_state["lorebook_enabled"],
                                                                      docs_enabled=self.app_state["docs_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,

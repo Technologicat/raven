@@ -117,10 +117,10 @@ class TestRegistration:
         assert llmtools.SKILL_TOOL_NAME not in llmtools.TOOL_ENTRYPOINTS
 
     def test_the_gate_withholds_it(self, settings, library):
-        offered = llmtools.maybe_tool_names_for_turn(settings, documents_available=True, internet_available=True, mcp_available=True, skills_available=False)
+        offered = llmtools.maybe_tool_names_for_turn(settings, documents_available=True, internet_available=True, mcp_available=True, skills_available=False, lorebook_available=True)
         assert llmtools.SKILL_TOOL_NAME not in offered
         assert "websearch" in offered
-        assert llmtools.maybe_tool_names_for_turn(settings, documents_available=True, internet_available=True, mcp_available=True, skills_available=True) is None
+        assert llmtools.maybe_tool_names_for_turn(settings, documents_available=True, internet_available=True, mcp_available=True, skills_available=True, lorebook_available=True) is None
 
     def test_its_cost_is_counted_in_its_own_group(self, settings, library):
         assert llmclient.tool_cost_by_group(settings)["skills"] > 0

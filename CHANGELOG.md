@@ -25,6 +25,11 @@
 - **Agent skills**: procedures written in Markdown, which the AI follows when a task matches, or when a message starts with `/skill-name`.
   - In the [Agent Skills](https://agentskills.io) format, under `skills/` in the user folder. Bundled scripts are not run.
   - The **Skills** toggle (`Alt+K`) and `!skills` in `raven-minichat` switch them on and off. Changes are picked up while the app runs, in a skill folder linked in from elsewhere too.
+- **A lorebook**: definitions of your terms, given to the AI when a term comes up in the conversation, so it reads the word the way you mean it.
+  - Markdown files under `lorebook/` in the user folder, a section per term; a glossary is one file, and can be a link to one kept elsewhere. Changes are picked up while the app runs.
+  - A term is matched as words, in any order, and an entry's links bring the entries they point to. Each definition goes into the chat once per branch, within caps set in `raven.librarian.config`.
+  - The AI can also look a term up itself, and is offered the closest entry when it asks for one that is not there.
+  - `!lorebook` in `raven-minichat` switches it on and off; from a script, `agent.turn(..., lorebook_enabled=True)`.
 - **Tools from MCP servers**, beside the built-in ones.
   - List servers in `mcp.json`, in the format other MCP clients use. Both a server *Librarian* starts itself and one reached over HTTP or SSE.
   - The **MCP** toggle (`Alt+M`) and `!mcp` in `raven-minichat` switch them on and off; `allowed_tools` and `disabled` choose per server.

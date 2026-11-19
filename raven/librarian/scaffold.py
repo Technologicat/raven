@@ -1188,7 +1188,8 @@ def ai_turn(llm_settings: env,
             maybe_abort: netutil.Abort | None = None,
             use_character_card: bool = True,
             write_docs_query: bool = False,
-            max_tokens: int | None = None) -> str:
+            max_tokens: int | None = None,
+            lorebook_enabled: bool = False) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -1213,6 +1214,9 @@ def ai_turn(llm_settings: env,
                    Gates the tools in `llm_settings.mcp_tool_servers` and nothing else.
 
     `skills_enabled`: Whether the agent skills are on offer — the user-facing "Skills" switch.
+
+    `lorebook_enabled`: Whether `lorebook_lookup` is on offer, when a lorebook is loaded — the user-facing
+                        "Lorebook" switch.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  A new chat node is created.
@@ -1485,7 +1489,8 @@ def ai_turn(llm_settings: env,
                                                            documents_available=documents_available,
                                                            internet_available=internet_enabled,
                                                            mcp_available=mcp_enabled,
-                                                           skills_available=skills_enabled)
+                                                           skills_available=skills_enabled,
+                                                           lorebook_available=lorebook_enabled)
     # They sit in the context window too, so a tool fitting a document into what is left has to know about them.
     tool_context.offered_tools_tokens = llmclient.count_tools_tokens(llm_settings,
                                                                      llmclient.offered_tools(llm_settings,
@@ -1854,7 +1859,8 @@ def retry_tool_calls(llm_settings: env,
                      on_call_lowlevel_done: Callable | None = None,
                      on_call_lowlevel_progress: Callable | None = None,
                      on_tool_done: Callable | None = None,
-                     on_tools_done: Callable | None = None) -> str:
+                     on_tools_done: Callable | None = None,
+                     lorebook_enabled: bool = False) -> str:
     """Re-run a single previously-denied tool call on a NEW branch, then continue the AI's turn.
 
     This is the backend of the GUI "approve this denied host & retry" override. The user has just approved
@@ -1953,6 +1959,7 @@ def retry_tool_calls(llm_settings: env,
     return ai_turn(llm_settings=llm_settings,
                    mcp_enabled=mcp_enabled,
                    skills_enabled=skills_enabled,
+                   lorebook_enabled=lorebook_enabled,
                    datastore=datastore,
                    retriever=retriever,
                    head_node_id=head_node_id,

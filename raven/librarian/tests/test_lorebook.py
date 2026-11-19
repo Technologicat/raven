@@ -404,6 +404,13 @@ class TestLorebook:
             time.sleep(0.5)
             assert "jazz" not in settings.lorebook_entries
 
+    def test_the_gate_withholds_the_tool(self, settings, folder):
+        with lorebook.loaded(settings, directory=folder):
+            gated = dict(documents_available=True, internet_available=True, mcp_available=True, skills_available=True)
+            assert llmtools.maybe_tool_names_for_turn(settings, **gated, lorebook_available=True) is None
+            offered = llmtools.maybe_tool_names_for_turn(settings, **gated, lorebook_available=False)
+            assert llmtools.LOREBOOK_TOOL_NAME not in offered and "websearch" in offered
+
     def test_a_path_may_be_str_or_path(self, settings, folder):
         with lorebook.loaded(settings, directory=str(folder)) as book:
             assert list(book.entries) == ["spork", "fup"]

@@ -231,6 +231,34 @@ class TestTurn:
         # ...and it is a stored attachment rather than pasted text: the sidecar is on disk, content-addressed.
         assert datastore.list_sidecar_files()
 
+    def test_the_lorebook_is_given_and_offered_only_when_enabled(self, monkeypatch, llm_settings, tmp_path):
+        from raven.librarian import llmtools, lorebook  # noqa: PLC0415 -- only this test needs the lorebook
+
+        seen = []
+
+        def fake_invoke(**kw):
+            wire = llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                        continue_=kw["continue_"], datastore=kw["datastore"])
+            kw["on_prompt_ready"](wire)
+            offered = {spec["function"]["name"]
+                       for spec in llmtools.offered_tools(kw["settings"], tools_enabled=kw["tools_enabled"], tool_names=kw["tool_names"])}
+            seen.append((offered, "\n".join(chatutil.content_to_text(message.get("content")) for message in wire)))
+            return make_invoke_result(content="Noted.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        folder = tmp_path / "lorebook"
+        folder.mkdir()
+        (folder / "glossary.md").write_text("## Spork\nA fork that is also a spoon.\n", encoding="utf-8")
+        with lorebook.loaded(llm_settings, directory=folder):
+            agent.turn(llm_settings, "Pass the spork.", lorebook_enabled=True)
+            agent.turn(llm_settings, "Pass the spork.")
+            agent.turn(llm_settings, "Pass the spork.", lorebook_enabled=True, tools_enabled=False)
+        (enabled_tools, enabled_wire), (default_tools, default_wire), (toolless_tools, toolless_wire) = seen
+        assert llmtools.LOREBOOK_TOOL_NAME in enabled_tools and "A fork that is also a spoon." in enabled_wire
+        assert llmtools.LOREBOOK_TOOL_NAME not in default_tools and "A fork that is also a spoon." not in default_wire
+        assert toolless_tools == set() and "A fork that is also a spoon." not in toolless_wire, \
+            "with no tools on offer, nothing is given as a call to one"
+
     def test_an_attachment_needs_no_file_backed_datastore(self, monkeypatch, llm_settings):
         # The default datastore is in-memory, and a batch attaching a paper per item wants to leave nothing
         # behind. The sidecar is held beside the tree rather than in a directory, and everything above the

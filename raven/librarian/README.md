@@ -573,6 +573,35 @@ The **Skills** toggle (`Alt+K`) switches them on or off. Changes are picked up w
 
 From a script, skills are available inside a `with skills.loaded(llm_settings):` block, and `agent.turn` offers them when given `skills_enabled=True`.
 
+### Lorebook
+
+A *lorebook* holds definitions of terms — your own coinages, a field's jargon, the special sense you give an ordinary word — and gives the AI the definition when a term comes up in the conversation, so it reads the word the way you mean it.
+
+Entries are Markdown files under `~/.config/raven/librarian/lorebook/`. Each entry is a section: its header is the term, and everything under it, up to the next header at the same level, is the definition. One file can hold one term or many; a glossary is one file:
+
+```markdown
+## Hydra tax
+
+What closing one item costs, when it opens two more. See also [attention rent](#attention-rent).
+
+## Attention rent (attention cost)
+
+What an open item costs everyone who has to read past it.
+```
+
+- **Other spellings** go in parentheses in the header, comma-separated.
+- **Case:** a term in lowercase matches any case. One with a capital letter after its first matches only as written, so `EQ curve` is not set off by "eq". The first letter does not count, headers being capitalized as sentences are.
+- **Word order:** the words of a term match in any order, as long as they are next to each other.
+- **Links:** an entry's `[text](#anchor)` links bring the entries they point to along with it, a couple of links deep.
+- **A file can be a link** to one kept elsewhere, so a glossary you maintain somewhere else needs no copying. Changes are picked up while the app runs.
+- **How a file is split:** the header level that delimits the entries is read from the file. A file it reads wrongly can be given its level in `lorebook_entry_levels`, in `raven.librarian.config`.
+
+**When an entry is given:** when a term appears in your new message, or in the few messages before it. The definitions go into the chat just ahead of your message, and stay there, so each is given once per branch of the chat. How much goes in at once and in a whole chat is capped. All of it is set in `raven.librarian.config`: `lorebook_scan_messages`, `lorebook_max_depth`, `lorebook_budget` and `lorebook_chat_cap`, to raise for a long discussion that uses many of your terms. Definitions are given only on a turn where the AI has tools.
+
+The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the closest entry if one stands out, the closest few by name if several do, and otherwise the answer that the term is not defined.
+
+`!lorebook` in `raven-minichat` switches the lorebook on and off. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.
+
 ### Security warning
 
 To keep tool use safe, there are [certain important considerations](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). In short, giving an LLM access to all three of:
