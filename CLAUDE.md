@@ -216,6 +216,9 @@ for which code runs (checked 2026-11-16):
   whichever directory they are started from: a script's `sys.path` starts at its own `bin/`, so `raven`
   resolves through the editable install. A live test of worktree code launched that way tests `main`
   instead, and nothing says so.
+- **So does a script kept outside the worktree** — a probe in the scratchpad, say — its `sys.path` starting
+  at its own directory. Run it as `PYTHONPATH=<worktree> python <script>`. (Seen 2026-11-19: a scratchpad
+  probe failed on a function the worktree had and `main` did not yet.)
 
 So launch from the worktree's root by module: `python -m raven.librarian.app`, `python -m raven.server.app`,
 and so on (`[project.scripts]` in `pyproject.toml` names each entry point's module). Those modules run the
