@@ -299,7 +299,23 @@ class TestLookup:
             Not a typo.
             ## Spork
             A utensil.
+            ## Miroconnection
+            A link between two minds, seen in a mirror.
+            ## Endognosis
+            What a system knows about itself from inside; introspection names the act, this the result.
             """))
+
+    def test_an_unrelated_word_is_no_near_miss_however_alike_it_looks(self, entries):
+        # A model searching by meaning asked for "introspection", and difflib's default cutoff took it for this.
+        found = lorebook.lookup(entries, "introspection")
+        assert found.maybe_entry is None and "Miroconnection" not in found.candidates
+
+    def test_an_entry_whose_content_mentions_the_term_is_named(self, entries):
+        found = lorebook.lookup(entries, "Introspection")
+        assert found.mentioned_in == ("Endognosis",)
+        answer = lorebook._answer(entries, "Introspection")
+        assert lorebook.CANONICAL_MENTIONED_IN.format(titles="'Endognosis'") in answer
+        assert answer.startswith(lorebook.CANONICAL_NO_ENTRY.format(term="Introspection"))
 
     def test_the_words_of_a_key_in_any_case_and_order(self, entries):
         found = lorebook.lookup(entries, "SHAMPOO different same bath")
@@ -424,3 +440,24 @@ def test_the_real_glossary_parses_and_its_links_resolve():
     assert len(entries) > 50, "the letter sections or the title were taken for entries, or the entries were missed"
     anchors = {anchor for entry in entries for anchor in entry.anchors}
     assert {crossref for entry in entries for crossref in entry.crossrefs} <= anchors
+
+
+@pytest.mark.skipif(not (pathlib.Path.home() / "Documents/koodit/substrate-independent/glossary.md").exists(),
+                    reason="the real glossary is on the maintainer's machines only")
+def test_on_the_real_glossary_a_typo_finds_its_entry_and_a_search_by_meaning_finds_none():
+    """The near-miss cutoff against real data: typos of every title, and the terms a model tried by meaning."""
+    path = pathlib.Path.home() / "Documents/koodit/substrate-independent/glossary.md"
+    entries = _by_id(lorebook.parse(path.read_text(encoding="utf-8"), name="glossary", source=path))
+    wrong = []
+    for entry in entries.values():
+        if len(entry.title) >= 4:
+            typo = entry.title[:len(entry.title) // 2] + entry.title[len(entry.title) // 2 + 1:]
+            found = lorebook.lookup(entries, typo)
+            if found.maybe_entry is not None and found.maybe_entry.id != entry.id:
+                wrong.append((typo, found.maybe_entry.title))
+            elif found.maybe_entry is None and entry.title not in found.candidates:
+                wrong.append((typo, None))
+    assert wrong == [], "a one-letter typo of a title missed its entry or found another"
+    # Asked by Flash Next looking for "endognosis" by meaning, on 2026-11-19.
+    for query in ["introspection", "interoception", "metacognition", "meta-attention", "proprioception"]:
+        assert lorebook.lookup(entries, query).maybe_entry is None, f"{query!r} was taken for an entry it is not"

@@ -85,15 +85,16 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **First end-to-end run, headless, on Flash Next (2026-11-19)**: `agent.turn` with the real glossary. Definitions
   fired and were used (a backlog question got *hydra tax*, *attention rent* and two linked entries, and the
   reply built on them). It also found a wire bug, since fixed: every message carried `tool_calls: []`, which gufo
-  refuses off an assistant message. **Two problems with `lorebook_lookup`, to decide (2026-11-20):**
+  refuses off an assistant message. **Two problems with `lorebook_lookup`, both fixed the same day:**
   - **The near-miss answer is too eager.** Asked by meaning, the model tried twelve terms; three unrelated ones
     came back as "the closest is" with the full entry (*introspection → Miroconnection*, *meta-attention →
     Attention rent*). difflib's default cutoff (0.6) sits among them: one-letter typos of every title score
-    0.857 and up (median 0.966), the model's failed queries 0.667 and down. A cutoff in that gap (0.8) would
-    separate them; the step-2 sweep had tried typos only.
+    0.857 and up (median 0.966), the model's failed queries 0.667 and down. The cutoff is now 0.8, in that
+    gap; the step-2 sweep had tried typos only. Typos now find their entry alone 84 times of 88 (was 69).
   - **The model searches by meaning, the tool by spelling.** *Endognosis*'s own text mentions *introspection*,
-    the first term tried. Answering an unknown term with the entries whose content mentions it ("not an entry,
-    but mentioned in *Endognosis*") would have found it at once, deterministically.
+    the first term tried. An unknown term is now answered with the entries whose content mentions it ("no
+    entry, but mentioned in *Endognosis*"), deterministically. A live test (`test_live_backend.py`) now gives
+    a definition through a real backend, and fails on the wire bug above.
 - **A switch after all** (maintainer, 2026-11-19, reversing "no GUI toggle in v0"): `app_state["lorebook_enabled"]`,
   on by default, which the controller passes to the prefill, the user turn, the AI turn and the retry, and
   `!lorebook` in minichat beside `!skills`. **The GUI placement is open**, the toolbar's row of toggles being

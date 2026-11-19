@@ -28,7 +28,7 @@
 - **A lorebook**: definitions of your terms, given to the AI when a term comes up in the conversation, so it reads the word the way you mean it.
   - Markdown files under `lorebook/` in the user folder, a section per term; a glossary is one file, and can be a link to one kept elsewhere. Changes are picked up while the app runs.
   - A term is matched as words, in any order, and an entry's links bring the entries they point to. Each definition goes into the chat once per branch, within caps set in `raven.librarian.config`.
-  - The AI can also look a term up itself, and is offered the closest entry when it asks for one that is not there.
+  - The AI can also look a term up itself. Asking for one that is not there, it gets the entry spelled nearly like it, or the entries whose definitions mention it.
   - `!lorebook` in `raven-minichat` switches it on and off; from a script, `agent.turn(..., lorebook_enabled=True)`.
 - **Tools from MCP servers**, beside the built-in ones.
   - List servers in `mcp.json`, in the format other MCP clients use. Both a server *Librarian* starts itself and one reached over HTTP or SSE.

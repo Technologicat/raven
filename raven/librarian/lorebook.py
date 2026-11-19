@@ -15,7 +15,8 @@ __all__ = ["Entry", "slugify",
            "parse", "load",
            "Match", "find_matches",
            "Firing", "select",
-           "CANONICAL_NOT_DEFINED", "CANONICAL_NEAR_MISS", "CANONICAL_CANDIDATES",
+           "CANONICAL_NOT_DEFINED", "CANONICAL_NEAR_MISS", "CANONICAL_NO_ENTRY", "CANONICAL_CANDIDATES",
+           "CANONICAL_MENTIONED_IN", "CANONICAL_LOOK_ONE_UP",
            "Lookup", "lookup", "format_entry",
            "Lorebook", "loaded"]
 
@@ -362,7 +363,17 @@ def select(entries: Mapping[str, Entry],
 CANONICAL_NOT_DEFINED = ("The term '{term}' is not defined in the lorebook. It holds only the terms the user has "
                          "defined, so most words are not in it.")
 CANONICAL_NEAR_MISS = "There is no entry for '{term}'. The closest is '{title}':"
-CANONICAL_CANDIDATES = "There is no entry for '{term}'. The closest entries are: {titles}. Look one of them up by its title."
+CANONICAL_NO_ENTRY = "There is no entry for '{term}'."
+CANONICAL_CANDIDATES = "The closest entries are: {titles}."
+CANONICAL_MENTIONED_IN = "It is mentioned in: {titles}."
+CANONICAL_LOOK_ONE_UP = "Look one of them up by its title."
+
+# How alike a term and a title must be (`difflib.SequenceMatcher.ratio`) to count as a near miss. Read off the
+# glossary this was built against: a one-letter typo of any of its titles scores 0.857 or more (median 0.966),
+# while the terms a model tried when searching it by meaning scored 0.667 or less against their nearest title.
+# Difflib's own default, 0.6, sits among the latter, and took "introspection" for "Miroconnection".
+_NEAR_MISS_CUTOFF = 0.8
+_MAX_TITLES = 5  # titles offered at most, in one list of candidates or of mentions
 
 @dataclasses.dataclass(frozen=True)
 class Lookup:
@@ -371,18 +382,21 @@ class Lookup:
     `maybe_entry`: the entry the term names, or the one near miss there is; `None` otherwise.
     `exact`: whether `maybe_entry` is the term's own entry rather than a near miss.
     `candidates`: titles of the closest entries, when there are several near misses and no exact entry.
+    `mentioned_in`: titles of the entries whose content mentions the term, when it has no entry of its own.
     """
     maybe_entry: Entry | None
     exact: bool
     candidates: tuple[str, ...]
+    mentioned_in: tuple[str, ...] = ()
 
 def lookup(entries: Mapping[str, Entry], term: str) -> Lookup:
     """Find the entry for `term`, as a model asking for it by name would want.
 
     Exact when the term's words are a key's words, in any order and any case: whoever asks by name has already
     picked the term, so smart case, which keeps scanned prose from firing on a common word, has nothing to do
-    here. Otherwise the keys within `difflib`'s default similarity of the term are near misses: one of them is
-    taken as meant, several are offered by title, and none means the term is not defined.
+    here. Otherwise a key spelled nearly like the term is a near miss: one of them is taken as meant. Failing
+    that, the answer names the several near misses there are, and the entries whose content mentions the term,
+    in any case; with neither, the term is not defined.
     """
     wanted = sorted(word.lower() for word in _key(term, sentence_case=False))
     spellings: dict[str, str] = {}  # a key as written, lowercased -> the entry it belongs to
@@ -392,11 +406,17 @@ def lookup(entries: Mapping[str, Entry], term: str) -> Lookup:
                 return Lookup(maybe_entry=entry, exact=True, candidates=())
         for phrase in (entry.title, *entry.aliases):
             spellings.setdefault(_normalize(phrase).lower(), entry.id)
-    close = difflib.get_close_matches(_normalize(term).lower(), list(spellings), n=5)
+    close = difflib.get_close_matches(_normalize(term).lower(), list(spellings), n=_MAX_TITLES, cutoff=_NEAR_MISS_CUTOFF)
     ids = list(dict.fromkeys(spellings[spelling] for spelling in close))  # several spellings, one entry
     if len(ids) == 1:
         return Lookup(maybe_entry=entries[ids[0]], exact=False, candidates=())
-    return Lookup(maybe_entry=None, exact=False, candidates=tuple(entries[entry_id].title for entry_id in ids))
+    # The term as a key of its own, in lowercase so that it matches in any case, run over each entry's content.
+    probe = {"probe": Entry(id="probe", title=_normalize(term).lower(), aliases=(), content="", crossrefs=(),
+                            anchors=(), source=pathlib.Path(), order=0)}
+    mentioned_in = [entry.title for entry in entries.values() if find_matches(probe, entry.content)][:_MAX_TITLES]
+    return Lookup(maybe_entry=None, exact=False,
+                  candidates=tuple(entries[entry_id].title for entry_id in ids),
+                  mentioned_in=tuple(mentioned_in))
 
 def format_entry(entry: Entry) -> str:
     """An entry as the model reads it: its title, then its content."""
@@ -409,9 +429,17 @@ def _answer(entries: Mapping[str, Entry], term: str) -> str:
         if found.exact:
             return format_entry(found.maybe_entry)
         return f"{CANONICAL_NEAR_MISS.format(term=term, title=found.maybe_entry.title)}\n\n{format_entry(found.maybe_entry)}"
+    if not (found.candidates or found.mentioned_in):
+        return CANONICAL_NOT_DEFINED.format(term=term)
+    def quoted(titles: tuple[str, ...]) -> str:
+        return ", ".join(f"'{title}'" for title in titles)
+    sentences = [CANONICAL_NO_ENTRY.format(term=term)]
     if found.candidates:
-        return CANONICAL_CANDIDATES.format(term=term, titles=", ".join(f"'{title}'" for title in found.candidates))
-    return CANONICAL_NOT_DEFINED.format(term=term)
+        sentences.append(CANONICAL_CANDIDATES.format(titles=quoted(found.candidates)))
+    if found.mentioned_in:
+        sentences.append(CANONICAL_MENTIONED_IN.format(titles=quoted(found.mentioned_in)))
+    sentences.append(CANONICAL_LOOK_ONE_UP)
+    return " ".join(sentences)
 
 def _tool_spec() -> dict[str, Any]:
     return {"type": "function",

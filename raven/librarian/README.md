@@ -598,7 +598,7 @@ What an open item costs everyone who has to read past it.
 
 **When an entry is given:** when a term appears in your new message, or in the few messages before it. The definitions go into the chat just ahead of your message, and stay there, so each is given once per branch of the chat. How much goes in at once and in a whole chat is capped. All of it is set in `raven.librarian.config`: `lorebook_scan_messages`, `lorebook_max_depth`, `lorebook_budget` and `lorebook_chat_cap`, to raise for a long discussion that uses many of your terms. Definitions are given only on a turn where the AI has tools.
 
-The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the closest entry if one stands out, the closest few by name if several do, and otherwise the answer that the term is not defined.
+The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the entry spelled nearly like it, if there is one. Otherwise it gets the names of the entries spelled closest and of those whose definitions mention the term, or, with neither, the answer that the term is not defined.
 
 `!lorebook` in `raven-minichat` switches the lorebook on and off. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.
 

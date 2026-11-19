@@ -88,6 +88,31 @@ def test_a_scripted_turn_comes_back_with_a_reply(llm_settings):
     assert record.generation.get("model"), "generation metadata names no model"
 
 
+def test_a_lorebook_definition_is_given_and_the_backend_takes_it(llm_settings, tmp_path):
+    """A message firing a lorebook entry: the definition goes in as a round of lookup calls nobody made.
+
+    That round is a shape the backend has to accept — an empty assistant message asking for tools, and their
+    results, all ahead of the user's message — and a strict one refuses a request whose messages carry fields
+    it does not expect. The term is a coinage, so no model knows it from anywhere else.
+    """
+    from raven.librarian import lorebook  # noqa: PLC0415 -- only this test needs the lorebook
+
+    folder = tmp_path / "lorebook"
+    folder.mkdir()
+    (folder / "terms.md").write_text("## Quorbling\nFiling a deferred item for a fix smaller than the item itself.\n",
+                                     encoding="utf-8")
+    with lorebook.loaded(llm_settings, directory=folder):
+        record = agent.turn(llm_settings,
+                            user_message_text="Is it quorbling to file a ticket for a two-line fix? Answer in one sentence.",
+                            lorebook_enabled=True)
+
+    given = [record.datastore.get_payload(node_id).get("generation_metadata", {}).get("lorebook_entry")
+             for node_id in record.datastore.linearize_up(record.head_node_id)]
+    assert "quorbling" in given, "the term was in the message, so its definition should have been given"
+    assert record.generation is not None, f"the backend refused or failed the turn: {record.reply}"
+    assert record.reply.strip(), f"the turn produced no reply text; messages={record.messages}"
+
+
 def test_the_model_calls_a_tool_and_the_result_reaches_the_reply(llm_settings):
     """The path a changed tool parser breaks, end to end: asked, called, executed, answered.
 
