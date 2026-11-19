@@ -75,8 +75,15 @@ ledger.
 
 ## Results
 
+**The reasoning effort these runs declare is most likely wrong** (found 2026-11-19). They declared `xhigh`
+with a 12k thinking budget, but every run here was served by the personal machine's LM Studio, whose setting
+for the model stood at `low` that day and had not been changed in a long time (the maintainer). The setting lives
+in a customized chat template on that machine: LM Studio honours neither a request's `reasoning_effort` nor a
+setting of its own, so Raven sends none when thinking is on (`raven.librarian.llmclient.thinking_request_fields`),
+and the template's value is what applied. Read every figure below as most likely measured at `low`.
+
 **Health education, run d's final set of 40, 2026-10-30.** Qwen 3.8 27B (`q4_k_xl`) on LM Studio, reasoning
-effort `xhigh`, thinking budget 12k; five runs per condition, about 4 minutes a run. Outputs, with the
+effort declared `xhigh`, thinking budget 12k (see the note above); five runs per condition, about 4 minutes a run. Outputs, with the
 comparison (`comparison.txt`) and its heatmaps, in `llm-grouping/` beside the `.bib`.
 
 - **Pilot** (the script at `c4defead`; the research questions with their file's provenance header, by
@@ -197,7 +204,10 @@ the themes, and the studies placed under each, stand as the model gave them.
 - **Aim**: the topic line, `aim-topic.txt`: *"Sustainability education in health education, at primary and secondary
   schools and in teacher education."* The log does not record it; the file's name and the table above do.
 - **Model**: Qwen 3.8 27B, `q4_k_xl`, on LM Studio. One run, a prompt of 13,009 tokens, about four minutes; no repair
-  turn. The reasoning effort and thinking budget are not recorded for this run (the bundle's own runs used `xhigh` and 12k).
+  turn. The reasoning effort is not in the run's log, but the run was served by the personal machine's LM Studio,
+  whose setting for this model stood at `low` on 2026-11-19 and had not been changed in a long time (the maintainer,
+  that day): so most likely `low`. The same machine served every run in this bundle, so the `xhigh` and 12k they declared
+  were most likely `low` as well (*Results*, the note at its head).
 - **Placement**: one theme per study; no study left over.
 
 **Corrections to `04b-final.bib` after the fact** (2026-11-17), from the export's metadata; the files before it in the
