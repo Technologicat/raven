@@ -909,6 +909,11 @@ below built into the standup's evaluation.
     compares rerankers with each other over a first-stage top 100, never against no reranking.
   - **The test is a configuration switch:** `HINDSIGHT_API_RERANKER_PROVIDER=rrf` keeps the fused order and
     disables neural reranking. Run the same queries over the same bank with and without it.
+- **Where the LLM is used:** retain (extracting facts, entities and causal links), the consolidation into
+  observations after each retain, and reflect. **Recall uses none**: nothing under `engine/search/` calls an
+  LLM, and time expressions in a query are parsed with `dateparser` (the paper's flan-t5 is gone). So
+  auto-search on every turn costs no LLM time; writing memories and `reflect` do, and with gufo as the LLM
+  they compete with chat for its sessions.
 - **The LLM endpoint.** The brief assumes LM Studio on the dev machine. gufo on the local AI server is now an
   OpenAI-compatible option on the LAN (`HINDSIGHT_API_LLM_PROVIDER=openai`, base URL `http://<ai server>:8080/v1`),
   and Hindsight's ports (8888 API, 9999 UI) clash with nothing there. Where Hindsight itself runs is open.
