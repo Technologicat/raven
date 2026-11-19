@@ -94,8 +94,9 @@ keep the export's values, by decision.
 - **The same caveat about PRISMA as the AOKK review's** (the maintainer, 2026-11-19): screening and eligibility
   as one step, with full texts consulted as needed, and criteria refined during it, so exploratory rather than
   confirmatory. Written out in `METHODS-DRAFT.md`, *How the process differs from PRISMA*.
-- **The run-to-run variation is reported** (2026-11-19), with the caveat that it was measured on the development
-  prompt.
+- **The run-to-run variation is reported, measured with the adopted run's own prompt** (2026-11-19), so that the
+  paper uses one prompt throughout: ten runs, omega 0.48, ARI 0.50 (`../llm-thematic-grouping/README.md`, *The
+  final clustering*). The development prompt's figures are kept there for reference only.
 
 ## Not part of this study
 

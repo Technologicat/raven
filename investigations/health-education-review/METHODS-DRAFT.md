@@ -176,29 +176,21 @@ broader themes. They read every abstract against the themes, and adopted the sev
 produced it, with no study moved and no theme renamed (17 November 2026). So the grouping is LLM-generated and
 fully human-verified: every study's placement was checked, not a sample.
 
-***Pending:** the paper uses one prompt throughout (the authors, 2026-11-19), so the measurement is being repeated
-with the adopted run's own prompt, ten runs from 2026-11-19. The figures below, from the development prompt, are
-then kept for reference only and replaced here.*
+**On repeatability.** An LLM grouping varies from run to run, so the grouping was repeated ten times under the
+adopted run's conditions (19 November 2026): the same prompt, the same 40 studies as the model saw them, the same
+aim and the same model on the same machine, at a low reasoning effort. The adopted run's effort was not logged,
+but that machine's setting had stood at low for a long time before. Only the order of the studies was shuffled in each run, so that a
+stable result could not come from the order. The measurements are in `../llm-thematic-grouping/`.
 
-**On repeatability.** An LLM grouping varies from run to run, and the group measured how much, on these same 40
-studies, while developing the method (2 November 2026; the measurements are in `../llm-thematic-grouping/`):
-
-- **Ten independent runs** with the same model, the same aim and the same 40 studies produced four to seven themes
-  each.
-- **Agreement between runs**, averaged over all pairs: an adjusted Rand index of 0.44 and an omega index of 0.40.
-  Both are 0 for chance agreement and 1 for identical groupings. The adjusted Rand index compares each study's
-  primary placement (Hubert & Arabie, 1985); the omega index generalizes it to groupings where a study may sit
-  under two themes (Collins & Dent, 1988).
-- **A stable core**: 23 of the 40 studies fell into seven groups that stayed together in every one of the ten runs.
+- **The ten runs produced four to seven themes each.** The adopted run's seven is within that range.
+- **Agreement between runs**, averaged over all 45 pairs: an adjusted Rand index of 0.50 and an omega index of
+  0.48. Both are 0 for chance agreement and 1 for identical groupings. The adjusted Rand index compares each
+  study's primary placement (Hubert & Arabie, 1985); the omega index generalizes it to groupings where a study may
+  sit under two themes (Collins & Dent, 1988).
+- **A stable core**: 22 of the 40 studies fell into six groups that stayed together in every one of the ten runs.
 
 So the themes are a plausible reading of the material rather than the only one, and the authors' check is what
-makes this one the result. The figures describe the method, not the adopted run, and one difference should be
-stated if they are reported: the ten runs used the development version of the prompt, and the adopted run the
-version built into the software. They ask for the same thing, themes with a primary placement and a reason for
-each, but the development version framed the collection as a systematic review, showed each record's keywords as
-well, and asked for the themes "the way a review presents its accepted studies as a table of thematic clusters".
-Single runs suggest that such wording moves how many themes come out, so the figures are indicative of the adopted
-prompt's variation rather than a measurement of it.
+makes this one the result. The figures describe the method, not the adopted run.
 
 References, to check before citing: Hubert, L., & Arabie, P. (1985). Comparing partitions. *Journal of
 Classification*, 2, 193–218. Collins, L. M., & Dent, C. W. (1988). Omega: A general formulation of the Rand index of

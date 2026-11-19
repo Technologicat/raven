@@ -218,6 +218,15 @@ pipeline still carry the export's values, and the clustering is unaffected:
   Øvrebø 2015) were not checked this way.
 - **Mannix-McNamara**, not "Mannix-Mc Namara" (the authors, from the chapter).
 
+**The adopted prompt's own variation** (2026-11-19): ten runs of `group_studies.py --dataset` over the adopted run's
+dataset, with the importer's prompt as of `69da540e`, the topic line, reasoning effort `low`; ledger
+`aim-topic+import-prompt/grouping-f6c4f1d6`, comparison in `comparison.txt` there. Four to seven themes a run; theme-level
+omega 0.48, ARI 0.50; six stable cores holding 22 of the 40; no repair turn; studies placed twice, 0 to 11 a run. Against
+the development prompt's ten runs on the same set (0.40 and 0.44), the runs of the two prompts agree with each other at
+0.45 and 0.48, about as well as each prompt's runs agree among themselves: the prompt's wording moved the grouping little.
+First-turn thinking ran to a median of about 28k characters, against 31k for the development runs, with overlapping
+ranges, which is consistent with the same reasoning effort. This is the measurement the paper reports.
+
 **This is not the route `METHOD.md` describes.** The catalogue (its steps 2 to 5) was built and applied on this set
 (*Results*, above), but the final themes come from one run, checked against every abstract by people, in place of runs
 pooled and placed again under an edited catalogue. A methods section should say which, and that the agreement figures
