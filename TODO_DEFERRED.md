@@ -45,6 +45,14 @@ What each new backend offers, as far as checked (gufo 0.34.0, 2026-11-18):
 
 So the likely shape is a llama-server flavor (detected by `/props`), which would cover gufo and plain llama.cpp servers alike, and a strata flavor if strata turns out to have its own endpoints. The parallel-slot warning has an analogue in gufo's `total_slots`, and image support could come from `input_modalities` instead of staying unknown.
 
+**strata is to be tested too** (the maintainer, 2026-11-19): it is more widely used than gufo, which is specific to Strix Halo. Where to run it is not decided yet: install it on the local AI server, or use the copy on the work machine, where it takes nearly all of the RAM and leaves little for anything beside it.
+
+**The llama-server flavor is wanted anyway**, for the emotion-vectors test, and is built and tested on the local AI server, where gufo runs (the maintainer, 2026-11-19).
+
+**Sending a reasoning effort** (added 2026-11-19). Raven sends none while thinking is on, because LM Studio honours neither a request's `reasoning_effort` nor its own setting; on LM Studio the effort lives in a customized chat template (`raven.librarian.llmclient.thinking_request_fields`). Some other OpenAI-compatible backends accept it, which matters once gufo is the usual backend.
+- **Where it goes**: a top-level `reasoning_effort`, which the check above found gufo takes, and/or `chat_template_kwargs`, which some backends accept (the maintainer's recollection). What gufo actually honours is to be measured, and the measurement wins over either recollection. A `chat_template_kwargs` value reaches the model's template, whose variable name depends on the model family.
+- **A setting, and a GUI selector for it in Librarian**, enabled only when the backend can honour it. So the flavor has to answer that question, which LM Studio's would answer with no.
+
 ## Per-call approval for MCP tools
 
 *Cluster: librarian-mcp · Cost: M, and the UX is the work · Gate: UX design; wanted soon after the MCP client · Filed: 2026-11-10 · See also: `briefs/librarian-extension/04_librarian-mcp-client-brief.md`*
