@@ -56,7 +56,9 @@ would be knowledge left on the floor. So this clears the bar the project already
 
 - **No assembler work in this build.** A definition is stored on the branch by `user_turn`, so the lorebook
   never passes through `data_injects` and has no per-turn candidate to emit. What it shares with the clock and
-  the document search is `scaffold._synthetic_tool_exchange`, which becomes public for it. The candidate-record
+  the document search is `scaffold._synthetic_tool_exchange`, now the one-call case of `_synthetic_tool_round`,
+  which stores several definitions as one parallel round; both stay private, the storing being in `scaffold`
+  too (2026-11-19). The candidate-record
   interface moves to the Hindsight brief, where the first second ephemeral source arrives.
 - **One folder, `lorebook_dir`** (`librarian_userdata_dir / "lorebook"`, beside `skills_dir`). Every `.md` in it
   is a source; the glossary is symlinked in, so there is no separate glossary-path setting. How a file splits:
@@ -100,9 +102,10 @@ would be knowledge left on the floor. So this clears the bar the project already
     the prompt files (`llmclient.watch_prompt_files`) and `mcp.json` — and none polls any more. A watched
     folder that is missing is created when watching starts.
   - **Progress (2026-11-19):** step 1, the stateless core (`lorebook.parse`, `find_matches`, `select`), landed
-    2026-11-16; step 2, `Lorebook` with its watcher, `lorebook_lookup` and `loaded`, today. **Next: step 3**,
-    `scaffold.user_turn` storing what fires on the branch; then step 4, the wiring (`agent.turn`, the app,
-    minichat, the tool's gate in `maybe_tool_names_for_turn`, README, changelog); then the key expansion.
+    2026-11-16; step 2, `Lorebook` with its watcher, `lorebook_lookup` and `loaded`, and step 3,
+    `scaffold.user_turn(..., lorebook_enabled=...)` storing what fires on the branch, today. **Next: step 4**, the
+    wiring (`agent.turn`, the app, minichat, the tool's gate in `maybe_tool_names_for_turn`, README,
+    changelog); then the key expansion.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 

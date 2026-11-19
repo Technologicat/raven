@@ -284,11 +284,13 @@ class Firing:
     `depth`: 0 for an entry whose term is in the text, n for one reached through n links from such an entry.
     `maybe_wording`: at depth 0, the text as written where the term was found; `None` deeper.
     `maybe_via`: deeper than 0, the id of the entry whose link brought this one in; `None` at depth 0.
+    `tokens`: what the entry costs in the budget, as `format_entry` gives it to the model.
     """
     entry: Entry
     depth: int
     maybe_wording: str | None
     maybe_via: str | None
+    tokens: int = 0
 
 def select(entries: Mapping[str, Entry],
            text: str,
@@ -321,12 +323,12 @@ def select(entries: Mapping[str, Entry],
         nonlocal remaining
         taken = []
         for firing in sorted(candidates, key=lambda firing: firing.entry.order):
-            cost = count_tokens(f"{firing.entry.title}\n\n{firing.entry.content}")
+            cost = count_tokens(format_entry(firing.entry))
             if cost > remaining:
                 logger.info(f"select: '{firing.entry.title}' fired but does not fit the budget ({cost} tokens, {remaining} left); skipped.")
                 continue
             remaining -= cost
-            taken.append(firing)
+            taken.append(dataclasses.replace(firing, tokens=cost))
         return taken
 
     matches = find_matches(entries, text)

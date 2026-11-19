@@ -2,6 +2,7 @@
 
 import copy
 import json
+import textwrap
 import threading
 
 import pytest  # noqa: F401 -- fixtures and marks below
@@ -10,6 +11,7 @@ from unpythonic.env import env
 
 from raven.common import netutil
 from raven.librarian import chattree, chatutil, textfilestore, imagestore, scaffold, sidecarstore
+from raven.librarian import llmtools, lorebook
 
 # This module used to open with an `importorskip` on `scaffold`, because importing it reached
 # `raven.client.api` and so required `spacy` and `av`, neither of which CI installs. `llmclient` now defers
@@ -225,6 +227,123 @@ class TestUserTurn:
                                       user_message_text="Hi there")
         content = chatutil.content_to_text(forest.get_payload(new_head)["message"]["content"])
         assert "Hi there" in content
+
+
+class TestUserTurnLorebook:
+    """A new message stores the lorebook entries it fires ahead of itself, as one round of `lorebook_lookup` calls."""
+
+    GLOSSARY = textwrap.dedent("""\
+        ## Hydra tax
+        Closing one item opens two. Paid as [attention rent](#attention-rent).
+
+        ## Attention rent
+        What an open item costs.
+
+        ## Same bath, different shampoo
+        A rerun under a new name.
+
+        ## Spork
+        A utensil.
+        """)
+
+    @pytest.fixture
+    def book(self, llm_settings):
+        llm_settings.lorebook_entries = {entry.id: entry for entry in lorebook.parse(self.GLOSSARY, name="glossary")}
+        return llm_settings
+
+    @staticmethod
+    def _send(llm_settings, forest, head, text, *, enabled=True):
+        return scaffold.user_turn(llm_settings=llm_settings, datastore=forest, head_node_id=head,
+                                  user_message_text=text, lorebook_enabled=enabled)
+
+    @staticmethod
+    def _reply(llm_settings, forest, head, text):
+        message = chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text=text)
+        return forest.create_node(payload=chatutil.create_payload(llm_settings=llm_settings, message=message), parent_id=head)
+
+    @staticmethod
+    def _given(forest, node_id):
+        """Ids of the entries the round directly above the user message `node_id` gave, in order."""
+        given, node_id = [], forest.get_parent(node_id)
+        while (metadata := forest.get_payload(node_id).get("generation_metadata", {})).get("lorebook_entry"):
+            given.append(metadata["lorebook_entry"])
+            node_id = forest.get_parent(node_id)
+        return list(reversed(given))
+
+    def test_a_term_fires_its_entry_and_the_entries_it_links_to(self, book, populated_forest):
+        forest, head = populated_forest
+        user_node = self._send(book, forest, head, "We pay a hydra tax on every feature.")
+        assert self._given(forest, user_node) == ["hydra-tax", "attention-rent"]
+        # Ahead of the message: one assistant message asking for both, then one result each.
+        assert roles_up(forest, user_node)[:4] == ["user", "tool", "tool", "assistant"]
+
+    def test_the_round_is_shaped_as_lookups_nobody_made(self, book, populated_forest):
+        forest, head = populated_forest
+        user_node = self._send(book, forest, head, "Isn't this different bath, same shampoo?")
+        result = forest.get_payload(forest.get_parent(user_node))
+        call = forest.get_payload(forest.get_parent(forest.get_parent(user_node)))
+        assert call["generation_metadata"]["automatic"] is True
+        assert chatutil.content_to_text(call["message"]["content"]) == "" and not call["message"].get("reasoning_content")
+        (tool_call,) = call["message"]["tool_calls"]
+        assert tool_call["function"]["name"] == llmtools.LOREBOOK_TOOL_NAME
+        # The call asks for the term as written; the result names the entry, so the difference is visible.
+        assert json.loads(tool_call["function"]["arguments"]) == {"term": "different bath, same shampoo"}
+        assert chatutil.content_to_text(result["message"]["content"]).startswith("Same bath, different shampoo\n\n")
+        assert result["message"]["tool_call_id"] == tool_call["id"]
+        assert result["generation_metadata"]["lorebook_tokens"] > 0
+
+    def test_nothing_is_stored_unless_enabled(self, book, populated_forest):
+        forest, head = populated_forest
+        user_node = self._send(book, forest, head, "We pay a hydra tax.", enabled=False)
+        assert forest.get_parent(user_node) == head
+
+    def test_an_entry_is_given_once_per_branch(self, book, populated_forest):
+        forest, head = populated_forest
+        first = self._send(book, forest, head, "A spork, please.")
+        assert self._given(forest, first) == ["spork"]
+        second = self._send(book, forest, self._reply(book, forest, first, "Here."), "Another spork.")
+        assert self._given(forest, second) == [], "given once on this branch already"
+        elsewhere = self._send(book, forest, head, "A spork on another branch.")
+        assert self._given(forest, elsewhere) == ["spork"], "another branch has not been given it"
+
+    def test_the_scan_reads_the_messages_just_before(self, book, populated_forest, monkeypatch):
+        monkeypatch.setattr(scaffold.librarian_config, "lorebook_scan_messages", 1)
+        forest, head = populated_forest
+        node = self._send(book, forest, head, "Hello.", enabled=False)
+        node = self._reply(book, forest, node, "Have a spork.")
+        node = self._send(book, forest, node, "Thanks.")
+        assert self._given(forest, node) == ["spork"], "the reply right before the message is in the window"
+
+    def test_the_scan_does_not_read_further_back(self, book, populated_forest, monkeypatch):
+        monkeypatch.setattr(scaffold.librarian_config, "lorebook_scan_messages", 1)
+        forest, head = populated_forest
+        node = self._send(book, forest, head, "Have a spork.", enabled=False)
+        node = self._reply(book, forest, node, "Sure.")
+        node = self._send(book, forest, node, "Thanks.")
+        assert self._given(forest, node) == [], "a term two messages back is outside a window of one"
+
+    def test_a_definition_given_earlier_is_not_scanned_again(self, book, populated_forest, monkeypatch):
+        # Hydra tax's definition mentions attention rent. At depth 0 only the hydra tax is given; if the stored
+        # definition were scanned with the next message, attention rent would fire there, past the depth limit.
+        monkeypatch.setattr(scaffold.librarian_config, "lorebook_max_depth", 0)
+        forest, head = populated_forest
+        first = self._send(book, forest, head, "We pay a hydra tax.")
+        assert self._given(forest, first) == ["hydra-tax"]
+        second = self._send(book, forest, self._reply(book, forest, first, "Indeed."), "What now?")
+        assert self._given(forest, second) == []
+
+    def test_the_per_chat_cap_stops_further_definitions(self, book, populated_forest, monkeypatch):
+        forest, head = populated_forest
+        first = self._send(book, forest, head, "A spork.")
+        spent = forest.get_payload(forest.get_parent(first))["generation_metadata"]["lorebook_tokens"]
+        monkeypatch.setattr(scaffold.librarian_config, "lorebook_chat_cap", spent)
+        second = self._send(book, forest, self._reply(book, forest, first, "Here."), "And a hydra tax.")
+        assert self._given(forest, second) == [], "the cap was spent on the spork"
+
+    def test_without_a_lorebook_nothing_happens(self, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_node = self._send(llm_settings, forest, head, "We pay a hydra tax.")
+        assert forest.get_parent(user_node) == head
 
 
 class TestUserTurnStagedImages:

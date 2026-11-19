@@ -53,6 +53,14 @@ lorebook_dir = librarian_userdata_dir / "lorebook"  # Markdown files of term def
 # The header level that delimits each lorebook file's entries, by filename, for a file the automatic rule reads
 # wrongly — e.g. `{"fron.md": 1}`. See `raven.librarian.lorebook.parse` for the rule.
 lorebook_entry_levels: dict[str, int] = {}
+# When the user sends a message, the lorebook entries whose terms are in it, or in this many messages before it,
+# are given to the AI, stored in the chat ahead of the message. So are the entries those lead to through their
+# links, this many links deep. Each entry is given once per branch of the chat.
+lorebook_scan_messages = 4
+lorebook_max_depth = 2
+# The most tokens of definitions given at once, and in a whole chat (once given, a definition stays in the chat).
+lorebook_budget = 2000
+lorebook_chat_cap = 8000
 mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

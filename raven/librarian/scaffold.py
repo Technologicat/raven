@@ -30,6 +30,8 @@ from . import chattree
 from . import chatutil
 from . import config as librarian_config
 from . import llmclient
+from . import llmtools
+from . import lorebook
 from . import skills
 
 # `hybridir` is only referenced by scaffold for type annotations (retriever
@@ -84,6 +86,80 @@ def _store_skill_activation(llm_settings: env,
     result_payload["generation_metadata"] = {"status": "success", "function_name": llmclient.SKILL_TOOL_NAME, **metadata}
     return datastore.create_node(payload=result_payload, parent_id=call_node_id)
 
+def _lorebook_on_branch(datastore: chattree.Forest, head_node_id: str) -> tuple[frozenset[str], int]:
+    """The lorebook entries already given on the branch ending at `head_node_id`, and the tokens they took."""
+    given, tokens = set(), 0
+    for node_id in datastore.linearize_up(head_node_id):
+        metadata = datastore.get_payload(node_id).get("generation_metadata", {})
+        if "lorebook_entry" in metadata:
+            given.add(metadata["lorebook_entry"])
+            tokens += metadata.get("lorebook_tokens", 0)
+    return frozenset(given), tokens
+
+def _lorebook_scan_text(datastore: chattree.Forest, head_node_id: str, user_message_text: str) -> str:
+    """The text a new message's lorebook scan reads: the message, and the last few messages before it."""
+    texts = []
+    for node_id in reversed(datastore.linearize_up(head_node_id)):  # newest first
+        if len(texts) >= librarian_config.lorebook_scan_messages:
+            break
+        payload = datastore.get_payload(node_id)
+        message = payload["message"]
+        # Definitions given earlier are left out: they are in the chat already, and the entries they link to
+        # were followed, to the depth limit, when they were given.
+        if message["role"] == "system" or "lorebook_entry" in payload.get("generation_metadata", {}):
+            continue
+        text = chatutil.content_to_text(message["content"])
+        if text.strip():
+            texts.append(text)
+    return "\n\n".join([*reversed(texts), user_message_text])
+
+def _store_lorebook_definitions(llm_settings: env,
+                                datastore: chattree.Forest,
+                                head_node_id: str,
+                                user_message_text: str) -> str:
+    """Store the lorebook entries a new message fires, on the branch ending at `head_node_id`. Returns its last node.
+
+    The entries go in as one round of `lorebook_lookup` calls that nobody made, ahead of the message, so that the
+    model reads them as material looked up before the question came. Each call asks for the term as the text
+    wrote it, and its result names the entry's title, so that a near spelling is visible as one.
+    """
+    entries = getattr(llm_settings, "lorebook_entries", None)
+    if not entries:
+        return head_node_id
+    given, used = _lorebook_on_branch(datastore, head_node_id)
+    budget = min(librarian_config.lorebook_budget, librarian_config.lorebook_chat_cap - used)
+    if budget <= 0:
+        logger.info(f"_store_lorebook_definitions: the chat's lorebook cap of {librarian_config.lorebook_chat_cap} tokens is spent; giving no more definitions.")
+        return head_node_id
+    firings = lorebook.select(entries,
+                              _lorebook_scan_text(datastore, head_node_id, user_message_text),
+                              count_tokens=lambda text: llmclient.count_tokens(llm_settings, text)[0],
+                              budget=budget,
+                              max_depth=librarian_config.lorebook_max_depth,
+                              already_fired=given)
+    if not firings:
+        return head_node_id
+
+    messages = _synthetic_tool_round(llm_settings,
+                                     [(f"raven_lorebook_{firing.entry.id}",
+                                       llmtools.LOREBOOK_TOOL_NAME,
+                                       {"term": firing.maybe_wording if firing.maybe_wording is not None else firing.entry.title},
+                                       lorebook.format_entry(firing.entry))
+                                      for firing in firings])
+    call_payload = chatutil.create_payload(llm_settings=llm_settings, message=messages[0])
+    call_payload["generation_metadata"] = {"status": "success", "automatic": True}
+    head_node_id = datastore.create_node(payload=call_payload, parent_id=head_node_id)
+    for firing, result_message in zip(firings, messages[1:]):
+        result_payload = chatutil.create_payload(llm_settings=llm_settings, message=result_message)
+        result_payload["generation_metadata"] = {"status": "success",
+                                                 "function_name": llmtools.LOREBOOK_TOOL_NAME,
+                                                 "lorebook_entry": firing.entry.id,
+                                                 "lorebook_tokens": firing.tokens}
+        head_node_id = datastore.create_node(payload=result_payload, parent_id=head_node_id)
+    titles = ", ".join(f"'{firing.entry.title}'" for firing in firings)
+    logger.info(f"_store_lorebook_definitions: gave {titles}, {sum(firing.tokens for firing in firings)} tokens.")
+    return head_node_id
+
 def user_turn(llm_settings: env,
               datastore: chattree.Forest,
               head_node_id: str,
@@ -92,7 +168,8 @@ def user_turn(llm_settings: env,
               staged_files: list[env] | None = None,
               *,
               add_persona: bool = True,
-              skills_enabled: bool = False) -> str:
+              skills_enabled: bool = False,
+              lorebook_enabled: bool = False) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -127,12 +204,18 @@ def user_turn(llm_settings: env,
     `skills_enabled`: Whether a message starting with `/skill-name` activates that skill. The exchange that
                       loads it is stored ahead of the message, which is what remains after the command.
 
+    `lorebook_enabled`: Whether the lorebook entries this message fires (`llm_settings.lorebook_entries`, from a
+                        `raven.librarian.lorebook.Lorebook`) are stored ahead of it, as `lorebook_lookup` calls.
+                        Pass `True` only for a turn that offers tools, those being calls to one.
+
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
     if skills_enabled:
         maybe_skill_name, user_message_text = skills.parse_user_activation(llm_settings, user_message_text)
         if maybe_skill_name is not None and maybe_skill_name not in _activated_skills(datastore, head_node_id):
             head_node_id = _store_skill_activation(llm_settings, datastore, head_node_id, maybe_skill_name)
+    if lorebook_enabled:
+        head_node_id = _store_lorebook_definitions(llm_settings, datastore, head_node_id, user_message_text)
 
     message = chatutil.create_chat_message(llm_settings=llm_settings,
                                            role="user",
@@ -519,6 +602,18 @@ def _synthetic_tool_exchange(llm_settings: env,
     One `tool` message per call, as the OpenAI schema describes - a `tool` message answers exactly one
     `tool_call_id`. So a set of retrieval matches rides as a single message, not one message per match;
     sharing one call id across many messages is the shape that Gemma4-E4B reads as nothing at all.
+
+    The one-call case of `_synthetic_tool_round`, which see.
+    """
+    return _synthetic_tool_round(llm_settings, [(call_id, function_name, arguments, result_text)])
+
+def _synthetic_tool_round(llm_settings: env,
+                          calls: list[tuple[str, str, dict, str]]) -> list[dict]:
+    """Return `[assistant message requesting the tool calls, one tool message answering each]`, for injected data.
+
+    `calls`: `(call_id, function_name, arguments, result_text)` per call, in order.
+
+    The shape of a model asking for several tools at once, which is how the agent loop stores such a round.
     """
     call_message = chatutil.create_chat_message(llm_settings=llm_settings,
                                                 role="assistant",
@@ -527,13 +622,17 @@ def _synthetic_tool_exchange(llm_settings: env,
                                                 tool_calls=[{"id": call_id,
                                                              "type": "function",
                                                              "function": {"name": function_name,
-                                                                          "arguments": json.dumps(arguments)}}])
-    result_message = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                  role="tool",
-                                                  add_persona=False,
-                                                  text=result_text)
-    result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
-    return [call_message, result_message]
+                                                                          "arguments": json.dumps(arguments)}}
+                                                            for call_id, function_name, arguments, _ in calls])
+    result_messages = []
+    for call_id, _, _, result_text in calls:
+        result_message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                                      role="tool",
+                                                      add_persona=False,
+                                                      text=result_text)
+        result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
+        result_messages.append(result_message)
+    return [call_message, *result_messages]
 
 def build_system_preamble(llm_settings: env) -> list[str]:
     """The system injects this turn puts *before* the standing system prompt: the first of the two kinds.
