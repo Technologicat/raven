@@ -2,9 +2,13 @@
 
 import pathlib
 import textwrap
+import time
 
 import pytest
+from unpythonic.env import env
 
+from raven.librarian import llmclient
+from raven.librarian import llmtools
 from raven.librarian import lorebook
 
 
@@ -279,6 +283,130 @@ class TestSelect:
 
     def test_nothing_in_the_text_fires_nothing(self, entries):
         assert self._select(entries, "nothing relevant here") == []
+
+
+class TestLookup:
+    @pytest.fixture
+    def entries(self):
+        return _by_id(_parse("""\
+            ## Hydra tax
+            Closing one opens two.
+            ## Hydra test
+            A test with heads.
+            ## Same bath, different shampoo
+            A rerun.
+            ## Fup (fuppable)
+            Not a typo.
+            ## Spork
+            A utensil.
+            """))
+
+    def test_the_words_of_a_key_in_any_case_and_order(self, entries):
+        found = lorebook.lookup(entries, "SHAMPOO different same bath")
+        assert found.exact and found.maybe_entry.id == "same-bath-different-shampoo"
+
+    def test_an_alias_is_a_key(self, entries):
+        assert lorebook.lookup(entries, "fuppable").maybe_entry.id == "fup"
+
+    def test_one_near_miss_is_taken_as_meant(self, entries):
+        found = lorebook.lookup(entries, "sprok")
+        assert not found.exact and found.maybe_entry.id == "spork"
+
+    def test_several_near_misses_are_offered_by_title(self, entries):
+        found = lorebook.lookup(entries, "hydra te")
+        assert found.maybe_entry is None and set(found.candidates) == {"Hydra tax", "Hydra test"}
+
+    def test_nothing_close_is_not_defined(self, entries):
+        found = lorebook.lookup(entries, "photosynthesis")
+        assert found.maybe_entry is None and found.candidates == ()
+
+    def test_the_answers_the_model_reads(self, entries):
+        assert lorebook._answer(entries, "spork") == "Spork\n\nA utensil."
+        assert lorebook._answer(entries, "sprok").startswith(lorebook.CANONICAL_NEAR_MISS.format(term="sprok", title="Spork"))
+        assert "'Hydra tax'" in lorebook._answer(entries, "hydra te")
+        assert lorebook._answer(entries, "photosynthesis") == lorebook.CANONICAL_NOT_DEFINED.format(term="photosynthesis")
+
+
+class TestLorebook:
+    @pytest.fixture
+    def settings(self):
+        model_info = env(label="m", model_id="m", context_length=4096, is_vlm=False, loaded=True)
+        return llmclient.configure(model_info=model_info, backend_flavor="generic", backend_url="http://x", quiet=True)
+
+    @pytest.fixture
+    def folder(self, tmp_path):
+        folder = tmp_path / "lorebook"
+        folder.mkdir()
+        (folder / "glossary.md").write_text("## Spork\nA utensil.\n\n## Fup\nNot a typo.\n", encoding="utf-8")
+        return folder
+
+    @staticmethod
+    def _wait_until(predicate, timeout=10.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.02)
+        return False
+
+    def test_the_entries_and_the_tool_are_in_the_settings(self, settings, folder):
+        with lorebook.loaded(settings, directory=folder) as book:
+            assert list(book.entries) == ["spork", "fup"]
+            assert list(settings.lorebook_entries) == ["spork", "fup"]
+            assert settings.tool_entrypoints[llmtools.LOREBOOK_TOOL_NAME](term="spork") == "Spork\n\nA utensil."
+            assert llmtools.LOREBOOK_TOOL_NAME in {spec["function"]["name"] for spec in settings.tools}
+        assert llmtools.LOREBOOK_TOOL_NAME not in settings.tool_entrypoints, "leaving the block removes the tool"
+        assert settings.lorebook_entries == {}
+
+    def test_an_empty_lorebook_offers_no_tool(self, settings, tmp_path):
+        with lorebook.loaded(settings, directory=tmp_path / "nope") as book:
+            assert book.entries == {} and llmtools.LOREBOOK_TOOL_NAME not in settings.tool_entrypoints
+
+    def test_watching_creates_a_missing_folder_whose_readme_is_no_entry(self, settings, tmp_path):
+        folder = tmp_path / "lorebook"
+        with lorebook.loaded(settings, directory=folder):
+            assert not folder.exists(), "a script neither creates nor follows the folder"
+        book = lorebook.Lorebook(settings, directory=folder)
+        book.start(watch=True)
+        try:
+            assert (folder / "README.md").read_text(encoding="utf-8").startswith("# Put your lorebook entries here")
+            assert book.entries == {} and not book.problems
+        finally:
+            book.shutdown()
+
+    def test_an_entry_added_while_watching_is_offered_and_announced(self, settings, folder):
+        calls = []
+        book = lorebook.Lorebook(settings, directory=folder, on_changed=lambda: calls.append(1))
+        book.start(watch=True)
+        try:
+            assert llmtools.LOREBOOK_TOOL_NAME in settings.tool_entrypoints
+            (folder / "jazz.md").write_text("# Jazz\nImprovised.\n", encoding="utf-8")
+            assert self._wait_until(lambda: "jazz" in settings.lorebook_entries)
+            assert self._wait_until(lambda: calls)
+            assert settings.tool_entrypoints[llmtools.LOREBOOK_TOOL_NAME](term="jazz") == "Jazz\n\nImprovised."
+        finally:
+            book.shutdown()
+
+    def test_an_edited_definition_is_read_again_without_an_announcement(self, settings, folder):
+        calls = []
+        book = lorebook.Lorebook(settings, directory=folder, on_changed=lambda: calls.append(1))
+        book.start(watch=True)
+        try:
+            (folder / "glossary.md").write_text("## Spork\nA fork that is also a spoon.\n\n## Fup\nNot a typo.\n", encoding="utf-8")
+            assert self._wait_until(lambda: settings.lorebook_entries["spork"].content == "A fork that is also a spoon.")
+            assert calls == [], "the same entries, so nothing for a frontend to update"
+        finally:
+            book.shutdown()
+
+    def test_a_script_does_not_follow_the_folder(self, settings, folder):
+        with lorebook.loaded(settings, directory=folder):
+            (folder / "jazz.md").write_text("# Jazz\nImprovised.\n", encoding="utf-8")
+            time.sleep(0.5)
+            assert "jazz" not in settings.lorebook_entries
+
+    def test_a_path_may_be_str_or_path(self, settings, folder):
+        with lorebook.loaded(settings, directory=str(folder)) as book:
+            assert list(book.entries) == ["spork", "fup"]
 
 
 @pytest.mark.skipif(not (pathlib.Path.home() / "Documents/koodit/substrate-independent/glossary.md").exists(),

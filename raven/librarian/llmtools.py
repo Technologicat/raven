@@ -48,7 +48,7 @@ __all__ = ["TOOLS",
            "CANONICAL_BAD_EXPRESSION", "calculate",
 
            # How the agent loop reaches all of the above.
-           "TOOL_ENTRYPOINTS", "SKILL_TOOL_NAME", "maybe_tool_names_for_turn", "replace_tools", "offered_tools",
+           "TOOL_ENTRYPOINTS", "SKILL_TOOL_NAME", "LOREBOOK_TOOL_NAME", "maybe_tool_names_for_turn", "replace_tools", "offered_tools",
            "CANONICAL_TOOL_CALL_CANCELLED", "perform_tool_calls"]
 
 import logging
@@ -890,6 +890,9 @@ TOOL_ENTRYPOINTS = {"websearch": websearch,
 
 # The tool the skills are read through, when there are any; see `raven.librarian.skills`.
 SKILL_TOOL_NAME = "activate_skill"
+
+# The tool the lorebook's definitions are looked up with, when there are any; see `raven.librarian.lorebook`.
+LOREBOOK_TOOL_NAME = "lorebook_lookup"
 
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool,

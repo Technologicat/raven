@@ -49,6 +49,10 @@ llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used if it 
 # See `raven.librarian.mcpclient.load_config`.
 mcp_config_file = librarian_userdata_dir / "mcp.json"  # will be used if it exists, ignored if not.
 skills_dir = librarian_userdata_dir / "skills"  # one folder per agent skill, each holding a `SKILL.md`; see `raven.librarian.skills`
+lorebook_dir = librarian_userdata_dir / "lorebook"  # Markdown files of term definitions; see `raven.librarian.lorebook`
+# The header level that delimits each lorebook file's entries, by filename, for a file the automatic rule reads
+# wrongly — e.g. `{"fron.md": 1}`. See `raven.librarian.lorebook.parse` for the rule.
+lorebook_entry_levels: dict[str, int] = {}
 mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

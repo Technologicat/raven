@@ -98,7 +98,11 @@ would be knowledge left on the floor. So this clears the bar the project already
   skills are typically linked in as folders from a repository.
   - **Progress (2026-11-16):** every watcher in Librarian is on `filewatch` — HybridIR, the skills library,
     the prompt files (`llmclient.watch_prompt_files`) and `mcp.json` — and none polls any more. A watched
-    folder that is missing is created when watching starts. **Next: the lorebook itself.**
+    folder that is missing is created when watching starts.
+  - **Progress (2026-11-19):** step 1, the stateless core (`lorebook.parse`, `find_matches`, `select`), landed
+    2026-11-16; step 2, `Lorebook` with its watcher, `lorebook_lookup` and `loaded`, today. **Next: step 3**,
+    `scaffold.user_turn` storing what fires on the branch; then step 4, the wiring (`agent.turn`, the app,
+    minichat, the tool's gate in `maybe_tool_names_for_turn`, README, changelog); then the key expansion.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
@@ -139,7 +143,7 @@ would be knowledge left on the floor. So this clears the bar the project already
 - **Languages are a setting**, `lorebook_languages`, English and Finnish by default; the prompt asks for loan
   forms too (*duolectissa*), Finnish speakers inflecting English terms.
 - **A stem's false positives need a guard derived rather than tuned**: there is no Finnish corpus to calibrate
-  on, the maintainer's working material being English. Proposed: a stem must share at least its word's length
+  on, the maintainer's working material being English. Agreed (2026-11-19): a stem must share at least its word's length
   minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
   (*kaupunki → kaupungissa* keeps *kaupun-*). A stem failing it is dropped, which can only cost a miss.
 - **The Finnish the LLM writes is unmeasured.** Qwens from 3.5 on read Finnish well; writing it has been broken
