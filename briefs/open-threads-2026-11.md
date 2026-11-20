@@ -49,12 +49,12 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 - **The AOKK scoping review: next are year filtering and clusters from the final keeps** (the maintainer,
   2026-11-19).
-  - **Year filtering is ready to start**: the `raven-siftbib` criterion (S), then live filtering in the
+  - **Year filtering**: `raven-siftbib --where` is done (2026-11-20); next, live filtering in the
     Visualizer, which the date-filter brief now puts first.
   - **The clusters wait twice**: on the team's keep-sample ratings, which fix the final keeps, and on our design
     discussion of LLM grouping at about 2,000 records.
   - Then rules v2 and probably a new LLM run.
   The meeting of 2026-11-19 settled the corpus's edges (the excluded ProQuest collection out, ERIC at 247) and
-  asked for year-based work: a year criterion in `raven-siftbib` (S, ready to build), year-specific maps compared with live
+  asked for year-based work: a year criterion in `raven-siftbib` (done 2026-11-20), year-specific maps compared with live
   year filtering, and whether LLM grouping scales to the final keeps (about 2,000), design to be discussed first. `investigations/aokk-corpus-scope/README.md`, that meeting's
   section, points to each.

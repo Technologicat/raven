@@ -14,7 +14,7 @@ Year-specific maps, to see how the topics changed from 2022 to 2026
 (`investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-19). Two routes, and the team named both:
 
 - **Prefilter, then import**: sift the bibliography by year and import each slice. It needs no new Visualizer code,
-  only a year criterion in `raven-siftbib` (`TODO.md`, *Papers tooling*). Each slice is its own map, with clusters
+  only `raven-siftbib --where 'year==2023'` per slice, or two `--where` for a range (since 2026-11-20). Each slice is its own map, with clusters
   of its own, so the slices' clusters do not correspond to each other.
 - **Filter live**: candidate 1 below, over one map of the whole corpus. The clusters stay the same across years,
   which is what a comparison over time wants.

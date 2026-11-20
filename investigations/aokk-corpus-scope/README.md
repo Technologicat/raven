@@ -1067,7 +1067,7 @@ released in November 2022, so that span holds nearly the whole history of the to
 the topics have changed over the years possible, giving an overview of how AI agents have been used in education.
 
 - **Records from before 2022 are strays** the search engines returned against the search's limits. They are
-  removed by sifting. `raven-siftbib` cannot yet say "year at least 2022"; see `TODO.md`, *Papers tooling*.
+  removed by sifting: `raven-siftbib --where 'year>=2022'` (since 2026-11-20).
 - **Year-specific maps** are wanted, by either of two routes: sift by year and import each slice with the existing
   importer, or filter the full dataset by year live in the Visualizer. The second is
   `../../briefs/visualizer-filter-by-date-and-recolour-brief.md`.
