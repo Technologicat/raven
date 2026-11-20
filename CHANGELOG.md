@@ -264,6 +264,18 @@
 - **The pose editor's output index chooser names each output**, such as *"9: face morpher, eye alpha"*, where it showed bare numbers.
   - The avatar README has a new section on what the outputs are, with the whole table.
 
+#### Raven-arxiv2id
+
+- **Other publishers' paper numbers in a filename are no longer taken for arXiv identifiers.**
+  - A short word and seven digits, as in `journal.pcbi.1010628.pdf` or `ssrn-4814445.pdf`, passed for a pre-2007 arXiv identifier, and `raven-arxiv2bib` then failed on it.
+  - Only the archives arXiv had, such as `hep-th` or `alg-geom`, now count.
+
+#### Raven-arxiv2bib
+
+- **An identifier arXiv rejects no longer loses the whole run.**
+  - arXiv rejects a batch that holds a malformed identifier, and the run stopped there without writing the records already fetched.
+  - A rejected batch is now asked again one identifier at a time, and the rejected identifiers are reported with the others that returned nothing.
+
 #### Raven-pdf2bib
 
 - **An LLM backend failing mid-run no longer writes its error message into the BibTeX as a field.** It used to pass for an answer.

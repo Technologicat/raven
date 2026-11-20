@@ -2,6 +2,8 @@
 
 import pathlib
 
+import pytest
+
 from raven.papers.identifiers import (
     ARXIV_NEW_ID_RE,
     ARXIV_OLD_ID_RE,
@@ -158,6 +160,24 @@ class TestArxivOldIdRegex:
         m = ARXIV_OLD_ID_RE.search("Smith 2003 hep-ex_0307015v1.pdf")
         assert m.group(1) == "hep-ex"
         assert m.group(2) == "0307015"
+
+    def test_preceded_by_hyphen_ok(self):
+        m = ARXIV_OLD_ID_RE.search("Smith-hep-th-0601001.pdf")
+        assert m.group(1) == "hep-th"
+
+    # -- Only archives arXiv had --
+
+    @pytest.mark.parametrize("filename", ["journal.pcbi.1010628.pdf", "pcbi/1010628", "pone_0314658.pdf",
+                                          "ssrn-4814445.pdf", "nihms/1535836", "lumat/1312612"])
+    def test_other_publishers_identifiers_rejected(self, filename):
+        """Seven digits after a short word is also how other publishers number papers."""
+        assert ARXIV_OLD_ID_RE.search(filename) is None
+
+    @pytest.mark.parametrize("archive", ["alg-geom", "chao-dyn", "cmp-lg", "supr-con"])
+    def test_merged_archives_accepted(self, archive):
+        """Archives since merged into others still name their old papers."""
+        m = ARXIV_OLD_ID_RE.search(f"{archive}/9701001v1")
+        assert m.group(1) == archive
         assert m.group(3) == "v1"
 
 

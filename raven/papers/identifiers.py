@@ -44,13 +44,27 @@ from .. import __version__
 # letters, or hyphens in filenames still match.
 ARXIV_NEW_ID_RE = re.compile(r"(?<!\d)(\d{4}\.\d{4,5})(v\d+)?(?!\d)")
 
-# Old-style arXiv IDs: subject-class/YYMMNNN (pre-Apr 2007).
-# In filenames, the canonical ``/`` is commonly replaced by ``-``, ``_``,
-# or ``.``.  Subject classes: ``math``, ``hep-th``, ``cs.AI``, etc.
-# Length limits on each segment keep false positives low.
+# Old-style arXiv IDs: archive/YYMMNNN (pre-Apr 2007), optionally with a subject class, ``math.GT/0309136``.
+# In filenames, the canonical ``/`` is commonly replaced by ``-``, ``_``, or ``.``.
+#
+# The archive must be one arXiv had. Any short word would also match other publishers' identifiers kept in
+# filenames — ``pcbi/1010628`` (PLOS Computational Biology), ``ssrn/4814445`` — which arXiv answers with
+# an error. The archives existing today are from https://arxiv.org/category_taxonomy (checked 2026-11-20);
+# of those merged into others since, the identifier documentation names ``alg-geom``, and the rest are
+# listed from memory. Archives founded after the switch to new-style IDs (``q-fin``, ``stat``, ``eess``,
+# ``econ``) never had old-style ones.
+_ARXIV_OLD_ARCHIVES = (
+    # existing
+    "astro-ph", "cond-mat", "cs", "gr-qc", "hep-ex", "hep-lat", "hep-ph", "hep-th", "math", "math-ph",
+    "nlin", "nucl-ex", "nucl-th", "physics", "q-bio", "quant-ph",
+    # merged into others
+    "acc-phys", "adap-org", "alg-geom", "ao-sci", "atom-ph", "bayes-an", "chao-dyn", "chem-ph", "cmp-lg",
+    "comp-gas", "dg-ga", "funct-an", "mtrl-th", "patt-sol", "plasm-ph", "q-alg", "solv-int", "supr-con",
+)
 ARXIV_OLD_ID_RE = re.compile(
     r"(?<![a-zA-Z])"                        # not preceded by a letter
-    r"([a-z]{1,7}(?:-[a-z]{1,3})?(?:\.[A-Z][A-Z])?)"  # subject class
+    r"((?:" + "|".join(re.escape(a) for a in sorted(_ARXIV_OLD_ARCHIVES, key=len, reverse=True)) + r")"
+    r"(?:\.[A-Z][A-Z])?)"                   # archive, and optional subject class
     r"[-_./]"                               # separator
     r"(\d{7})"                              # 7-digit paper number
     r"(v\d+)?"                              # optional version

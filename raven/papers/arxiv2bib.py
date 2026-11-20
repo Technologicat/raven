@@ -103,6 +103,24 @@ def read_identifiers(maybe_paths: list[str], stream=None) -> list[str]:
     return identifiers
 
 
+def _fetch_once(identifiers: list[str]) -> list | None:
+    """One request for `identifiers`: the feed's entries, or `None` when arXiv rejects the request.
+
+    arXiv rejects a request naming a malformed identifier, with HTTP 400 or with an error reported as a
+    single entry, which an unchecked fetch would take for a record. Any other failure raises.
+    """
+    response = httpfetch.polite_get(papers_config.arxiv_api_url,
+                                    params={"id_list": ",".join(identifiers), "max_results": len(identifiers)},
+                                    timeout=30)
+    if getattr(response, "status_code", 200) == 400:
+        return None
+    response.raise_for_status()
+    feed = feedparser.parse(response.text)
+    if feed.entries and "api/errors" in feed.entries[0].get("id", ""):
+        return None
+    return feed.entries
+
+
 def fetch_metadata(identifiers: list[str], batch_size: int = papers_config.arxiv_id_batch_size) -> list:
     """Fetch arXiv metadata for `identifiers`, in batches, respecting the rate limit.
 
@@ -110,7 +128,8 @@ def fetch_metadata(identifiers: list[str], batch_size: int = papers_config.arxiv
 
     Identifiers arXiv does not return are silently absent from the result rather than raising — a
     mistyped or withdrawn identifier should not discard the several hundred that worked. The caller is
-    expected to diff the request against the result and report the gap; `main` does.
+    expected to diff the request against the result and report the gap; `main` does. That includes an
+    identifier arXiv rejects as malformed: a batch it rejects is asked again one identifier at a time.
     """
     rate_limiter = RateLimiter(papers_config.arxiv_request_delay)
     entries: list = []
@@ -118,18 +137,23 @@ def fetch_metadata(identifiers: list[str], batch_size: int = papers_config.arxiv
     for start in range(0, len(identifiers), batch_size):
         batch = identifiers[start:start + batch_size]
         rate_limiter.wait()
-        response = httpfetch.polite_get(papers_config.arxiv_api_url,
-                                        params={"id_list": ",".join(batch), "max_results": len(batch)},
-                                        timeout=30)
-        response.raise_for_status()
-        feed = feedparser.parse(response.text)
+        batch_entries = _fetch_once(batch)
+        if batch_entries is None and len(batch) > 1:
+            print(f"  arXiv rejected a batch of {len(batch)}; asking for each identifier separately",
+                  file=sys.stderr)
+            batch_entries = []
+            for identifier in batch:
+                rate_limiter.wait()
+                one = _fetch_once([identifier])
+                if one is None:
+                    print(f"  arXiv rejected identifier {identifier}", file=sys.stderr)
+                else:
+                    batch_entries.extend(one)
+        elif batch_entries is None:
+            print(f"  arXiv rejected identifier {batch[0]}", file=sys.stderr)
+            batch_entries = []
 
-        # arXiv reports errors as a single entry rather than an HTTP status, so a malformed request looks
-        # like a successful fetch of one useless record unless this is checked.
-        if feed.entries and "api/errors" in feed.entries[0].get("id", ""):
-            raise RuntimeError(f"arXiv API error: {feed.entries[0].get('summary', 'unknown')}")
-
-        entries.extend(feed.entries)
+        entries.extend(batch_entries)
         print(f"  fetched {len(entries)} / {len(identifiers)}", file=sys.stderr)
 
     return entries

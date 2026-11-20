@@ -102,11 +102,13 @@ def _error_feed(message: str) -> str:
 
 
 class _FakeResponse:
-    def __init__(self, text):
+    def __init__(self, text, status_code=200):
         self.text = text
+        self.status_code = status_code
 
     def raise_for_status(self):
-        pass
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class _FakeHttpfetch:
@@ -158,11 +160,30 @@ class TestFetchMetadata:
         assert [e.title for e in entries] == ["A", "B", "C"]
         assert [c["id_list"] for c in fake.calls] == ["2301.00001,2301.00002", "2301.00003"]
 
-    def test_api_errors_are_raised_not_returned(self):
+    def test_api_errors_are_not_returned_as_records(self):
         """arXiv reports errors as a normal-looking entry, so an unchecked fetch 'succeeds' with junk."""
         ctx, _fake = self._patch([_FakeResponse(_error_feed("incorrect id format"))])
-        with ctx, pytest.raises(RuntimeError, match="incorrect id format"):
-            fetch_metadata(["not-an-id"])
+        with ctx:
+            entries = fetch_metadata(["not-an-id"])
+        assert entries == []
+
+    def test_a_rejected_batch_is_asked_again_one_at_a_time(self):
+        """One malformed identifier makes arXiv reject its whole batch; the rest must still come back."""
+        ctx, fake = self._patch([_FakeResponse("", status_code=400),
+                                 _FakeResponse(_atom_feed([("2301.00001", "A")])),
+                                 _FakeResponse("", status_code=400),
+                                 _FakeResponse(_atom_feed([("2301.00002", "B")]))])
+        with ctx:
+            entries = fetch_metadata(["2301.00001", "pcbi/1010628", "2301.00002"])
+        assert [e.title for e in entries] == ["A", "B"]
+        assert [c["id_list"] for c in fake.calls] == ["2301.00001,pcbi/1010628,2301.00002",
+                                                      "2301.00001", "pcbi/1010628", "2301.00002"]
+
+    def test_other_http_failures_still_raise(self):
+        """Only a rejection is retried; a server that is down is not a malformed identifier."""
+        ctx, _fake = self._patch([_FakeResponse("", status_code=503)])
+        with ctx, pytest.raises(RuntimeError, match="503"):
+            fetch_metadata(["2301.00001"])
 
     def test_missing_identifiers_do_not_discard_the_rest(self):
         """A withdrawn or mistyped identifier must not cost the several hundred that worked."""
