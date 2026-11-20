@@ -991,6 +991,11 @@ with dpg.tooltip(btn):
 
 This is non-negotiable: surfacing the key right on the control it triggers is how users learn the shortcuts in flow. A feature reachable by keyboard but only listed in the help card is a UX miss — most software in the wild gets this wrong; Raven apps don't.
 
+**Don't wall-of-text the user** (the maintainer, 2026-11-20). How to apply it is decided case by case. Most
+tooltips name their key right after the description, on the same line or the next. A control whose keyboard
+explanation runs to several lines wants a paragraph break before the keys, as one logical whole: the Visualizer's
+filter selectors, whose description is followed by a blank line and then a key per line.
+
 There is no shared keymap — bindings live in the hotkey handler, and these surfaces mirror them by hand (KISS; hotkeys change rarely). Keep a comment at the hotkey handler reminding the next dev to update both surfaces when adding, removing, or rebinding a key:
 
 ```python
