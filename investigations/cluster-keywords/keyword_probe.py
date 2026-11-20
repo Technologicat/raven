@@ -336,7 +336,7 @@ def ctfidf(candidates: list[set[str]], labels: list[int], *, min_support: int = 
     for label, tf in cluster_tf.items():
         scored = [(term, weight(count, cluster_size[label], term), count / cluster_size[label])
                   for term, count in tf.items() if count >= min_support]
-        scored.sort(key=lambda item: -item[1])
+        scored.sort(key=lambda item: (-item[1], item[0]))  # ties by term, so a run does not depend on set order
         ranked[label] = scored
     return ranked
 

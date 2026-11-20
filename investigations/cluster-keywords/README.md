@@ -11,6 +11,8 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 ## The script
 
+- **`measure_centroids.py DATASET.pickle ...`**: whether the rerank favours terms many clusters share,
+  from the caches `keyword_probe.py --rerank` leaves; embeds nothing.
 - **`run_llm_imports.sh`**: imports the test corpora with LLM cluster keywords, for the comparison.
 - **`keyword_probe.py DATASET.pickle`**: reads a dataset as the importer wrote it, extracts candidate terms
   afresh with spaCy (`en_core_web_sm`, CPU), and writes `out/<dataset>.md`, setting the methods below side by
@@ -143,9 +145,9 @@ where this cluster differs from the corpus):
 | geography | 93% / 93% | 71% / 90% | 88% / 96% | 90% / 93% | 93% / 94% |
 | health education | 88% / 100% | 92% / 97% | 96% / 100% | 100% / 99% | 100% / 99% |
 
-- **The rerank alone favours what the whole corpus is about.** A cluster's centroid in a single-topic corpus
-  lies near the corpus's generic phrases, so AOKK's labels fill with *learning process*, *educator*, *task*,
-  and hydrogen's repeat *photocatalytic hydrogen production* in 15 clusters. Centering helps, not enough.
+- **The rerank alone reads worse on AOKK and hydrogen**: AOKK's labels fill with *learning process*,
+  *educator*, *task*, and hydrogen's repeat *photocatalytic hydrogen production* in 15 clusters. Why is
+  not settled; see the measurement below, which rejects the first explanation offered.
 - **On the distinctive pool it does what it was for**: the tail stops picking noise for its rarity. AOKK's
   *gender*, *effect size*, *base* give way to *technology acceptance model*, *bayesian knowledge tracing*,
   *learner model*, *prompt engineering*, *educational data mining*; geography's tail becomes *spatial
@@ -155,6 +157,31 @@ where this cluster differs from the corpus):
   sometimes drops a good term, as SRL's phases *forethought* and *monitoring*.
 - **Not settled by the table.** The labels have to be read, and the LLM imports (`run_llm_imports.sh`,
   running) are for comparing against.
+
+### Does the rerank favour generic terms? (`measure_centroids.py`)
+
+The explanation first written here was that a single-topic corpus's cluster centroids lie near the corpus's
+generic phrases, so similarity to a centroid rewards them. Measured on the six corpora: *centroid closeness*
+is the mean cosine between each cluster's centroid and the corpus mean; *generality bias* the Spearman
+correlation, within each cluster's pool of 30, between a term's similarity to the centroid and the number
+of clusters it is present in; *clusters per pick* that number averaged over the six terms each method picks.
+
+| dataset | centroid closeness | generality bias, raw / centered | clusters per pick: c-TF-IDF / rerank / rerank centered |
+|---|---|---|---|
+| hydrogen | 0.843 | −0.06 / −0.05 | 7.4 / 9.1 / 13.8 |
+| AOKK, latest | 0.884 | −0.15 / −0.31 | 16.5 / 17.2 / 19.7 |
+| ECCOMAS | 0.854 | −0.29 / −0.29 | 11.9 / 5.4 / 11.9 |
+| biology | 0.944 | +0.17 / −0.15 | 4.8 / 3.9 / 3.8 |
+| geography | 0.934 | +0.21 / −0.16 | 5.2 / 3.7 / 3.6 |
+| health education | 0.945 | +0.03 / −0.13 | 3.0 / 1.7 / 2.5 |
+
+- **The explanation does not hold in general.** Within a pool, the terms nearest the centroid tend to be the
+  *less* shared ones on every large corpus; the rerank's picks are more generic than c-TF-IDF's on
+  hydrogen, about as generic on AOKK, and less generic on the other four.
+- **Centroid closeness separates the corpora little**: AOKK, the single-topic one, is highest of the large
+  three, by a few hundredths. The small corpora score highest because each of their few clusters is a large
+  share of the corpus.
+- **Centering makes the picks more generic on hydrogen and AOKK**, the opposite of its intent.
 
 ## Open
 
