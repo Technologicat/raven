@@ -736,6 +736,7 @@ path rather than adding beside it. All under `00_stuff/`, so on the maintainer's
 | hydrogen production | `00_stuff/datasets/out-2026-11.pickle` | ~12k records |
 | AOKK, latest | `00_stuff/rawdata/AOKK/scopebib-2026-11-full/run-without-retracted/kept-and-held-agglomerative-fullmap.pickle` | ~2k |
 | ECCOMAS 2024 | `00_stuff/datasets/eccomas2024.pickle` | ~2.5k |
+| arXiv, AI papers | `00_stuff/datasets/ai_papers/ai_papers_202611.bib`, BibTeX to import | ~1.3k |
 | biology education, final | `00_stuff/rawdata/biology_geography_health_education/202508/biology.pickle` | ~170 |
 | geography education, final | `00_stuff/rawdata/biology_geography_health_education/202512/geography.pickle` | ~130, LLM keywords |
 | health education, as in the manuscript | `00_stuff/rawdata/biology_geography_health_education/202610/scopebib-2026-10-29e/visualizer-llm-topic.pickle` | 40, 7 LLM themes |

@@ -185,6 +185,18 @@ of clusters it is present in; *clusters per pick* that number averaged over the 
 
 ## Open
 
+**Which method, not yet decided** (the maintainer, 2026-11-20): no clear winner among `phrase-mix1`,
+`phrase-mix2`, `mix-rerank` and `mix-rerank-c`. The `phrase-mix` labels read more easily; the `mix-rerank`
+ones find specific concepts, as *bayesian knowledge tracing*. Judging on AOKK is confounded, its clusters
+being unfamiliar to the person reading them, so the next judgement is on the arXiv corpus, which the
+maintainer knows:
+
+1. `keyword_probe.py --rerank data/arxiv.pickle` (imported 2026-11-20 with LLM keywords, from
+   `00_stuff/datasets/ai_papers/ai_papers_202611.bib`), and the maintainer reads the labels.
+2. The same on the other LLM imports in `data/`, for the comparison against the LLM keyworder.
+3. Then pick the method, and plan it into the importer; after that, colouring by year v0
+   (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
+
 - **"state of the art" yields *art***, and *GIS* did not merge with *geographical information system*.
 - **Against the LLM keyworder**: `run_llm_imports.sh` imports each corpus with LLM keywords on agglomerative
   clusters into `data/`, one corpus at a time, resuming after the last one finished.
