@@ -171,7 +171,8 @@ would be knowledge left on the floor. So this clears the bar the project already
   - **A translated term is out of reach of inflection** (*EQ curve* → *EQ-käyrän*). The author's way in is an
     alias, `## EQ curve (EQ-käyrä)`, which then inflects like any key. Asking the expansion for the term's
     rendering in each configured language, as extra keys, is a possible follow-up, not built: translating a
-    coinage is dubious (*hydra tax* → *hydravero*?).
+    coinage is a judgement call, and a model's rendering may not be the one its user would say. Sometimes it
+    is: *hydravero* reads exactly right to the maintainer.
 - **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`,
   run as a `sweep.Sweep` over the terms with its `Ledger` as the cache (2026-11-20): resuming, telling a bad
   batch from a dead backend, model swaps and cancellation are already there. The prompt is a file in
