@@ -1032,7 +1032,8 @@ with timer() as tim:
                 with dpg.tooltip("year_mode_combo", tag="year_mode_tooltip"):  # tag
                     dpg.add_text("How the records outside the years are shown: grayed out beneath the rest, or hidden.\n"
                                  "[F5] next, [Shift+F5] previous\n"
-                                 "[Ctrl+E] to focus; then Up, Down, Home, End to choose, Esc to leave",
+                                 "[Ctrl+E] to focus; then Up, Down, Home, End to choose, Esc to leave\n"
+                                 "While focused: Left, Right to move the years; with Shift the first year only, with Ctrl the last",
                                  tag="year_mode_tooltip_text")
                 with dpg.tooltip("grayed_selectable_checkbox", tag="grayed_selectable_tooltip"):  # tag
                     dpg.add_text("Let the grayed records be hovered and selected, like those in colour.\n"
