@@ -1030,7 +1030,7 @@ with timer() as tim:
                     dpg.add_text("Set the Misc cutoff back to 0%, showing every cluster as itself. Keeps the filter mode.",
                                  tag="reset_misc_cutoff_tooltip_text")
                 with dpg.tooltip("year_mode_combo", tag="year_mode_tooltip"):  # tag
-                    dpg.add_text("How the records outside the years are shown: grayed out beneath the rest, or hidden.\n"
+                    dpg.add_text("How the records outside the years are shown: grayed out beneath the rest, or hidden.\n\n"
                                  "[F5] next, [Shift+F5] previous\n"
                                  "[Ctrl+E] to focus; then Up, Down, Home, End to choose, Esc to leave\n"
                                  "While focused: Left, Right to move the years; with Shift the first year only, with Ctrl the last",
@@ -1040,7 +1040,7 @@ with timer() as tim:
                                  "Available while some records are grayed out.",
                                  tag="grayed_selectable_tooltip_text")
                 with dpg.tooltip("misc_mode_combo", tag="misc_mode_tooltip"):  # tag
-                    dpg.add_text("How the records in Misc are shown: in colour, grayed out beneath the rest, or hidden.\n"
+                    dpg.add_text("How the records in Misc are shown: in colour, grayed out beneath the rest, or hidden.\n\n"
                                  "[F4] next, [Shift+F4] previous\n"
                                  "[Ctrl+M] to focus; then Up, Down, Home, End to choose, Esc to leave",
                                  tag="misc_mode_tooltip_text")
