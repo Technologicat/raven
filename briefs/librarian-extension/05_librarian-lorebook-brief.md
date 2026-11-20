@@ -160,9 +160,28 @@ would be knowledge left on the floor. So this clears the bar the project already
   the only shape that survives Finnish agglutination. Words, not phrases, so multi-word terms keep matching in
   any order.
 - **Matching**: a key word matches a text word that is equal under smart case, or is one of its `forms`, or is
-  one of its `stems` followed by letters. An exact (case-sensitive) key word still matches only as written.
-- **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`.
-  **Cached by the term** (title and aliases), not the body, so editing a definition asks nothing. The cache is
+  one of its `stems` followed by letters. The words of a multi-word key are paired one to one with the window's,
+  each pair accepted by any of the three.
+  - **An exact key word expands too** (2026-11-20): its forms are matched as written (*EQ → EQs*), and its stems
+    only when **lowercase** letters follow, so *Program* + *issa* (*Kerbal Space Programissa*) and *EQ* + *s*
+    match while *EQ* + *UAL* does not.
+  - **A colon suffix belongs to the word before it** (2026-11-20): Finnish inflects an abbreviation or a foreign
+    name with a colon and an ending on its last word (*Qwen Flash Next:ssä*, *EQ:n*), and the word is matched on
+    the part before the colon. Until then `EQ:n` was two words, which broke a multi-word term's adjacency.
+  - **A translated term is out of reach of inflection** (*EQ curve* → *EQ-käyrän*). The author's way in is an
+    alias, `## EQ curve (EQ-käyrä)`, which then inflects like any key. Asking the expansion for the term's
+    rendering in each configured language, as extra keys, is a possible follow-up, not built: translating a
+    coinage is dubious (*hydra tax* → *hydravero*?).
+- **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`,
+  run as a `sweep.Sweep` over the terms with its `Ledger` as the cache (2026-11-20): resuming, telling a bad
+  batch from a dead backend, model swaps and cancellation are already there. The prompt is a file in
+  `prompts/`, overridable as the others are and readable by a port.
+  - **The cost of the ledger: it is keyed by the model too**, its fingerprint holding the model's identity, so
+    switching models asks every term again, in the background, competing with the chat for the backend — on the
+    order of a hundred terms in a few batches for the glossary. Switching back finds the earlier ledger. To be
+    documented where a user will meet it. A cache of our own keyed by the term alone was the alternative.
+  - **Scripts read the expansions cached for their model, and never ask**, as they do not follow the folder.
+- **Cached by the term** (title and aliases), not the body, so editing a definition asks nothing. The cache is
   machinery, not meant to be edited: the author's way to add a form is an alias in the header. With the backend
   down, titles and aliases match and the expansions arrive once it answers.
 - **Languages are a setting**, `lorebook_languages`, **English only by default** (2026-11-20), Finnish to be
@@ -172,6 +191,16 @@ would be knowledge left on the floor. So this clears the bar the project already
   on, the maintainer's working material being English. Agreed (2026-11-19): a stem must share at least its word's length
   minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
   (*kaupunki → kaupungissa* keeps *kaupun-*). A stem failing it is dropped, which can only cost a miss.
+  - **Refined, and a floor (2026-11-20).** The word itself as a stem is always allowed. A shortened stem must
+    keep at least the word's length minus two letters *and* at least four: minus two alone let *fup* keep *f*,
+    and *hydra* keep *hyd*, which catches *hydrogen*. The four is chosen, not derived.
+  - **It rejects verb stem changes**, the maintainer's examples: *juosta → juoks-* shares 3 of 6 letters,
+    *juoksennella → juoksentel-* 7 of 12; Finnish suffixes stack on the inflection stem, not on the dictionary
+    form. Considered: **(b)**, two conditions — the stem at least max(4, length − 2) letters long, sharing at
+    least half the word as a prefix — which admits both. **Starting with the strict guard; the maintainer leans
+    (b).** What decides it is a measurement rather than more examples: once there are Finnish expansions, count
+    the words of Voikko's dictionary (installed for `investigations/lorebook-lemmas/`) that each stem would
+    match without being a form of its term — false positives on data neither of us wrote.
 - **The Finnish the LLM writes is poor, and the support is built anyway.** Qwens from 3.5 on read Finnish
   well; writing it has been broken at the 30B class, and Flash Next is not usable either: too many typos and
   invented words (maintainer, 2026-11-20). No local model tried so far clears the maintainer's bar. But users
