@@ -2586,9 +2586,14 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # The graph's own keyboard has a page of its own; this page carries only the ways into it, Tab
                # below and Ctrl+Shift+G at the foot of the first column.
                # Several rows below pair two keys each, where the second only reverses the first: the page is a
-               # screenshot of the whole keyboard, and on a 1080p screen it holds 29 rows a column, which search
-               # overran. Pairing cost a row apiece and no information; the alternatives were dropping the blank
-               # rows that do the grouping, or splitting the page.
+               # screenshot of the whole keyboard, and on a 1080p screen about thirty rows fill a column, which
+               # search overran. Pairing cost a row apiece and no information; the alternatives were dropping the
+               # blank rows that do the grouping, or splitting the page.
+               #
+               # TODO: Both columns are at 31 rows, and the page measures 1056 px against a 1040 px viewport
+               # (2026-11-20): the card is clamped, losing only its bottom padding, and `HelpWindow` logs a
+               # warning the first time it is shown. A row added to either column will cut off a key, so free
+               # one first — a blank grouping row, or another pairing.
                env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Search, chat log, composer, graph"),
                env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Scroll the chat a page", notes="Also while typing"),
                env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while writing a message"),
