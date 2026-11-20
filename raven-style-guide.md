@@ -431,6 +431,44 @@ opening), so they have to hold up to it.
 A person reading for the gist skims these and loses nothing. An agent that is not told them has to infer
 them, from the code or from guesses, and its report back reads the same either way.
 
+## Interface design
+
+**When designing or changing an interface, check it against two established lists**: Jakob Nielsen's
+[ten usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/) (Nielsen and Rolf Molich
+1990, refined by Nielsen in 1994), and Ben Shneiderman's
+[eight golden rules of interface design](https://www.cs.umd.edu/users/ben/goldenrules.html) (*Designing the User
+Interface*, 6th ed. 2016, §3.3.4). They overlap almost entirely; Shneiderman adds *universal usability*.
+
+Most of what Raven does already follows from them, written down in other words. Mapped, so that a new design can
+be checked against the list rather than against memory:
+
+- **Visibility of system status.** The filter pill and the backend-status pill, the importer's progress. Raven
+  narrows it: **status only when something is wrong or not as usual**, so that a status shown means something.
+  Leaving "you see all the data" is always visible.
+- **Match between the system and the real world.** The weakest of the ten here. *Misc*, *purity* and *cutoff* are
+  our vocabulary, explained by tooltips; prefer the user's word where one exists.
+- **User control and freedom.** Undo and redo of the selection, Esc to leave anything, **a reset per filter beside
+  *Show all***: an exit from one action, not only from everything.
+- **Consistency and standards.** One meaning per key across the scopes on screen together, Ctrl+S for save, F1 for
+  help, and shared widgets from `raven.common.gui` rather than a copy per app (`CLAUDE.md`, *Hotkeys*).
+- **Error prevention.** A control that cannot act is disabled rather than hidden, so nothing jumps; the file dialog
+  asks for a second click before overwriting.
+- **Recognition rather than recall.** Hotkeys named in tooltips, the F1 card, the keyboard mark showing where the
+  keys go. **Never make the user remember a state to restore it**: undoing one filter must not mean clearing all
+  of them and redoing the rest from memory.
+- **Flexibility and efficiency of use.** Keyboard first, and every keyboard action also reachable by mouse:
+  reward the curious reader without punishing the casual one.
+- **Aesthetic and minimalist design.** Colour only when something has something to say; **nothing jumps**, so a row
+  that may appear reserves its height; acknowledgment by a flash rather than a dialog.
+- **Help users recognize, diagnose and recover from errors.** Uneven. The command-line tools say what was expected
+  and what to do; the GUIs mostly log, which a user never reads.
+- **Help and documentation.** The F1 card for the keys, and the manual for the rest (*User-facing text*, above).
+- **Universal usability** (Shneiderman). Expert shortcuts and a path for the newcomer, as above; colour choices that
+  read for colour-blind viewers and on light and dark backgrounds are part of it, and open (`TODO.md`, the light
+  theme and the colormap).
+
+The open ones are the place to look first when a design session comes round.
+
 ## Docstrings
 
 reStructuredText format. Extensive for public API, pragmatic for internals:
