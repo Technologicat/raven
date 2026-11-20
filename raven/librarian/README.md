@@ -1028,19 +1028,19 @@ The toggles persist across sessions. They are stored in the app state file, whic
 
 ## What the indicators say
 
-Five small labels can light under the mode toggles, below the avatar panel, saying what *Librarian* is busy with while you wait. Each appears only while its work is running, and the visible ones stack top-down in the order below — which is roughly the order a question passes through them.
+Five small labels can light under the mode toggles, below the avatar panel, saying what *Librarian* is busy with while you wait. Each appears only while its work is running. **INDEXING** has a line of its own at the top; **READING** and **DOCUMENTS** share the next, and **SYSTEM** and **INTERNET** the one after, a label taking the left edge when its partner is not lit. Read row by row, that is roughly the order a question passes through them.
 
 | | Lit while |
 |---|---|
 | **INDEXING** | your document database is being indexed: new or changed files are being read and added to the search index. It carries a progress figure beside it |
-| **DOCUMENTS** | the document database is being searched — the automatic search before a reply, or the AI's own `search_documents` tool. Also carries progress |
 | **READING** | an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two here before anything else can start |
+| **DOCUMENTS** | the document database is being searched — the automatic search before a reply, or the AI's own `search_documents` tool. Also carries progress |
 | **SYSTEM** | the LLM backend has your conversation and has not started writing yet. This is prompt processing |
 | **INTERNET** | the AI is reaching the network, through `websearch` or `webfetch` |
 
 **Pulsating means still working**, which is the same vocabulary the thinking cloud uses beside a reply. Nothing pulsating and nothing lit means nothing is being waited for.
 
-Two of them are worth knowing about before they surprise you:
+Three things worth knowing before they surprise you:
 
 - **INDEXING and DOCUMENTS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background, so INDEXING can be lit alongside any of the others.
 - **SYSTEM is never lit together with READING, DOCUMENTS or INTERNET.** Those three are the work done before the backend gets the prompt, and SYSTEM is the backend reading it. DOCUMENTS lights for the automatic search and for the AI's own searches; INTERNET only ever for the AI's tool calls. When the AI searches the web and your documents in the same breath, both are lit at once.
