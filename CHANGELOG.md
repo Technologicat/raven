@@ -110,6 +110,9 @@
 
 #### Raven-siftbib
 
+- **`--where` keeps the records whose field compares to a number**, such as `--where 'year>=2022'` for the records a search engine returned from before the search's first year.
+  - The comparisons are `<`, `<=`, `>`, `>=`, `==` and `!=`, made as numbers.
+  - A record whose field is missing or not a number is removed too, and the audit says which.
 - **The audits are Excel spreadsheets by default**, which open as they are in any spreadsheet program. `--audit-format ods` or `tsv` writes OpenDocument or TSV.
   - The lines saying which tool, which input and which criteria go on a second sheet, *Notes*, so the first row of the table is its header.
 - **The audit links to each removed paper and carries its full abstract**, so a removal can be checked from the audit alone. The link is by DOI when the record has one, else its `url`.

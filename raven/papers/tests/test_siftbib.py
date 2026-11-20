@@ -110,6 +110,62 @@ class TestParseMinChars:
             siftbib.parse_min_chars(spec)
 
 
+def year_record(key: str, year: str | None) -> str:
+    """A record with `year` as written, or no year field when `year` is `None`."""
+    year_line = f"  year = {{{year}}},\n" if year is not None else ""
+    return f"@article{{{key},\n  title = {{A study keyed {key}}},\n{year_line}  abstract = {{Enough to read.}}\n}}"
+
+
+class TestWhere:
+    def test_a_stray_from_before_the_first_year_is_removed(self):
+        # The boundary year itself is kept: `>=` is the whole point of the case it exists for.
+        kept, dropped = siftbib.sift(library(year_record("old", "2019"), year_record("edge", "2022"),
+                                             year_record("new", "2024")),
+                                     siftbib.parse_where("year>=2022"))
+        assert [entry.key for entry in kept.entries] == ["edge", "new"]
+        assert [(record.key, record.reason) for record in dropped] == [("old", "year < 2022")]
+
+    def test_a_missing_year_and_one_that_is_not_a_number_are_told_apart(self):
+        kept, dropped = siftbib.sift(library(year_record("none", None), year_record("press", "in press"),
+                                             year_record("nan", "nan"), year_record("ok", "2023")),
+                                     siftbib.parse_where("year >= 2022"))
+        assert [entry.key for entry in kept.entries] == ["ok"]
+        # "nan" is a number to `float`, and would otherwise reach the comparison and be audited as too early.
+        assert {record.key: record.reason for record in dropped} == {
+            "none": "no year", "press": "year not a number", "nan": "year not a number"}
+
+    @pytest.mark.parametrize("spec, kept_years, reason", [
+        ("year<2020", ["2019"], "year >= 2020"),
+        ("year<=2020", ["2019", "2020"], "year > 2020"),
+        ("year>2020", ["2021"], "year <= 2020"),
+        ("year>=2020", ["2020", "2021"], "year < 2020"),
+        ("year==2020", ["2020"], "year != 2020"),
+        ("year!=2020", ["2019", "2021"], "year == 2020"),
+    ])
+    def test_every_comparison_keeps_its_side_and_audits_the_other(self, spec, kept_years, reason):
+        years = ["2019", "2020", "2021"]
+        kept, dropped = siftbib.sift(library(*(year_record(f"y{year}", year) for year in years)),
+                                     siftbib.parse_where(spec))
+        assert [entry.key for entry in kept.entries] == [f"y{year}" for year in kept_years]
+        assert {record.reason for record in dropped} == {reason}
+
+    def test_a_number_is_compared_as_a_number_not_as_text(self):
+        # As text, "999" sorts after "1000"; as numbers it does not. A comparison of strings would keep it.
+        kept, _ = siftbib.sift(library(year_record("short", "999"), year_record("long", "1000")),
+                               siftbib.parse_where("year>=1000"))
+        assert [entry.key for entry in kept.entries] == ["long"]
+
+    @pytest.mark.parametrize("spec", ["year", "year>=", ">=2022", "year=>2022", "year>=soon", "year>=nan",
+                                      "year=2022", "year >= 2022 2023"])
+    def test_a_malformed_spec_is_refused_rather_than_guessed_at(self, spec):
+        with pytest.raises(ValueError):
+            siftbib.parse_where(spec)
+
+    def test_compare_rejects_an_operator_it_does_not_know(self):
+        with pytest.raises(ValueError):
+            siftbib.compare("year", "=>", "2022")
+
+
 class TestWriteAudit:
     def test_the_header_says_which_tool_on_what_input_and_by_what_test(self, tmp_path: pathlib.Path):
         criteria = [siftbib.require_field("abstract")]

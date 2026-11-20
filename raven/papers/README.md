@@ -440,12 +440,15 @@ A search export carries records of wildly uneven completeness. A record holding 
 ```bash
 raven-siftbib corpus.bib --require abstract          # corpus_sifted.bib + corpus_removed.xlsx
 raven-siftbib corpus.bib --min-chars abstract=200
+raven-siftbib corpus.bib --where 'year>=2022'        # the strays from before the search's first year
 raven-siftbib -n corpus.bib --require abstract       # report only
 ```
 
 ### Naming the criterion
 
-**The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field. `--min-chars FIELD=N` keeps those whose field reaches a given length. Either may be given more than once, and a record must satisfy all of them.
+**The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field. `--min-chars FIELD=N` keeps those whose field reaches a given length. `--where 'FIELD OP NUMBER'` keeps those whose field, read as a number, compares as asked: `<`, `<=`, `>`, `>=`, `==` or `!=`. Each may be given more than once, and a record must satisfy all of them.
+
+**`--where` is for the records a search returned against its own limits.** A search for work from 2022 on can still hand back older records, and `--where 'year>=2022'` removes them. Quote it, or the shell reads the `>` as a redirection. A record whose field is missing goes as `no year`, one whose field is not a number (`in press`, say) as `year not a number`, and the rest as `year < 2022`, so the audit separates the strays from the records that need a look.
 
 **A run naming no criteria is refused rather than defaulted.** A default would be the tool holding an opinion about what a usable record is, which is the caller's to hold.
 

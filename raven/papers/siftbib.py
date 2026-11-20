@@ -7,9 +7,10 @@ separate act from judging relevance, and this tool is the separate act.
 
     raven-siftbib corpus.bib --require abstract
 
-The criterion is a parameter rather than a policy. `--require` names a field the record must carry, and
-`--min-chars` a length it must reach; both may be given more than once, and a record is kept when it
-satisfies all of them. That is what keeps this from being an abstract-specific tool that grows a second
+The criterion is a parameter rather than a policy. `--require` names a field the record must carry,
+`--min-chars` a length it must reach, and `--where` a comparison its value must satisfy as a number
+(`--where 'year>=2022'`, for the strays a search engine returns from before the search's first year). Each
+may be given more than once, and a record is kept when it satisfies all of them. That is what keeps this from being an abstract-specific tool that grows a second
 flag the first time a corpus needs `--require year`.
 
 The sifted `.bib` is what you came for, and the audit beside it — a record per line with the
@@ -32,6 +33,7 @@ where `deduplicate` merges its inputs into one corpus.
 from __future__ import annotations
 
 __all__ = ["Criterion", "require_field", "min_chars", "parse_min_chars",
+           "numeric_field", "compare", "parse_where",
 
            "DroppedRecord", "AUDIT_COLUMNS", "sift", "write_audit",
 
@@ -40,7 +42,10 @@ __all__ = ["Criterion", "require_field", "min_chars", "parse_min_chars",
 import argparse
 import dataclasses
 import logging
+import math
+import operator
 import pathlib
+import re
 import sys
 from collections.abc import Callable
 
@@ -106,6 +111,72 @@ def parse_min_chars(spec: str) -> Criterion:
     if length < 0:
         raise ValueError(f"a length cannot be negative: {spec!r}")
     return min_chars(field.strip(), length)
+
+
+#: The comparisons `parse_where` reads, longest first so that `>=` is not read as `>`; each with its test, and
+#: the comparison a failing record satisfies instead, which is what the audit says against it.
+_COMPARISONS = {"<=": (operator.le, ">"), ">=": (operator.ge, "<"), "==": (operator.eq, "!="),
+                "!=": (operator.ne, "=="), "<": (operator.lt, ">="), ">": (operator.gt, "<=")}
+_WHERE = re.compile(r"^\s*([^\s<>=!]+)\s*(" + "|".join(re.escape(op) for op in _COMPARISONS) + r")\s*(\S.*?)\s*$")
+
+
+def _number(text: str) -> float | None:
+    """`text` as a finite number, or `None` when it is not one."""
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    # `float` also accepts "nan" and "inf". A year of NaN fails every comparison, which would put it in the
+    # audit under the comparison's reason rather than as what it is, not a number.
+    return value if math.isfinite(value) else None
+
+
+def numeric_field(field: str) -> Criterion:
+    """A record's `field` must be a number, as a year or a page count is."""
+    return Criterion(describe=f"`{field}` is a number",
+                     reason=f"{field} not a number",
+                     holds=lambda entry: _number(bibtex.entry_field(entry, field)) is not None)
+
+
+def compare(field: str, op: str, number: str) -> Criterion:
+    """A record's `field`, read as a number, must compare to `number` by `op`, one of `<`, `<=`, `>`, `>=`, `==`
+    and `!=`.
+
+    `number` is given as text, the way it was written, and the criterion's descriptions repeat it as written.
+    A field that is missing or not a number fails; to tell those apart in an audit, put `require_field` and
+    `numeric_field` before this one, as `parse_where` does.
+
+    Raises `ValueError` on an unknown `op`, or a `number` that is not one.
+    """
+    if op not in _COMPARISONS:
+        raise ValueError(f"unknown comparison {op!r}; expected one of {', '.join(_COMPARISONS)}")
+    threshold = _number(number)
+    if threshold is None:
+        raise ValueError(f"expected a number to compare `{field}` with, got {number!r}")
+    test, failing = _COMPARISONS[op]
+
+    def holds(entry: Entry) -> bool:
+        value = _number(bibtex.entry_field(entry, field))
+        return value is not None and test(value, threshold)
+    return Criterion(describe=f"`{field}` {op} {number}",
+                     reason=f"{field} {failing} {number}",
+                     holds=holds)
+
+
+def parse_where(spec: str) -> list[Criterion]:
+    """Build the criteria for a `FIELD OP NUMBER` command-line argument, such as `year>=2022`.
+
+    Three criteria, in the order `sift` tries them, so that a removed record is audited under the one that
+    applies: the field is present, it is a number, and it compares as asked.
+
+    Raises `ValueError` on anything that is not that shape.
+    """
+    match = _WHERE.match(spec)
+    if match is None:
+        raise ValueError(f"expected FIELD OP NUMBER with OP one of {', '.join(_COMPARISONS)}, e.g. year>=2022; "
+                         f"got {spec!r}")
+    field, op, number = match.groups()
+    return [require_field(field), numeric_field(field), compare(field, op, number)]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -200,6 +271,10 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--min-chars", dest="min_chars", action="append", default=None, metavar="FIELD=N",
                         help="Keep only records whose FIELD runs to at least N characters. For a field "
                              "that is present and useless — a publisher's truncated teaser abstract, say.")
+    parser.add_argument("--where", dest="where", action="append", default=None, metavar="FIELD OP NUMBER",
+                        help="Keep only records whose FIELD is a number comparing to NUMBER by OP, one of "
+                             "<, <=, >, >=, == and !=, such as 'year>=2022' (quoted, for the shell). A record "
+                             "whose FIELD is missing or not a number is removed, and the audit says which.")
     parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_sifted", type=papers_utils.output_suffix,
                         metavar="suf", help="Suffix for naming output files (file.bib -> file_sifted.bib).")
     parser.add_argument("--audit-suffix", dest="audit_suffix", default="_removed", type=str,
@@ -235,6 +310,7 @@ def main() -> None:  # pragma: no cover
     criteria = [require_field(field) for field in (opts.require or [])]
     try:
         criteria += [parse_min_chars(spec) for spec in (opts.min_chars or [])]
+        criteria += [criterion for spec in (opts.where or []) for criterion in parse_where(spec)]
     except ValueError as exc:
         parser.error(str(exc))
 
