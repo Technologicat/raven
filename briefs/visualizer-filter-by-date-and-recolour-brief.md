@@ -93,6 +93,19 @@ a reset per filter is Nielsen's *user control and freedom*, an exit from one act
   what it resets.
 - **No hotkeys for now.**
 
+## Decided: what comes after the year filter (2026-11-20)
+
+- **Colouring by year is in scope for 0.2.11** (the maintainer): candidate 2 above, for the year only. A
+  continuous quantity wants a sequential colour map and a legend of its own, in place of the cluster colours.
+  Not yet designed. Colouring by a categorical criterion, such as the first author, is not part of it.
+- **Time at a finer granularity than a year comes in a v2**, perhaps H1/2027: timestamps down to nanoseconds since
+  the epoch, as a system log carries, with a general time-range picker in the GUI. It needs the dataset format
+  changed, as BibTeX gives a year only, so it is filed with the format redesign (`TODO.md`, "Data file format").
+- **The embeddings in the dataset move to the format redesign** too (candidate 3); same item.
+- **The two-handle range slider** replaces the two year fields later (*Decided: the year filter*, above).
+- **The comparison of year-specific maps against the filtered whole map waits for the AOKK team's final keeps**,
+  and is done with them.
+
 ## Open
 
-Recolouring, and the embeddings in the dataset.
+Colouring by year: its design.

@@ -136,6 +136,9 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - **Near-future, so that datasets become migratable** (maintainer, 2026-10-01). Pilot users upgrade, and a pickle has no migrator: until this lands, **losing imported datasets after a Python version upgrade is a known limitation.**
   - Keep it easily accessible to external tools: JSON, plus NPZ for the arrays, is the first candidate. Details not decided.
   - `briefs/design/install-and-first-run-sketch.md` → *Upgrading*; brief 13's unified DB may be where it lands.
+  - **Two more things the format should carry** (maintainer, 2026-11-20; `briefs/visualizer-filter-by-date-and-recolour-brief.md`):
+    - **The embeddings**, which live in the importer's cache file today, for features that want them when a dataset loads.
+    - **Time at a finer granularity than a year**, down to timestamps in nanoseconds since the epoch, as a system log carries. BibTeX gives a year only. With it comes a general time-range picker in the GUI; H1/2027, perhaps.
 
 - **[Low]** Deployability: move user-configurable parts to `~/.raven/visualizer/` (consistent with `~/.raven/` already used by Librarian). Check Windows and macOS conventions.
 

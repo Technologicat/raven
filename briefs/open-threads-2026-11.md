@@ -30,13 +30,10 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
-- **Year-specific maps against the whole map filtered by year**, for the AOKK trends: both routes now exist
-  (`raven-siftbib --where 'year==2023'` per slice and an import each, or the live filter). The question is what
-  the difference shows; `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Wanted by the AOKK review*.
+- **Colouring the Visualizer's map by year**, in scope for 0.2.11 (2026-11-20); not yet designed.
+  `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *What comes after the year filter*.
 - **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as
   DPG has none. Same brief.
-- **Recolouring, and the embeddings in the dataset**: the date-filter brief's remaining candidates, not yet
-  discussed.
 - **A light theme across the constellation**, with a roomier layout as an option, starting with a UI design
   session on the principles listed there: `TODO.md`, Cross-cutting. M or L.
 - **Datasets of 100k records in the Visualizer**: level-of-detail rendering for the plot, on the model of
@@ -63,5 +60,7 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
     discussion of LLM grouping at about 2,000 records (`investigations/llm-thematic-grouping/README.md`, *Next*:
     the map's clusters as bins, a revision step over cluster summaries, batched allocation with reasons).
   - **Also from the team**: confirming that the full-text fetch may send DOIs to an outside service.
+  - **With the final keeps**: comparing year-specific maps against the whole map filtered by year, for the
+    trends. Both routes exist (`raven-siftbib --where 'year==2023'` per slice, or the live filter).
   - Then rules v2 and probably a new LLM run.
   `investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-19, points to each.
