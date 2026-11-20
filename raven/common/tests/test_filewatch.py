@@ -78,7 +78,11 @@ class TestLiveChanges:
     def test_a_save_by_rename_is_a_modification_of_the_original_only(self, docs, recorder, temporary_name):
         # The temporary file exists for a moment under a name `accept` may well take (the second case keeps
         # the extension), and is renamed away within the quiet period; only the original's change is real.
-        with filewatch.watching(docs, on_changed=recorder, **FAST):
+        #
+        # A quiet period of a second here, where the others use `QUIET`: what is under test is the netting
+        # of the two events *within* one period, and at 0.1 s a loaded CI runner delivered the rename after
+        # the period had already reported the temporary file — correctly, as two batches.
+        with filewatch.watching(docs, on_changed=recorder, quiet_period=1.0, observer_timeout=QUIET):
             temporary = docs / temporary_name
             temporary.write_text("version two, longer")
             os.replace(temporary, docs / "a.md")
