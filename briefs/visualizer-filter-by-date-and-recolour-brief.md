@@ -152,6 +152,11 @@ keywords, using whichever keyworder that settles on. The keyworder sits between 
 the LLM keyworder struggles with a year of thousands of records, and c-TF-IDF scores a year against the corpus with
 no prompt limit. v1 should land before 0.2.11 is released, so that year mode does not ship incomplete.
 
+**Reordered the same day: the keyworder first, then v0, then v1** (the maintainer, 2026-11-20). v0 does not depend
+on the keyworder, its headers being plain, so swapping the two costs nothing. The keyworder's first two steps fit
+one afternoon and end at a measured result, while v0 would have spilled over a weekend partway through the info
+panel's change from clusters to groups.
+
 ## Open
 
 Colouring by year's v1: per-year keywords at import, after the keyworder.

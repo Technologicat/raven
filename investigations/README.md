@@ -15,6 +15,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 
 | Directory | What it investigated |
 |---|---|
+| `cluster-keywords/` | Whether a classical keyworder labels the Visualizer's clusters well without an LLM: noun phrases scored by class-based TF-IDF, with abbreviations merged, against the stored frequency keywords on four corpora — clearly better labels, more distinctive and covering more of each cluster; the KL-weighted variant rejected (2026-11-20) |
 | `health-education-review/` | How the health-education review's data got from the Scopus search to the 40 studies and their seven themes: each stage with its counts, tools and decisions, for the methods section, and what is still open |
 | `llm-thematic-grouping/` | Whether an LLM, given a review's research questions and every accepted study's abstract in one prompt, groups the studies into themes and sub-themes as the earlier studies' hand-made tables do, and how stable that is across shuffled runs; writes each run as a table and as a Visualizer dataset laid out by hand (2026-10-30) |
 | `context-injects/` | What shape Librarian's temporary context injects should take, measured across four local models; and where the grounding instruction goes (2026-10-05) |
