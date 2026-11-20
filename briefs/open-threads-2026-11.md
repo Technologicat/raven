@@ -4,6 +4,12 @@
 their head. It points at where each thread's detail lives; it is not the place for that detail. Take an item
 off when it closes, and delete the file when it is empty.*
 
+## Done 2026-11-20: year filtering, for the AOKK review
+
+`raven-siftbib --where 'year>=2022'`, the same in `raven-scopebib`'s sift, and live year filtering in the
+Visualizer with a reset per filter. Also a zoom race on dataset load fixed, and *Interface design* (Nielsen,
+Shneiderman) in `raven-style-guide.md`. Decisions: `briefs/visualizer-filter-by-date-and-recolour-brief.md`.
+
 ## Done 2026-11-19: the health-education methods draft, first version
 
 See *Waiting on others* for what it still needs.
@@ -24,8 +30,13 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
-- **Date-range filtering, recolouring, embeddings in the dataset**: `briefs/visualizer-filter-by-date-and-recolour-brief.md`,
-  opened and not yet discussed.
+- **Year-specific maps against the whole map filtered by year**, for the AOKK trends: both routes now exist
+  (`raven-siftbib --where 'year==2023'` per slice and an import each, or the live filter). The question is what
+  the difference shows; `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Wanted by the AOKK review*.
+- **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as
+  DPG has none. Same brief.
+- **Recolouring, and the embeddings in the dataset**: the date-filter brief's remaining candidates, not yet
+  discussed.
 - **A light theme across the constellation**, with a roomier layout as an option, starting with a UI design
   session on the principles listed there: `TODO.md`, Cross-cutting. M or L.
 - **Datasets of 100k records in the Visualizer**: level-of-detail rendering for the plot, on the model of
@@ -47,14 +58,10 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   exclusions if the flowchart keeps the breakdown, and the word clouds. Two small fixes in the manuscript's
   Table 5 are noted in the study's README.
 
-- **The AOKK scoping review: next are year filtering and clusters from the final keeps** (the maintainer,
-  2026-11-19).
-  - **Year filtering**: `raven-siftbib --where` is done (2026-11-20); next, live filtering in the
-    Visualizer, which the date-filter brief now puts first.
+- **The AOKK scoping review: year filtering is done (2026-11-20); next, clusters from the final keeps.**
   - **The clusters wait twice**: on the team's keep-sample ratings, which fix the final keeps, and on our design
-    discussion of LLM grouping at about 2,000 records.
+    discussion of LLM grouping at about 2,000 records (`investigations/llm-thematic-grouping/README.md`, *Next*:
+    the map's clusters as bins, a revision step over cluster summaries, batched allocation with reasons).
+  - **Also from the team**: confirming that the full-text fetch may send DOIs to an outside service.
   - Then rules v2 and probably a new LLM run.
-  The meeting of 2026-11-19 settled the corpus's edges (the excluded ProQuest collection out, ERIC at 247) and
-  asked for year-based work: a year criterion in `raven-siftbib` (done 2026-11-20), year-specific maps compared with live
-  year filtering, and whether LLM grouping scales to the final keeps (about 2,000), design to be discussed first. `investigations/aokk-corpus-scope/README.md`, that meeting's
-  section, points to each.
+  `investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-19, points to each.

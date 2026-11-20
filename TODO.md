@@ -23,7 +23,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     (maintainer). The levers are DPG's style variables (frame padding, item spacing, the text sizes), settable in
     one place at bootup, so a roomier layout can come with the light theme and the dense one stay the default.
   - **Start with a UI design session, with mockups side by side** (maintainer, 2026-11-16), on the principles
-    the GUI follows: Tufte's and Nielsen's, and those the code and docs already state: reward the curious reader
+    the GUI follows (Nielsen's and Shneiderman's are mapped to Raven in `raven-style-guide.md` → *Interface design*,
+    since 2026-11-20, with the gaps marked): Tufte's and Nielsen's, and those the code and docs already state: reward the curious reader
     without punishing the casual one (hotkeys in tooltips, F1 cards); keyboard first, with the keyboard mark
     showing where the keys go; leaving "you see all the data" is always visible; colour only when something
     has something to say; nothing jumps (a row that appears takes its height from a field, not from the panels);
