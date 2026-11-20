@@ -215,6 +215,12 @@ would be knowledge left on the floor. So this clears the bar the project already
     (b).** What decides it is a measurement rather than more examples: once there are Finnish expansions, count
     the words of Voikko's dictionary (installed for `investigations/lorebook-lemmas/`) that each stem would
     match without being a form of its term — false positives on data neither of us wrote.
+  - **Measured (2026-11-20, `investigations/lorebook-lemmas/`)**, against `/usr/share/dict/words` and WordNet for
+    English and Kotus's *Nykysuomen sanalista* for Finnish — Voikko cannot list its vocabulary. Of 63 stems the
+    guard kept, every bad catch is a stem of four or five letters (*hydr* → *hydrangea*, *lint* → *lintu*), so
+    the data argues against (b) and, if anything, for a higher floor. The exposure is mostly single-word terms, a
+    multi-word term needing its other words beside the catch. Also found: the model translates words unasked
+    (*rent* → *vuokran*), and mangles a coinage now and then (*fup* → *fapped*), which no guard catches yet.
 - **The Finnish the LLM writes is poor, and the support is built anyway.** Qwens from 3.5 on read Finnish
   well; writing it has been broken at the 30B class, and Flash Next is not usable either: too many typos and
   invented words (maintainer, 2026-11-20). No local model tried so far clears the maintainer's bar. But users

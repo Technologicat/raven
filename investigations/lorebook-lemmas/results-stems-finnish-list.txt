@@ -1,0 +1,13 @@
+ledger: expansions-4d1ecf0e.jsonl; word lists: investigations/lorebook-lemmas/data/nykysuomensanalista2024.txt (104261 words)
+63 stems kept by the guard; 11 catch at least one listed word that is not their own form
+     40  'lint'             (lint in 'Lint rule'): lintallaan, lintalleen, lintassa, lintsaaja, lintsari, lintsata, lintsaus, linttaan, lintu, lintuasema, lintuemo, lintuharrastaja, … (+28)
+     17  'hydr'             (hydra in 'Hydra tax'): hydraatti, hydrauliikka, hydraulinen, hydraulineste, hydraulisesti, hydraulivasara, hydrobic, hydrobikki, hydrokopteri, hydrokortisoni, hydroksidi, hydroksyyli, … (+5)
+     16  'mode'             (mode in 'Little Prince mode'): modeemi, moderaattori, moderato, moderni, modernismi, modernisoida, modernisointi, modernisoitua, modernistaa, modernisti, modernistinen, modernistua, … (+4)
+     15  'latin'            (Latin in 'Monk Latin'): latina, latinainen, latinaistaa, latinalainen, latinalaisamerikkalainen, latinalaistaa, latinalaistanssi, latinankielinen, latinantaa, latinismi, latinisti, latinki, … (+3)
+     12  'jazz'             (jazz in 'Jazz'): jazzahtava, jazzari, jazzfestivaali, jazzklubi, jazzlaulaja, jazzlaulajatar, jazzmessu, jazzmusiikki, jazzmuusikko, jazzorkesteri, jazzstandardi, jazztanssi
+      9  'anim'             (anime in 'Anime maid form factor'): animaalinen, animaalisuus, animaatio, animaatioelokuva, animaatiosarja, animismi, animistinen, animoida, animointi
+      5  'agent'            (agent in 'Ding agent'): agentti, agenttifilmi, agenttiromaani, agentuuri, agentuuriliike
+      4  'dual'             (dual in 'Dual blades'): dualismi, dualistinen, dualistisesti, dualistisuus
+      3  'moment'           (moment in 'Silicon census moment'): momentaaninen, momentti, momenttiavain
+      3  'rule'             (rule in 'Lint rule'): rulettaa, ruletti, rulettipöytä
+      2  'gratiin'          (Gratin in 'Ancient Gratin'): gratiini, gratiinikastike

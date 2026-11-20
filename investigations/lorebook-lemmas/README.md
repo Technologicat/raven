@@ -48,3 +48,50 @@ configures (`en_core_web_sm` 3.8.0, spaCy 3.8.18), loaded in-process — the sam
   on its own, capitalized or not. So a word it does not know is not thereby a coinage.
 - So it cannot lemmatize a lorebook's terms, which are coinages by nature, and it has no generation call to
   produce their forms either.
+
+## How many unrelated words the generated stems catch (2026-11-20)
+
+**Question:** with Finnish switched on, the lorebook asks the LLM for stems, and a stem fires its term on any
+word it begins. So how many words that are *not* forms of the term does each generated stem catch — in Finnish,
+and in English, since the matcher does not know a message's language? The stem guard in
+`lorebook.clean_expansion` (all but the last two letters of the word, and at least four) is to be judged by
+this, and a looser one considered (the brief's option (b), for Finnish verb stem changes).
+
+**Apparatus:** `measure_stem_false_positives.py` reads an expansion ledger (`raven.librarian.lorebook_expansion`),
+applies the guard to every Finnish stem, and counts the words of a word list each would match, other than the
+term's own forms. Word lists: `/usr/share/dict/words` and WordNet's `index.*` for English; for Finnish,
+`data/nykysuomensanalista2024.txt` (below).
+
+**Voikko could not be the Finnish word list**, as planned: `voikko-fi` ships only its compiled analyser
+(`mor.vfst`), which answers about a word it is given and cannot list its vocabulary.
+
+### The Finnish word list
+
+`data/nykysuomensanalista2024.txt` is **Nykysuomen sanalista 2024**, by Kotimaisten kielten keskus (Kotus),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), downloaded 2026-11-20 from
+<https://kaino.kotus.fi/lataa/nykysuomensanalista2024.txt> (the file dated 11.4.2025 on
+[its page](https://kotus.fi/sanakirjat/kielitoimiston-sanakirja/nykysuomen-sana-aineistot/nykysuomen-sanalista/)).
+Unmodified. Tab-separated, UTF-8: headword, homonym number, word class, inflection type; about 105,000
+headwords, base forms only.
+
+### Findings (2026-11-20, Qwen Flash Next via gufo, `{"English": "forms", "Finnish": "stems"}`)
+
+The ledger measured: all 91 glossary terms answered in 8 min 17 s, no failures (English alone, an earlier run:
+2 min 26 s). `results-stems-english-lists.txt` and `results-stems-finnish-list.txt` are the probe's output.
+
+- **63 stems pass the guard.** 23 of them catch an English word that is not one of their term's forms, 11 a
+  Finnish headword. The worst: `hydr` 127 English words (*hydrangea*, *hydrant*, *hydrate*) and 17 Finnish
+  (*hydraulinen*); `mode` and `flat` 47 English each (*model*, *flatbed*); `anim` 37 (*animal*); `lint` 40 Finnish
+  (*lintu*, a bird). **Every bad catch comes from a stem of four or five letters.**
+- **The counts overstate the harm, in two ways.** They are per *word*, while a multi-word term fires only with its
+  other words beside it — *mode* catching *model* matters in "little prince model", which nobody writes — so the
+  exposure is the single-word terms. And a Finnish compound beginning with the term is often a true match
+  (*jazz* → *jazzmusiikki*, *agent* → *agentti*), which the probe counts as false.
+- **So the data argues against loosening the guard** (option (b) admits more short stems) and, if anything, for
+  a higher floor.
+- **The model also translates, unasked**: *rent* → *vuokran*, *vuokrassa*, …; *landmine* → *maamiina*, … — each
+  word translated, then inflected, under its forms.
+- **Its Finnish has the errors the maintainer found**: *hydryt*, and wrong vowel harmony in *hydrissä*,
+  *hydristä*, *hydrillä*. A form nobody writes costs nothing; the stems are where an error matters.
+- **The English forms are mostly right, with one bad one in two runs**: *fup* → *fapped*, *fapping* in the
+  first run (a mangled form, and a vulgar word), *fups*, *fup's* in the second.

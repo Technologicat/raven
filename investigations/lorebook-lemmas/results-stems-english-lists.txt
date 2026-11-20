@@ -1,0 +1,25 @@
+ledger: expansions-4d1ecf0e.jsonl; word lists: /usr/share/dict/words, /usr/share/wordnet/index.adj, /usr/share/wordnet/index.adv, /usr/share/wordnet/index.noun, /usr/share/wordnet/index.verb (147604 words)
+63 stems kept by the guard; 23 catch at least one listed word that is not their own form
+    127  'hydr'             (hydra in 'Hydra tax'): hydrae, hydralazine, hydramnios, hydrangea, hydrangeaceae, hydrangeas, hydrant, hydrants, hydrargyrum, hydrarthrosis, hydrastis, hydrate, … (+115)
+     47  'mode'             (mode in 'Little Prince mode'): model, modeled, modeler, modeling, modelings, modelled, modeller, modelling, models, modem, modems, moderate, … (+35)
+     47  'flat'             (flat in 'Flat knowledge profile'): flatbed, flatbeds, flatboat, flatboats, flatbottom, flatbottomed, flatbread, flatbrod, flatcar, flatcars, flatfeet, flatfish, … (+35)
+     37  'anim'             (anime in 'Anime maid form factor'): anima, animadversion, animadvert, animal, animalcule, animalculum, animalia, animalisation, animalise, animalism, animalistic, animality, … (+25)
+     19  'space'            (space in 'Latent space collision'): spacecraft, spacecrafts, spacefaring, spaceflight, spaceflights, spaceman, spacemen, spaceship, spaceships, spacesuit, spacesuits, spacewalk, … (+7)
+     13  'latin'            (Latin in 'Monk Latin'): latina, latinae, latinate, latiner, latinesce, latinise, latinism, latinist, latinize, latino, latinos, latins, … (+1)
+     13  'ding'             (ding in 'Ding agent'): dingbat, dingdong, dinge, dinghies, dinghy, dingier, dingiest, dingily, dinginess, dingle, dingo, dingoes, … (+1)
+      9  'Prince'           (Prince in 'Little Prince mode'): princedom, princelier, princeliest, princeling, princely, princess, princesses, princeton, princewood
+      8  'moment'           (moment in 'Silicon census moment'): momentaneous, momentarily, momentary, momently, momentous, momentously, momentousness, momentum
+      6  'jazz'             (jazz in 'Jazz'): jazzed, jazzier, jazziest, jazzing, jazzman, jazzy
+      4  'lint'             (lint in 'Lint rule'): lintel, lintels, linton, lintwhite
+      4  'knowledge'        (knowledge in 'Flat knowledge profile'): knowledgeability, knowledgeable, knowledgeableness, knowledgeably
+      4  'fail'             (fails in 'Fails thermodynamics'): failings, faille, failure, failures
+      4  'dual'             (dual in 'Dual blades'): dualism, dualist, dualistic, duality
+      3  'rule'             (rule in 'Lint rule'): ruler, rulers, rulership
+      3  'hydri'            (hydra in 'Hydra tax'): hydric, hydride, hydrilla
+      2  'census'           (census in 'Silicon census moment'): censused, censusing
+      2  'raptor'           (raptor in 'Raptor contingency'): raptores, raptorial
+      2  'architectur'      (architecture in 'Listening to the architecture sing'): architectural, architecturally
+      2  'blade'            (blades in 'Dual blades'): bladed, bladelike
+      1  'curve'            (curve in 'EQ curve'): curvey
+      1  'dinge'            (ding in 'Ding agent'): dinge
+      1  'agent'            (agent in 'Ding agent'): agential
