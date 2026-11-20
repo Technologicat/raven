@@ -598,6 +598,12 @@ What an open item costs everyone who has to read past it.
 
 **When an entry is given:** when a term appears in your new message, or in the few messages before it. The definitions go into the chat just ahead of your message, and stay there, so each is given once per branch of the chat. How much goes in at once and in a whole chat is capped. All of it is set in `raven.librarian.config`: `lorebook_scan_messages`, `lorebook_max_depth`, `lorebook_budget` and `lorebook_chat_cap`, to raise for a long discussion that uses many of your terms. Definitions are given only on a turn where the AI has tools.
 
+**Inflected forms:** a term fires however it is inflected — "two hydra taxes" fires *Hydra tax*. *Librarian* asks the AI for the other forms of each term's words, in the background, and keeps the answers.
+
+- **The languages** are `lorebook_languages` in `raven.librarian.config`, English only by default. A language with a few forms per word, as English has, takes `"forms"`: every inflected form, irregular ones included. A language whose endings stack, such as Finnish, takes `"stems"`, the beginning of the word its endings attach to: `{"English": "forms", "Finnish": "stems"}`. A stem also catches unrelated words that begin the same way, in every language, so add only the languages you write in.
+- **The answers belong to the AI model that gave them.** Switching to another model asks for them again, which takes a few minutes for a glossary of a hundred terms, running on the same backend beside your chat. Switching back finds the earlier answers. They are in `~/.config/raven/librarian/lorebook_expansion/`, one file per model.
+- **A form the model gets wrong** fires the entry wherever that word appears. Deleting that model's file asks for every form again, and a spelling the model missed can be added as an alias in the term's header. There is no way yet to remove a single wrong form.
+
 The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the entry spelled nearly like it, if there is one. Otherwise it gets the names of the entries spelled closest and of those whose definitions mention the term, or, with neither, the answer that the term is not defined.
 
 The **Lorebook** toggle (`Alt+L`) switches it on or off, and `!lorebook` does the same in `raven-minichat`. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.

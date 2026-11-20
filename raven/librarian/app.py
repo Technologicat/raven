@@ -110,6 +110,7 @@ with timer() as tim:
     from . import imagestore
     from . import llmclient
     from . import lorebook
+    from . import lorebook_expansion
     from . import mcpclient
     from . import skills
     from . import textfilestore
@@ -507,6 +508,10 @@ user_lorebook = lorebook.Lorebook(llm_settings, on_changed=_on_lorebook_changed)
 user_lorebook.start(watch=True)
 for _lorebook_file, _lorebook_problem in user_lorebook.problems.items():
     print(colorizer.colorize(f"Lorebook '{_lorebook_file}': {_lorebook_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
+# The terms' inflected forms: cached ones at once, the rest asked of the LLM in the background. Polled per frame
+# from `update_animations`, which is how it follows edits to the lorebook and a swap of the model.
+lorebook_expander = lorebook_expansion.Expander(llm_settings, user_lorebook)
+lorebook_expander.start()
 
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
 # and write it back at exit, so running both means the later exit silently discards the other's session.
@@ -2499,6 +2504,9 @@ def update_animations():
         if maybe_bad_status is not llmclient.backend_ready:
             _refresh_backend_status_pill(maybe_bad_status)
             _start_backend_status_poll(delay_first_probe=False)
+    # The lorebook's inflected forms follow edits to it and swaps of the model, neither of which raises anything
+    # here. A few attribute reads, and never waits: what it starts runs on a thread of its own.
+    lorebook_expander.poll()
     # Mirror the retriever's indexing progress text into INDEXING. The other indicators' texts are pushed.
     chat_controller.update_indexing_progress_text()
     # The jump-to-latest pill must be polled rather than pushed: the mouse wheel and the scrollbar move the
@@ -3770,6 +3778,7 @@ def _gui_release() -> None:
     chat_controller.shutdown()
     # After the chat, so that a turn in flight keeps its tools; before the wait, as it interrupts a start in progress.
     skill_library.shutdown()
+    lorebook_expander.shutdown()  # abandons a request in flight
     user_lorebook.shutdown()
     mcp_client.shutdown()
     mcp_task_manager.clear(wait=True)

@@ -68,6 +68,7 @@ with timer() as tim:
     from . import hybridir
     from . import llmclient
     from . import lorebook
+    from . import lorebook_expansion
     from . import mcpclient
     from . import scaffold
     from . import skills
@@ -206,6 +207,11 @@ def minimal_chat_client(backend_url) -> None:
         atexit.register(user_lorebook.shutdown)
         for filename, problem in user_lorebook.problems.items():
             print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}Lorebook '{filename}': {problem}{colorizer.Style.RESET_ALL}")
+        # The terms' inflected forms, asked in the background; polled before each message. Registered after the
+        # lorebook, so that `atexit`, running the last first, stops it before the lorebook goes.
+        lorebook_expander = lorebook_expansion.Expander(llm_settings, user_lorebook)
+        lorebook_expander.start()
+        atexit.register(lorebook_expander.shutdown)
 
         chat_show_model_info()
 
@@ -614,6 +620,7 @@ def minimal_chat_client(backend_url) -> None:
                 print()
                 return Values(action=action_next_exchange)
             if user_message_text:
+                lorebook_expander.poll()  # an edited lorebook or a swapped model; asks in the background
                 new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
                                                       datastore=datastore,
                                                       head_node_id=app_state["HEAD"],

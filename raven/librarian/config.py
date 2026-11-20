@@ -61,6 +61,15 @@ lorebook_max_depth = 2
 # The most tokens of definitions given at once, and in a whole chat (once given, a definition stays in the chat).
 lorebook_budget = 2000
 lorebook_chat_cap = 8000
+# A term fires however it is inflected: the LLM is asked, once per term, for its words' inflected forms in these
+# languages. "forms" lists whole words, which covers a language whose inflection is finite, as English's is.
+# "stems" adds the stems the words' endings attach to, for an agglutinative language whose suffixes stack, e.g.
+# `{"English": "forms", "Finnish": "stems"}`. A stem matches any word it begins, so it also catches unrelated words
+# in the other languages; only add a language that needs it. The answers are kept per model, so switching models
+# asks every term again, in the background.
+lorebook_languages: dict[str, str] = {"English": "forms"}
+lorebook_expansion_dir = librarian_userdata_dir / "lorebook_expansion"  # the answers, one ledger per model and prompt
+lorebook_expansion_batch_size = 10  # terms per request
 mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

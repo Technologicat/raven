@@ -136,7 +136,8 @@ def _store_lorebook_definitions(llm_settings: env,
                               count_tokens=lambda text: llmclient.count_tokens(llm_settings, text)[0],
                               budget=budget,
                               max_depth=librarian_config.lorebook_max_depth,
-                              already_fired=given)
+                              already_fired=given,
+                              expansions=getattr(llm_settings, "lorebook_expansions", None))
     if not firings:
         return head_node_id
 

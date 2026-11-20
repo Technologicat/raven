@@ -13,7 +13,7 @@ prompt of its own. The stateful half is `Lorebook`, which reads a folder, follow
 
 __all__ = ["Entry", "slugify",
            "parse", "load",
-           "Expansion", "clean_expansion", "Match", "find_matches",
+           "terms", "Expansion", "clean_expansion", "Match", "find_matches",
            "Firing", "select",
            "CANONICAL_NOT_DEFINED", "CANONICAL_NEAR_MISS", "CANONICAL_NO_ENTRY", "CANONICAL_CANDIDATES",
            "CANONICAL_MENTIONED_IN", "CANONICAL_LOOK_ONE_UP",
@@ -220,6 +220,20 @@ def _keys(entry: Entry) -> list[tuple[str, ...]]:
     keys = [_key(entry.title, sentence_case=True)]
     keys.extend(_key(alias, sentence_case=False) for alias in entry.aliases)
     return [key for key in keys if key]
+
+def terms(entries: Mapping[str, Entry]) -> dict[str, tuple[str, ...]]:
+    """Every term the entries fire on, its title or an alias as written -> its words, as `find_matches` matches them.
+
+    A word in lowercase matches in any case, one with an uppercase letter only as written. The words are what an
+    `Expansion` is keyed by.
+    """
+    found: dict[str, tuple[str, ...]] = {}
+    for entry in entries.values():
+        for phrase, sentence_case in ((entry.title, True), *((alias, False) for alias in entry.aliases)):
+            key = _key(phrase, sentence_case=sentence_case)
+            if key:
+                found.setdefault(_normalize(phrase), key)
+    return found
 
 @dataclasses.dataclass(frozen=True)
 class Expansion:
@@ -496,9 +510,9 @@ def format_entry(entry: Entry) -> str:
     """An entry as the model reads it: its title, then its content."""
     return f"{entry.title}\n\n{entry.content}"
 
-def _answer(entries: Mapping[str, Entry], term: str) -> str:
+def _answer(entries: Mapping[str, Entry], term: str, *, expansions: Mapping[str, Expansion] | None = None) -> str:
     """The text `lorebook_lookup` answers `term` with."""
-    found = lookup(entries, term)
+    found = lookup(entries, term, expansions=expansions)
     if found.maybe_entry is not None:
         if found.exact:
             return format_entry(found.maybe_entry)
@@ -551,7 +565,8 @@ class Lorebook:
     """The lorebook in a folder, offered to the LLM through `settings`.
 
     `settings`: from `llmclient.setup` or `llmclient.connect`. `start` adds the lookup tool to it when there are
-                entries, and `settings.lorebook_entries` holds them for the per-turn scan; `shutdown` removes both.
+                entries, and `settings.lorebook_entries` holds them for the per-turn scan, with
+                `settings.lorebook_expansions` holding the key words' other forms; `shutdown` removes all three.
 
     `directory`: where the lorebook files are. Default is `librarian_config.lorebook_dir`.
 
@@ -571,7 +586,9 @@ class Lorebook:
         self.entry_levels = dict(entry_levels if entry_levels is not None else librarian_config.lorebook_entry_levels)
         self.on_changed = on_changed
         self._entries: dict[str, Entry] = {}
+        self._expansions: dict[str, Expansion] = {}
         self._problems: dict[str, str] = {}
+        self._generation = 0
         self._registered = False
         self._maybe_watcher: filewatch.DirectoryWatcher | None = None
 
@@ -579,6 +596,24 @@ class Lorebook:
         """Copy, so that a caller cannot edit the lorebook's record."""
         return dict(self._entries)
     entries = property(fget=_get_entries, doc="The entries, by id, in order.")
+
+    def _get_expansions(self) -> dict[str, Expansion]:
+        """Copy, so that a caller cannot edit the lorebook's record."""
+        return dict(self._expansions)
+    def _set_expansions(self, expansions: Mapping[str, Expansion]) -> None:
+        """Replace the expansions, and offer them to the scan and the lookup tool from now on."""
+        self._expansions = dict(expansions)
+        self._install()
+    def _get_generation(self) -> int:
+        """A counter, compared rather than read: only whether it moved means anything."""
+        return self._generation
+    generation = property(fget=_get_generation,
+                          doc="How many times the folder has been read. Changes whenever a file does, whether or not "
+                              "the set of entries did, so a poll can notice an edited alias.")
+
+    expansions = property(fget=_get_expansions, fset=_set_expansions,
+                          doc="The key words' other forms, as `find_matches` takes them; `lorebook_expansion` makes "
+                              "them. Setting this offers them to the scan and the lookup tool from then on.")
 
     def _get_problems(self) -> dict[str, str]:
         """Copy, so that a caller cannot edit the lorebook's record."""
@@ -609,10 +644,12 @@ class Lorebook:
             self._maybe_watcher.stop()
             self._maybe_watcher = None
         self._entries = {}
+        self._expansions = {}
         self._install()
 
     def _refresh(self) -> None:
         self._entries, self._problems = load(self.directory, entry_levels=self.entry_levels)
+        self._generation += 1
         for filename, problem in self._problems.items():
             logger.error(f"Lorebook: '{filename}': {problem}")
         self._install()
@@ -622,10 +659,12 @@ class Lorebook:
     def _install(self) -> None:
         # Readers take the dict as it is at that moment, and it is replaced whole rather than changed in place,
         # so a scan running alongside a reload sees one lorebook or the other, never a mixture.
-        entries = self._entries
+        entries, expansions = self._entries, self._expansions
         self.settings.lorebook_entries = entries
+        self.settings.lorebook_expansions = expansions
         specs = [_tool_spec()] if entries else []
-        entrypoints = {llmtools.LOREBOOK_TOOL_NAME: lambda term: _answer(entries, term)} if entries else {}
+        entrypoints = ({llmtools.LOREBOOK_TOOL_NAME: lambda term: _answer(entries, term, expansions=expansions)}
+                       if entries else {})
         previous = {llmtools.LOREBOOK_TOOL_NAME} if self._registered else set()
         llmtools.replace_tools(self.settings, previous_names=previous, specs=specs, entrypoints=entrypoints)
         self._registered = bool(entries)

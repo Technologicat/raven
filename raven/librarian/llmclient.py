@@ -924,12 +924,15 @@ def _prompt_texts(user: str, char: str) -> dict[str, str]:
     """The settings that come from prompt files, filled in for `user` and `char`.
 
     Includes `search_query_instruction`, what the automatic search's query is written from; see `scaffold.ai_turn`.
+    And `lorebook_expansion_instruction`, what the lorebook's inflected forms are asked with, which is not a
+    template: its example is JSON, whose braces stay as written. See `lorebook_expansion`.
     """
     template_vars = env(user=user, char=char)
     return {"system_prompt": _setup_system_prompt(template_vars),
             "character_card": _setup_character_card(template_vars),
             "user_card": _setup_user_card(template_vars),
-            "search_query_instruction": _format_prompt("search_query", template_vars)}
+            "search_query_instruction": _format_prompt("search_query", template_vars),
+            "lorebook_expansion_instruction": _load_prompt("lorebook_expansion")}
 
 def make_prompt_reloader(settings: env) -> Callable[[], bool]:
     """Return a function that brings `settings` up to date with the prompt files, if they have changed on disk.
