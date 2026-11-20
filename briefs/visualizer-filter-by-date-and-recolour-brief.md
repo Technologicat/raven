@@ -106,6 +106,35 @@ a reset per filter is Nielsen's *user control and freedom*, an exit from one act
 - **The comparison of year-specific maps against the filtered whole map waits for the AOKK team's final keeps**,
   and is done with them.
 
+## Decided: colouring by year (2026-11-20)
+
+Settled with the maintainer:
+
+- **A *Colour by* selector, *Cluster* or *Year***, on the year row, with **F2** to switch and the same keyboard
+  handling as the other selectors.
+- **The plot's configured colormap**, reassigned to the years: a change of meaning, not of palette.
+- **A colour bar on the year row**, "2012 ▬▬▬ 2026", from the same colormap, shown only while colouring by year: a
+  small drawlist of a rectangle per year. What the colours mean is on screen.
+- **A record with no year takes the Misc colour.** Misc is "no cluster placement detected", so "no year" is its
+  natural generalization; it stays distinct from grayed, which means filtered out.
+- **The reading views group by what the plot colours by** (the maintainer): in year mode the tooltip and the info
+  panel group by year, so the group headers are the legend. One notion of "the current grouping" serves the plot,
+  the tooltip and the panel alike, and the two views never disagree.
+  - Within a group, the order stays the reference list's: authors, year, title.
+  - **The year in front of each title in the tooltip, always**, in both modes: "(2022) Teaching a conversational
+    agent…". A record with no year shows none. A strict improvement on its own (the maintainer).
+  - **The info panel's cluster features become group features in year mode**: Ctrl+N, Ctrl+P and Ctrl+U go by
+    year, F7 and the header buttons select a year. Its widget lookups, anchors and scroll-to-cluster key on the
+    group rather than on the cluster ID.
+  - **Purity has no per-year counterpart**, so a year header carries none.
+- **Keywords per year are part of v1, not v0** (the maintainer). v0 groups by year with plain headers; the feature
+  is not complete without the keywords.
+  - **Computed at import time**, not on display: the word cloud's computation is too slow to run live.
+  - **Recent years can hold thousands of records**, which bears on the LLM keyworder's prompt size.
+  - So they are stored in the dataset, which ties v1 to the dataset format (`TODO.md`, "Data file format"), or to
+    an extra field in today's pickle.
+
 ## Open
 
-Colouring by year: its design.
+Colouring by year's v1: per-year keywords at import, and how the LLM keyworder copes with a year of thousands of
+records.
