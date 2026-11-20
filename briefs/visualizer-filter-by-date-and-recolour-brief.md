@@ -102,9 +102,14 @@ a reset per filter is Nielsen's *user control and freedom*, an exit from one act
   the epoch, as a system log carries, with a general time-range picker in the GUI. It needs the dataset format
   changed, as BibTeX gives a year only, so it is filed with the format redesign (`TODO.md`, "Data file format").
   - **Per-year keywords stop being precomputable there** (the maintainer): an arbitrary time range has no fixed
-    groups. Frequency keywords survive it, as each record's keyword counts are already in the dataset and add up
-    over any bin, which is how the word cloud sums a selection. LLM keywords do not add up, so they would want
-    precomputed bins at a fixed base granularity, or generating on demand.
+    groups. LLM keywords do not add up over a bin, so they would want precomputed bins at a fixed base
+    granularity, or generating on demand.
+  - **Frequency keywords add up over any bin**, as each record's keyword counts are already in the dataset (which
+    is how the word cloud sums a selection), **but are useless as they stand** (the maintainer). The fix is planned
+    in `briefs/visualizer-keyword-pools-brief.md`, *An improved classical mode, worth trying*: phrases as candidates, then c-TF-IDF,
+    then an embedding rerank. The first two keep the additivity, needing only each bin's term counts against the
+    corpus totals, so an improved frequency keyworder would serve arbitrary time ranges. The rerank needs each
+    bin's centroid embedding, one more reason for the embeddings in the dataset.
 - **The embeddings in the dataset move to the format redesign** too (candidate 3); same item.
 - **The two-handle range slider** replaces the two year fields later (*Decided: the year filter*, above).
 - **The comparison of year-specific maps against the filtered whole map waits for the AOKK team's final keeps**,
