@@ -174,6 +174,9 @@ would be knowledge left on the floor. So this clears the bar the project already
     rendering in each configured language, as extra keys, is a possible follow-up, not built: translating a
     coinage is a judgement call, and a model's rendering may not be the one its user would say. Sometimes it
     is: *hydravero* reads exactly right to the maintainer.
+    - **A test for it, proposed by the maintainer (2026-11-20):** translate every glossary title into Finnish
+      three times — the maintainer, Claude, and the local model — and count how often the three agree.
+      Agreement between translators is a fair measure of whether a rendering is the one people would say.
 - **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`,
   run as a `sweep.Sweep` over the terms with its `Ledger` as the cache (2026-11-20): resuming, telling a bad
   batch from a dead backend, model swaps and cancellation are already there. The prompt is a file in
@@ -193,9 +196,18 @@ would be knowledge left on the floor. So this clears the bar the project already
   on, the maintainer's working material being English. Agreed (2026-11-19): a stem must share at least its word's length
   minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
   (*kaupunki → kaupungissa* keeps *kaupun-*). A stem failing it is dropped, which can only cost a miss.
-  - **Refined, and a floor (2026-11-20).** The word itself as a stem is always allowed. A shortened stem must
-    keep at least the word's length minus two letters *and* at least four: minus two alone let *fup* keep *f*,
-    and *hydra* keep *hyd*, which catches *hydrogen*. The four is chosen, not derived.
+  - **Refined, and a floor (2026-11-20).** Every stem, the word itself included, must keep at least the word's
+    length minus two letters *and* at least four: minus two alone let *fup* keep *f*, and *hydra* keep *hyd*,
+    which catches *hydrogen*. The four is chosen, not derived. So a word of three letters or fewer gets forms
+    only.
+  - **Stems only for a language that needs them** (2026-11-20). A stem followed by any letters is loose even at
+    full length — *hydra* catches *hydrangea*, *lint* catches *lintel* — so the prompt asks for stems only for
+    an agglutinative language such as Finnish, where suffixes stack without limit and no list of forms can
+    cover them. Every other language gets forms, which cover inflection completely where it is finite,
+    irregular forms included (*mouse → mice*, *policy → policies*); derivation (*tax → taxation*) is a different
+    word, out of scope as translation is. With the English-only default no stems exist at all. With Finnish on,
+    stems apply to all text, the matcher not knowing a message's language, so *hydra* would catch *hydrant* in
+    English prose: the measurement below counts that too, against `/usr/share/dict/words` and WordNet.
   - **It rejects verb stem changes**, the maintainer's examples: *juosta → juoks-* shares 3 of 6 letters,
     *juoksennella → juoksentel-* 7 of 12; Finnish suffixes stack on the inflection stem, not on the dictionary
     form. Considered: **(b)**, two conditions — the stem at least max(4, length − 2) letters long, sharing at
