@@ -165,8 +165,9 @@ would be knowledge left on the floor. So this clears the bar the project already
   **Cached by the term** (title and aliases), not the body, so editing a definition asks nothing. The cache is
   machinery, not meant to be edited: the author's way to add a form is an alias in the header. With the backend
   down, titles and aliases match and the expansions arrive once it answers.
-- **Languages are a setting**, `lorebook_languages`, English and Finnish by default; the prompt asks for loan
-  forms too (*duolectissa*), Finnish speakers inflecting English terms.
+- **Languages are a setting**, `lorebook_languages`, **English only by default** (2026-11-20), Finnish to be
+  added by those who want it — the Finnish a local model writes being poor, below. With Finnish on, the
+  prompt asks for loan forms too (*duolectissa*), Finnish speakers inflecting English terms.
 - **A stem's false positives need a guard derived rather than tuned**: there is no Finnish corpus to calibrate
   on, the maintainer's working material being English. Agreed (2026-11-19): a stem must share at least its word's length
   minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
@@ -479,9 +480,33 @@ the plugin is a port, both landing in v0/v1.
 
 **Not needed now** (maintainer, 2026-11-20): the local setup is moving to Open WebUI, with LM Studio likely
 staying as the on-the-road one. The longer-term need is wider than this section: a lorebook for whatever
-frontend is in use — LM Studio, Open WebUI, pi.dev and others. **Open: how to make a port quick**, whether
-from the Raven implementation as it stands or from something written for the purpose. The section below is
-kept as what is known about LM Studio specifically.
+frontend is in use — LM Studio, Open WebUI, pi.dev and others. The section below is kept as what is known
+about LM Studio specifically.
+
+**Decided (2026-11-20): make porting quick, right after the key expansion.** Raven's implementation is the
+reference, and three things make it portable:
+
+- **Conformance fixtures as data**: a JSON file of cases (a glossary snippet, a text, the expected matches,
+  selections and lookup answers), read by Raven's own tests and run by every port. The spec that cannot
+  drift from the code.
+- **The core as one dependency-free file** — format, matching, selection, lookup — apart from Raven's
+  stateful half (the watcher, the settings, the tool's registration). A Python host can take it as it is.
+- **A short porting guide**: what a host must provide — where definitions go, how "already given on this
+  branch" is remembered, the budget and cap, the lookup tool.
+
+What a host has to supply differs, which is what the guide is for:
+
+- **Open WebUI** is Python (its functions are; recalled, not checked), so the core file goes in unchanged.
+- **LM Studio and pi** are TypeScript, so one TS port of the core serves both.
+  - **pi** (read 2026-11-20, `docs.pi.dev` and its `extensions.md`): an extension's `before_agent_start` can
+    return a message with a `customType`, stored in the session and sent to the model — the nearest thing to
+    Raven's stored round — and recognizing that type on `ctx.sessionManager.getBranch()` is how a port would
+    know what this branch was already given. `pi.registerTool` registers the lookup. No per-extension
+    configuration is documented, so the folder's path would come from a file of the extension's own.
+  - **LM Studio**'s preprocessor can only prepend to the user's message, so its port needs a marker it can
+    find in the history.
+- **The key expansion's cache is a documented JSON format**, and its prompt a shipped file, so a port can
+  read the expansions Raven wrote or make its own with the same prompt.
 
 For driving the model from LM Studio's own chat UI, ship the lorebook as an LM Studio
 **prompt-preprocessor plugin**. Because Juha runs both frontends, this is a committed deliverable
