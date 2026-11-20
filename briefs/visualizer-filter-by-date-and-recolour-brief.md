@@ -129,7 +129,9 @@ Settled with the maintainer:
   - **Purity has no per-year counterpart**, so a year header carries none.
 - **Keywords per year are part of v1, not v0** (the maintainer). v0 groups by year with plain headers; the feature
   is not complete without the keywords.
-  - **Computed at import time**, not on display: the word cloud's computation is too slow to run live.
+  - **Computed at import time**, as the cluster keywords are: the years are fixed groups, known when the dataset
+    is made. The word cloud is the other case, dynamic by design: it works on whatever the user selects, so it
+    cannot be precomputed, and computing per-year keywords on display the same way would be too slow.
   - **Recent years can hold thousands of records**, which bears on the LLM keyworder's prompt size.
   - So they are stored in the dataset, which ties v1 to the dataset format (`TODO.md`, "Data file format"), or to
     an extra field in today's pickle.
