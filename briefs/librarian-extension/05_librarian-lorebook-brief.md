@@ -131,9 +131,13 @@ would be knowledge left on the floor. So this clears the bar the project already
   - **Progress (2026-11-20, end of day):** the key expansion is built (`lorebook_expansion`), tested, measured
     (`investigations/lorebook-lemmas/`) and pushed. Not yet seen in the GUI: the app asks for the English forms
     in the background on its first launch with the new prompt, about two and a half minutes for the glossary.
-    **Next: making the lorebook portable** — fixtures as data, the core as one dependency-free file, the porting
-    guide (the LM Studio section below). Open small items: the prompt's Finnish example *rent → rentin* wants
-    the maintainer's eye, and whether thinking improves the forms is a TODO at the call.
+    **First on Monday: a hyphenated compound of a term's words does not fire it** — "let's not get
+    *hydra-taxed*" misses *Hydra tax*, and *flash-attentionin* misses *Flash attention*, where the unhyphenated
+    forms fire (checked 2026-11-20). The tokenizer keeps a hyphenated word whole. Fix: where a text word is
+    hyphenated, also try its parts as separate words; a term with a hyphen of its own (*co-pter*) still matches
+    the word whole. Then the GUI check, with an inflected term. **Then: making the lorebook portable** —
+    fixtures as data, the core as one dependency-free file, the porting guide (the LM Studio section below).
+    Whether thinking improves the forms is a TODO at the call.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
@@ -183,6 +187,12 @@ would be knowledge left on the floor. So this clears the bar the project already
     - **A test for it, proposed by the maintainer (2026-11-20):** translate every glossary title into Finnish
       three times — the maintainer, Claude, and the local model — and count how often the three agree.
       Agreement between translators is a fair measure of whether a rendering is the one people would say.
+    - **How Finnish actually takes English terms** (the maintainer, 2026-11-20), which is what such a rendering
+      has to match. A plain word is as likely as not swapped for its Finnish equivalent (*rent* → *vuokra*). A
+      technical term with no settled Finnish one is often half-translated, the English part kept and the
+      Finnish part inflecting (*attention-mekanismi*), and a researcher understands that where a full
+      translation (*huomiomekanismi*) draws a raised eyebrow. A proper noun is inflected as it is
+      (*flash-attentionin*). Inflecting a plain English word directly as a loan also happens, but less.
 - **Generated when entries load**, in the background and batched, through `agent.ask` and `parse_json_reply`,
   run as a `sweep.Sweep` over the terms with its `Ledger` as the cache (2026-11-20): resuming, telling a bad
   batch from a dead backend, model swaps and cancellation are already there. The prompt is a file in
