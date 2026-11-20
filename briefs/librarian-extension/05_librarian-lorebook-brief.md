@@ -136,7 +136,8 @@ would be knowledge left on the floor. So this clears the bar the project already
     forms fire (checked 2026-11-20). The tokenizer keeps a hyphenated word whole. Fix: where a text word is
     hyphenated, also try its parts as separate words; a term with a hyphen of its own (*co-pter*) still matches
     the word whole. **Split at an apostrophe too**: Finnish inflects a foreign name whose written ending differs
-    from its sound with one (*Bordeaux'n*; recalled from Kotus's guidance, not checked), a case the colon rule
+    from its sound with one (*Bordeaux'n*; confirmed by the maintainer, as is the connecting *-i-* of a name
+    ending in a pronounced consonant, *Bushin*), a case the colon rule
     does not cover — the colon being for abbreviations and numerals (*EU:ssa*), which the matcher already
     reads, the ending standing apart. It also lets an English possessive (*tax's*) fire with no form listed.
     The maintainer adds (2026-11-20) that a plain English word inflected as a loan usually follows Finnish
