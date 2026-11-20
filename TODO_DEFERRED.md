@@ -1310,9 +1310,9 @@ Note the *scan* side is already there and needs nothing: `raven.avatar.character
 `raven.librarian.userprofile` both offer `rescan`, so a selector can list what is on disk now rather than
 what was there at start.
 
-## Let the system prompt be hidden
+## Let the scaffolding be hidden: the system prompt, tool rounds, lorebook definitions
 
-*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09*
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09 · See also: `briefs/librarian-extension/05_librarian-lorebook-brief.md`*
 
 Librarian shows the system prompt, on purpose — it is a teaching tool as much as a chat client, and seeing
 what the model was actually set up with is a large part of what there is to learn. But it is not always
@@ -1342,6 +1342,18 @@ with its own colours (`gui_config.chat_color_system_front`), so not drawing it i
 pointed at. That stays true whether or not the user can see it — it was rewritten in 0.2.9 precisely so it
 would not claim invisibility — so hiding the prompt needs no change there. Worth stating, since the
 obvious guess is that the two are coupled.
+
+**The same question for tool rounds, and for the lorebook's definitions** (maintainer, 2026-11-20). A tool
+round — the assistant message asking for calls, and the results — is scaffolding of the same kind: what
+the model worked from, worth seeing while learning, in the way while working. The lorebook stores its
+definitions as a tool round of `lorebook_lookup` calls nobody made, ahead of the user's message, so they
+come under the same switch, unless they turn out to want one of their own: a long discussion of defined
+terms can carry several thousand tokens of them.
+
+- **The graph half is partly solved for these**: `chatgraph` already folds a round's results into a gap
+  box once there are enough of them (`_MIN_HIDDEN_FOR_GAP`). What is left there is whether a hidden round
+  also folds its asking message, and the rounds below the fold threshold.
+- **The chat log half is a filter**, as for the system prompt.
 
 Raised while rewriting that notice (2026-09-09).
 

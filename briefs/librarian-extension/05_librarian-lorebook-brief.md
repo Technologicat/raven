@@ -31,8 +31,9 @@ would be knowledge left on the floor. So this clears the bar the project already
     lorebook holds anything at all. Its metadata marks it as automatic, so the log does not credit a model with it.
   - **The tool's description says what it holds**: only the terms the user has defined, so most words are not in
     it. A real call for an unknown term answers with exactly that.
-  - **Nodes show in the chat log and the graph**, as everything else does. A visibility toggle can come later,
-    together with one for the system prompt.
+  - **Nodes show in the chat log and the graph**, as everything else does. Hiding them is filed with hiding the
+    system prompt and tool rounds, in `TODO_DEFERRED.md` ("Let the scaffolding be hidden"), so that it does
+    not hold this brief open.
 - **Humans mix up word order, and the match has to allow it.** "different bath, same shampoo" should fire the
   entry "same bath, different shampoo". A multi-word key also matches its words in any order, within a span of
   its own length; still deterministic, with the smart-case rule applying per word. No edit distance in v0. The
@@ -97,9 +98,13 @@ would be knowledge left on the floor. So this clears the bar the project already
     a definition through a real backend, and fails on the wire bug above.
 - **A switch after all** (maintainer, 2026-11-19, reversing "no GUI toggle in v0"): `app_state["lorebook_enabled"]`,
   on by default, which the controller passes to the prefill, the user turn, the AI turn and the retry, and
-  `!lorebook` in minichat beside `!skills`. **The GUI placement is open**, the toolbar's row of toggles being
-  full; to think through together (2026-11-20). A change on disk refreshes the context-fill readout and shows
-  a composer notice through `on_changed`, as the skills library does.
+  `!lorebook` in minichat beside `!skills`. A change on disk refreshes the context-fill readout and shows a
+  composer notice through `on_changed`, as the skills library does.
+  - **In the GUI, the *Lorebook* checkbox, `Alt+L`** (2026-11-20). The row of toggles was full, so the toggles
+    became two rows: what the AI may draw on, then how it answers and what you see and hear of it. That cost
+    the status lights a line, so they take three. Considered and rejected: moving the toggles into the
+    composer's toolbar, which would split one set of settings over two places; and icon toggles, where *Docs*,
+    *Skills* and *Lorebook* would be three books.
 - **Scripts have it off by default**: `agent.turn(..., lorebook_enabled=False)`, mirroring `skills_enabled`.
   - **`agent.ask` has no lorebook**, the lorebook being retrieval-shaped and `ask` having neither retrieval nor
     history. The lorebook module exposes its scan as a pure function from text to matched entries, which a
@@ -121,6 +126,8 @@ would be knowledge left on the floor. So this clears the bar the project already
     `scaffold.user_turn(..., lorebook_enabled=...)` storing what fires on the branch, today. **Next: step 4**, the
     wiring (`agent.turn`, the app, minichat, the tool's gate in `maybe_tool_names_for_turn`, README,
     changelog); then the key expansion.
+  - **Progress (2026-11-20):** step 4 is done, the GUI switch included, and the maintainer's live check in
+    Librarian passed end to end. **Next: the key expansion**, below.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
@@ -164,9 +171,11 @@ would be knowledge left on the floor. So this clears the bar the project already
   on, the maintainer's working material being English. Agreed (2026-11-19): a stem must share at least its word's length
   minus two letters as a prefix, Finnish inflection and consonant gradation acting on the last syllable
   (*kaupunki → kaupungissa* keeps *kaupun-*). A stem failing it is dropped, which can only cost a miss.
-- **The Finnish the LLM writes is unmeasured.** Qwens from 3.5 on read Finnish well; writing it has been broken
-  at the 30B class, and whether Flash Next does better is part of a broader Finnish evaluation, not this
-  feature's. Generated stems inherit that uncertainty.
+- **The Finnish the LLM writes is poor, and the support is built anyway.** Qwens from 3.5 on read Finnish
+  well; writing it has been broken at the 30B class, and Flash Next is not usable either: too many typos and
+  invented words (maintainer, 2026-11-20). No local model tried so far clears the maintainer's bar. But users
+  want Finnish on local AI, and it is their install to judge, so the Finnish half goes in. Generated stems
+  inherit the model's quality, which the stem guard can only partly contain.
 - **Raven-server's footprint is unchanged**: the expansion uses the LLM that is loaded anyway, where (a) or (b)
   would add models to the server, in RAM or VRAM.
 - **Voikko stays out of v0.** Probed (`investigations/lorebook-lemmas/`): perfect on dictionary words however
@@ -468,6 +477,12 @@ the plugin is a port, both landing in v0/v1.
 
 ## LM Studio plugin (v0/v1 — second frontend, not a stretch goal)
 
+**Not needed now** (maintainer, 2026-11-20): the local setup is moving to Open WebUI, with LM Studio likely
+staying as the on-the-road one. The longer-term need is wider than this section: a lorebook for whatever
+frontend is in use — LM Studio, Open WebUI, pi.dev and others. **Open: how to make a port quick**, whether
+from the Raven implementation as it stands or from something written for the purpose. The section below is
+kept as what is known about LM Studio specifically.
+
 For driving the model from LM Studio's own chat UI, ship the lorebook as an LM Studio
 **prompt-preprocessor plugin**. Because Juha runs both frontends, this is a committed deliverable
 (v0, v1 at the latest), not a someday-maybe. Well-supported: LM Studio plugins are TypeScript on
@@ -514,7 +529,8 @@ Scope and constraints:
 - A term appearing in recent context injects its (atomic, whole) entry into the prompt; absent
   the term, nothing injects.
 - Word-boundary matching: "cat" does not fire on "concatenate".
-- Injected lorebook content respects a token budget; over-budget firings evict by priority.
+- Injected lorebook content respects a token budget: entries are taken by depth, then in the order they
+  appear, and one that does not fit is skipped and logged.
 - `glossary.md` ingests cleanly and its terms trigger correctly.
 - Recursive triggering works and terminates on the glossary's cycles (visited-set; no double
   injection, no runaway).
