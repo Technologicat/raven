@@ -19,6 +19,7 @@ mtime, so a second run over the same dataset costs seconds. The report goes to `
 import argparse
 import collections
 import hashlib
+import json
 import math
 import pathlib
 import pickle
@@ -33,6 +34,13 @@ from raven.common import nlptools  # noqa: E402 -- after the path setup
 from raven.common.text import stopwords as raven_stopwords  # noqa: E402 -- after the path setup
 
 STOPWORDS = set(nlptools.default_stopwords) | {x.lower() for x in raven_stopwords.academic_stopwords}
+
+# Candidates for a list of words useless as a bare one-word keyword, while useful inside a phrase:
+# "potential" against "potential flow", "field" against "field theory". Applied only to a single-word
+# candidate, never to a phrase's edges. Proposed from the labels of six corpora, 2026-11-20, not yet adopted.
+BARE_STOPWORDS = {"background", "challenge", "change", "concept", "concern", "conclusion", "effect",
+                  "example", "field", "framework", "future", "issue", "level", "limitation", "method",
+                  "outcome", "paper", "participant", "people", "potential", "problem", "strategy", "topic"}
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
@@ -171,6 +179,8 @@ def phrases(doc) -> set[str]:
             continue
         words = phrase_words(tokens)
         for start in range(max(0, len(words) - MAX_PHRASE_WORDS), len(words)):
+            if words[start] in STOPWORDS:  # "dark- and photo-fermentation" yields "and photo-fermentation"
+                continue
             phrase = " ".join(words[start:])
             if len(phrase) < MIN_CHARS or phrase in STOPWORDS:
                 continue
@@ -342,9 +352,31 @@ def nested(a: str, b: str) -> bool:
     return any(wb[i:i + len(wa)] == wa for i in range(len(wb) - len(wa) + 1))
 
 
+def umbrella_terms(candidates: list[set[str]], labels: list[int], *, min_support: int = 2,
+                   threshold_fraction: float = 0.1) -> set[str]:
+    """Terms present in too many clusters to say how any one of them stands out.
+
+    The rule `nlptools.suggest_keywords` applies to the stored keywords, with clusters as its documents: a
+    term present in at least max(min(5, n), ceil(threshold_fraction n)) of the n clusters is excluded.
+    Present means in at least `min_support` of the cluster's records, the bar a term must clear to be
+    ranked for a cluster at all.
+    """
+    tf = collections.defaultdict(collections.Counter)
+    for terms, label in zip(candidates, labels):
+        if label >= 0:
+            tf[label].update(terms)
+    n = len(tf)
+    threshold_n = max(min(5, n), math.ceil(threshold_fraction * n))
+    presence = collections.Counter()
+    for counts in tf.values():
+        presence.update(term for term, count in counts.items() if count >= min_support)
+    return {term for term, count in presence.items() if count >= threshold_n}
+
+
 def pick(ranked: list[tuple[str, float, float]], top: int, *, suppress_nested: bool,
-         keep_longer: float = 0.5) -> list[tuple[str, float]]:
-    """The first `top` terms as `(term, share)`, with nested phrases suppressed if asked.
+         keep_longer: float = 0.5, exclude: frozenset[str] = frozenset()) -> list[tuple[str, float]]:
+    """The first `top` terms as `(term, share)`, with nested phrases suppressed if asked, and the terms in
+    `exclude` skipped.
 
     When a candidate and a term already taken are nested in each other, only one of them is kept. The
     shorter one always covers at least as much of the cluster, every record holding "latin hypercube
@@ -354,6 +386,8 @@ def pick(ranked: list[tuple[str, float, float]], top: int, *, suppress_nested: b
     """
     chosen = []
     for term, _weight, share in ranked:
+        if term in exclude:
+            continue
         if suppress_nested:
             clash = next((j for j, (other, _) in enumerate(chosen) if nested(term, other)), None)
             if clash is not None:
@@ -366,6 +400,21 @@ def pick(ranked: list[tuple[str, float, float]], top: int, *, suppress_nested: b
         if len(chosen) == top:
             break
     return chosen
+
+
+def pick_mixed(ranked: list[tuple[str, float, float]], top: int, *, n_common: int, umbrella: set[str],
+               bare: frozenset[str]) -> list[tuple[str, float]]:
+    """`n_common` terms from the full ranking, then the rest from the ranking with umbrella terms removed.
+
+    The two pools of the keyword-pools brief, from one set of scores: the first says what the cluster is
+    (in a single-topic corpus, often a term other clusters share), the rest how it stands out.
+    """
+    common = pick(ranked, n_common, suppress_nested=True, exclude=bare)
+    taken = {term for term, _ in common}
+    rest = [item for item in ranked
+            if item[0] not in taken and not any(nested(item[0], t) for t in taken)]
+    distinctive = pick(rest, top - len(common), suppress_nested=True, exclude=bare | umbrella)
+    return common + distinctive
 
 
 # --------------------------------------------------------------------------------
@@ -415,23 +464,29 @@ def main():
     candidates = {space: fold_plurals(candidates[space]) for space in ("unigram", "phrase")}
     candidates["phrase-ab"], display = expand_abbreviations(candidates["phrase"], definitions)
 
-    stored = {cid: list(dataset["vis_keywords_by_cluster"][cid]) for cid in members}
+    # Stored LLM keywords are phrases in their own capitalization; they are matched against the phrase
+    # candidates, which undercounts them, a keyword being an abstraction over its cluster.
+    stored = {cid: [kw.lower() for kw in dataset["vis_keywords_by_cluster"][cid]] for cid in members}
+    stored_space = "phrase-ab" if any(" " in kw for kws in stored.values() for kw in kws) else "unigram"
     unigram_ranked = ctfidf(candidates["unigram"], labels)
-    phrase_ranked = ctfidf(candidates["phrase"], labels)
-    phrase_kl_ranked = ctfidf(candidates["phrase"], labels, weighting="kl")
     phrase_ab_ranked = ctfidf(candidates["phrase-ab"], labels)
+    umbrella = umbrella_terms(candidates["phrase-ab"], labels)
     methods = {
-        "stored": {cid: [(kw, share) for kw, share in zip(kws, shares_by_literal_match(kws, [candidates["unigram"][i] for i in members[cid]]))]
+        "stored": {cid: list(zip(kws, shares_by_literal_match(kws, [candidates[stored_space][i] for i in members[cid]])))
                    for cid, kws in stored.items()},
         "unigram": {cid: pick(unigram_ranked.get(cid, []), args.top, suppress_nested=False) for cid in members},
-        "phrase": {cid: pick(phrase_ranked.get(cid, []), args.top, suppress_nested=True) for cid in members},
-        "phrase-kl": {cid: pick(phrase_kl_ranked.get(cid, []), args.top, suppress_nested=True) for cid in members},
         "phrase-ab": {cid: pick(phrase_ab_ranked.get(cid, []), args.top, suppress_nested=True) for cid in members},
+        "phrase-cut": {cid: pick(phrase_ab_ranked.get(cid, []), args.top, suppress_nested=True, exclude=umbrella)
+                       for cid in members},
+        "phrase-bare": {cid: pick(phrase_ab_ranked.get(cid, []), args.top, suppress_nested=True,
+                                  exclude=frozenset(BARE_STOPWORDS)) for cid in members},
+        "phrase-mix": {cid: pick_mixed(phrase_ab_ranked.get(cid, []), args.top, n_common=2, umbrella=umbrella,
+                                       bare=frozenset(BARE_STOPWORDS)) for cid in members},
     }
     labels_canonical = {name: {cid: [kw for kw, _ in kws] for cid, kws in labelling.items()} for name, labelling in methods.items()}
-    methods["phrase-ab"] = {cid: [(display.get(kw, kw), share) for kw, share in kws] for cid, kws in methods["phrase-ab"].items()}
-    coverage_space = {"stored": "unigram", "unigram": "unigram", "phrase": "phrase", "phrase-kl": "phrase",
-                      "phrase-ab": "phrase-ab"}
+    for name in ("phrase-ab", "phrase-cut", "phrase-bare", "phrase-mix"):
+        methods[name] = {cid: [(display.get(kw, kw), share) for kw, share in kws] for cid, kws in methods[name].items()}
+    coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab", "phrase-mix": "phrase-ab"}
 
     lines = [f"# Cluster keywords: {args.dataset.name}", "",
              f"{len(records)} records, {len(members)} clusters, {sum(1 for x in labels if x < 0)} outliers; "
@@ -447,8 +502,11 @@ def main():
     lines.append("")
     lines.append("*Coverage*: the share of a cluster's records containing at least one of its keywords, averaged over clusters.")
     lines.append("")
+    lines.append(f"Umbrella terms excluded by `phrase-cut` ({len(umbrella)}): "
+                 + ", ".join(sorted(display.get(t, t) for t in umbrella)))
+    lines.append("")
     for name, s in summaries.items():
-        lines.append(f"- most repeated, {name}: " + ", ".join(f"{display.get(kw, kw) if name == 'phrase-ab' else kw} ×{n}"
+        lines.append(f"- most repeated, {name}: " + ", ".join(f"{display.get(kw, kw) if name.startswith('phrase') else kw} ×{n}"
                                                                for kw, n in s["most_repeated"]))
     lines.append("")
 
@@ -476,6 +534,9 @@ def main():
     out_path = HERE / "out" / f"{args.dataset.stem}.md"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
+    with open(out_path.with_suffix(".json"), "w") as f:
+        json.dump({name: {str(cid): [kw for kw, _ in kws] for cid, kws in labelling.items()}
+                   for name, labelling in methods.items()}, f, indent=1)
     print("\n".join(lines[:16 + len(methods)]))
     print(f"\nReport: {out_path}")
 

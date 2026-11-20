@@ -82,12 +82,49 @@ Fixes found on the way, each from a real label rather than an invented case:
 - **A short form needs two capitals or a digit**, an addition to Schwartz and Hearst: "(oxygen)" after a
   description defined the word *oxygen*, and expanded every phrase containing it.
 
+## Umbrella terms and the two pools, 2026-11-20
+
+Run again on six datasets, the latest of each where it exists: hydrogen (`out-2026-11`), the latest AOKK
+(2,032 records, 74 clusters), ECCOMAS, and the three education corpora, biology (165 records, 6 clusters),
+geography (128, 7; stored keywords from the LLM) and health education (40, 4; LLM theme names). Three more
+variants, all on the `phrase-ab` scores:
+
+- `phrase-cut`: the maintainer's original rule, the one `nlptools.suggest_keywords` applies, with clusters as
+  documents: a term present (in two or more records) in at least max(min(5, n), ⌈0.1 n⌉) clusters is dropped.
+- `phrase-bare`: a list of words dropped only as a bare one-word keyword, never inside a phrase (*potential*
+  against *potential flow*). Candidates in the script's `BARE_STOPWORDS`, not yet adopted.
+- `phrase-mix`: the keyword-pools brief's two pools from one set of scores — the best two terms of the full
+  ranking, then four with the umbrella terms removed.
+
+| corpus | `stored` distinct / coverage | `phrase-ab` | `phrase-cut` | `phrase-mix` |
+|---|---|---|---|---|
+| hydrogen | 51% / 76% | 83% / 78% | 84% / 75% | 84% / 77% |
+| AOKK, latest | 85% / 64% | 82% / 92% | 94% / 71% | 92% / 84% |
+| ECCOMAS | 77% / 62% | 79% / 86% | 86% / 76% | 84% / 81% |
+| biology | 81% / 77% | 64% / 99% | 94% / 85% | 86% / 96% |
+| geography | 71% / 48% | 64% / 100% | 98% / 90% | 88% / 97% |
+| health education | — | 83% / 100% | 88% / 100% | 88% / 100% |
+
+(Geography's stored coverage is a literal match of LLM keywords, which undercounts them.)
+
+- **On a single-topic corpus, each pure method fails one way.** `phrase-ab` fills a label with the corpus's
+  own vocabulary (*education, student, tool*); `phrase-cut` removes the term that defines the cluster
+  (*self-regulated learning*, *generative ai*) and leaves a tail at a few percent of coverage each.
+- **`phrase-mix` reads best of the four**: *self-regulated learning, self-regulation, forethought,
+  monitoring, scaffolding, self-reflection*; *intelligent tutoring system, learning process, knowledge
+  tracing, neural network, knowledge state*. Its second common slot is often generic (*student*, *tool*),
+  so one common term may be the better split.
+- **`phrase-bare` barely moves the statistics**, as expected: a dropped word makes room for the next.
+- **The very small corpora stay weak** under every method, a few clusters of tens of records each giving
+  c-TF-IDF little to contrast.
+
 ## Open
 
-- **Generic nouns remain**: *review*, *potential*, *field*, *limitation*, *framework*, *participant*, and
-  structured-abstract headings (*background*, *conclusion*). A stopword question, or the embedding rerank's.
-- **The umbrella terms of a single-topic corpus** (*generative ai* in 22 of AOKK's 183 labels) are
-  distinctive against nothing, the whole corpus being about them.
+- **Generic nouns remain**: *framework*, *limitation*, *participant*, structured-abstract headings
+  (*background*, *conclusion*). Several have a useful sense inside a phrase, which `raven.common.text.stopwords`
+  records (*potential flow*, *field theory*), so the candidate list applies to bare terms only. To be checked
+  word by word before adoption.
+- **"state of the art" yields *art***, and *GIS* did not merge with *geographical information system*.
 - **Not yet measured against the LLM keyworder**, which the brief asks for; none of these datasets stores
   LLM keywords.
 - **The embedding rerank with MMR**, the brief's third step.
