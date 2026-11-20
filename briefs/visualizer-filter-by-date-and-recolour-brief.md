@@ -49,9 +49,50 @@ against the whole map filtered by year. Does the comparison reveal anything new 
 3. **Storing the embeddings in the dataset**: they live in the importer's cache file today. Needed the first
    time a feature wants them when a dataset loads, rather than at import.
 
-## Open
+## Decided: the year filter (2026-11-20)
 
 **Date-range filtering comes first** (the maintainer, 2026-11-19): it is next for the AOKK review, together with
-the year criterion in `raven-siftbib`. Recolouring and the embeddings in the dataset come later, and everything
-about the filter itself is still to be discussed: what happens to records with no year, and how two filters
-combine.
+the year criterion in `raven-siftbib` (done 2026-11-20). Recolouring and the embeddings in the dataset come later.
+
+Settled with the maintainer on 2026-11-20:
+
+- **Filters combine by AND, over three states**: a record is shown in full colour only if every filter shows it,
+  hidden if any filter hides it, and grayed otherwise. The most restrictive filter wins.
+- **So each filter computes its own verdict per record, and one function combines them.** Today
+  `displaystate.apply_misc_mode` writes `visibility` directly and resets every other record to `SHOWN`, which a
+  second filter would overwrite; its logic stays, and where its result lands changes.
+- **The filter**: a minimum and a maximum year, defaulting to the dataset's own range and reset when a dataset
+  loads; and a mode for the records outside it, grayed or hidden, cycled like the Misc control. Leaving the full
+  range is what switches it off, so there is no shown mode. *Show all* resets it with the others.
+- **A record with no year follows the out-of-range records**, as a missing year fails `raven-siftbib --where`.
+  The importer's placeholder marks one (`raven.visualizer.importer.is_missing_field`).
+- **Two integer fields for the range, for now**, to get to testing quickly. **A two-handle range slider later**
+  (the maintainer): DPG has none, so it is a drawlist and custom code.
+
+Settled in live testing, the same day:
+
+- **The year controls are a second row**, right-aligned, and **Grayed points selectable** sits at its left end,
+  under the purity readout, as it applies to whatever any filter grays. The purity slider is labelled **Misc
+  cutoff**.
+- **Keys**: **Ctrl+E** (era) focuses the year mode selector, which then takes **Left / Right** to slide the range
+  a year keeping its width, **Shift+** to move the first year and **Ctrl+** the last, and **Up / Down / Home / End**
+  for the mode. **F5** switches the mode from anywhere.
+
+**A reset per filter, beside *Show all*** (the maintainer, 2026-11-20). Both kinds are needed, and not as
+alternatives: *Show all* discards the whole view, which is right only when that is what the user wants ("I'm done
+with this view, back to the whole dataset"). Undoing one filter must never require *Show all* followed by
+remembering and redoing the others. That is *recognition rather than recall*, the sixth of
+[Nielsen's usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/) (Nielsen and Molich 1990,
+refined 1994), and Shneiderman's "reduce short-term memory load" ([*Eight Golden Rules*](https://www.cs.umd.edu/users/ben/goldenrules.html));
+a reset per filter is Nielsen's *user control and freedom*, an exit from one action rather than from all of them.
+`raven-style-guide.md` → *Interface design* maps both lists to Raven as a whole.
+
+- **A reset leaves its filter's mode alone**, in both filters. The years reset to the dataset's span; the Misc
+  reset sets the cutoff to 0%.
+- **At the left end of each filter's controls**, styled like the search field's clear button, with a tooltip saying
+  what it resets.
+- **No hotkeys for now.**
+
+## Open
+
+Recolouring, and the embeddings in the dataset.

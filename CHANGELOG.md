@@ -76,6 +76,10 @@
   - While anything is grayed or hidden, a pill above the plot and the plot's title say how many records are in focus or on screen. Clicking the pill shows everything again.
   - Only records in colour can be hovered and selected. Selected records that are grayed out or hidden leave the selection, and come back when shown again, unless the selection has changed meanwhile. A **Grayed points selectable** checkbox lets the grayed ones be hovered and selected too.
   - Search still counts the matches it cannot show, as in *"[7 matches, 3 hidden]"*.
+- **The Visualizer can show only some years.** Fields above the plot set a range of years, and the records outside it are grayed out or hidden, a record with no year among them.
+  - With the keyboard on the year selector (**Ctrl+E**), **Left** and **Right** slide the range a year at a time, keeping its width; with **Shift** they move the first year only, and with **Ctrl** the last. **F5** switches between grayed and hidden.
+  - The year filter and the Misc selector apply together: a record is in colour only if both show it.
+  - Each filter has a reset of its own, beside the one that shows everything, so one can be undone while the other is kept.
 
 #### Raven-server
 

@@ -57,26 +57,109 @@ class TestRelabelByPurity:
 class TestMiscMode:
     def test_misc_is_shown_as_the_mode_says_and_everything_else_in_full(self):
         entries = entries_of(0, -1, 1, -1)
-        assert displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        assert displaystate.apply_filters(entries, misc_mode=displaystate.GRAYED)
         assert [e.visibility for e in entries] == ["shown", "grayed", "shown", "grayed"]
 
     def test_a_cluster_moved_to_misc_by_purity_goes_with_misc(self):
         entries = entries_of(0, 1, -1)
         displaystate.relabel_by_purity(entries, [0.9, 0.1], 0.5)
-        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
+        displaystate.apply_filters(entries, misc_mode=displaystate.HIDDEN)
         assert [e.visibility for e in entries] == ["shown", "hidden", "hidden"]
 
     def test_showing_misc_again_restores_it(self):
         entries = entries_of(0, -1)
-        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
-        assert displaystate.apply_misc_mode(entries, displaystate.SHOWN)
+        displaystate.apply_filters(entries, misc_mode=displaystate.HIDDEN)
+        assert displaystate.apply_filters(entries, misc_mode=displaystate.SHOWN)
         assert [e.visibility for e in entries] == ["shown", "shown"]
-        assert not displaystate.apply_misc_mode(entries, displaystate.SHOWN), "nothing changed, and it said so"
+        assert not displaystate.apply_filters(entries, misc_mode=displaystate.SHOWN), "nothing changed, and it said so"
 
     def test_an_unknown_mode_is_refused_by_name(self):
         import pytest
         with pytest.raises(ValueError, match="sideways"):
-            displaystate.apply_misc_mode(entries_of(0), "sideways")
+            displaystate.apply_filters(entries_of(0), misc_mode="sideways")
+
+
+def entries_with_years(*years, cluster_id=0):
+    """Entries in one cluster, with `year` as given; `None` gives the importer's placeholder for a missing year."""
+    entries = [env(title=f"paper {i}", cluster_id=cluster_id, year=year if year is not None else "[Year not specified]")
+               for i, year in enumerate(years)]
+    displaystate.init(entries)
+    return entries
+
+
+class TestYearFilter:
+    def test_records_outside_the_range_are_shown_as_the_mode_says_and_the_ends_are_inside(self):
+        entries = entries_with_years("2019", "2022", "2024", "2026")
+        assert displaystate.apply_filters(entries, maybe_year_range=(2022, 2024), year_mode=displaystate.GRAYED)
+        assert [e.visibility for e in entries] == ["grayed", "shown", "shown", "grayed"]
+
+    def test_a_record_with_no_year_follows_the_records_outside(self):
+        entries = entries_with_years("2023", None, "in press")
+        displaystate.apply_filters(entries, maybe_year_range=(2022, 2024), year_mode=displaystate.HIDDEN)
+        assert [e.visibility for e in entries] == ["shown", "hidden", "hidden"]
+
+    def test_with_the_filter_off_a_record_with_no_year_is_shown(self):
+        entries = entries_with_years("2023", None)
+        # The control: with a range, the yearless record does go. Without one it must not.
+        displaystate.apply_filters(entries, maybe_year_range=(2022, 2024))
+        assert entries[1].visibility == displaystate.GRAYED, "this fixture's yearless record never left the range"
+        assert displaystate.apply_filters(entries, maybe_year_range=None)
+        assert [e.visibility for e in entries] == ["shown", "shown"]
+
+    def test_the_bounds_are_the_dataset_s_own_and_a_missing_year_is_not_one_of_them(self):
+        assert displaystate.year_bounds(entries_with_years("2024", None, "2019", "2022")) == (2019, 2024)
+        assert displaystate.year_bounds(entries_with_years(None, "in press")) is None
+
+    def test_an_unknown_year_mode_is_refused_and_shown_is_not_a_year_mode(self):
+        import pytest
+        with pytest.raises(ValueError, match="year mode"):
+            displaystate.apply_filters(entries_with_years("2023"), maybe_year_range=(2022, 2024),
+                                       year_mode=displaystate.SHOWN)
+
+
+class TestSteppingTheYearRange:
+    BOUNDS = (2012, 2026)
+
+    def test_a_slide_keeps_the_width(self):
+        assert displaystate.step_year_range((2015, 2018), delta=1, bounds=self.BOUNDS) == (2016, 2019)
+        assert displaystate.step_year_range((2015, 2018), delta=-1, bounds=self.BOUNDS) == (2014, 2017)
+
+    def test_a_slide_that_would_cross_a_bound_does_not_move(self):
+        # Clamping one end instead would narrow the range, which is not what a slide is for.
+        assert displaystate.step_year_range((2023, 2026), delta=1, bounds=self.BOUNDS) == (2023, 2026)
+        assert displaystate.step_year_range((2012, 2014), delta=-1, bounds=self.BOUNDS) == (2012, 2014)
+
+    def test_one_end_moves_alone_and_stops_at_the_bound_and_at_the_other_end(self):
+        step = displaystate.step_year_range
+        assert step((2015, 2018), delta=1, bounds=self.BOUNDS, ends="first") == (2016, 2018)
+        assert step((2015, 2018), delta=-1, bounds=self.BOUNDS, ends="last") == (2015, 2017)
+        assert step((2012, 2018), delta=-1, bounds=self.BOUNDS, ends="first") == (2012, 2018)
+        assert step((2015, 2026), delta=1, bounds=self.BOUNDS, ends="last") == (2015, 2026)
+        assert step((2018, 2018), delta=1, bounds=self.BOUNDS, ends="first") == (2018, 2018)
+        assert step((2018, 2018), delta=-1, bounds=self.BOUNDS, ends="last") == (2018, 2018)
+
+    def test_an_unknown_end_is_refused(self):
+        import pytest
+        with pytest.raises(ValueError, match="middle"):
+            displaystate.step_year_range((2015, 2018), delta=1, bounds=self.BOUNDS, ends="middle")
+
+
+class TestFiltersCombine:
+    def test_the_most_restrictive_verdict_wins(self):
+        S, G, H = displaystate.SHOWN, displaystate.GRAYED, displaystate.HIDDEN
+        assert displaystate.combine() == S
+        assert displaystate.combine(S, S) == S
+        assert displaystate.combine(S, G) == displaystate.combine(G, S) == G
+        assert displaystate.combine(G, H) == displaystate.combine(H, S) == H
+
+    def test_misc_and_the_year_filter_apply_together(self):
+        # Four records, one per corner of (Misc or not) x (in range or not), Misc grayed and years hidden.
+        entries = entries_with_years("2023", "2019", "2023", "2019")
+        entries[2].cluster_id = entries[3].cluster_id = -1
+        displaystate.init(entries)
+        displaystate.apply_filters(entries, misc_mode=displaystate.GRAYED,
+                                   maybe_year_range=(2022, 2024), year_mode=displaystate.HIDDEN)
+        assert [e.visibility for e in entries] == ["shown", "hidden", "grayed", "hidden"]
 
 
 class TestSummary:
@@ -85,12 +168,12 @@ class TestSummary:
 
     def test_grayed_records_are_still_on_screen_so_the_count_is_of_those_in_focus(self):
         entries = entries_of(*([0] * 1422 + [-1] * 610))
-        displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        displaystate.apply_filters(entries, misc_mode=displaystate.GRAYED)
         assert displaystate.summary(entries) == "1,422 of 2,032 in focus"
 
     def test_hidden_records_are_not_shown_so_the_count_is_of_those_on_screen(self):
         entries = entries_of(*([0] * 1422 + [-1] * 610))
-        displaystate.apply_misc_mode(entries, displaystate.HIDDEN)
+        displaystate.apply_filters(entries, misc_mode=displaystate.HIDDEN)
         assert displaystate.summary(entries) == "Showing 1,422 of 2,032"
 
     def test_grayed_and_hidden_together_give_both_counts(self):
@@ -108,7 +191,7 @@ class TestPointsByLabel:
 
     def test_grayed_and_hidden_records_are_in_no_colour_series(self):
         entries = entries_of(0, -1, 0, -1)
-        displaystate.apply_misc_mode(entries, displaystate.GRAYED)
+        displaystate.apply_filters(entries, misc_mode=displaystate.GRAYED)
         assert displaystate.points_by_label(entries) == {0: [0, 2]}
         assert displaystate.points_with_visibility(entries, displaystate.GRAYED) == [1, 3]
 

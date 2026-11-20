@@ -426,6 +426,18 @@ def load_dataset(ds):
         # readout and its slider need the purity the importer stores, so a dataset without it shows only the rest.
         dpg.set_value("purity_cutoff_slider", 0)  # tag
         dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
+        # The year filter starts at the dataset's whole span, which is what switching it off means. A dataset with no
+        # years at all has nothing to filter by, so its controls are not shown.
+        ds.year_bounds = displaystate.year_bounds(ds.sorted_entries)
+        if ds.year_bounds is not None:
+            first, last = ds.year_bounds
+            for item, value in (("year_from_input", first), ("year_to_input", last)):  # tag
+                dpg.configure_item(item, min_value=first, max_value=last, min_clamped=True, max_clamped=True)
+                dpg.set_value(item, value)
+        dpg.set_value("year_mode_combo", displaystate.GRAYED)  # tag
+        (dpg.show_item if ds.year_bounds is not None else dpg.hide_item)("year_filter_controls")  # tag
+        dpg.disable_item("reset_years_button")  # tag
+        dpg.disable_item("reset_misc_cutoff_button")  # tag
         dpg.set_value("grayed_selectable_checkbox", False)  # tag
         app_state.grayed_selectable = False
         dpg.disable_item("grayed_selectable_checkbox")  # tag

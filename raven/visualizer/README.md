@@ -40,6 +40,7 @@
     - [Put the info panel on the right](#put-the-info-panel-on-the-right)
     - [How tight the clusters are, and showing loose ones as Misc](#how-tight-the-clusters-are-and-showing-loose-ones-as-misc)
     - [Gray out or hide Misc](#gray-out-or-hide-misc)
+    - [Show only some years](#show-only-some-years)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
 - [Limitations](#limitations)
@@ -450,7 +451,7 @@ The row above the plot gives the dataset's **cluster purity**, as in *"Cluster p
 - **Low purity** means the cluster overlaps its neighbours: its records are related, but each has closer neighbours elsewhere. Read such a cluster as a region of the map rather than as a topic.
 - **Compare clusters within one dataset, not across datasets.** A collection on a single topic has low purity throughout, because everything in it is related; a broad one has high purity. There is no general threshold for a "good" cluster.
 
-The **Purity cutoff for Misc** slider, at the right end of the row, shows every cluster below the chosen purity as *Misc*: on the map, in the info panel and in the tooltip. It works live, and your selection is kept as clusters come and go. At 0%, every cluster is shown as itself. Hover over the slider for a reminder of all this; Ctrl+click it to type a value.
+The **Misc cutoff** slider, at the right end of the row, shows every cluster below the chosen purity as *Misc*: on the map, in the info panel and in the tooltip. It works live, and your selection is kept as clusters come and go. At 0%, every cluster is shown as itself. Hover over the slider for a reminder of all this; Ctrl+click it to type a value.
 
 The cutoff changes only what is shown. The dataset file is unchanged, and the slider starts at 0% whenever a dataset is loaded.
 
@@ -472,15 +473,28 @@ Graying out keeps the shape of the whole collection in view, while hiding leaves
 
 **Changing the selection in between ends that**: a new selection is built from what is on screen, so if you brush in more records while some are grayed out, say, the grayed ones stay out of the selection when you show them again.
 
-While records are grayed out, the **Grayed points selectable** checkbox beside the selector makes them hoverable and selectable as well, for asking why one of them is grayed.
+While records are grayed out, the **Grayed points selectable** checkbox, under the purity line, makes them hoverable and selectable as well, for asking why one of them is grayed. It applies to whatever is grayed, by the Misc selector or by the [year filter](#show-only-some-years).
 
 **Search still finds every match**: one among hidden records is counted but not drawn, as in *"[7 matches, 3 hidden]"*, and one among grayed records is highlighted like any other. Selecting the matches takes only those that can be selected.
 
-**Whenever records are grayed out or hidden, the app says so**: a pill beside the purity line reads, for example, *"1,422 of 2,032 in focus · Show all"* when records are grayed, or *"Showing 1,422 of 2,032"* when some are hidden. The plot's title carries the same count. **Click the pill to show everything again**: it resets the Misc selector and the purity cutoff at once. With everything shown, neither the pill nor the count appears.
+**Whenever records are grayed out or hidden, the app says so**: a pill beside the purity line reads, for example, *"1,422 of 2,032 in focus · Show all"* when records are grayed, or *"Showing 1,422 of 2,032"* when some are hidden. The plot's title carries the same count. **Click the pill to show everything again**: it resets the Misc selector, the purity cutoff and the years at once. With everything shown, neither the pill nor the count appears.
 
 Like the purity cutoff, this changes only what is shown, and starts from showing everything whenever a dataset is loaded.
 
 A dataset imported before Raven measured purity shows neither the row nor the cluster purities. Importing it again adds them; the embeddings are cached beside the BibTeX file, so that is quick.
+
+
+## Show only some years
+
+The **Years** fields, in the second row above the plot, show the records from a range of years in colour, both ends included. They start at the dataset's own span, which shows everything; narrow them with the − and + buttons, or type a year. Setting one end past the other moves the other along.
+
+The selector beside them chooses how the records outside the range are shown: **grayed** out beneath the rest, or **hidden**. A record with no year counts as outside, so narrowing the range sets it aside too.
+
+**From the keyboard**, **Ctrl+E** (for *era*) puts the keyboard on that selector. There, **Left** and **Right** move the whole range a year earlier or later, keeping its width, which is a quick way to watch a topic come and go. **Shift+Left** and **Shift+Right** move only the first year, and **Ctrl+Left** and **Ctrl+Right** only the last. **Up**, **Down**, **Home** and **End** choose how the other years are shown, and **Esc** leaves. **F5** switches that choice from anywhere.
+
+**The year filter and the Misc selector work together**: a record is in colour only if both show it, hidden if either hides it, and grayed otherwise. So you can, say, hide the noise and gray the other years at once. Everything else is as for Misc above: what can be selected, how search counts, the pill, and *Show all*.
+
+A dataset whose records carry no year has nothing to filter by, so the year fields do not appear.
 
 
 ## Create a word cloud
@@ -542,6 +556,11 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 |---|---|
 | `F4` / `Shift+F4` | Show *Misc* the next / previous way: shown, grayed out, hidden |
 | `Ctrl+M` | Put the keyboard on the *Misc* selector: then `Up`, `Down`, `Home` and `End` choose, and `Esc` leaves it |
+| `F5` / `Shift+F5` | Show the records outside the years the other way: grayed out, hidden |
+| `Ctrl+E` | Put the keyboard on the year selector: then `Up`, `Down`, `Home` and `End` choose, and `Esc` leaves it |
+| `Left` / `Right` | With the year selector holding the keyboard: move the years back or forward, keeping the range's width |
+| `Shift+Left` / `Shift+Right` | The same, but the first year only |
+| `Ctrl+Left` / `Ctrl+Right` | The same, but the last year only |
 
 ### Datasets and search
 

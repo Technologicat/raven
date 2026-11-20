@@ -361,7 +361,7 @@ def set_grayed_selectable(selectable: bool) -> None:
 def apply_display_filters():
     """Apply the display filters as their controls now stand, and redraw whatever shows the records.
 
-    The purity cutoff first, which decides what is labelled Misc, then how Misc is shown. See
+    The purity cutoff first, which decides what is labelled Misc, then how Misc and the years are shown. See
     `raven.visualizer.displaystate`.
     """
     ds = app_state.dataset
@@ -370,7 +370,14 @@ def apply_display_filters():
     relabelled = displaystate.relabel_by_purity(ds.sorted_entries,
                                                 getattr(ds.file_content, "cluster_purities", None),
                                                 dpg.get_value("purity_cutoff_slider") / 100)  # tag
-    restyled = displaystate.apply_misc_mode(ds.sorted_entries, dpg.get_value("misc_mode_combo"))  # tag
+    restyled = displaystate.apply_filters(ds.sorted_entries,
+                                          misc_mode=dpg.get_value("misc_mode_combo"),  # tag
+                                          maybe_year_range=_chosen_year_range(),
+                                          year_mode=dpg.get_value("year_mode_combo"))  # tag
+    # Each reset is available exactly while its filter is not at rest. Set before the early return below: a range
+    # can narrow without changing what is shown, and its reset must still come on.
+    (dpg.enable_item if _chosen_year_range() is not None else dpg.disable_item)("reset_years_button")  # tag
+    (dpg.enable_item if dpg.get_value("purity_cutoff_slider") > 0 else dpg.disable_item)("reset_misc_cutoff_button")  # tag
     if not (relabelled or restyled):
         return
     plotter.refresh_series(ds)
@@ -392,6 +399,30 @@ def apply_display_filters():
     app_state.update_search()  # redraws the matches on screen and recounts the hidden ones; updates the info panel and tooltip
 
 
+def _chosen_year_range() -> tuple[int, int] | None:
+    """The year range the controls ask for, or `None` while it covers the dataset's whole span, which is the filter
+    switched off."""
+    maybe_bounds = getattr(app_state.dataset, "year_bounds", None)
+    if maybe_bounds is None:
+        return None
+    first, last = dpg.get_value("year_from_input"), dpg.get_value("year_to_input")  # tag
+    if first <= maybe_bounds[0] and last >= maybe_bounds[1]:
+        return None
+    return first, last
+
+
+def set_year_range(*, moved_first: bool) -> None:
+    """Callback of the two year fields, `moved_first` saying whether it was the first that changed. Keeps the range
+    non-empty, moving the other end along when one is set past it, then applies the filters."""
+    first, last = dpg.get_value("year_from_input"), dpg.get_value("year_to_input")  # tag
+    if first > last:
+        if moved_first:
+            dpg.set_value("year_to_input", first)  # tag
+        else:
+            dpg.set_value("year_from_input", last)  # tag
+    apply_display_filters()
+
+
 def cycle_misc_mode(direction: int = 1) -> None:
     """Show Misc the next way along `displaystate.MISC_MODES` (`direction` 1), or the previous one (-1). Hotkey handler."""
     if app_state.dataset is None:
@@ -402,10 +433,58 @@ def cycle_misc_mode(direction: int = 1) -> None:
     apply_display_filters()
 
 
+def step_year_range(delta: int, *, ends: str = "both") -> None:
+    """Move the year range by `delta` years: slide it whole, or move one end (`displaystate.step_year_range`).
+    Hotkey handler."""
+    maybe_bounds = getattr(app_state.dataset, "year_bounds", None)
+    if maybe_bounds is None:
+        return
+    first, last = displaystate.step_year_range((dpg.get_value("year_from_input"), dpg.get_value("year_to_input")),  # tag
+                                               delta=delta, bounds=maybe_bounds, ends=ends)
+    dpg.set_value("year_from_input", first)  # tag
+    dpg.set_value("year_to_input", last)  # tag
+    apply_display_filters()
+
+
+def cycle_year_mode(direction: int = 1) -> None:
+    """Show the records outside the years the next way along `displaystate.YEAR_MODES` (`direction` 1), or the previous
+    one (-1). Hotkey handler."""
+    if app_state.dataset is None:
+        return
+    modes = displaystate.YEAR_MODES
+    current = dpg.get_value("year_mode_combo")  # tag
+    dpg.set_value("year_mode_combo", modes[(modes.index(current) + direction) % len(modes)])  # tag
+    apply_display_filters()
+
+
+#: The display filters' selectors, which browse with the keyboard alike and show the keyboard mark.
+_FILTER_COMBOS = ("year_mode_combo", "misc_mode_combo")  # tag
+
+
+def reset_years() -> None:
+    """Show every year again, keeping the filter mode. Callback of the year filter's reset."""
+    maybe_bounds = getattr(app_state.dataset, "year_bounds", None)
+    if maybe_bounds is None:
+        return
+    dpg.set_value("year_from_input", maybe_bounds[0])  # tag
+    dpg.set_value("year_to_input", maybe_bounds[1])  # tag
+    apply_display_filters()
+
+
+def reset_misc_cutoff() -> None:
+    """Set the Misc cutoff back to 0%, keeping the filter mode. Callback of the Misc filter's reset."""
+    dpg.set_value("purity_cutoff_slider", 0)  # tag
+    apply_display_filters()
+
+
 def show_all():
     """Undo every display filter at once: the way back to seeing all the data."""
     dpg.set_value("purity_cutoff_slider", 0)  # tag
     dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
+    maybe_bounds = getattr(app_state.dataset, "year_bounds", None)
+    if maybe_bounds is not None:
+        dpg.set_value("year_from_input", maybe_bounds[0])  # tag
+        dpg.set_value("year_to_input", maybe_bounds[1])  # tag
     apply_display_filters()
 
 
@@ -864,44 +943,97 @@ with timer() as tim:
 
                 # Readouts about the dataset shown, and the controls that act on them. Above the plot, which fills
                 # the rest of the column. Hidden while no dataset is loaded; `plotter.load_dataset` fills it.
-                # A table, so that the controls sit flush right: the first column stretches, and the second fits
-                # its content.
-                with dpg.table(tag="display_filters_group", header_row=False, show=False,
-                               policy=dpg.mvTable_SizingFixedFit, borders_innerV=False, borders_outerV=False,
-                               borders_innerH=False, borders_outerH=False):
-                    dpg.add_table_column(width_stretch=True)
-                    dpg.add_table_column(width_fixed=True)
-                    with dpg.table_row():
-                        with dpg.group(horizontal=True):
-                            dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
-                            # Says that not every record is in full colour, and is the way back: present exactly while
-                            # a display filter grays or hides something.
-                            filters_pill = pill.Pill(tag="filters",
-                                                     icon_font=app_state.themes_and_fonts.icon_font_solid,
-                                                     callback=lambda: show_all())
-                        with dpg.group(horizontal=True):
-                            dpg.add_text("Misc", color=(140, 140, 140), tag="misc_mode_label_text")
-                            dpg.add_combo(items=list(displaystate.MISC_MODES),
-                                          default_value=displaystate.SHOWN,
-                                          tag="misc_mode_combo",
-                                          width=80,
-                                          callback=lambda: apply_display_filters())
+                # Two tables, so that the controls sit flush right: in each, the first column stretches and the
+                # second fits its content. One table per row, as a second row in the first table would sit under
+                # the first row's widest content, left-aligned.
+                # A reset per filter, at the left end of its controls and styled like the search field's clear
+                # button: undoing one filter keeps the other, where *Show all* discards the whole view.
+                with dpg.theme(tag="filter_reset_theme"):  # tag
+                    with dpg.theme_component(dpg.mvButton):
+                        dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+                    with dpg.theme_component(dpg.mvButton, enabled_state=False):
+                        dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR)
+
+                def _add_filter_reset_button(tag: str, *, callback) -> None:
+                    dpg.add_button(label=fa.ICON_X, callback=callback, tag=tag, enabled=False)
+                    dpg.bind_item_font(tag, app_state.themes_and_fonts.icon_font_solid)
+                    dpg.bind_item_theme(tag, "filter_reset_theme")  # tag
+
+                table_options = dict(header_row=False, policy=dpg.mvTable_SizingFixedFit, borders_innerV=False,
+                                     borders_outerV=False, borders_innerH=False, borders_outerH=False)
+                with dpg.group(tag="display_filters_group", show=False):
+                    with dpg.table(**table_options):
+                        dpg.add_table_column(width_stretch=True)
+                        dpg.add_table_column(width_fixed=True)
+                        with dpg.table_row():
+                            with dpg.group(horizontal=True):
+                                dpg.add_text("", tag="dataset_purity_text", color=(140, 140, 140))
+                                # Says that not every record is in full colour, and is the way back: present exactly
+                                # while a display filter grays or hides something.
+                                filters_pill = pill.Pill(tag="filters",
+                                                         icon_font=app_state.themes_and_fonts.icon_font_solid,
+                                                         callback=lambda: show_all())
+                            with dpg.group(horizontal=True):
+                                _add_filter_reset_button("reset_misc_cutoff_button", callback=lambda: reset_misc_cutoff())
+                                dpg.add_text("Misc", color=(140, 140, 140), tag="misc_mode_label_text")
+                                dpg.add_combo(items=list(displaystate.MISC_MODES),
+                                              default_value=displaystate.SHOWN,
+                                              tag="misc_mode_combo",
+                                              width=80,
+                                              callback=lambda: apply_display_filters())
+                                with dpg.group(tag="purity_cutoff_controls", horizontal=True):
+                                    dpg.add_spacer(width=8)
+                                    dpg.add_text("Misc cutoff", color=(140, 140, 140), tag="purity_cutoff_label_text")
+                                    dpg.add_slider_int(tag="purity_cutoff_slider",
+                                                       min_value=0,
+                                                       max_value=100,
+                                                       default_value=0,
+                                                       format="%d%%",
+                                                       width=160,
+                                                       callback=lambda: apply_display_filters())
+                    with dpg.table(**table_options):
+                        dpg.add_table_column(width_stretch=True)
+                        dpg.add_table_column(width_fixed=True)
+                        with dpg.table_row():
+                            # Under the readouts rather than beside one filter, as it applies to the records every
+                            # filter grays.
                             dpg.add_checkbox(label="Grayed points selectable",
                                              tag="grayed_selectable_checkbox",
                                              default_value=False,
                                              enabled=False,
                                              callback=lambda sender, app_data: set_grayed_selectable(app_data))
                             dpg.bind_item_theme("grayed_selectable_checkbox", "disablable_widget_theme")  # tag
-                            with dpg.group(tag="purity_cutoff_controls", horizontal=True):
-                                dpg.add_spacer(width=8)
-                                dpg.add_text("Purity cutoff for Misc", color=(140, 140, 140), tag="purity_cutoff_label_text")
-                                dpg.add_slider_int(tag="purity_cutoff_slider",
-                                                   min_value=0,
-                                                   max_value=100,
-                                                   default_value=0,
-                                                   format="%d%%",
-                                                   width=160,
-                                                   callback=lambda: apply_display_filters())
+                            # The year filter: a range, and how the records outside it are shown. `plotter.load_dataset`
+                            # sets the range to the dataset's span, and hides these where no record has a year.
+                            with dpg.group(tag="year_filter_controls", horizontal=True):
+                                _add_filter_reset_button("reset_years_button", callback=lambda: reset_years())
+                                dpg.add_text("Years", color=(140, 140, 140), tag="year_filter_label_text")
+                                dpg.add_input_int(tag="year_from_input", width=100, step=1,
+                                                  callback=lambda: set_year_range(moved_first=True))
+                                dpg.add_text("to", color=(140, 140, 140), tag="year_filter_to_text")
+                                dpg.add_input_int(tag="year_to_input", width=100, step=1,
+                                                  callback=lambda: set_year_range(moved_first=False))
+                                dpg.add_combo(items=list(displaystate.YEAR_MODES),
+                                              default_value=displaystate.GRAYED,
+                                              tag="year_mode_combo",
+                                              width=80,
+                                              callback=lambda: apply_display_filters())
+                for year_input in ("year_from_input", "year_to_input"):  # tag
+                    with dpg.tooltip(year_input, tag=f"{year_input}_tooltip"):
+                        dpg.add_text("The years to show in full colour, inclusive. A record with no year counts as "
+                                     "outside them.\nThe whole span shows everything.",
+                                     tag=f"{year_input}_tooltip_text")
+                with dpg.tooltip("reset_years_button", tag="reset_years_tooltip"):  # tag
+                    dpg.add_text("Show every year again. Keeps the filter mode.",
+                                 tag="reset_years_tooltip_text")
+                with dpg.tooltip("reset_misc_cutoff_button", tag="reset_misc_cutoff_tooltip"):  # tag
+                    dpg.add_text("Set the Misc cutoff back to 0%, showing every cluster as itself. Keeps the filter mode.",
+                                 tag="reset_misc_cutoff_tooltip_text")
+                with dpg.tooltip("year_mode_combo", tag="year_mode_tooltip"):  # tag
+                    dpg.add_text("How the records outside the years are shown: grayed out beneath the rest, or hidden.\n"
+                                 "[F5] next, [Shift+F5] previous\n"
+                                 "[Ctrl+E] to focus; then Up, Down, Home, End to choose, Esc to leave",
+                                 tag="year_mode_tooltip_text")
                 with dpg.tooltip("grayed_selectable_checkbox", tag="grayed_selectable_tooltip"):  # tag
                     dpg.add_text("Let the grayed records be hovered and selected, like those in colour.\n"
                                  "Available while some records are grayed out.",
@@ -1086,9 +1218,13 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # The plotter itself: what it shows, and stepping back through what was selected in it.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
-               env(key_indent=0, key="F4", action_indent=0, action="Show Misc the next way", notes="Shown, grayed, hidden"),
-               env(key_indent=1, key="Shift+F4", action_indent=1, action="Same, but the previous way", notes=""),
+               env(key_indent=0, key="F4 / Shift+F4", action_indent=0, action="Show Misc the next or previous way", notes="Shown, grayed, hidden"),
                env(key_indent=1, key="Ctrl+M", action_indent=0, action="Focus the Misc selector", notes="Then Up, Down, Home, End"),
+               env(key_indent=0, key="F5", action_indent=0, action="Show the other years the next way", notes="Grayed, hidden"),
+               env(key_indent=1, key="Ctrl+E", action_indent=0, action="Focus the year mode selector", notes='"era"; then Up, Down, Home, End'),
+               env(key_indent=2, key="Left / Right", action_indent=0, action="Move the years back or forward", notes="While the year mode selector has focus"),
+               env(key_indent=2, key="Shift+Left / Right", action_indent=1, action="Same, but the first year only", notes=""),
+               env(key_indent=2, key="Ctrl+Left / Right", action_indent=1, action="Same, but the last year only", notes=""),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
                # The window's layout.
@@ -1499,14 +1635,19 @@ def hotkeys_callback(sender, app_data):
     # Tab moves the keyboard between the search field and the info panel, keeping what is typed, and Shift+Tab
     # does the same: with two places to be, both directions are the other one. Leaving parks focus where Enter
     # does, for the reason given there.
-    # While the Misc selector has the focus, the four keys that browse a combo are its, ahead of the info panel
-    # that uses the same keys, and Escape hands the keyboard back to where Enter and Tab park it.
-    elif (guiutils.has_focus("misc_mode_combo") and not (ctrl_pressed or shift_pressed) and  # tag
-          key in (*guiutils.COMBO_BROWSE_KEYS, dpg.mvKey_Escape)):
+    # While a display-filter selector has the focus, the four keys that browse a combo are its, ahead of the info
+    # panel that uses the same keys, and Escape hands the keyboard back to where Enter and Tab park it.
+    # While the year selector has the focus, Left and Right move the years: the whole range, or with Shift its first
+    # year and with Ctrl its last. The combo has no use for them, and nothing else in the app binds them.
+    elif guiutils.has_focus("year_mode_combo") and key in (dpg.mvKey_Left, dpg.mvKey_Right):  # tag
+        step_year_range(-1 if key == dpg.mvKey_Left else 1,
+                        ends="first" if shift_pressed else "last" if ctrl_pressed else "both")
+    elif ((focused_combo := next((combo for combo in _FILTER_COMBOS if guiutils.has_focus(combo)), None)) is not None and
+          not (ctrl_pressed or shift_pressed) and key in (*guiutils.COMBO_BROWSE_KEYS, dpg.mvKey_Escape)):
         if key == dpg.mvKey_Escape:
             guiutils.focus_item("clear_search_button")  # tag
         else:
-            guiutils.browse_combo("misc_mode_combo", key)  # tag  # runs the combo's callback, as a click would
+            guiutils.browse_combo(focused_combo, key)  # runs the combo's callback, as a click would
     elif key == dpg.mvKey_Tab and not ctrl_pressed:
         if dpg.is_item_active("search_field"):  # tag
             guiutils.focus_item("clear_search_button")  # tag
@@ -1535,6 +1676,8 @@ def hotkeys_callback(sender, app_data):
                 info_panel.scroll_to_next_search_match()
     elif key == dpg.mvKey_F4:  # Shift goes backwards, as Shift+F3 does for search matches.
         cycle_misc_mode(-1 if shift_pressed else 1)
+    elif key == dpg.mvKey_F5:  # the year mode, as F4 is Misc's
+        cycle_year_mode(-1 if shift_pressed else 1)
     elif key == dpg.mvKey_F6:  # Use an F-key, because this too has Shift/Ctrl modes.
         info_panel.search_or_select_current_entry()
     elif key == dpg.mvKey_F7:  # Use an F-key, because this too needs selection mode modifiers.
@@ -1576,6 +1719,8 @@ def hotkeys_callback(sender, app_data):
             importer_gui.toggle_window()
         elif key == dpg.mvKey_M:
             gui_animation.give_focus("misc_mode_combo")  # tag
+        elif key == dpg.mvKey_E and dpg.is_item_shown("year_filter_controls"):  # tag  # E for era; hidden where no record has a year
+            gui_animation.give_focus("year_mode_combo")  # tag
         elif key == dpg.mvKey_Home:
             plotter.reset_zoom()
         elif key == dpg.mvKey_N:
@@ -1727,7 +1872,7 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
 # nav focus to the first navigable item of a window by itself, so the field reports focused from the first
 # frame, and a focus-driven mark would be lit before anyone had touched it.
 keyboardmark.install_caret_follower(["search_field"])  # tag
-keyboardmark.install_focus_follower(["misc_mode_combo"], release_to="clear_search_button")  # tag  # where Esc parks too
+keyboardmark.install_focus_follower(list(_FILTER_COMBOS), release_to="clear_search_button")  # where Esc parks too
 
 # Load the file optionally provided on the command line
 if opts.filename:
