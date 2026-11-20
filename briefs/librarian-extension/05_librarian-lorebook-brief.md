@@ -135,7 +135,13 @@ would be knowledge left on the floor. So this clears the bar the project already
     *hydra-taxed*" misses *Hydra tax*, and *flash-attentionin* misses *Flash attention*, where the unhyphenated
     forms fire (checked 2026-11-20). The tokenizer keeps a hyphenated word whole. Fix: where a text word is
     hyphenated, also try its parts as separate words; a term with a hyphen of its own (*co-pter*) still matches
-    the word whole. Then the GUI check, with an inflected term. **Then: making the lorebook portable** —
+    the word whole. **Split at an apostrophe too**: Finnish inflects a foreign name whose written ending differs
+    from its sound with one (*Bordeaux'n*; recalled from Kotus's guidance, not checked), a case the colon rule
+    does not cover — the colon being for abbreviations and numerals (*EU:ssa*), which the matcher already
+    reads, the ending standing apart. It also lets an English possessive (*tax's*) fire with no form listed.
+    The maintainer adds (2026-11-20) that a plain English word inflected as a loan usually follows Finnish
+    rules, and that a proper name needing an inflected form, in a sentence that also wants to hyperlink it, is
+    a recurring headache for Finnish writers. Then the GUI check, with an inflected term. **Then: making the lorebook portable** —
     fixtures as data, the core as one dependency-free file, the porting guide (the LM Studio section below).
     Whether thinking improves the forms is a TODO at the call.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
