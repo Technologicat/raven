@@ -574,6 +574,11 @@ reference, and three things make it portable:
 What a host has to supply differs, which is what the guide is for:
 
 - **Open WebUI** is Python (its functions are; recalled, not checked), so the core file goes in unchanged.
+- **Claude Code**, as a plugin (maintainer, 2026-11-20): it would save the agent a manual lookup whenever the
+  maintainer uses a glossary term. Recalled from the hooks API, to verify before building: a
+  `UserPromptSubmit` hook sees each prompt and can add context to it; a plugin can bundle hooks; the hook is
+  any command, so a Python script takes the core file unchanged; and it is given the session id and the
+  transcript's path, from which "already given in this session" can be read, or kept in a state file.
 - **LM Studio and pi** are TypeScript, so one TS port of the core serves both.
   - **pi** (read 2026-11-20, `docs.pi.dev` and its `extensions.md`): an extension's `before_agent_start` can
     return a message with a `customType`, stored in the session and sent to the model — the nearest thing to
