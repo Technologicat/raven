@@ -27,6 +27,8 @@ import random
 import sys
 import unicodedata
 
+import numpy as np
+
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent))  # run from anywhere; import the tree this script is in
 
@@ -35,12 +37,7 @@ from raven.common.text import stopwords as raven_stopwords  # noqa: E402 -- afte
 
 STOPWORDS = set(nlptools.default_stopwords) | {x.lower() for x in raven_stopwords.academic_stopwords}
 
-# Candidates for a list of words useless as a bare one-word keyword, while useful inside a phrase:
-# "potential" against "potential flow", "field" against "field theory". Applied only to a single-word
-# candidate, never to a phrase's edges. Proposed from the labels of six corpora, 2026-11-20, not yet adopted.
-BARE_STOPWORDS = {"background", "challenge", "change", "concept", "concern", "conclusion", "effect",
-                  "example", "field", "framework", "future", "issue", "level", "limitation", "method",
-                  "outcome", "paper", "participant", "people", "potential", "problem", "strategy", "topic"}
+BARE_STOPWORDS = raven_stopwords.bare_keyword_stopwords
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
@@ -418,6 +415,96 @@ def pick_mixed(ranked: list[tuple[str, float, float]], top: int, *, n_common: in
 
 
 # --------------------------------------------------------------------------------
+# Embedding rerank
+
+def make_embedder():
+    """The importer's embedding model, through Raven-server when it answers, else locally."""
+    from raven.client import api
+    from raven.client import config as client_config
+    from raven.client import mayberemote
+    from raven.visualizer import config as visualizer_config
+    api.initialize(raven_server_url=client_config.raven_server_url,
+                   maybe_network_retry=client_config.network_retry_batch,
+                   raven_api_key_file=client_config.raven_api_key_file)
+    return mayberemote.Embedder(allow_local=True,
+                                model_name=visualizer_config.embedding_model,
+                                device_string=client_config.devices["embeddings"]["device_string"],
+                                dtype=client_config.devices["embeddings"]["dtype"])
+
+
+def embed(embedder, texts: list[str], *, batch_size: int = 256) -> np.ndarray:
+    """Unit vectors for `texts`, one row each."""
+    rows = [np.asarray(embedder.encode(texts[k:k + batch_size])) for k in range(0, len(texts), batch_size)]
+    vectors = np.concatenate(rows).astype(np.float32)
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+
+def cached_vectors(embedder_box: list, cache_path: pathlib.Path, texts: list[str]) -> dict[str, np.ndarray]:
+    """`{text: vector}`, embedding only the texts not already in the cache file."""
+    cache = {}
+    if cache_path.exists():
+        with open(cache_path, "rb") as f:
+            cache = pickle.load(f)
+    missing = [t for t in dict.fromkeys(texts) if t not in cache]
+    if missing:
+        if not embedder_box:
+            embedder_box.append(make_embedder())
+        print(f"Embedding {len(missing)} texts...", flush=True)
+        cache.update(zip(missing, embed(embedder_box[0], missing)))
+        cache_path.parent.mkdir(exist_ok=True)
+        with open(cache_path, "wb") as f:
+            pickle.dump(cache, f)
+    return cache
+
+
+def unit(v: np.ndarray) -> np.ndarray:
+    return v / np.linalg.norm(v, axis=-1, keepdims=True)
+
+
+def mmr(relevance: np.ndarray, vectors: np.ndarray, top: int, *, diversity: float = 0.5) -> list[int]:
+    """Maximal marginal relevance (Carbonell and Goldstein 1998): indices of `top` items, each chosen to
+    maximize (1 - diversity) * relevance - diversity * (its largest similarity to an item already chosen).
+    `vectors` are unit rows, so similarity is a dot product.
+    """
+    chosen = [int(np.argmax(relevance))]
+    similarity = vectors @ vectors.T
+    while len(chosen) < min(top, len(relevance)):
+        redundancy = similarity[:, chosen].max(axis=1)
+        score = (1.0 - diversity) * relevance - diversity * redundancy
+        score[chosen] = -np.inf
+        chosen.append(int(np.argmax(score)))
+    return chosen
+
+
+def rerank(ranked: dict[int, list[tuple[str, float, float]]], members: dict[int, list[int]],
+           doc_vectors: np.ndarray, term_vectors: dict[str, np.ndarray], top: int, *, pool: int, centered: bool,
+           bare: frozenset[str]) -> dict[int, list[tuple[str, float]]]:
+    """Each cluster's c-TF-IDF pool reordered by similarity to the cluster's centroid, picked by MMR.
+
+    After KeyBERT (Grootendorst 2020, https://github.com/MaartenGr/KeyBERT), with the pool taken from the
+    c-TF-IDF ranking rather than from all n-grams. `centered=True` subtracts the corpus mean from the
+    documents and the mean of all pooled terms from the terms before comparing, so that a term scores by
+    how it points where this cluster differs from the corpus rather than where the whole corpus points.
+    """
+    pools = {cid: [item for item in ranked.get(cid, []) if item[0] not in bare][:pool] for cid in members}
+    all_terms = sorted({term for items in pools.values() for term, _, _ in items})
+    term_matrix = np.stack([term_vectors[t] for t in all_terms]) if all_terms else np.zeros((0, doc_vectors.shape[1]))
+    doc_mean = doc_vectors.mean(axis=0) if centered else 0.0
+    term_mean = term_matrix.mean(axis=0) if centered and len(all_terms) else 0.0
+    index = {t: k for k, t in enumerate(all_terms)}
+    out = {}
+    for cid, items in pools.items():
+        if not items:
+            out[cid] = []
+            continue
+        centroid = unit(doc_vectors[members[cid]].mean(axis=0) - doc_mean)
+        vectors = unit(term_matrix[[index[t] for t, _, _ in items]] - term_mean)
+        relevance = vectors @ centroid
+        out[cid] = [(items[k][0], items[k][2]) for k in mmr(relevance, vectors, top)]
+    return out
+
+
+# --------------------------------------------------------------------------------
 # Measures
 
 def shares_by_literal_match(keywords: list[str], member_candidates: list[set[str]]) -> list[float]:
@@ -447,6 +534,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("dataset", type=pathlib.Path)
     parser.add_argument("--top", type=int, default=6, help="keywords per cluster (default: 6, as the importer)")
+    parser.add_argument("--rerank", action="store_true", help="add the embedding rerank (needs the embedder)")
+    parser.add_argument("--pool", type=int, default=30, help="for --rerank: candidates per cluster from c-TF-IDF (default: 30)")
     parser.add_argument("--show", type=int, default=15, help="clusters shown in full, of the largest and of a random draw each")
     args = parser.parse_args()
 
@@ -479,14 +568,46 @@ def main():
         "phrase-cut": {cid: pick(phrase_ab_ranked.get(cid, []), args.top, suppress_nested=True, exclude=umbrella)
                        for cid in members},
         "phrase-bare": {cid: pick(phrase_ab_ranked.get(cid, []), args.top, suppress_nested=True,
-                                  exclude=frozenset(BARE_STOPWORDS)) for cid in members},
-        "phrase-mix": {cid: pick_mixed(phrase_ab_ranked.get(cid, []), args.top, n_common=2, umbrella=umbrella,
-                                       bare=frozenset(BARE_STOPWORDS)) for cid in members},
+                                  exclude=BARE_STOPWORDS) for cid in members},
+        "phrase-mix1": {cid: pick_mixed(phrase_ab_ranked.get(cid, []), args.top, n_common=1, umbrella=umbrella,
+                                        bare=BARE_STOPWORDS) for cid in members},
+        "phrase-mix2": {cid: pick_mixed(phrase_ab_ranked.get(cid, []), args.top, n_common=2, umbrella=umbrella,
+                                        bare=BARE_STOPWORDS) for cid in members},
     }
+    if args.rerank:
+        embedder_box = []
+        stem = args.dataset.stem
+        doc_texts = [record_text(entry) for entry in records]
+        doc_cache = cached_vectors(embedder_box, HERE / "cache" / f"{stem}-docvectors.pickle", doc_texts)
+        doc_vectors = np.stack([doc_cache[t] for t in doc_texts])
+        pooled = {t for cid in members for t, _, _ in
+                  [item for item in phrase_ab_ranked.get(cid, []) if item[0] not in BARE_STOPWORDS][:args.pool]}
+        term_vectors = cached_vectors(embedder_box, HERE / "cache" / f"{stem}-termvectors.pickle", sorted(pooled))
+        for name, centered in (("rerank", False), ("rerank-c", True)):
+            methods[name] = rerank(phrase_ab_ranked, members, doc_vectors, term_vectors, args.top, pool=args.pool,
+                                   centered=centered, bare=BARE_STOPWORDS)
+        # The two pools again, with the distinctive one reordered by the rerank: one term from the full
+        # c-TF-IDF ranking, then the rest from the ranking with the umbrella terms and that term removed.
+        common = {cid: pick(phrase_ab_ranked.get(cid, []), 1, suppress_nested=True, exclude=BARE_STOPWORDS)
+                  for cid in members}
+        distinctive = {cid: [item for item in phrase_ab_ranked.get(cid, [])
+                             if item[0] not in umbrella and not any(nested(item[0], t) for t, _ in common[cid])]
+                       for cid in members}
+        more = {t for cid in members for t, _, _ in
+                [item for item in distinctive[cid] if item[0] not in BARE_STOPWORDS][:args.pool]} - set(term_vectors)
+        if more:
+            term_vectors = cached_vectors(embedder_box, HERE / "cache" / f"{stem}-termvectors.pickle",
+                                          sorted(set(term_vectors) | more))
+        for name, centered in (("mix-rerank", False), ("mix-rerank-c", True)):
+            tails = rerank(distinctive, members, doc_vectors, term_vectors, args.top - 1, pool=args.pool,
+                           centered=centered, bare=BARE_STOPWORDS)
+            methods[name] = {cid: common[cid] + tails[cid] for cid in members}
     labels_canonical = {name: {cid: [kw for kw, _ in kws] for cid, kws in labelling.items()} for name, labelling in methods.items()}
-    for name in ("phrase-ab", "phrase-cut", "phrase-bare", "phrase-mix"):
+    for name in [n for n in methods if n.startswith(("phrase", "rerank", "mix"))]:
         methods[name] = {cid: [(display.get(kw, kw), share) for kw, share in kws] for cid, kws in methods[name].items()}
-    coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab", "phrase-mix": "phrase-ab"}
+    coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab",
+                      "phrase-mix1": "phrase-ab", "phrase-mix2": "phrase-ab", "rerank": "phrase-ab", "rerank-c": "phrase-ab",
+                      "mix-rerank": "phrase-ab", "mix-rerank-c": "phrase-ab"}
 
     lines = [f"# Cluster keywords: {args.dataset.name}", "",
              f"{len(records)} records, {len(members)} clusters, {sum(1 for x in labels if x < 0)} outliers; "

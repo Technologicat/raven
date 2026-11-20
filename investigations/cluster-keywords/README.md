@@ -11,6 +11,7 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 ## The script
 
+- **`run_llm_imports.sh`**: imports the test corpora with LLM cluster keywords, for the comparison.
 - **`keyword_probe.py DATASET.pickle`**: reads a dataset as the importer wrote it, extracts candidate terms
   afresh with spaCy (`en_core_web_sm`, CPU), and writes `out/<dataset>.md`, setting the methods below side by
   side: a summary table, then the largest clusters and a random draw of the rest, each keyword with its share
@@ -92,7 +93,8 @@ variants, all on the `phrase-ab` scores:
 - `phrase-cut`: the maintainer's original rule, the one `nlptools.suggest_keywords` applies, with clusters as
   documents: a term present (in two or more records) in at least max(min(5, n), ⌈0.1 n⌉) clusters is dropped.
 - `phrase-bare`: a list of words dropped only as a bare one-word keyword, never inside a phrase (*potential*
-  against *potential flow*). Candidates in the script's `BARE_STOPWORDS`, not yet adopted.
+  against *potential flow*). Adopted as `raven.common.text.stopwords.bare_keyword_stopwords`, after checking each word for a useful
+  sense standing alone (*future*, *method* and *paper* have one, and stay off it).
 - `phrase-mix`: the keyword-pools brief's two pools from one set of scores — the best two terms of the full
   ranking, then four with the umbrella terms removed.
 
@@ -118,13 +120,44 @@ variants, all on the `phrase-ab` scores:
 - **The very small corpora stay weak** under every method, a few clusters of tens of records each giving
   c-TF-IDF little to contrast.
 
+## The embedding rerank, 2026-11-20
+
+`--rerank` adds the brief's third step: a pool of each cluster's 30 best terms by c-TF-IDF (bare-keyword
+stopwords removed) is scored by cosine similarity to the cluster's centroid in the importer's embedding
+space, then picked by maximal marginal relevance ([Carbonell & Goldstein,
+1998](https://doi.org/10.1145/290941.291025)), after KeyBERT (Grootendorst 2020,
+[repository](https://github.com/MaartenGr/KeyBERT)). The diversity weight is 0.5, a choice. Two shapes, each
+raw and *centered* (documents on the corpus mean, terms on the mean of all pooled terms, so a term scores by
+where this cluster differs from the corpus):
+
+- `rerank`, `rerank-c`: the whole label from the reranked pool.
+- `mix-rerank`, `mix-rerank-c`: one term from c-TF-IDF, then the distinctive pool (umbrella terms removed)
+  reranked. `phrase-mix1` is the same split without the rerank.
+
+| corpus | `phrase-mix1` distinct / coverage | `rerank` | `rerank-c` | `mix-rerank` | `mix-rerank-c` |
+|---|---|---|---|---|---|
+| hydrogen | 84% / 76% | 73% / 71% | 77% / 76% | 74% / 76% | 78% / 77% |
+| AOKK, latest | 94% / 81% | 66% / 89% | 75% / 91% | 90% / 81% | 93% / 82% |
+| ECCOMAS | 85% / 78% | 84% / 69% | 82% / 79% | 85% / 73% | 87% / 75% |
+| biology | 92% / 92% | 75% / 90% | 92% / 91% | 81% / 90% | 94% / 88% |
+| geography | 93% / 93% | 71% / 90% | 88% / 96% | 90% / 93% | 93% / 94% |
+| health education | 88% / 100% | 92% / 97% | 96% / 100% | 100% / 99% | 100% / 99% |
+
+- **The rerank alone favours what the whole corpus is about.** A cluster's centroid in a single-topic corpus
+  lies near the corpus's generic phrases, so AOKK's labels fill with *learning process*, *educator*, *task*,
+  and hydrogen's repeat *photocatalytic hydrogen production* in 15 clusters. Centering helps, not enough.
+- **On the distinctive pool it does what it was for**: the tail stops picking noise for its rarity. AOKK's
+  *gender*, *effect size*, *base* give way to *technology acceptance model*, *bayesian knowledge tracing*,
+  *learner model*, *prompt engineering*, *educational data mining*; geography's tail becomes *spatial
+  thinking skill*, *geography teaching*, *sustainability competency*, *inquiry-based learning*, close to its
+  LLM keywords.
+- **The cost is coverage within the tail**: the rerank prefers specific phrases at 3–5% of a cluster, and
+  sometimes drops a good term, as SRL's phases *forethought* and *monitoring*.
+- **Not settled by the table.** The labels have to be read, and the LLM imports (`run_llm_imports.sh`,
+  running) are for comparing against.
+
 ## Open
 
-- **Generic nouns remain**: *framework*, *limitation*, *participant*, structured-abstract headings
-  (*background*, *conclusion*). Several have a useful sense inside a phrase, which `raven.common.text.stopwords`
-  records (*potential flow*, *field theory*), so the candidate list applies to bare terms only. To be checked
-  word by word before adoption.
 - **"state of the art" yields *art***, and *GIS* did not merge with *geographical information system*.
-- **Not yet measured against the LLM keyworder**, which the brief asks for; none of these datasets stores
-  LLM keywords.
-- **The embedding rerank with MMR**, the brief's third step.
+- **Against the LLM keyworder**: `run_llm_imports.sh` imports each corpus with LLM keywords on agglomerative
+  clusters into `data/`, one corpus at a time, resuming after the last one finished.

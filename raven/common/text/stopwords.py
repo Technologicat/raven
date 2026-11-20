@@ -11,7 +11,8 @@ so that a content word means the same thing in both.
 
 __all__ = ["filler_stopwords", "scilang_stopwords", "metadata_stopwords", "copyright_stopwords",
            "publisher_stopwords", "misc_stopwords",
-           "academic_stopwords"]
+           "academic_stopwords",
+           "bare_keyword_stopwords"]
 
 # This is based on an automated frequency analysis (without these) on a few small datasets of research literature,
 # with some manual editing afterward.
@@ -168,3 +169,18 @@ misc_stopwords = ["center", "constructed", "containing",
 academic_stopwords = frozenset(filler_stopwords + scilang_stopwords +
                                metadata_stopwords + copyright_stopwords +
                                publisher_stopwords + misc_stopwords)
+
+# Words useless as a keyword on their own, while useful inside a phrase: "background" against "cosmic
+# microwave background", "effect" against "Hall effect", "field" against "field theory". A keyworder that
+# extracts phrases drops a candidate that is one of these alone, and keeps every phrase containing one.
+# Not part of `academic_stopwords`, which applies to single words wherever they occur.
+#
+# Left out because the bare word itself is useful in some corpus:
+#  - "future": in trend studies
+#  - "method": where a corpus divides between analyses of a subject and proposed new methods
+#  - "paper": the material, cardboard and its kind
+#  - "review": vs. a regular study, as in the list above
+bare_keyword_stopwords = frozenset(["background", "challenge", "change", "concept", "concern", "conclusion",
+                                    "effect", "example", "field", "framework", "issue", "level", "limitation",
+                                    "outcome", "participant", "people", "potential", "problem", "strategy",
+                                    "topic"])
