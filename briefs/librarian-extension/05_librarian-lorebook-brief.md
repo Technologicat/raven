@@ -128,6 +128,12 @@ would be knowledge left on the floor. So this clears the bar the project already
     changelog); then the key expansion.
   - **Progress (2026-11-20):** step 4 is done, the GUI switch included, and the maintainer's live check in
     Librarian passed end to end. **Next: the key expansion**, below.
+  - **Progress (2026-11-20, end of day):** the key expansion is built (`lorebook_expansion`), tested, measured
+    (`investigations/lorebook-lemmas/`) and pushed. Not yet seen in the GUI: the app asks for the English forms
+    in the background on its first launch with the new prompt, about two and a half minutes for the glossary.
+    **Next: making the lorebook portable** — fixtures as data, the core as one dependency-free file, the porting
+    guide (the LM Studio section below). Open small items: the prompt's Finnish example *rent → rentin* wants
+    the maintainer's eye, and whether thinking improves the forms is a TODO at the call.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
@@ -221,6 +227,11 @@ would be knowledge left on the floor. So this clears the bar the project already
     the data argues against (b) and, if anything, for a higher floor. The exposure is mostly single-word terms, a
     multi-word term needing its other words beside the catch. Also found: the model translates words unasked
     (*rent* → *vuokran*), and mangles a coinage now and then (*fup* → *fapped*), which no guard catches yet.
+  - **Decided (2026-11-20):** the strict guard stays and **the floor goes to five letters**, the whole word as a
+    stem included. The prompt now forbids translations, which belong to the translation follow-up, done at the
+    level of whole terms, and asks for a coinage to be inflected regularly rather than replaced. A mangled form
+    is accepted for now: no cheap rule rejects *fapped* and keeps *run → ran*, both changing a vowel. The batch
+    stays at ten terms, the reply being where the work is.
 - **The Finnish the LLM writes is poor, and the support is built anyway.** Qwens from 3.5 on read Finnish
   well; writing it has been broken at the 30B class, and Flash Next is not usable either: too many typos and
   invented words (maintainer, 2026-11-20). No local model tried so far clears the maintainer's bar. But users

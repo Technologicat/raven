@@ -88,7 +88,9 @@ The ledger measured: all 91 glossary terms answered in 8 min 17 s, no failures (
   exposure is the single-word terms. And a Finnish compound beginning with the term is often a true match
   (*jazz* → *jazzmusiikki*, *agent* → *agentti*), which the probe counts as false.
 - **So the data argues against loosening the guard** (option (b) admits more short stems) and, if anything, for
-  a higher floor.
+  a higher floor. **The floor was raised to five** the same day, which drops the four-letter stems (*hydr*,
+  *mode*, *flat*, *anim*, *lint*, *jazz*), the worst of the catches; *space* (19 English words) and *latin* (13)
+  remain.
 - **The model also translates, unasked**: *rent* → *vuokran*, *vuokrassa*, …; *landmine* → *maamiina*, … — each
   word translated, then inflected, under its forms.
 - **Its Finnish has the errors the maintainer found**: *hydryt*, and wrong vowel harmony in *hydrissä*,

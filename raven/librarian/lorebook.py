@@ -255,7 +255,7 @@ class Expansion:
 # with its word all but the last `_STEM_SLACK` letters, which is where Finnish inflection and consonant gradation
 # act ("kaupunki", "kaupungissa"), and never fewer than `_MIN_STEM`.
 _STEM_SLACK = 2
-_MIN_STEM = 4
+_MIN_STEM = 5  # four-letter stems caught by far the most unrelated words; see investigations/lorebook-lemmas/
 
 def _is_exact(word: str) -> bool:
     return word != word.lower()
@@ -263,7 +263,7 @@ def _is_exact(word: str) -> bool:
 def clean_expansion(word: str, forms: Collection[str], stems: Collection[str]) -> Expansion:
     """An `Expansion` of the key word `word`, from forms and stems as a generator suggested them.
 
-    A stem is kept when it begins with `word`'s first letters, all of them but the last two, and at least four;
+    A stem is kept when it begins with `word`'s first letters, all of them but the last two, and at least five;
     others would match unrelated words, so dropping them can only cost a miss. A form or a stem that is the word
     itself, or holds anything but word characters, is dropped too, and duplicates are. For a lowercase `word`,
     everything is lowercased.

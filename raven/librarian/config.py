@@ -69,7 +69,9 @@ lorebook_chat_cap = 8000
 # asks every term again, in the background.
 lorebook_languages: dict[str, str] = {"English": "forms"}
 lorebook_expansion_dir = librarian_userdata_dir / "lorebook_expansion"  # the answers, one ledger per model and prompt
-lorebook_expansion_batch_size = 10  # terms per request
+# Terms per request. Sized by the reply, which is where the work is: with Finnish, a batch of 10 glossary terms
+# came back as 1,600–5,800 tokens on Qwen Flash Next, and one reply that does not parse loses the whole batch.
+lorebook_expansion_batch_size = 10
 mcp_log_dir = librarian_userdata_dir / "mcp_logs"  # what each stdio server writes to its stderr, one file per server, rewritten at each start
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

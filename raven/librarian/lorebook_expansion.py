@@ -66,8 +66,8 @@ def _ask_batch_for(languages: Mapping[str, str]):
     def ask_batch(settings: env, batch: list[tuple[str, dict]], maybe_abort) -> tuple[dict[str, Any], list]:
         listing = "\n".join(f"{number}. {_render(item)}" for number, (_, item) in enumerate(batch, start=1))
         prompt = f"{material(settings, languages)}\n\nTerms:\n{listing}"
-        # Without thinking, to keep the background work short. Whether thinking would give better forms is
-        # unmeasured.
+        # Without thinking, to keep the background work short.
+        # TODO: measure whether thinking gives better forms, Finnish especially, and what it costs in time.
         record = agent.ask_record(settings, prompt, maybe_abort=maybe_abort, thinking_enabled=False)
         try:
             reply = agent.parse_json_reply(record.reply)

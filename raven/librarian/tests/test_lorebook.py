@@ -298,8 +298,9 @@ class TestCleanExpansion:
     def test_a_stem_keeps_all_but_the_last_two_letters_of_its_word(self):
         assert lorebook.clean_expansion("kaupunki", forms=[], stems=["kaupun", "kaupu"]).stems == ("kaupun",)
 
-    def test_and_never_fewer_than_four(self):
-        assert lorebook.clean_expansion("hydra", forms=[], stems=["hydr", "hyd"]).stems == ("hydr",)
+    def test_and_never_fewer_than_five(self):
+        assert lorebook.clean_expansion("hydra", forms=[], stems=["hydra", "hydr"]).stems == ("hydra",)
+        assert lorebook.clean_expansion("lint", forms=[], stems=["lint"]).stems == (), "even the whole word"
         assert lorebook.clean_expansion("fup", forms=[], stems=["fup", "f"]).stems == ()
 
     def test_a_stem_that_wanders_off_the_word_is_dropped(self):
