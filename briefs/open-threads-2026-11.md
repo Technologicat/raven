@@ -30,8 +30,9 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
-- **Colouring the Visualizer's map by year**, in scope for 0.2.11 (2026-11-20); not yet designed.
-  `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *What comes after the year filter*.
+- **Colouring the Visualizer's map by year: next, building v0** (designed and ordered 2026-11-20). Then the
+  improved keyworder, then v1 with per-year keywords, before 0.2.11 is released.
+  `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Decided: colouring by year*.
 - **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as
   DPG has none. Same brief.
 - **A light theme across the constellation**, with a roomier layout as an option, starting with a UI design

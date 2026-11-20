@@ -145,7 +145,13 @@ Settled with the maintainer:
   - So they are stored in the dataset, which ties v1 to the dataset format (`TODO.md`, "Data file format"), or to
     an extra field in today's pickle.
 
+**The order** (agreed 2026-11-20): **v0 first**, grouping by year with plain headers, whose design above is
+complete; **then the improved keyworder** (`briefs/visualizer-keyword-pools-brief.md`, *An improved classical mode,
+worth trying*), measured on more than one corpus, which also fixes the cluster keywords; **then v1**, the per-year
+keywords, using whichever keyworder that settles on. The keyworder sits between because it may decide how v1 works:
+the LLM keyworder struggles with a year of thousands of records, and c-TF-IDF scores a year against the corpus with
+no prompt limit. v1 should land before 0.2.11 is released, so that year mode does not ship incomplete.
+
 ## Open
 
-Colouring by year's v1: per-year keywords at import, and how the LLM keyworder copes with a year of thousands of
-records.
+Colouring by year's v1: per-year keywords at import, after the keyworder.
