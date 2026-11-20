@@ -76,6 +76,9 @@ class TestResolving:
         (("run", "c.bib", "--out-dir", "o"), "no definition file.*c.scope.toml"),
         (("run", "c.bib", "--definition", "d.toml"), "no output directory"),
         (("run", "c.bib", "--definition", "d.toml", "--out-dir", "o", "--sample", "0"), "at least 1"),
+        (("run", "c.bib", "--definition", "d.toml", "--out-dir", "o", "--min-chars", "abstract"), "--min-chars: expected FIELD=N"),
+        (("run", "c.bib", "--definition", "d.toml", "--out-dir", "o", "--where", "year=>2022"),
+         "--where: expected FIELD OP NUMBER"),
     ])
     def test_what_is_missing_is_named(self, argv, complaint):
         with pytest.raises(cli.UsageError, match=complaint):
@@ -186,7 +189,6 @@ class TestARun:
         assert (out / report.FINAL_BIB).exists()
         assert (out / f"{report.CHECK_BY_HAND}.xlsx").exists(), "finish does not rewrite the reports"
 
-
     def test_a_finished_run_is_refused_before_any_work(self, files, tmp_path, model, connect):
         corpus, definition = files
         out = tmp_path / "out"
@@ -204,7 +206,6 @@ class TestARun:
         assert not (out / report.FINAL_BIB).exists()
         [kept] = out.glob("04b-final, set aside *.bib")
         assert kept.read_text(encoding="utf-8") == "% edited by hand\n"
-
 
     def test_decisions_from_an_earlier_run_are_carried_and_a_contradiction_is_said(self, files, tmp_path, model,
                                                                                    connect, capsys):

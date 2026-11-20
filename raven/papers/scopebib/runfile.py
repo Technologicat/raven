@@ -71,7 +71,8 @@ class Settings:
 
     `maybe_bib`, `maybe_definition`, `maybe_ledgers`: the input, the definition file, and the directory
                                                     holding the ledgers, as absolute paths.
-    `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them: field names, and `FIELD=N`.
+    `require`, `min_chars`, `where`: the sift's criteria, as `raven-siftbib` takes them: field names, `FIELD=N`,
+                                    and `FIELD OP NUMBER`.
     `maybe_fill`: fill missing and truncated abstracts from Crossref before the sift, as `raven-fillbib` does.
     `maybe_keep_appended`: in the fill, keep a second text appended to an abstract the record keeps, as
                            `raven-fillbib --keep-appended` does.
@@ -90,6 +91,7 @@ class Settings:
     maybe_ledgers: pathlib.Path | None = None
     require: tuple[str, ...] = ()
     min_chars: tuple[str, ...] = ()
+    where: tuple[str, ...] = ()
     maybe_fill: bool | None = None
     maybe_keep_appended: bool | None = None
     maybe_sample: int | None = None
@@ -111,7 +113,9 @@ class RunFile:
 
 # The `[run]` table's keys: the `Settings` field each fills, and its smallest value where it is a count.
 _PATHS = {"bib": "maybe_bib", "definition": "maybe_definition", "ledgers": "maybe_ledgers"}
-_LISTS = {"require": "require", "min_chars": "min_chars"}
+_LISTS = {"require": "require", "min_chars": "min_chars", "where": "where"}
+# The list keys whose items `raven-siftbib` parses, each with its parser, so that a bad one is refused on reading.
+_LIST_PARSERS = {"min_chars": siftbib.parse_min_chars, "where": siftbib.parse_where}
 _INTS = {"sample": ("maybe_sample", 1), "pilot": ("maybe_pilot", 1), "seed": ("maybe_seed", None),
          "control": ("maybe_control", 0), "replicate": ("maybe_replicate", 1),
          "context_length": ("maybe_context_length", 1)}
@@ -178,10 +182,10 @@ def _load_settings(table: dict, path: pathlib.Path) -> Settings:
         elif key in _LISTS:
             if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
                 raise RunFileError(f"{where}: expected a list of strings, got {value!r}")
-            if key == "min_chars":
+            if key in _LIST_PARSERS:
                 for item in value:
                     try:
-                        siftbib.parse_min_chars(item)
+                        _LIST_PARSERS[key](item)
                     except ValueError as exc:
                         raise RunFileError(f"{where}: {exc}") from None
             fields[_LISTS[key]] = tuple(item.strip() for item in value)

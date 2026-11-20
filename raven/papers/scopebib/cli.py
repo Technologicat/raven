@@ -59,6 +59,9 @@ def _parser() -> argparse.ArgumentParser:
                         help="Sift first: keep only records carrying FIELD, as raven-siftbib does. Repeatable.")
     common.add_argument("--min-chars", dest="min_chars", action="append", default=None, metavar="FIELD=N",
                         help="Sift first: keep only records whose FIELD runs to N characters. Repeatable.")
+    common.add_argument("--where", dest="where", action="append", default=None, metavar="FIELD OP NUMBER",
+                        help="Sift first: keep only records whose FIELD is a number comparing as asked, such as "
+                             "'year>=2022', as raven-siftbib does. Repeatable.")
     common.add_argument("--fill", dest="fill", action=argparse.BooleanOptionalAction, default=None,
                         help="Before the sift, fill missing and truncated abstracts from Crossref, as raven-fillbib "
                              "does. Sends every DOI in the corpus to Crossref. Its answers are kept in the "
@@ -225,6 +228,7 @@ class UsageError(ValueError):
 
 def resolve(opts: argparse.Namespace) -> Plan:
     """The `Plan` for parsed command-line options. Raises `UsageError`, or `runfile.RunFileError`."""
+    from .. import siftbib
     from . import runfile
 
     maybe_run_file = pathlib.Path(opts.run_file).expanduser().resolve() if opts.run_file else None
@@ -235,7 +239,8 @@ def resolve(opts: argparse.Namespace) -> Plan:
     given = {"maybe_bib": path(getattr(opts, "bib", None)), "maybe_definition": path(opts.definition),
              "maybe_ledgers": path(opts.ledgers),
              "require": tuple(opts.require) if opts.require else None,
-             "min_chars": tuple(opts.min_chars) if opts.min_chars else None, "maybe_fill": opts.fill,
+             "min_chars": tuple(opts.min_chars) if opts.min_chars else None,
+             "where": tuple(opts.where) if opts.where else None, "maybe_fill": opts.fill,
              "maybe_keep_appended": opts.keep_appended,
              "maybe_sample": opts.sample, "maybe_pilot": opts.pilot, "maybe_seed": opts.seed,
              "maybe_control": opts.control, "maybe_replicate": opts.replicate, "maybe_format": opts.format,
@@ -267,6 +272,14 @@ def resolve(opts: argparse.Namespace) -> Plan:
         least = {"maybe_seed": None, "maybe_control": 0}.get(name, 1)
         if value is not None and least is not None and value < least:
             raise UsageError(f"--{name.removeprefix('maybe_')} must be at least {least}, got {value}")
+    # Checked here, where the command line can be blamed, rather than when the sift parses them deep in a run.
+    for option, specs, parse_spec in (("--min-chars", settings.min_chars, siftbib.parse_min_chars),
+                                      ("--where", settings.where, siftbib.parse_where)):
+        for spec in specs:
+            try:
+                parse_spec(spec)
+            except ValueError as exc:
+                raise UsageError(f"{option}: {exc}") from None
 
     if opts.out_dir:
         root = path(opts.out_dir)
@@ -294,7 +307,7 @@ def _provenance(plan: Plan, models: dict[str, str], stages: dict, nlp_descriptio
                      "or authors")
         if settings.maybe_keep_appended:
             lines.append("second texts appended to abstracts kept, as --keep-appended asks")
-    criteria = list(settings.require) + list(settings.min_chars)
+    criteria = list(settings.require) + list(settings.min_chars) + list(settings.where)
     if criteria:
         lines.append(f"sifted on: {', '.join(criteria)}")
     if settings.maybe_pilot is not None:
@@ -359,7 +372,7 @@ def execute(plan: Plan, *, nlp, connect, nlp_description: str = "", sheet: str |
                                                                                        plan.reports_dir))
     definition = scope_definition.load_definition(settings.maybe_definition)
     corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require,
-                                  min_chars=settings.min_chars, fill=settings.maybe_fill,
+                                  min_chars=settings.min_chars, where=settings.where, fill=settings.maybe_fill,
                                   strip_appended=not settings.maybe_keep_appended,
                                   maybe_crossref_cache=plan.ledger_dir / CROSSREF_CACHE,
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample, seed=settings.maybe_seed)
@@ -462,7 +475,7 @@ def compare_runs(path_a: str | pathlib.Path, path_b: str | pathlib.Path, *, nlp,
     (path_a, first), (path_b, second) = runs
     settings = first.settings
     corpus = pipeline.load_corpus(settings.maybe_bib, nlp=nlp, require=settings.require, min_chars=settings.min_chars,
-                                  fill=bool(settings.maybe_fill),
+                                  where=settings.where, fill=bool(settings.maybe_fill),
                                   strip_appended=not settings.maybe_keep_appended,
                                   maybe_crossref_cache=(settings.maybe_ledgers or path_a.parent / "ledgers") / CROSSREF_CACHE,
                                   maybe_sample=settings.maybe_pilot or settings.maybe_sample,

@@ -29,10 +29,10 @@ class TestLoading:
         (tmp_path / "runs").mkdir()
         path = tmp_path / "runs" / "run.toml"
         path.write_text('[run]\nbib = "../corpus.bib"\nrequire = ["abstract"]\nmin_chars = ["abstract=200"]\n'
-                        'seed = 7\ncontrol = 0\nformat = "xlsx"\n', encoding="utf-8")
+                        'where = ["year>=2022"]\nseed = 7\ncontrol = 0\nformat = "xlsx"\n', encoding="utf-8")
         assert runfile.load_run_file(path).settings == Settings(maybe_bib=(tmp_path / "corpus.bib").resolve(),
                                                                 require=("abstract",), min_chars=("abstract=200",),
-                                                                maybe_seed=7, maybe_control=0, maybe_format="xlsx")
+                                                                where=("year>=2022",), maybe_seed=7, maybe_control=0, maybe_format="xlsx")
 
     @pytest.mark.parametrize("text, complaint", [
         ('[judges]\nmodel = "m"\n', "unknown key 'judges'"),
@@ -44,6 +44,7 @@ class TestLoading:
         ('[run]\nsample = 0\n', r"\[run\] sample: expected a whole number of at least 1"),
         ('[run]\ncontrol = true\n', "expected a whole number"),
         ('[run]\nmin_chars = ["abstract"]\n', "expected FIELD=N"),
+        ('[run]\nwhere = ["year=>2022"]\n', r"\[run\] where: expected FIELD OP NUMBER"),
         ('[run]\nformat = "csv"\n', "expected one of"),
         ('[run]\nuntil = "judge"\n', r"\[run\]: unknown key 'until'"),
         ('[run]\nserver_nlp = "yes"\n', "expected true or false"),
@@ -84,7 +85,8 @@ class TestWriting:
     def test_a_written_file_reads_back_the_same(self, tmp_path):
         run_file = RunFile(Settings(maybe_bib=(tmp_path / "corpus.bib").resolve(),
                                     maybe_definition=(tmp_path / "out" / "d.scope.toml").resolve(),
-                                    require=("abstract",), min_chars=("abstract=200",), maybe_sample=50,
+                                    require=("abstract",), min_chars=("abstract=200",), where=("year>=2022",),
+                                    maybe_sample=50,
                                     maybe_pilot=50, maybe_seed=42, maybe_control=40, maybe_replicate=2,
                                     maybe_format="ods", maybe_server_nlp=True, maybe_context_length=131072,
                                     maybe_fill=True, maybe_keep_appended=True),

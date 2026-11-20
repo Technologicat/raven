@@ -316,6 +316,17 @@ class TestLoadingTheCorpus:
         assert [record.key for record in corpus.maybe_sift.dropped] == ["r1"]
         assert set(corpus.measures) == {record.key for record in corpus.records}
 
+    def test_a_year_criterion_sifts_as_raven_siftbib_does(self, tmp_path):
+        path = tmp_path / "in.bib"
+        years = {"old": "  year = {2019},\n", "new": "  year = {2023},\n", "none": ""}
+        path.write_text("".join(f"@article{{{key},\n  title = {{Ravens of {key}}},\n{year}"
+                                f"  abstract = {{About ravens.}}\n}}\n\n" for key, year in years.items()),
+                        encoding="utf-8")
+        corpus = pipeline.load_corpus(path, nlp=_NLP(), where=["year>=2022"], stopwords=STOPWORDS)
+        assert [record.key for record in corpus.records] == ["new"]
+        dropped = {record.key: record.reason for record in corpus.maybe_sift.dropped}
+        assert dropped == {"old": "year < 2022", "none": "no year"}
+
     @staticmethod
     def _bib_with_dois(path):
         path.write_text("@article{bare,\n  title = {Ravens unexplained},\n  doi = {10.1234/bare}\n}\n\n"

@@ -88,6 +88,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
                 nlp,
                 require: Sequence[str] = (),
                 min_chars: Sequence[str] = (),
+                where: Sequence[str] = (),
                 maybe_sample: int | None = None,
                 seed: int = 42,
                 stopwords: Container[str] | None = None,
@@ -106,7 +107,7 @@ def load_corpus(bib_path: str | pathlib.Path, *,
 
     Raises `PipelineError` where a lookup failed. Otherwise the record would be judged on its teaser, and the
     next run, once Crossref answers, would fill it and every stage that shows it would ask about it again.
-    `require`, `min_chars`: the sift's criteria, as `raven-siftbib` takes them; with neither, no sift runs.
+    `require`, `min_chars`, `where`: the sift's criteria, as `raven-siftbib` takes them; with none, no sift runs.
     `maybe_sample`: draw this many records, after the sift; `None` for all of them.
     `seed`: which records the sample draws. The draw is over the keys in sorted order, so reordering the
                 file does not change it.
@@ -126,8 +127,9 @@ def load_corpus(bib_path: str | pathlib.Path, *,
         library, maybe_fill = fillbib.fill(library, abstracts, strip_appended=strip_appended)
         maybe_fill_summary = fillbib.summary(library, maybe_fill)
     maybe_sift = None
-    criteria = [siftbib.require_field(field) for field in require] + [siftbib.parse_min_chars(spec)
-                                                                      for spec in min_chars]
+    criteria = ([siftbib.require_field(field) for field in require] +
+                [siftbib.parse_min_chars(spec) for spec in min_chars] +
+                [criterion for spec in where for criterion in siftbib.parse_where(spec)])
     if criteria:
         library, dropped = siftbib.sift(library, criteria)
         maybe_sift = scope_report.SiftResult(dropped=dropped, criteria=criteria)
