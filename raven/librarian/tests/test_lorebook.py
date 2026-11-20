@@ -427,6 +427,11 @@ class TestLorebook:
             offered = llmtools.maybe_tool_names_for_turn(settings, **gated, lorebook_available=False)
             assert llmtools.LOREBOOK_TOOL_NAME not in offered and "websearch" in offered
 
+    def test_the_tool_is_costed_in_its_own_group_while_it_is_offered(self, settings, folder):
+        assert llmclient.tool_cost_by_group(settings)["lorebook"] == 0, "no lorebook, so nothing to cost"
+        with lorebook.loaded(settings, directory=folder):
+            assert llmclient.tool_cost_by_group(settings)["lorebook"] > 0
+
     def test_a_path_may_be_str_or_path(self, settings, folder):
         with lorebook.loaded(settings, directory=str(folder)) as book:
             assert list(book.entries) == ["spork", "fup"]

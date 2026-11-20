@@ -487,10 +487,19 @@ skill_library.start(watch=True)
 for _skill_folder, _skill_problem in skill_library.problems.items():
     print(colorizer.colorize(f"Skill '{_skill_folder}': {_skill_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
 
+def _refresh_lorebook_status() -> None:
+    """Bring the GUI up to date with the lorebook: the toggle and the lookup tool's token cost."""
+    if (not dpg.does_item_exist("lorebook_enabled_checkbox") or "chat_controller" not in globals() or  # tag
+            guiutils.is_shutting_down()):
+        return  # the GUI is not built yet, and `_finish_startup` calls this once it is; or it is going away
+    dpg.configure_item("lorebook_enabled_checkbox", enabled=bool(user_lorebook.entries))  # tag
+    _refresh_tool_cost_tooltips()
+    chat_controller.update_context_fill_indicator()  # the lookup tool comes and goes with the entries
+
 def _on_lorebook_changed() -> None:
+    _refresh_lorebook_status()
     if guiutils.is_shutting_down() or "chat_controller" not in globals():  # going away, or not built yet
         return
-    chat_controller.update_context_fill_indicator()  # the lookup tool comes and goes with the entries
     count = len(user_lorebook.entries)
     _show_composer_notice(f"Lorebook reloaded: {count} {'entry' if count == 1 else 'entries'}.")  # plural
 
@@ -737,7 +746,8 @@ def _refresh_tool_cost_tooltips() -> None:
     for group, text_widget in (("internet", "internet_tool_cost_text"),  # tag
                                ("mcp", "mcp_tool_cost_text"),  # tag
                                ("skills", "skills_tool_cost_text"),  # tag
-                               ("documents", "documents_tool_cost_text")):  # tag
+                               ("documents", "documents_tool_cost_text"),  # tag
+                               ("lorebook", "lorebook_tool_cost_text")):  # tag
         n_tokens = costs[group]
         dpg.set_value(text_widget, f"\nAbout {n_tokens} token{common_text.plural_s(n_tokens)} of context.")
         dpg.configure_item(text_widget, show=(n_tokens > 0))
@@ -2053,14 +2063,12 @@ with timer() as tim:
                             app_state["show_thinking"] = not app_state["show_thinking"]
                         def toggle_thinking_enabled():
                             app_state["thinking_enabled"] = not app_state["thinking_enabled"]
+                        def toggle_lorebook_enabled():
+                            app_state["lorebook_enabled"] = not app_state["lorebook_enabled"]
+                            chat_controller.update_context_fill_indicator()  # the tools on offer changed
 
-                        # Three groups, divided: what the AI does when it answers, how the chat log is
-                        # shown, and what the avatar does. They answer different questions of the user, and
-                        # in a flat row the display preference reads as one more thing the AI does.
-                        dpg.add_checkbox(label="Thinking", default_value=app_state["thinking_enabled"], callback=toggle_thinking_enabled, tag="thinking_enabled_checkbox")
-                        dpg.add_tooltip("thinking_enabled_checkbox", tag="thinking_enabled_tooltip")  # tag
-                        dpg.add_text("Let a thinking model reason before it answers. [Alt+T]\n\nWith this off, the same model answers immediately: replies arrive sooner\nand are shorter. Reasoning is how these models work through a hard\nquestion, so switching it off trades accuracy on those for speed.\n\nDoes nothing to a model that does not reason.\n\nTakes effect from the AI's next chat message onward.", parent="thinking_enabled_tooltip")  # tag
-
+                        # Two rows, by the question each answers. This one: what the AI may draw on, when it
+                        # answers. The next: how it answers, and what you then see and hear of it.
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
                         dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nApart from any MCP servers you have set up (see next toggle), this is the\nonly switch that sends anything to a site the AI picked, so it is the one\nto turn off when the conversation should stay between you and\nthe machines you run. Your messages always go to the LLM backend you\nconfigured, and searching your documents may reach the Raven-server you\nconfigured; either of those can sit elsewhere on your network. Both are\nset in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle), do arithmetic, and ask what time it is.", parent="internet_enabled_tooltip")  # tag
@@ -2091,12 +2099,17 @@ with timer() as tim:
                         dpg.add_tooltip("autosearch_enabled_checkbox", tag="autosearch_enabled_tooltip")  # tag
                         dpg.add_text("Before each reply, search the documents for your message, and give\nthe AI the best matches. [Alt+A]\n\nUsed when Docs is on.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply. With this off, the AI can still search the\ndocuments itself, when you ask it to or when it sees the need.", parent="autosearch_enabled_tooltip")  # tag
 
-                        # No line, matching the toolbar below the chat, which separates its sections by
-                        # spacing alone at every one of its call sites.
-                        guiutils.add_toolbar_separator(horizontal=True,
-                                                       toolbar_extent=gui_config.mode_toggle_row_h,
-                                                       size=gui_config.toolbar_separator_w,
-                                                       line=False)
+                        dpg.add_checkbox(label="Lorebook", default_value=app_state["lorebook_enabled"], callback=toggle_lorebook_enabled,
+                                         enabled=bool(user_lorebook.entries), tag="lorebook_enabled_checkbox")
+                        dpg.bind_item_theme("lorebook_enabled_checkbox", "disablable_widget_theme")  # tag
+                        dpg.add_tooltip("lorebook_enabled_checkbox", tag="lorebook_enabled_tooltip")  # tag
+                        dpg.add_text(f"Give the AI the definitions of your terms when they come up. [Alt+L]\n\nA lorebook entry is a section of a Markdown file: its header is the term, and\nwhat is under it the definition. When a term appears in the chat, its\ndefinition is given to the AI, once per branch. The AI can also look a term\nup itself.\n\nTo use this, put your files in the following folder:\n{librarian_config.lorebook_dir}\n\nSee the Librarian README, section Lorebook, for an example.\n\nChanges to the files are picked up live, and take effect at your next message.", parent="lorebook_enabled_tooltip")  # tag
+                        dpg.add_text("", tag="lorebook_tool_cost_text", parent="lorebook_enabled_tooltip", show=False)
+
+                    with dpg.group(horizontal=True):
+                        dpg.add_checkbox(label="Thinking", default_value=app_state["thinking_enabled"], callback=toggle_thinking_enabled, tag="thinking_enabled_checkbox")
+                        dpg.add_tooltip("thinking_enabled_checkbox", tag="thinking_enabled_tooltip")  # tag
+                        dpg.add_text("Let a thinking model reason before it answers. [Alt+T]\n\nWith this off, the same model answers immediately: replies arrive sooner\nand are shorter. Reasoning is how these models work through a hard\nquestion, so switching it off trades accuracy on those for speed.\n\nDoes nothing to a model that does not reason.\n\nTakes effect from the AI's next chat message onward.", parent="thinking_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Show thinking", default_value=app_state["show_thinking"], callback=toggle_show_thinking, tag="show_thinking_checkbox")
                         dpg.add_tooltip("show_thinking_checkbox", tag="show_thinking_tooltip")  # tag
@@ -2126,22 +2139,24 @@ with timer() as tim:
                     # outside the rect the avatar and the chat graph take turns in, so what the app is busy with
                     # stays on screen whichever of them holds it, or while the avatar sleeps.
                     #
-                    # They stack top-down in a vertical group. Order — INDEXING, DOCUMENTS, READING, SYSTEM,
-                    # INTERNET — mirrors the typical processing order of a query and places the longest-lived
-                    # indicator (INDEXING) at the top so it stays in place when shorter-lived siblings appear
-                    # below it. READING sits where it does because extracting an attachment's text is what
-                    # happens between finding documents and handing the prompt to the backend. DPG's vertical
-                    # group naturally hides any child whose `show=False`, so the visible siblings just repack
-                    # with no overlap.
-                    #
                     # Which can be lit together, which is what sizes the room this needs: INDEXING at any time,
                     # since indexing runs in the background (hence its own widget, rather than a state of
                     # DOCUMENTS). SYSTEM is prompt processing, so never alongside READING, DOCUMENTS or
                     # INTERNET, which all run between prompts rather than during one. DOCUMENTS is a database
                     # search, automatic or by tool call; INTERNET is the web tools, so tool calls only. Those two
                     # can be lit together, `llmtools.perform_tool_calls` running calls of different kinds in
-                    # parallel, and READING runs on a background task that can overlap a tool call. So at most
-                    # four lines: INDEXING, DOCUMENTS, READING and INTERNET.
+                    # parallel, and READING runs on a background task that can overlap a tool call.
+                    #
+                    # So three lines, which is what the panel has room for below the two rows of toggles:
+                    # - INDEXING on a line of its own, at the top. It is the longest-lived, so it stays in place
+                    #   while the others come and go, and its progress names a document, which wants the width.
+                    # - READING, then DOCUMENTS. A hidden item takes no room in a horizontal group, so DOCUMENTS
+                    #   starts at the left edge unless an attachment is being read at the same time.
+                    # - SYSTEM, then INTERNET, which are never lit together, so either starts at the left edge.
+                    # Read row by row, that is the typical processing order of a query, with READING and
+                    # DOCUMENTS swapped: the light with no message of its own goes first, so the one with a
+                    # message keeps the rest of the line. DPG's vertical group hides any child whose
+                    # `show=False`, so the lines repack with no overlap.
                     with dpg.group():
                         with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
                             dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
@@ -2152,37 +2167,39 @@ with timer() as tim:
                             dpg.add_text("", tag="docs_indexing_progress_text")
                             dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
 
-                        with dpg.group(show=False, horizontal=True) as docs_access_indicator_group:
-                            dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
-                            dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_access_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("DOCUMENTS", tag="docs_access_text")
-                            dpg.bind_item_theme("docs_access_text", "my_steady_gray_indicator_theme")  # tag
-                            dpg.add_text("", tag="docs_access_progress_text")
-                            dpg.bind_item_theme("docs_access_progress_text", "my_steady_gray_indicator_theme")  # tag
+                        with dpg.group(horizontal=True):
+                            with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
+                                dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
+                                dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.add_text("READING", tag="attachment_read_text")
+                                dpg.bind_item_theme("attachment_read_text", "my_steady_gray_indicator_theme")  # tag
 
-                        with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
-                            dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
-                            dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("READING", tag="attachment_read_text")
-                            dpg.bind_item_theme("attachment_read_text", "my_steady_gray_indicator_theme")  # tag
+                            with dpg.group(show=False, horizontal=True) as docs_access_indicator_group:
+                                dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
+                                dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("docs_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.add_text("DOCUMENTS", tag="docs_access_text")
+                                dpg.bind_item_theme("docs_access_text", "my_steady_gray_indicator_theme")  # tag
+                                dpg.add_text("", tag="docs_access_progress_text")
+                                dpg.bind_item_theme("docs_access_progress_text", "my_steady_gray_indicator_theme")  # tag
 
-                        with dpg.group(show=False, horizontal=True) as llm_indicator_group:
-                            dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
-                            dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
-                            dpg.bind_item_theme("llm_prompt_process_text", "my_steady_gray_indicator_theme")  # tag
+                        with dpg.group(horizontal=True):
+                            with dpg.group(show=False, horizontal=True) as llm_indicator_group:
+                                dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
+                                dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
+                                dpg.bind_item_theme("llm_prompt_process_text", "my_steady_gray_indicator_theme")  # tag
 
-                        with dpg.group(show=False, horizontal=True) as web_indicator_group:
-                            dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
-                            dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("INTERNET", tag="web_access_text")
-                            dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
-                            dpg.add_text("", tag="web_access_progress_text")
-                            dpg.bind_item_theme("web_access_progress_text", "my_steady_gray_indicator_theme")  # tag
+                            with dpg.group(show=False, horizontal=True) as web_indicator_group:
+                                dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
+                                dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.add_text("INTERNET", tag="web_access_text")
+                                dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
+                                dpg.add_text("", tag="web_access_progress_text")
+                                dpg.bind_item_theme("web_access_progress_text", "my_steady_gray_indicator_theme")  # tag
 
                     # Raven-server's status, on the same pattern as the composer's LLM-backend row and for
                     # the same reason: a server that has gone away is something the user has to be told,
@@ -2196,8 +2213,12 @@ with timer() as tim:
                     # Shown only when something is wrong, plus a moment on the way back. A row that said
                     # "connected" all day would be teaching the user to stop reading it.
                     # Parked at the bottom right of the panel rather than following the status indicators, so
-                    # that it does not jump about as they come and go, and stays clear of them however many are
-                    # lit. Positioned by `_place_server_status_pill`.
+                    # that it does not jump about as they come and go. Positioned by `_place_server_status_pill`.
+                    #
+                    # TODO: The pill shares the bottom line with the indicators' third line (SYSTEM, INTERNET), so
+                    # a long INTERNET message, such as a long URL being fetched, runs under it. Rare in practice,
+                    # the pill being up only while Raven-server is not answering. Revisit if the indicator layout
+                    # changes again.
                     server_pill = pill.Pill(tag="server_status",
                                             icon_font=themes_and_fonts.icon_font_solid,
                                             callback=lambda: _request_server_recheck())
@@ -2558,6 +2579,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
                helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
                env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Go to the chat graph, and back", notes="Shows it first; again to leave"),
                env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
                helpcard.hotkey_new_column,
@@ -2604,7 +2626,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Alt+K", action_indent=0, action="Skills", notes="Procedures you have written"),
                env(key_indent=0, key="Alt+D", action_indent=0, action="Docs", notes="Your document database"),
                env(key_indent=1, key="Alt+A", action_indent=1, action="Auto-search", notes="Search it before each reply"),
-               env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
+               env(key_indent=0, key="Alt+L", action_indent=0, action="Lorebook", notes="Definitions of your terms"),
                env(key_indent=0, key="Alt+S", action_indent=0, action="Speech", notes="Whether the avatar speaks replies"),
                env(key_indent=1, key="Alt+C", action_indent=1, action="Subtitles", notes="Used when Speech is on"),
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
@@ -3375,8 +3397,8 @@ def librarian_hotkeys_callback(sender, app_data):
             dpg.show_font_manager()
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
-    # Alt+... — the switches in the row below the avatar, one key each, mnemonic on the label. Alt is
-    # otherwise unused here, which is what leaves nine letters free in one place; the graph claims
+    # Alt+... — the switches in the rows below the avatar, one key each, mnemonic on the label. Alt is
+    # otherwise unused here, which is what leaves their letters free in one place; the graph claims
     # Alt+Left/Alt+Right for its history, and is offered the key further up, while it holds the keyboard.
     #
     # Live while the composer has the caret, like the Ctrl chords above and unlike the bare keys below:
@@ -3405,6 +3427,9 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_A:
             if app_state["docs_enabled"]:  # as a click does nothing to the checkbox while Docs is off
                 guiutils.toggle_checkbox("autosearch_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_L:
+            if dpg.is_item_enabled("lorebook_enabled_checkbox"):  # tag  # as a click does nothing to the checkbox while the lorebook is empty
+                guiutils.toggle_checkbox("lorebook_enabled_checkbox")  # tag
         elif key == dpg.mvKey_G:
             guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
         elif key == dpg.mvKey_S:
@@ -4006,6 +4031,7 @@ def _finish_startup(sender, app_data) -> None:
     _start_server_status_poll(delay_first_probe=True)
     _refresh_mcp_status()  # for what the servers did before the GUI existed
     _refresh_skills_status()
+    _refresh_lorebook_status()
     global stop_prompt_watch
     stop_prompt_watch = llmclient.watch_prompt_files(llm_settings, on_changed=_on_prompts_changed)
 

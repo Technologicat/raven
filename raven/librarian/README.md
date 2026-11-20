@@ -600,7 +600,7 @@ What an open item costs everyone who has to read past it.
 
 The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the entry spelled nearly like it, if there is one. Otherwise it gets the names of the entries spelled closest and of those whose definitions mention the term, or, with neither, the answer that the term is not defined.
 
-`!lorebook` in `raven-minichat` switches the lorebook on and off. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.
+The **Lorebook** toggle (`Alt+L`) switches it on or off, and `!lorebook` does the same in `raven-minichat`. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.
 
 ### Security warning
 
@@ -956,7 +956,7 @@ part of the text the model sees if you ask it to continue, and not part of what 
 
 ## Mode toggles
 
-Below the avatar panel at the right, there are **mode toggles**, grouped by what they govern: what the AI may reach for, what the AI does when it answers, how the chat log is shown, and what the avatar does.
+Below the avatar panel at the right, there are **mode toggles**, in two rows. The first is what the AI may draw on when it answers; the second is how it answers, and what you then see and hear of it.
 
 Each has a hotkey, mnemonic on its label, and they work while you are typing — which is when you usually want one, on noticing that the answer wants the web or the documents:
 
@@ -969,6 +969,7 @@ Each has a hotkey, mnemonic on its label, and they work while you are typing —
 | `Alt+K` | Skills | | | |
 | `Alt+D` | Docs | | | |
 | `Alt+A` | Auto-search | | | |
+| `Alt+L` | Lorebook | | | |
 
 *Show thinking* is `Alt+Shift+T` rather than a letter of its own because the pair is the point: `Alt+T` is what the AI does, `Alt+Shift+T` is what you see of it.
 
@@ -1145,6 +1146,7 @@ mid-sentence, on noticing that the answer wants the web or the documents.
 | `Alt+K` | Skills |
 | `Alt+D` | Docs |
 | `Alt+A` | Auto-search |
+| `Alt+L` | Lorebook |
 | `Alt+G` | Chat graph |
 | `Alt+S` | Speech |
 | `Alt+C` | Subtitles (captions) |

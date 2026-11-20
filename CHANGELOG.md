@@ -29,7 +29,7 @@
   - Markdown files under `lorebook/` in the user folder, a section per term; a glossary is one file, and can be a link to one kept elsewhere. Changes are picked up while the app runs.
   - A term is matched as words, in any order, and an entry's links bring the entries they point to. Each definition goes into the chat once per branch, within caps set in `raven.librarian.config`.
   - The AI can also look a term up itself. Asking for one that is not there, it gets the entry spelled nearly like it, or the entries whose definitions mention it.
-  - `!lorebook` in `raven-minichat` switches it on and off; from a script, `agent.turn(..., lorebook_enabled=True)`.
+  - The **Lorebook** toggle (`Alt+L`) and `!lorebook` in `raven-minichat` switch it on and off; from a script, `agent.turn(..., lorebook_enabled=True)`.
 - **Tools from MCP servers**, beside the built-in ones.
   - List servers in `mcp.json`, in the format other MCP clients use. Both a server *Librarian* starts itself and one reached over HTTP or SSE.
   - The **MCP** toggle (`Alt+M`) and `!mcp` in `raven-minichat` switch them on and off; `allowed_tools` and `disabled` choose per server.
@@ -167,6 +167,9 @@
 
 #### Raven-librarian
 
+- **The mode toggles are in two rows.**
+  - The first is what the AI may draw on; the second, how it answers and what you see and hear of it.
+  - The status lights below them take three lines, and indexing has one of its own.
 - **Starts several seconds sooner when it counts tokens with a tokenizer read from a `.gguf`** (`llm_tokenizer_path`, in `raven.librarian.config`).
   - The tokenizer is built once and kept in `~/.config/raven/librarian/tokenizer_cache/` (`llm_tokenizer_cache_dir`); later starts load it from there. Safe to delete; it is rebuilt when the `.gguf` changes.
   - A large document collection also loads faster.
