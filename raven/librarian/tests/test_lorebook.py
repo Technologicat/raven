@@ -231,6 +231,87 @@ class TestFindMatches:
         assert match.wording == "different bath, same shampoo"
         assert lorebook.find_matches(entries, "Hydra tax here, hydra tax there")["hydra-tax"].wording == "hydra tax"
 
+    def test_a_colon_suffix_needs_nothing_of_its_own(self, entries):
+        # Finnish inflects an abbreviation or a foreign name with a colon and an ending on its last word. The
+        # ending is read as a word of its own, after the term, so the term's words still stand together.
+        assert self._ids(entries, "EQ curve:n muoto") == {"eq-curve"}
+
+
+class TestExpansion:
+    @pytest.fixture
+    def entries(self):
+        return _by_id(_parse("""\
+            ## Hydra tax
+            Closing one opens two.
+            ## Kaupunki
+            A town.
+            ## Kerbal Space Program
+            A game.
+            ## EQ
+            Equalization.
+            """))
+
+    @pytest.fixture
+    def expansions(self):
+        return {"tax": lorebook.clean_expansion("tax", forms=["taxes", "taxed"], stems=[]),
+                "kaupunki": lorebook.clean_expansion("kaupunki", forms=[], stems=["kaupung", "kaupunk"]),
+                "Program": lorebook.clean_expansion("Program", forms=[], stems=["Program"]),
+                "EQ": lorebook.clean_expansion("EQ", forms=["EQs"], stems=[])}
+
+    def _ids(self, entries, text, expansions):
+        return set(lorebook.find_matches(entries, text, expansions=expansions))
+
+    def test_without_them_an_inflected_term_does_not_fire(self, entries):
+        assert self._ids(entries, "two hydra taxes", None) == set()
+
+    def test_a_form_fires_its_term_and_in_any_order(self, entries, expansions):
+        assert self._ids(entries, "two hydra taxes", expansions) == {"hydra-tax"}
+        assert self._ids(entries, "the taxes hydra levies", expansions) == {"hydra-tax"}
+        assert self._ids(entries, "HYDRA TAXED", expansions) == {"hydra-tax"}, "a lowercase key word matches in any case"
+
+    def test_a_stem_fires_with_letters_after_it(self, entries, expansions):
+        assert self._ids(entries, "Asun kaupungissa.", expansions) == {"kaupunki"}
+        assert self._ids(entries, "kaupunkien", expansions) == {"kaupunki"}
+        assert self._ids(entries, "kaupung-ssa", expansions) == set(), "only letters may follow a stem"
+
+    def test_an_exact_word_takes_only_lowercase_after_a_stem(self, entries, expansions):
+        assert self._ids(entries, "Kerbal Space Programissa", expansions) == {"kerbal-space-program"}
+        assert self._ids(entries, "Kerbal Space ProgramISSA", expansions) == set()
+
+    def test_an_exact_words_forms_match_as_written(self, entries, expansions):
+        assert self._ids(entries, "two EQs", expansions) == {"eq"}
+        assert self._ids(entries, "two eqs", expansions) == set()
+
+    def test_a_lookup_finds_a_term_by_its_forms(self, entries, expansions):
+        found = lorebook.lookup(entries, "hydra taxes", expansions=expansions)
+        assert found.exact and found.maybe_entry.id == "hydra-tax"
+        assert not lorebook.lookup(entries, "hydra taxes").exact, "without them, a near miss at best"
+
+    def test_select_passes_them_on(self, entries, expansions):
+        firings = lorebook.select(entries, "two hydra taxes", count_tokens=_chars, budget=1000, max_depth=0,
+                                  expansions=expansions)
+        assert [firing.entry.id for firing in firings] == ["hydra-tax"]
+        assert lorebook.select(entries, "two hydra taxes", count_tokens=_chars, budget=1000, max_depth=0) == []
+
+
+class TestCleanExpansion:
+    def test_a_stem_keeps_all_but_the_last_two_letters_of_its_word(self):
+        assert lorebook.clean_expansion("kaupunki", forms=[], stems=["kaupun", "kaupu"]).stems == ("kaupun",)
+
+    def test_and_never_fewer_than_four(self):
+        assert lorebook.clean_expansion("hydra", forms=[], stems=["hydr", "hyd"]).stems == ("hydr",)
+        assert lorebook.clean_expansion("fup", forms=[], stems=["fup", "f"]).stems == ()
+
+    def test_a_stem_that_wanders_off_the_word_is_dropped(self):
+        assert lorebook.clean_expansion("duolect", forms=[], stems=["duolekt", "dialekt"]).stems == ("duolekt",)
+
+    def test_the_word_itself_and_malformed_forms_are_dropped(self):
+        cleaned = lorebook.clean_expansion("fup", forms=["fup", "Fups", "fups", "fupped up", ""], stems=[])
+        assert cleaned.forms == ("fups",), "lowercased, deduplicated, and one word each"
+
+    def test_an_exact_words_case_is_kept(self):
+        assert lorebook.clean_expansion("EQ", forms=["EQs", "EQ"], stems=[]).forms == ("EQs",)
+
 
 class TestSelect:
     @pytest.fixture

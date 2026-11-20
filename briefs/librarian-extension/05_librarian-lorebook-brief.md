@@ -165,9 +165,10 @@ would be knowledge left on the floor. So this clears the bar the project already
   - **An exact key word expands too** (2026-11-20): its forms are matched as written (*EQ → EQs*), and its stems
     only when **lowercase** letters follow, so *Program* + *issa* (*Kerbal Space Programissa*) and *EQ* + *s*
     match while *EQ* + *UAL* does not.
-  - **A colon suffix belongs to the word before it** (2026-11-20): Finnish inflects an abbreviation or a foreign
-    name with a colon and an ending on its last word (*Qwen Flash Next:ssä*, *EQ:n*), and the word is matched on
-    the part before the colon. Until then `EQ:n` was two words, which broke a multi-word term's adjacency.
+  - **A colon suffix needs nothing** (2026-11-20): Finnish inflects an abbreviation or a foreign name with a
+    colon and an ending on its *last* word (*Qwen Flash Next:ssä*, *EQ:n*). The matcher reads the ending as a
+    word of its own, after the term, so the term's words stay together. A change making the ending part of its
+    word was built and taken out again: it mattered only for a colon inside a term, which Finnish does not write.
   - **A translated term is out of reach of inflection** (*EQ curve* → *EQ-käyrän*). The author's way in is an
     alias, `## EQ curve (EQ-käyrä)`, which then inflects like any key. Asking the expansion for the term's
     rendering in each configured language, as extra keys, is a possible follow-up, not built: translating a

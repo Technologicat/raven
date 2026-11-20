@@ -13,7 +13,7 @@ prompt of its own. The stateful half is `Lorebook`, which reads a folder, follow
 
 __all__ = ["Entry", "slugify",
            "parse", "load",
-           "Match", "find_matches",
+           "Expansion", "clean_expansion", "Match", "find_matches",
            "Firing", "select",
            "CANONICAL_NOT_DEFINED", "CANONICAL_NEAR_MISS", "CANONICAL_NO_ENTRY", "CANONICAL_CANDIDATES",
            "CANONICAL_MENTIONED_IN", "CANONICAL_LOOK_ONE_UP",
@@ -25,8 +25,9 @@ import dataclasses
 import difflib
 import logging
 import pathlib
+import itertools
+import os
 import re
-from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping
 from typing import Any
 
@@ -221,6 +222,71 @@ def _keys(entry: Entry) -> list[tuple[str, ...]]:
     return [key for key in keys if key]
 
 @dataclasses.dataclass(frozen=True)
+class Expansion:
+    """The other forms of one key word, which match where it is written inflected.
+
+    `forms`: whole words that match it, as "fups" and "fupped" do "fup".
+    `stems`: beginnings of words that match it when letters follow, as "kaupung" does in "kaupungissa".
+
+    For a key word with an uppercase letter past its first, which matches only as written, its forms match as
+    written too, and a stem only when what follows it is lowercase: "Program" with "issa" ("Kerbal Space
+    Programissa"), but not "EQ" with "UAL". For one in lowercase, case does not count anywhere.
+
+    Build one with `clean_expansion`, which drops what would match too much.
+    """
+    forms: tuple[str, ...] = ()
+    stems: tuple[str, ...] = ()
+
+# A stem matches every word it begins, so a short one matches too many. One kept by `clean_expansion` shares
+# with its word all but the last `_STEM_SLACK` letters, which is where Finnish inflection and consonant gradation
+# act ("kaupunki", "kaupungissa"), and never fewer than `_MIN_STEM`.
+_STEM_SLACK = 2
+_MIN_STEM = 4
+
+def _is_exact(word: str) -> bool:
+    return word != word.lower()
+
+def clean_expansion(word: str, forms: Collection[str], stems: Collection[str]) -> Expansion:
+    """An `Expansion` of the key word `word`, from forms and stems as a generator suggested them.
+
+    A stem is kept when it begins with `word`'s first letters, all of them but the last two, and at least four;
+    others would match unrelated words, so dropping them can only cost a miss. A form or a stem that is the word
+    itself, or holds anything but word characters, is dropped too, and duplicates are. For a lowercase `word`,
+    everything is lowercased.
+    """
+    exact = _is_exact(word)
+    def tidy(candidates: Collection[str]) -> list[str]:
+        out = []
+        for candidate in candidates:
+            candidate = candidate.strip() if exact else candidate.strip().lower()
+            if candidate and re.fullmatch(r"\w+(?:['-]\w+)*", candidate) and candidate not in out:
+                out.append(candidate)
+        return out
+    needed = max(_MIN_STEM, len(word) - _STEM_SLACK)
+    kept_stems = [stem for stem in tidy(stems)
+                  if len(os.path.commonprefix([stem.lower(), word.lower()])) >= needed]
+    kept_forms = [form for form in tidy(forms) if form != (word if exact else word.lower())]
+    return Expansion(forms=tuple(kept_forms), stems=tuple(kept_stems))
+
+def _accepts(key_word: str, text_word: str, maybe_expansion: Expansion | None, *, ignore_case: bool = False) -> bool:
+    """Whether `text_word` is `key_word`, or one of its forms, or one of its stems followed by letters."""
+    exact = _is_exact(key_word) and not ignore_case
+    seen = text_word if exact else text_word.lower()
+    if seen == (key_word if exact else key_word.lower()):
+        return True
+    if maybe_expansion is None:
+        return False
+    if any(seen == (form if exact else form.lower()) for form in maybe_expansion.forms):
+        return True
+    for stem in maybe_expansion.stems:
+        stem = stem if exact else stem.lower()
+        if seen.startswith(stem):
+            rest = seen[len(stem):]
+            if not rest or (rest.isalpha() and (not exact or rest == rest.lower())):
+                return True
+    return False
+
+@dataclasses.dataclass(frozen=True)
 class Match:
     """Where an entry's term was found. `wording` is the text as written there, which may differ from the title."""
     entry_id: str
@@ -228,46 +294,48 @@ class Match:
     end: int
     wording: str
 
-def _window_matches(key: tuple[str, ...], window: list[str]) -> bool:
-    """Whether the words of `window` are the words of `key`, in any order, each matched with smart case.
+def _window_matches(key: tuple[str, ...], window: list[str], expansions: Mapping[str, Expansion]) -> bool:
+    """Whether the words of `window` are the words of `key`, in any order: paired one to one, each pair accepted.
 
-    A key word in lowercase matches any case; a key word with an uppercase letter matches only as written.
+    A key word in lowercase matches in any case; a key word with an uppercase letter only as written. Either
+    also matches its forms and stems in `expansions`.
     """
-    if Counter(word.lower() for word in key) != Counter(word.lower() for word in window):
-        return False
-    # Within each lowercase spelling, a forgiving key word takes any of the window's words, so an assignment
-    # exists exactly when every exact form has at least as many words in the window as exact key words need it.
-    exact_needed = Counter(word for word in key if word != word.lower())
-    exact_present = Counter(window)
-    return all(exact_present[form] >= count for form, count in exact_needed.items())
+    # A key is a few words long, so trying every pairing costs less than anything cleverer would to write.
+    return any(all(_accepts(key_word, text_word, expansions.get(key_word)) for key_word, text_word in zip(key, order))
+               for order in itertools.permutations(window))
 
-def find_matches(entries: Mapping[str, Entry], text: str) -> dict[str, Match]:
+def find_matches(entries: Mapping[str, Entry], text: str, *,
+                 expansions: Mapping[str, Expansion] | None = None) -> dict[str, Match]:
     """Which entries' terms appear in `text`: entry id -> the last place one does.
 
     A term is matched as words, never inside one ("cat" is not in "concatenate"), and a term of several words
     matches them in any order, next to each other ("different bath, same shampoo" for "Same bath, different
     shampoo"). Case is smart: a word in lowercase matches any case, and a word with an uppercase letter only as
     written, except that a title's first letter does not count, being capitalized as a sentence's would be.
+
+    `expansions`: key word, as the key has it (lowercase unless it matches only as written) -> its other forms,
+                  which then match it too.
     """
+    expansions = expansions or {}
     normalized = _normalize(text)
     words = _words(normalized)
-    lowered = [match.group().lower() for match in words]
-    positions: dict[str, list[int]] = {}
-    for position, word in enumerate(lowered):
-        positions.setdefault(word, []).append(position)
+    text_words = [match.group() for match in words]
+    distinct = set(text_words)
 
     found: dict[str, Match] = {}
     for entry in entries.values():
         best: tuple[int, int] | None = None  # (start word, end word) of the last match
         for key in _keys(entry):
             n = len(key)
-            # Every window holding the key must hold its rarest word, so only the windows around that word's
-            # occurrences are worth looking at.
-            rarest = min((word.lower() for word in key), key=lambda word: len(positions.get(word, ())))
-            for position in positions.get(rarest, ()):
+            # Every window holding the key holds a word for each key word, so only the windows around the
+            # occurrences of the key word with the fewest are worth looking at.
+            accepted = {key_word: {word for word in distinct if _accepts(key_word, word, expansions.get(key_word))}
+                        for key_word in set(key)}
+            rarest = min(accepted.values(), key=len)
+            for position in (position for position, word in enumerate(text_words) if word in rarest):
                 for first in range(max(0, position - n + 1), min(position, len(words) - n) + 1):
-                    window = [match.group() for match in words[first:first + n]]
-                    if _window_matches(key, window) and (best is None or first > best[0]):
+                    window = text_words[first:first + n]
+                    if (best is None or first > best[0]) and _window_matches(key, window, expansions):
                         best = (first, first + n - 1)
         if best is not None:
             start, end = words[best[0]].start(), words[best[1]].end()
@@ -299,13 +367,15 @@ def select(entries: Mapping[str, Entry],
            count_tokens: Callable[[str], int],
            budget: int,
            max_depth: int,
-           already_fired: Collection[str] = ()) -> list[Firing]:
+           already_fired: Collection[str] = (),
+           expansions: Mapping[str, Expansion] | None = None) -> list[Firing]:
     """Choose which entries fire for `text`, and the entries they lead to.
 
     `count_tokens`: the size of a text in tokens, for the budget.
     `budget`: the most tokens the chosen entries may take together, counting each entry's title and content.
     `max_depth`: how many links deep to follow; 0 takes only the entries whose terms are in `text`.
     `already_fired`: ids of entries the model has already been given, which neither fire nor lead anywhere.
+    `expansions`: the key words' other forms, as `find_matches` takes them.
 
     An entry whose term is in `text` fires at depth 0. Each entry chosen then leads to more: through its
     `[text](#anchor)` links when it has any, which say exactly what the author meant to point at, and otherwise
@@ -332,7 +402,7 @@ def select(entries: Mapping[str, Entry],
             taken.append(dataclasses.replace(firing, tokens=cost))
         return taken
 
-    matches = find_matches(entries, text)
+    matches = find_matches(entries, text, expansions=expansions)
     level = take([Firing(entry=entries[entry_id], depth=0, maybe_wording=match.wording, maybe_via=None)
                   for entry_id, match in matches.items() if entry_id not in visited])
     visited.update(entry_id for entry_id in matches)  # fired or skipped, either way not again at another depth
@@ -346,7 +416,7 @@ def select(entries: Mapping[str, Entry],
             if entry.crossrefs:
                 targets = [anchors[anchor] for anchor in entry.crossrefs if anchor in anchors]
             else:
-                targets = list(find_matches(entries, entry.content))
+                targets = list(find_matches(entries, entry.content, expansions=expansions))
             for target in targets:
                 if target not in visited and target not in candidates:
                     candidates[target] = Firing(entry=entries[target], depth=depth, maybe_wording=None, maybe_via=entry.id)
@@ -389,20 +459,24 @@ class Lookup:
     candidates: tuple[str, ...]
     mentioned_in: tuple[str, ...] = ()
 
-def lookup(entries: Mapping[str, Entry], term: str) -> Lookup:
+def lookup(entries: Mapping[str, Entry], term: str, *, expansions: Mapping[str, Expansion] | None = None) -> Lookup:
     """Find the entry for `term`, as a model asking for it by name would want.
 
-    Exact when the term's words are a key's words, in any order and any case: whoever asks by name has already
-    picked the term, so smart case, which keeps scanned prose from firing on a common word, has nothing to do
-    here. Otherwise a key spelled nearly like the term is a near miss: one of them is taken as meant. Failing
+    Exact when the term's words are a key's words, in any order and any case, or their forms and stems in
+    `expansions`: whoever asks by name has already picked the term, so smart case, which keeps scanned prose
+    from firing on a common word, has nothing to do here. Otherwise a key spelled nearly like the term is a near miss: one of them is taken as meant. Failing
     that, the answer names the several near misses there are, and the entries whose content mentions the term,
     in any case; with neither, the term is not defined.
     """
-    wanted = sorted(word.lower() for word in _key(term, sentence_case=False))
+    expansions = expansions or {}
+    wanted = _key(term, sentence_case=False)
     spellings: dict[str, str] = {}  # a key as written, lowercased -> the entry it belongs to
     for entry in entries.values():
         for key in _keys(entry):
-            if sorted(word.lower() for word in key) == wanted:
+            if len(key) == len(wanted) and any(
+                    all(_accepts(key_word, word, expansions.get(key_word), ignore_case=True)
+                        for key_word, word in zip(key, order))
+                    for order in itertools.permutations(wanted)):
                 return Lookup(maybe_entry=entry, exact=True, candidates=())
         for phrase in (entry.title, *entry.aliases):
             spellings.setdefault(_normalize(phrase).lower(), entry.id)
