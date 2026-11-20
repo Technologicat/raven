@@ -334,6 +334,11 @@ def reset_app_state(_update_gui=True):
         # But restore the highlights for the next dataset
         plotter.create_highlight_series()
 
+        # Nothing is on screen now, so there is no dataset. Until the next one is parsed, a mouse move would
+        # otherwise highlight the old dataset's points in the fresh hover series, and the new plot's zoom would
+        # fit itself to them.
+        app_state.dataset = None
+
         # Delete old cluster-color-coding scatterplot themes
         plotter.clear_cluster_color_themes()
 

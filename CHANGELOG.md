@@ -240,6 +240,7 @@
 #### Raven-visualizer
 
 - **A dataset with no clusters opens instead of crashing the app.** Where every record was an outlier, colouring the map divided zero by zero, and the plotting library crashed on the result.
+- **Opening a dataset no longer leaves the plot zoomed to the wrong range.** Moving the mouse over the plot while a dataset was loading could highlight points of the previous dataset, and the new plot's zoom fitted itself to them.
 - **A small, spread-out bibliography imports instead of failing.** Where no cluster formed among the records' embeddings, the import stopped with "No clusters detected", though the map could still be drawn; a screened set of a few dozen records was enough to reach it. It now draws the map from every record. Fewer records than the smallest cluster still stop the import.
 - **The importer keeps a record whose authors are listed APA-style**, as `Surname, I., Surname, I., & Surname, I.`, or carry a stray comma before an `and`. In v0.2.10 such a record was left out of the dataset, with a warning blaming unbalanced braces. The list is read as `raven-fixbib` now rewrites it.
 - **The importer keeps a record that repeats an earlier record's key**, reading it under a new one (`key-2`) and saying so. In v0.2.10 it was left out of the dataset, with a warning blaming unbalanced braces.

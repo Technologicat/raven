@@ -436,6 +436,9 @@ def load_dataset(ds):
         if maybe_purity_text is not None:
             dpg.set_value("dataset_purity_text", maybe_purity_text)  # tag
         dpg.show_item("display_filters_group")  # tag
+        # The fit covers every series, the hover highlight's too, which a mouse move during the load may have
+        # filled from the previous dataset; empty it so that the zoom fits this dataset alone.
+        dpg.set_value("my_mouse_hover_scatter_series", [[], []])  # tag
         reset_zoom()
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
