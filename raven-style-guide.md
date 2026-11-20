@@ -229,6 +229,13 @@ of looking, and the useful residue is the moment to look rather than a procedure
 Labels, tooltips, help-card rows, status lines — the words a user reads on screen. Different audience from
 docstrings and comments, so the rules are their own.
 
+- **Don't wall-of-text the user** (the maintainer, 2026-11-20), in a tooltip, a card or a manual alike. How is
+  decided case by case: nesting where the ideas are hierarchical, a headline with the detail beneath it, and a
+  paragraph break at a logical whole. The fleet's [`CLAUDE.md`](https://github.com/Technologicat/dotclaude/blob/main/CLAUDE.md) states the rule for all prose.
+  - **A tooltip, for instance**, usually names its key right after the description, on the same line or the next.
+    One whose keyboard explanation runs to several lines gets a blank line before the keys, as one logical whole:
+    the Visualizer's filter selectors.
+
 - **Write grammatical English, articles included.** *"Start a new chat"*, not *"Start new chat"*; *"Copy
   the chatlog to the clipboard"*, not *"Copy chatlog to clipboard"*.
 
@@ -990,11 +997,6 @@ with dpg.tooltip(btn):
 ```
 
 This is non-negotiable: surfacing the key right on the control it triggers is how users learn the shortcuts in flow. A feature reachable by keyboard but only listed in the help card is a UX miss — most software in the wild gets this wrong; Raven apps don't.
-
-**Don't wall-of-text the user** (the maintainer, 2026-11-20). How to apply it is decided case by case. Most
-tooltips name their key right after the description, on the same line or the next. A control whose keyboard
-explanation runs to several lines wants a paragraph break before the keys, as one logical whole: the Visualizer's
-filter selectors, whose description is followed by a blank line and then a key per line.
 
 There is no shared keymap — bindings live in the hotkey handler, and these surfaces mirror them by hand (KISS; hotkeys change rarely). Keep a comment at the hotkey handler reminding the next dev to update both surfaces when adding, removing, or rebinding a key:
 
