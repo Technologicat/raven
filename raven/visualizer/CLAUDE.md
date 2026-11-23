@@ -142,7 +142,7 @@ The tooltip (`_update_annotation`, ~300 lines) and info panel (`_update_info_pan
 
 ## importer.py Structure
 
-Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster the map (`clustering_method`: HDBSCAN in 2D, or agglomerative in high-D) → extract keywords (NLP, cached) → collect cluster keywords (frequency or LLM) → optional LLM summarize → save dataset. With `clustering_method = "llm"`, `llmclustering` replaces the high-D clustering, the reduction and the map clustering, and its theme names are the cluster keywords.
+Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster the map (`clustering_method`: HDBSCAN in 2D, or agglomerative in high-D) → extract keywords and phrase candidates (NLP, cached) → collect cluster keywords (phrases, via `raven.common.keyphrases`, or LLM) → optional LLM summarize → save dataset. With `clustering_method = "llm"`, `llmclustering` replaces the high-D clustering, the reduction and the map clustering, and its theme names are the cluster keywords.
 
 Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked via macro/microstep counter with ETA. Background execution via `bgtask.TaskManager`. Optionally connects to raven-server for NLP; falls back to local models via `mayberemote`.
 

@@ -216,7 +216,7 @@ Status messages are printed into the terminal window.
 
 To choose how clusters are found for this import, overriding the configuration, use `--clustering hdbscan_2d`, `--clustering agglomerative` or `--clustering llm`; with the last, `--aim "what the collection is for"` or `--aim-file aim.txt` gives the LLM its context. See [Choose how clusters are found](#choose-how-clusters-are-found).
 
-When the configuration asks for LLM cluster keywords or summaries and no LLM backend answers, `raven-importer` stops before it starts, where the GUI importer goes ahead without them. `--llm optional` makes it go ahead too, with frequency keywords and no summaries, and say so at the end; `--no-llm` leaves those stages out for this run without trying a backend.
+When the configuration asks for LLM cluster keywords or summaries and no LLM backend answers, `raven-importer` stops before it starts, where the GUI importer goes ahead without them. `--llm optional` makes it go ahead too, with phrase keywords and no summaries, and say so at the end; `--no-llm` leaves those stages out for this run without trying a backend.
 
 **:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven.visualizer.config`](config.py). :exclamation:**
 
@@ -249,8 +249,8 @@ that were the part worth reading.
 while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *propose* — describe what
 a paper *does*, are the same in every field, and crowd the head of the frequency list without saying
 anything. This is also why *learning* and *learn* are counted separately, and should be: as a noun it is the
-topic, as a verb it is prose. Affects the word cloud, the per-entry keywords and the frequency-based cluster
-keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the
+topic, as a verb it is prose. Affects the word cloud and the per-entry keywords, for datasets imported from
+now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the
 older, wider behaviour.
 
 **A publisher's rights notice is stripped off an abstract.** `© 2022 IEEE.` and *This article is distributed
@@ -264,6 +264,22 @@ says — which is where publisher names in your word cloud were coming from.
   argument does not. A bare *copyright* is never a match, and only the tail of an abstract is examined.
 - `publisher_stopwords` in [`raven.visualizer.config`](config.py) still exists and still works; it now has
   much less to do.
+
+**Cluster keywords are noun phrases** (`clusters_keyword_method = "phrases"`, the default): *palm oil mill
+effluent*, *proton exchange membrane*, *self-regulated learning*, where single words would give *palm*, *mill*
+and *effluent*. A label's first phrase says what the cluster is about. The rest say how it stands out from the
+others: phrases particular to the cluster, and close in meaning to it.
+
+- **An abbreviation and its long form count as one keyword**, so *SRL* and *self-regulated learning* do not
+  take two places in a label. It is shown as written where the corpus mostly uses it unexplained (*ChatGPT*),
+  and spelled out where papers define it wherever they use it (*FWP* becomes *fast weight programmer*).
+- **A phrase that many clusters share is left out of the tail**, as it cannot say how one cluster differs.
+  It can still lead a label: in a corpus about one subject, the subject is often what a cluster is about.
+- **The dataset keeps a longer list per cluster**, 30 phrases by default, each with the share of the cluster's
+  records containing it.
+- The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
+  no LLM, and is what `"llm"` falls back to when no backend answers. It replaces `"frequencies"`; a
+  configuration still naming that is refused, with a message saying what to write instead.
 
 **LLM cluster keywords are made comparable across clusters**, if you have set `clusters_keyword_method =
 "llm"`. Each cluster is keyworded on its own, so one concept can come back under several spellings — an
@@ -643,4 +659,4 @@ editor. Mnemonic: *Mr. T Lite*.
 
 [LitStudy](https://nlesc.github.io/litstudy/) is a Jupyter notebook with similar goals. Its analysis methods seem slightly different to what we use. Also, having existed since 2022, it has many more importers than we do at the moment.
 
-[BERTopic](https://maartengr.github.io/BERTopic/index.html) is a library for *topic modeling*, to automatically extract topics from a large dataset of texts. BERTopic uses many of the same ideas and methods that *Raven-visualizer* uses to generate its semantic map (embed semantically, cluster with HDBSCAN, reduce the dimension), although our approach to keyword extraction for the clusters is different. Raven was developed independently, before I became aware of BERTopic. While the library has existed since 2022, for some reason it didn't come up in my initial searches at the beginning of the Raven project. As of H2/2025, BERTopic has become very popular, and has been mentioned several times in various technically flavored AI news outlets. It seems that as of 2025, this kind of overview analysis of large text datasets is in the zeitgeist.
+[BERTopic](https://maartengr.github.io/BERTopic/index.html) is a library for *topic modeling*, to automatically extract topics from a large dataset of texts. BERTopic uses many of the same ideas and methods that *Raven-visualizer* uses to generate its semantic map (embed semantically, cluster with HDBSCAN, reduce the dimension), and the phrase keywords for the clusters borrow its class-based TF-IDF to rank a cluster's phrases. Raven was developed independently, before I became aware of BERTopic. While the library has existed since 2022, for some reason it didn't come up in my initial searches at the beginning of the Raven project. As of H2/2025, BERTopic has become very popular, and has been mentioned several times in various technically flavored AI news outlets. It seems that as of 2025, this kind of overview analysis of large text datasets is in the zeitgeist.

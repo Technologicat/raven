@@ -192,6 +192,12 @@
 - **The semantic map keeps the dataset's topical structure much better.** With `vis_method = "tsne"`, the default, the map is now fitted on every record, where before it was fitted on a sample and the rest of the records placed by that fit.
   - On a corpus about a single topic, the sample was thin, and records of one cluster could end up spread across the whole map.
   - `vis_method = "umap"` is unchanged.
+- **Cluster keywords are noun phrases, and say what each cluster is about.**
+  - Where the keywords were single words, *palm, mill, effluent*, they are now phrases such as *palm oil mill effluent*. The first says what the cluster is about, and the rest how it differs from the others.
+  - An abbreviation and its long form count as one keyword, spelled out where the papers define it each time they use it.
+  - This is `clusters_keyword_method = "phrases"`, the new default and the fallback when no LLM backend answers, in [`raven.visualizer.config`](raven/visualizer/config.py). It needs no LLM.
+  - It replaces `"frequencies"`, which an import now refuses, saying what to write instead.
+  - Datasets imported before keep their keywords; import again for the new ones.
 
 #### Raven-deduplicate
 

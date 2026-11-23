@@ -301,7 +301,7 @@ the override against the configured value it replaced.
 
 This is how a *degraded* state gets exercised on purpose, which is otherwise awkward. Aim `--backend-url`
 at a port nothing is listening on and Librarian's backend-status pill appears and stays, while the
-Visualizer's importer falls back to frequency keywords and no summaries and says so above its status line;
+Visualizer's importer falls back to phrase keywords and no summaries and says so above its status line;
 aim `--server-url` likewise and that importer loads its NLP and embedding models locally instead. The
 alternative was editing configuration and putting it back exactly afterwards, which is worth a flag on its
 own — machine-local settings now live outside the repository, but they are still somebody's settings and a
