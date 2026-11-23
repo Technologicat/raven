@@ -208,7 +208,8 @@ network, attention mechanism, linear attention*. 94% distinct at 82% coverage, a
 Two fixes in the same round:
 
 - **An abbreviation shows as its long form where most records using it define it**, and as its short form
-  where most use it unexplained: *fwp* became *fast weight programmer*, *chatgpt* stays. The half is a choice.
+  where most use it unexplained: *fwp* became *fast weight programmer*, *chatgpt* stays. The half is a choice,
+  and a setting (`--short-form-share`).
 - **The stored keywords' plurals are folded before matching**, as the candidates' are: the LLM writes
   *transformers* and *diffusion models*, which matched nothing. Its arXiv coverage is 70%, not 38%; the
   earlier tables here undercount it the same way.
