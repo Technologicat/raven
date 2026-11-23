@@ -267,14 +267,16 @@ says — which is where publisher names in your word cloud were coming from.
 
 **Cluster keywords are noun phrases** (`clusters_keyword_method = "phrases"`, the default): *palm oil mill
 effluent*, *proton exchange membrane*, *self-regulated learning*, where single words would give *palm*, *mill*
-and *effluent*. A label's first phrase says what the cluster is about. The rest say how it stands out from the
-others: phrases particular to the cluster, and close in meaning to it.
+and *effluent*.
 
+- **A label has two parts.** Its first phrase is the one that best says what the cluster is about. The other
+  five say how it differs from the other clusters: phrases particular to the cluster, and close in meaning to
+  it. So a phrase found in many clusters is never one of those five, though it can come first: in a corpus
+  about generative AI, *generative AI* is what several clusters are mostly about, and the five after it say
+  which part of the subject each one is.
 - **An abbreviation and its long form count as one keyword**, so *SRL* and *self-regulated learning* do not
   take two places in a label. It is shown as written where the corpus mostly uses it unexplained (*ChatGPT*),
   and spelled out where papers define it wherever they use it (*FWP* becomes *fast weight programmer*).
-- **A phrase that many clusters share is left out of the tail**, as it cannot say how one cluster differs.
-  It can still lead a label: in a corpus about one subject, the subject is often what a cluster is about.
 - **The dataset keeps a longer list per cluster**, 30 phrases by default, each with the share of the cluster's
   records containing it.
 - The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
