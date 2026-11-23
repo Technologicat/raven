@@ -3,7 +3,8 @@
 The lorebook gives an LLM the definitions of the user's own terms when a term comes up in the conversation: a
 folder of Markdown files, each entry a section whose header is the term. Raven-librarian is one frontend for it.
 This says what it takes to give the same lorebook to another — Claude Code, Open WebUI, LM Studio, pi — so that
-one folder of definitions serves them all.
+one folder of definitions serves them all. The ports themselves are built in
+[grimoire](https://github.com/Technologicat/grimoire).
 
 A port is three things:
 
