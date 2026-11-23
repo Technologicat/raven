@@ -1423,6 +1423,7 @@ class DPGChatController:
                  avatar_panel_covered: Callable[[], bool] | None = None,
                  on_search_results_changed: Callable[[], None] | None = None,
                  on_navigate: Callable[[], None] | None = None,
+                 on_indexing_done: Callable[[], None] | None = None,
                  give_caret: Callable[[str | int], None] | None = None,
                  give_keyboard_to_log: Callable[[], None] | None = None,
                  open_revision_history: Callable[[str], None] | None = None,
@@ -1519,6 +1520,9 @@ class DPGChatController:
                        jump to a continuation, a new chat through `navigated` — as opposed to HEAD moving
                        because the conversation grew.
 
+        `on_indexing_done`: Called with no arguments when the document database has finished indexing, after
+                            INDEXING goes out, on the retriever's worker thread.
+
         `give_caret`: Called with a text field's DPG tag or ID, to put the caret there — as when a message
                       opens for editing. `None` means `raven.common.gui.animation.give_caret`. The app passes
                       its own, which also releases whatever else was holding the keyboard.
@@ -1575,6 +1579,7 @@ class DPGChatController:
         self.current_chat_history_lock = threading.RLock()
 
         self.on_navigate = on_navigate
+        self.on_indexing_done = on_indexing_done
         self.give_caret = give_caret if give_caret is not None else gui_animation.give_caret
         self.give_keyboard_to_log = give_keyboard_to_log if give_keyboard_to_log is not None else (lambda: None)
         self.open_revision_history = open_revision_history if open_revision_history is not None else (lambda node_id: None)
@@ -1778,6 +1783,11 @@ class DPGChatController:
         logger.info(f"DPGChatController._on_indexing_done: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
             self.indicator_hold.hide(self.docs_indexing_indicator_widget)
+            if self.on_indexing_done is not None:
+                try:
+                    self.on_indexing_done()
+                except Exception:  # noqa: BLE001 -- the retriever's worker must not be taken down by the app's handler
+                    logger.exception("DPGChatController._on_indexing_done: ignoring exception from `on_indexing_done`")
 
     def update_indexing_progress_text(self) -> None:
         """Poll the retriever's indexing progress text; mirror a change to INDEXING's text widget.

@@ -5,6 +5,7 @@ The model is faked at `agent.ask_record`; the sweep and its ledger are the real 
 
 import json
 import re
+import threading
 import time
 
 import pytest
@@ -259,6 +260,46 @@ class TestExpander:
             status[0] = llmclient.backend_ready
             expander.poll()
             assert _wait_until(lambda: "tax" in book.expansions)
+        finally:
+            expander.shutdown()
+            book.shutdown()
+
+    def test_progress_shows_while_asking_and_on_done_reports_after(self, llm_settings, folder, ledger_dir, monkeypatch):
+        release = threading.Event()
+        fake = FakeModel()
+        def slow(*args, **kwargs):
+            release.wait(timeout=10)
+            return fake(*args, **kwargs)
+        monkeypatch.setattr(agent, "ask_record", slow)
+        reported = []
+        book = lorebook.Lorebook(llm_settings, directory=folder)
+        book.start()
+        expander = lorebook_expansion.Expander(llm_settings, book, on_done=reported.append)
+        try:
+            expander.start()
+            assert _wait_until(lambda: expander.progress is not None and expander.progress.total == 3)
+            assert expander.progress.done == 0 and reported == []
+            release.set()
+            assert _wait_until(lambda: reported == [3]), "on_done gets the number of terms with forms"
+            assert expander.progress is None, "nothing is being asked now"
+        finally:
+            expander.shutdown()
+            book.shutdown()
+
+    def test_on_done_is_not_called_when_everything_was_cached(self, llm_settings, folder, ledger_dir, model):
+        book, expander = self._start(llm_settings, folder)
+        assert _wait_until(lambda: "tax" in book.expansions)
+        expander.shutdown()
+        book.shutdown()
+
+        reported = []
+        book = lorebook.Lorebook(llm_settings, directory=folder)
+        book.start()
+        expander = lorebook_expansion.Expander(llm_settings, book, on_done=reported.append)
+        try:
+            expander.start()
+            time.sleep(0.3)
+            assert "tax" in book.expansions and reported == [] and expander.progress is None
         finally:
             expander.shutdown()
             book.shutdown()

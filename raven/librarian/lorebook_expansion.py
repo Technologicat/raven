@@ -19,7 +19,7 @@ __all__ = ["material", "expansions_from", "cached", "Expander"]
 
 import logging
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from unpythonic.env import env
@@ -147,6 +147,9 @@ class Expander:
     `book`: the `Lorebook` whose `expansions` this sets.
     `languages`: as `librarian_config.lorebook_languages`, which is the default.
     `batch_size`: terms per request. Default `librarian_config.lorebook_expansion_batch_size`.
+    `on_done`: called with the number of terms that have forms, on the expander's thread, when a run that asked
+               the LLM has answered every term it asked about. Not after a run that stopped early, nor when
+               everything was already cached and nothing was asked.
 
     `start` gives the lorebook what is cached at once, then asks for the rest. Then call `poll` as often as is
     convenient, a GUI's frame update included: it notices an edit to the lorebook, a model swap, which needs a
@@ -158,11 +161,13 @@ class Expander:
                  book: lorebook.Lorebook,
                  *,
                  languages: Mapping[str, str] | None = None,
-                 batch_size: int | None = None) -> None:
+                 batch_size: int | None = None,
+                 on_done: Callable[[int], None] | None = None) -> None:
         self.settings = settings
         self.book = book
         self.languages = _languages(languages)
         self.batch_size = batch_size if batch_size is not None else librarian_config.lorebook_expansion_batch_size
+        self.on_done = on_done
         self._lock = threading.Lock()  # the state below
         self._refresh_lock = threading.Lock()  # one refresh at a time: from the lorebook's watcher, and from `poll`
         self._maybe_sweep: sweep.Sweep | None = None
@@ -172,6 +177,20 @@ class Expander:
         self._waiting_for_backend = False  # the last run stopped because the backend was not there
         self._refresh_pending = False  # a refresh started by `poll` that has not finished yet
         self._closed = False
+
+    def _get_progress(self) -> env | None:
+        """`env(done, total)` for the terms of the run in progress, or `None` while none is.
+
+        Reads one attribute and the sweep's own progress, whose lock is held only to copy a few numbers, so a
+        render loop can call it each frame.
+        """
+        maybe_sweep = self._maybe_sweep
+        if maybe_sweep is None:
+            return None
+        progress = maybe_sweep.progress
+        return env(done=progress.done + progress.failed, total=progress.total)
+    progress = property(fget=_get_progress, doc="`env(done, total)`, the terms of the run asking the LLM now, or "
+                                                "`None` while nothing is being asked.")
 
     def _model_identity(self) -> tuple:
         record = self.settings.model_record
@@ -264,11 +283,17 @@ class Expander:
         with self._lock:
             if self._closed or self._maybe_sweep is not the_sweep:
                 return  # superseded by a refresh, or shut down, while it ran
+            self._maybe_sweep = None  # nothing is being asked now, which is what `progress` reports
             self._waiting_for_backend = result.outcome is sweep.backend_unavailable
             answered = _current_answers(ledger, items)
             self.book.expansions = expansions_from(answered, self.languages)
         logger.info(f"Expander: {result.outcome} {result.message}; inflected forms for {len(answered)} of "
                     f"{len(items)} terms.")
+        if result.outcome is sweep.completed and not result.failed and self.on_done is not None:
+            try:
+                self.on_done(len(answered))
+            except Exception:  # noqa: BLE001 -- a frontend's handler must not take the expander down
+                logger.exception("Expander: ignoring exception from `on_done`")
 
     def _stop_sweep(self) -> None:
         with self._lock:

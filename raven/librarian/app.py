@@ -509,8 +509,12 @@ user_lorebook.start(watch=True)
 for _lorebook_file, _lorebook_problem in user_lorebook.problems.items():
     print(colorizer.colorize(f"Lorebook '{_lorebook_file}': {_lorebook_problem}", colorizer.Style.BRIGHT, colorizer.Fore.RED))
 # The terms' inflected forms: cached ones at once, the rest asked of the LLM in the background. Polled per frame
-# from `update_animations`, which is how it follows edits to the lorebook and a swap of the model.
-lorebook_expander = lorebook_expansion.Expander(llm_settings, user_lorebook)
+# from `update_animations`, which is how it follows edits to the lorebook and a swap of the model, and how the
+# LOREBOOK light shows the asking.
+def _on_lorebook_forms_ready(count: int) -> None:
+    _show_composer_notice(f"Lorebook: inflected forms ready for {count} {'term' if count == 1 else 'terms'}.")  # plural
+
+lorebook_expander = lorebook_expansion.Expander(llm_settings, user_lorebook, on_done=_on_lorebook_forms_ready)
 lorebook_expander.start()
 
 # Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
@@ -2153,8 +2157,12 @@ with timer() as tim:
                     # parallel, and READING runs on a background task that can overlap a tool call.
                     #
                     # So three lines, which is what the panel has room for below the two rows of toggles:
-                    # - INDEXING on a line of its own, at the top. It is the longest-lived, so it stays in place
-                    #   while the others come and go, and its progress names a document, which wants the width.
+                    # - LOREBOOK, then INDEXING, at the top: the two background jobs, either of which can be lit
+                    #   beside anything. INDEXING stays at the top because it is the longest-lived, and lower in
+                    #   the stack it would jump each time a light above it came or went. LOREBOOK, asking for the
+                    #   terms' inflected forms, lights only occasionally, so it may go first and move INDEXING
+                    #   along the line for a while; after it, it would be pushed off the line by a long document
+                    #   name in INDEXING's progress.
                     # - READING, then DOCUMENTS. A hidden item takes no room in a horizontal group, so DOCUMENTS
                     #   starts at the left edge unless an attachment is being read at the same time.
                     # - SYSTEM, then INTERNET, which are never lit together, so either starts at the left edge.
@@ -2163,14 +2171,24 @@ with timer() as tim:
                     # message keeps the rest of the line. DPG's vertical group hides any child whose
                     # `show=False`, so the lines repack with no overlap.
                     with dpg.group():
-                        with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
-                            dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
-                            dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
-                            dpg.add_text("INDEXING", tag="docs_indexing_text")
-                            dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
-                            dpg.add_text("", tag="docs_indexing_progress_text")
-                            dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
+                        with dpg.group(horizontal=True):
+                            with dpg.group(show=False, horizontal=True) as lorebook_expansion_indicator_group:
+                                dpg.add_text(fa.ICON_BOOK, tag="lorebook_expansion_symbol")
+                                dpg.bind_item_font("lorebook_expansion_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("lorebook_expansion_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.add_text("LOREBOOK", tag="lorebook_expansion_text")
+                                dpg.bind_item_theme("lorebook_expansion_text", "my_steady_gray_indicator_theme")  # tag
+                                dpg.add_text("", tag="lorebook_expansion_progress_text")
+                                dpg.bind_item_theme("lorebook_expansion_progress_text", "my_steady_gray_indicator_theme")  # tag
+
+                            with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
+                                dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
+                                dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
+                                dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
+                                dpg.add_text("INDEXING", tag="docs_indexing_text")
+                                dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
+                                dpg.add_text("", tag="docs_indexing_progress_text")
+                                dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
 
                         with dpg.group(horizontal=True):
                             with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
@@ -2492,6 +2510,29 @@ with timer() as tim:
 # --------------------------------------------------------------------------------
 # Animations, live updates
 
+_lorebook_light_text: str | None = None  # what LOREBOOK last showed, or `None` while it is out
+
+def _update_lorebook_light() -> None:
+    """Show LOREBOOK, with its progress, while the expander asks the LLM for forms. Polled per frame.
+
+    GUI work only when the text changes, so a frame where nothing moved costs a comparison.
+    """
+    global _lorebook_light_text
+    maybe_progress = lorebook_expander.progress
+    if maybe_progress is None:
+        text = None
+    else:
+        text = f"[{maybe_progress.done} / {maybe_progress.total}]" if maybe_progress.total else ""
+    if text == _lorebook_light_text:
+        return
+    if text is None:
+        dpg.hide_item(lorebook_expansion_indicator_group)
+    else:
+        dpg.set_value("lorebook_expansion_progress_text", text)  # tag
+        if _lorebook_light_text is None:
+            dpg.show_item(lorebook_expansion_indicator_group)
+    _lorebook_light_text = text
+
 # Whether the composer held the caret on the previous frame; see `update_animations`.
 _composer_was_active = False
 def update_animations():
@@ -2507,6 +2548,7 @@ def update_animations():
     # The lorebook's inflected forms follow edits to it and swaps of the model, neither of which raises anything
     # here. A few attribute reads, and never waits: what it starts runs on a thread of its own.
     lorebook_expander.poll()
+    _update_lorebook_light()
     # Mirror the retriever's indexing progress text into INDEXING. The other indicators' texts are pushed.
     chat_controller.update_indexing_progress_text()
     # The jump-to-latest pill must be polled rather than pushed: the mouse wheel and the scrollbar move the
@@ -3666,6 +3708,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     # picture. Hidden or not, so that a graph shown later opens where the
                                     # conversation now is.
                                     on_navigate=chat_graph_panel.go_to_head,
+                                    on_indexing_done=lambda: _show_composer_notice("Documents indexed."),
                                     # A message opened for editing takes the caret, and gives it back to the
                                     # log when closed, by the app's own routes, which also keep the panes'
                                     # keyboard-home flags honest.
