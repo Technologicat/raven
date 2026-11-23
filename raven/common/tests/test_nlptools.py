@@ -447,33 +447,6 @@ def test_detect_named_entities_list_input(spacy_pipe):
 def test_detect_named_entities_empty():
     assert nlptools.detect_named_entities([]) == {}
 
-def test_suggest_keywords_distinguishes_documents(sample_docs):
-    per_doc = [nlptools.count_frequencies(d, min_occurrences=1, min_length=3) for d in sample_docs]
-    keywords = nlptools.suggest_keywords(per_doc)
-    assert len(keywords) == 3
-    # Each document gets a distinct top keyword from its own subject matter.
-    doc0_text = "finite element discretize"
-    doc1_text = "machine learning neural"
-    doc2_text = "climate atmospheric circulation"
-    # At least one keyword of each doc should be subject-specific.
-    assert any(kw in doc0_text for kw in keywords[0])
-    assert any(kw in doc1_text for kw in keywords[1])
-    assert any(kw in doc2_text for kw in keywords[2])
-
-def test_suggest_keywords_max_keywords(sample_docs):
-    per_doc = [nlptools.count_frequencies(d, min_occurrences=1, min_length=3) for d in sample_docs]
-    keywords = nlptools.suggest_keywords(per_doc, max_keywords=2)
-    assert all(len(kws) <= 2 for kws in keywords)
-
-def test_suggest_keywords_with_supplied_corpus(sample_docs):
-    per_doc = [nlptools.count_frequencies(d, min_occurrences=1, min_length=3) for d in sample_docs]
-    # A deliberately narrow corpus — words absent from it are dropped from results.
-    corpus = {"machine": 5, "learning": 4, "climate": 3}
-    keywords = nlptools.suggest_keywords(per_doc, corpus_frequencies=corpus)
-    for kws in keywords:
-        for kw in kws:
-            assert kw in corpus
-
 # --------------------------------------------------------------------------------
 # The installed model against the installed spaCy
 

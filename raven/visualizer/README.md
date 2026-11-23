@@ -292,7 +292,6 @@ not. A second pass over the whole vocabulary folds the variants together once ev
   replacement is applied only when it is itself one of the keywords the first pass extracted, so an invented
   or rephrased term cannot reach the dataset — it is dropped instead of trusted.
 - The prompt is `clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement applied.
-  Word clouds and cluster labels read the same list, so both benefit.
 
 ## Good to know
 

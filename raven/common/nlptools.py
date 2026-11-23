@@ -22,8 +22,7 @@ __all__ = ["default_stopwords",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
            "load_translator", "translate",
-           "count_frequencies", "detect_named_entities",
-           "suggest_keywords"]
+           "count_frequencies", "detect_named_entities"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 import base64
 import collections
 import copy
-import math
 import operator
 from typing import Container, Dict, List, Optional, Tuple, Union
 
@@ -1038,136 +1036,3 @@ def detect_named_entities(tokens: Union[List[spacy.tokens.token.Token],
                                  key=operator.itemgetter(1),
                                  reverse=True))
     return named_entities
-
-
-def suggest_keywords(per_document_frequencies: List[Dict[str, int]],
-                     corpus_frequencies: Optional[Dict[str, int]] = None,
-                     threshold_fraction: float = 0.1,
-                     max_keywords: Optional[int] = None) -> List[List[str]]:
-    """Data-adaptively suggest per-document keywords that distinguish between documents of the corpus.
-
-    `per_document_frequencies`: list of outputs of `count_frequencies`, one element per document.
-                                See the example there.
-
-    `corpus_frequencies`: output of `count_frequencies`, across the whole corpus.
-
-                          The per-document data is analyzed against the corpus data. For each document,
-                          any words that do not appear in the corpus data will be ignored, regardless
-                          of their frequencies in the individual document.
-
-                          If `corpus_frequencies` is not supplied, one will be automatically aggregated
-                          from the per-document frequency data.
-
-                          Supplying the corpus data separately can be useful e.g. if you need to filter it,
-                          or when looking at a subset of documents from a larger corpus (while analyzing
-                          keywords against that larger corpus).
-
-    `threshold_fraction`: IMPORTANT. The source of the keyword suggestion magic. See details below.
-
-    `max_keywords`: In the final results, return at most this many keywords for each document.
-
-                    If not specified, all words remaining after threshold filtering, in that document's
-                    entry in `per_document_frequencies`, will be treated as keywords.
-
-    Returns `[[doc0_kw0, doc0_kw1, ...], [doc1_kw0, ...], ...]`, where each list is ordered by count
-    (descending, i.e. more common words first).
-
-    If you want the frequencies, each of the words is a key to your `per_document_frequencies`,
-    so you can do this::
-
-        per_document_keyword_frequencies = []
-        for words, frequencies in zip(suggested_keywords, per_document_frequencies):
-            per_document_keyword_frequencies.append({word: frequencies[word] for word in words})
-
-    **Details**
-
-    This function aims to pick, from the given frequency data, words that distinguish each document
-    from the other documents in the corpus. Words that are uselessly common across different documents
-    are dropped.
-
-    There's a fine balance here, drawing on the old NLP observation that words with intermediate frequencies
-    best describe a dataset:
-
-      - Filtering out words present in *all* other documents drops only a few of the most common words,
-        leaving uselessly large overlaps between the suggested keyword sets. This happens even after we
-        account for stopwords (see `count_frequencies`), because a typical corpus discusses a single
-        broad umbrella topic.
-
-      - Filtering out words present in *any* other document leaves only noise. Documents that talk about
-        the same topic tend to use some of the same words.
-
-      - Hence, enter the `threshold_fraction` parameter. If at least that fraction of all documents have
-        a particular word, then that word is considered uselessly common for the purposes of distinguishing
-        between documents (within this corpus), and dropped.
-
-    The default is to ignore words that appear in at least 10% of all documents. But since it is possible
-    that there are just a few documents, the final formula that allows also such edge cases is::
-
-        threshold_n = max(min(5, n_documents), math.ceil(threshold_fraction * n_documents))
-
-    Any word that appears in `threshold_n` or more documents is ignored.
-    """
-    # Collect word frequencies over whole corpus, if not supplied, from the frequencies over each document.
-    user_supplied_corpus_frequencies = True
-    if corpus_frequencies is None:
-        user_supplied_corpus_frequencies = False
-        corpus_frequencies = collections.Counter()
-        for frequencies in per_document_frequencies:
-            corpus_frequencies.update(frequencies)
-
-    # Find how many document(s) each word in the per-document frequencies appears in.
-    n_documents = len(per_document_frequencies)
-    threshold_n = max(min(5, n_documents), math.ceil(threshold_fraction * n_documents))
-    document_counts_by_word = collections.Counter()
-    for frequencies in per_document_frequencies:
-        for word in frequencies.keys():
-            document_counts_by_word[word] += 1  # found one more document that has this word
-    excessively_common_words = {word for word, count in document_counts_by_word.items() if count >= threshold_n}
-    logger.info(f"suggest_keywords: Found {len(excessively_common_words)} words shared between {threshold_n} documents out of {n_documents}. Threshold fraction = {threshold_fraction:0.2g}. Total unique words = {len(corpus_frequencies)}.")
-
-    # # Detect words common to *all* documents - not helpful.
-    # words_common_to_all_documents = set(per_document_frequencies[0].keys())
-    # for kws in per_document_frequencies[1:]:
-    #     kws = set(kws.keys())
-    #     words_common_to_all_documents.intersection_update(kws)
-
-    # Keep the highest-frequency words detected in each document. Hopefully this will compactly describe what the document is about.
-    logger.info("suggest_keywords: Ranking and filtering results...")
-    per_document_keywords = []
-    for document_index, frequencies in enumerate(per_document_frequencies):
-        words = set(frequencies.keys())
-
-        # # Drop words present in *any* other document - not helpful.
-        # other_documents_words = per_document_frequencies[:document_index] + per_document_frequencies[document_index + 1:]
-        # for other_words in other_documents_words:
-        #     words = words.difference(other_words)
-        # words = list(words)
-
-        # Drop words common with too many other documents. This is helpful.
-        # NOTE: We build the `excessively_common_words` set first (further above), and filter against the complete set, to treat all documents symmetrically.
-        #       We don't want filler words to end up in the first document's keywords just because it was processed first.
-        words = list(words.difference(excessively_common_words))
-
-        # Drop words not in the corpus data.
-        # If the corpus data was autogenerated, all per-document words appear there, so we only need to do this if the corpus data was user-supplied.
-        if user_supplied_corpus_frequencies:  # if the corpus data was autogenerated, all per-document words appear there, so we only need to check this if the corpus data was user-supplied.
-            words = [word for word in words if word in corpus_frequencies.keys()]
-
-        # Sort by frequency *in this document*, more common first.
-        filtered_frequencies = {word: frequencies[word] for word in words}
-        filtered_frequencies = list(sorted(filtered_frequencies.items(),
-                                           key=operator.itemgetter(1),
-                                           reverse=True))
-        words = [word for word, count in filtered_frequencies]
-
-        # # Sort by frequency across whole corpus, more common first.
-        # words = list(sorted(words,
-        #                     key=lambda word: corpus_frequencies.get(word, 0),
-        #                     reverse=True))
-
-        # If we're cutting, keep the words with the highest number of occurrences.
-        if max_keywords is not None:
-            words = words[:max_keywords]
-
-        per_document_keywords.append(words)
-    return per_document_keywords
