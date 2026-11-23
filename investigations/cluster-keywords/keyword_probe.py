@@ -424,10 +424,27 @@ def umbrella_terms(candidates: list[set[str]], labels: list[int], *, min_support
     return {term for term, count in presence.items() if count >= threshold_n}
 
 
+def shares_modifier(a: str, b: str) -> bool:
+    """Whether two terms share a word that modifies a head in at least one of them.
+
+    "reasoning capability" and "llm reasoning" share "reasoning", which modifies "capability" in the first:
+    two labels on one facet. "reinforcement learning" and "deep learning" share only a head, and are not
+    counted. A stopword shared is not counted either.
+    """
+    wa, wb = a.split(), b.split()
+    modifiers = set(wa[:-1]) | set(wb[:-1])
+    return any(w in modifiers and w not in STOPWORDS for w in set(wa) & set(wb))
+
+
+FIRINGS: list[tuple[str, str]] = []  # (skipped, because of), for the run's report
+
+
 def pick(ranked: list[tuple[str, float, float]], top: int, *, suppress_nested: bool,
-         keep_longer: float = 0.5, exclude: frozenset[str] = frozenset()) -> list[tuple[str, float]]:
+         keep_longer: float = 0.5, exclude: frozenset[str] = frozenset(),
+         one_per_modifier: bool = False, already: tuple[str, ...] = ()) -> list[tuple[str, float]]:
     """The first `top` terms as `(term, share)`, with nested phrases suppressed if asked, and the terms in
-    `exclude` skipped.
+    `exclude` skipped. With `one_per_modifier`, a term sharing a modifier with one already taken, or with
+    one of `already`, is skipped too (`shares_modifier`).
 
     When a candidate and a term already taken are nested in each other, only one of them is kept. The
     shorter one always covers at least as much of the cluster, every record holding "latin hypercube
@@ -439,6 +456,11 @@ def pick(ranked: list[tuple[str, float, float]], top: int, *, suppress_nested: b
     for term, _weight, share in ranked:
         if term in exclude:
             continue
+        if one_per_modifier:
+            blocker = next((t for t in list(already) + [t for t, _ in chosen] if shares_modifier(term, t)), None)
+            if blocker is not None:
+                FIRINGS.append((term, blocker))
+                continue
         if suppress_nested:
             clash = next((j for j, (other, _) in enumerate(chosen) if nested(term, other)), None)
             if clash is not None:
@@ -736,6 +758,14 @@ def main():
                 by_relevance = relevance_order(by_ctfidf, centroid, term_vectors)
                 tail = pick(combine([by_ctfidf, by_relevance]), args.top - 1, suppress_nested=True)
                 methods[name][cid] = common[cid] + tail
+        methods["hybrid-rrf-word"] = {}
+        for cid in members:
+            by_ctfidf = [item for item in distinctive[cid] if item[0] not in BARE_STOPWORDS][:args.pool]
+            centroid = unit(doc_vectors[members[cid]].mean(axis=0))
+            fused = fuse([by_ctfidf, relevance_order(by_ctfidf, centroid, term_vectors)])
+            tail = pick(fused, args.top - 1, suppress_nested=True, one_per_modifier=True,
+                        already=tuple(t for t, _ in common[cid]))
+            methods["hybrid-rrf-word"][cid] = common[cid] + tail
         # The fused ranking again, diversified: MMR against the common term and the terms already taken.
         common_terms_needed = {t for cid in members for t, _ in common[cid]} - set(term_vectors)
         if common_terms_needed:
@@ -756,7 +786,8 @@ def main():
     coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab",
                       "phrase-mix1": "phrase-ab", "phrase-mix2": "phrase-ab", "rerank": "phrase-ab", "rerank-c": "phrase-ab",
                       "mix-rerank": "phrase-ab", "mix-rerank-c": "phrase-ab",
-                      "hybrid-alt": "phrase-ab", "hybrid-rrf": "phrase-ab", "hybrid-rrf-mmr": "phrase-ab"}
+                      "hybrid-alt": "phrase-ab", "hybrid-rrf": "phrase-ab", "hybrid-rrf-mmr": "phrase-ab",
+                      "hybrid-rrf-word": "phrase-ab"}
 
     lines = [f"# Cluster keywords: {args.dataset.name}", "",
              f"{len(records)} records, {len(members)} clusters, {sum(1 for x in labels if x < 0)} outliers; "
@@ -804,6 +835,9 @@ def main():
     out_path = HERE / "out" / f"{args.dataset.stem}.md"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
+    if FIRINGS:
+        with open(out_path.with_name(out_path.stem + "-firings.txt"), "w") as f:
+            f.writelines(f"{display.get(a, a)}\t{display.get(b, b)}\n" for a, b in FIRINGS)
     with open(out_path.with_suffix(".json"), "w") as f:
         json.dump({name: {str(cid): [kw for kw, _ in kws] for cid, kws in labelling.items()}
                    for name, labelling in methods.items()}, f, indent=1)

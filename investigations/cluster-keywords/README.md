@@ -225,6 +225,24 @@ close, at cosines of 0.94 (*recurrent model* / *recurrent neural network*) and 0
 risk*), so a stronger diversity weight chosen from these few pairs would be fitted to them. Whether
 near-duplicates separate from related terms at all wants the distribution over every label first.
 
+### One term per modifier (`hybrid-rrf-word`)
+
+`hybrid-rrf` can spend a label on one facet: the RLVR cluster read *reinforcement learning, reasoning
+capability, large reasoning model, llm reasoning, reasoning performance, reasoning ability*. `hybrid-rrf-word`
+skips a candidate sharing a modifier word with a term already taken, the common term included, where a
+modifier is a word before the head in either term (`shares_modifier`). Each run writes its firings to
+`out/<dataset>-firings.txt`.
+
+- **It fires often**: 104 times on arXiv, changing 36 of 68 labels; a third to two thirds of the labels on
+  every large corpus.
+- **The RLVR cluster becomes** *reinforcement learning, reasoning capability, verifiable reward, supervised
+  fine-tuning, deepseek-r1, policy optimization*; the transformer cluster loses *recurrent neural network*
+  beside *recurrent model* and gains *self-attention, sequence length*.
+- **It costs a name where the shared word is part of one**: *stable diffusion* gives way to *diffusion
+  model*, and the slot goes to the bare *synthesis*.
+- **Some firings separate distinct terms**: *data analysis* / *data visualisation*, and *perceived ease of
+  use* / *perceived usefulness*, two constructs of the technology acceptance model.
+
 ## Open
 
 **Which method, not yet decided** (the maintainer, 2026-11-20): no clear winner among `phrase-mix1`,
@@ -239,6 +257,12 @@ maintainer knows:
 3. Then pick the method, and plan it into the importer; after that, colouring by year v0
    (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
 
+- **The LLM keyworder given the classical terms as evidence**: the terms with their shares, beside the
+  sampled abstracts, framed as data rather than as a suggestion, so that any anchoring pulls toward the
+  corpus. The two fail in opposite directions (classical terms cannot abstract, as the evaluation cluster
+  shows; the LLM's wander, as *AI safety* in the diffusion cluster), and the statistics cover the whole
+  cluster where the prompt holds at most 60 records. Its bias wants measuring: the same clusters with and
+  without the evidence. Importer work, not this probe's.
 - **"state of the art" yields *art***, and *GIS* did not merge with *geographical information system*.
 - **Against the LLM keyworder**: `run_llm_imports.sh` imports each corpus with LLM keywords on agglomerative
   clusters into `data/`, one corpus at a time, resuming after the last one finished.
