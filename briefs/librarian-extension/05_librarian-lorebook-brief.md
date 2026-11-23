@@ -585,10 +585,25 @@ What a host has to supply differs, which is what the guide is for:
 
 - **Open WebUI** is Python (its functions are; recalled, not checked), so the core file goes in unchanged.
 - **Claude Code**, as a plugin (maintainer, 2026-11-20): it would save the agent a manual lookup whenever the
-  maintainer uses a glossary term. Recalled from the hooks API, to verify before building: a
-  `UserPromptSubmit` hook sees each prompt and can add context to it; a plugin can bundle hooks; the hook is
-  any command, so a Python script takes the core file unchanged; and it is given the session id and the
-  transcript's path, from which "already given in this session" can be read, or kept in a state file.
+  maintainer uses a glossary term. Checked against Claude Code's hooks and plugins references (2026-11-23):
+  - **Injection**: a `UserPromptSubmit` hook gets the prompt and `session_id` on stdin and returns
+    `hookSpecificOutput.additionalContext`, which the model sees as a system reminder and the user does not
+    see as a message. **Capped at 10,000 characters** per hook output, with no setting to raise it; Raven's
+    budget of 2,000 tokens is near 8,000 characters, so it fits, and the port must check.
+  - **Memory**: the transcript stores injected text in an undocumented record, so "already given this session"
+    is the plugin's own state, in `${CLAUDE_PLUGIN_DATA}` keyed by the session id.
+  - **Compaction summarizes hook-added context away.** A `SessionStart` hook matching `compact` re-gives the
+    definitions the session had, from that state. (Librarian will meet the same question when it gets context
+    compaction, `TODO.md`'s High item: stored definitions are messages like any other.)
+  - **Configuration**: a plugin's `userConfig` has a `directory` type, so the lorebook folder is a setting the
+    user is asked for, reaching the hook as an environment variable.
+  - **Timeout**: 30 s by default for this event; a timeout drops the context silently, the prompt still going
+    through. The scan takes about a tenth of a second.
+  - **The forms cannot be generated in a hook**, so the plugin reads Raven's ledger where there is one, which is
+    one more reason its format is documented.
+  - **Not verified**: whether a plugin's MCP server gives the model a callable lookup tool (standard MCP, by
+    the docs' account), and which Python runs the hook (whatever `python3` is on the path), so the guide states
+    the core's floor, Python 3.10, for its `X | None` annotations.
 - **LM Studio and pi** are TypeScript, so one TS port of the core serves both.
   - **pi** (read 2026-11-20, `docs.pi.dev` and its `extensions.md`): an extension's `before_agent_start` can
     return a message with a `customType`, stored in the session and sent to the model — the nearest thing to
