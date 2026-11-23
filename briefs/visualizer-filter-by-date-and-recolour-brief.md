@@ -157,6 +157,10 @@ on the keyworder, its headers being plain, so swapping the two costs nothing. Th
 one afternoon and end at a measured result, while v0 would have spilled over a weekend partway through the info
 panel's change from clusters to groups.
 
+**And the keyworder is settled** (the maintainer, 2026-11-23): `hybrid-rrf`, from
+`investigations/cluster-keywords/`. The order from here: wire it into the importer; then the LLM keyworder
+given its terms as evidence, measured on the same test set while it is loaded; then v0, then v1.
+
 ## Open
 
 Colouring by year's v1: per-year keywords at import, after the keyworder.

@@ -245,8 +245,14 @@ modifier is a word before the head in either term (`shares_modifier`). Each run 
 
 ## Open
 
-**Which method, not yet decided** (the maintainer, 2026-11-20): no clear winner among `phrase-mix1`,
-`phrase-mix2`, `mix-rerank` and `mix-rerank-c`. The `phrase-mix` labels read more easily; the `mix-rerank`
+**Decided: `hybrid-rrf` ships as it is** (the maintainer, 2026-11-23). Read across the arXiv corpus, its
+labels mostly read as if a person or an LLM had picked them. Tuning stops here: `hybrid-rrf-word` conflates
+distinct terms (*data analysis* / *data visualisation*), and narrowing it to generic heads needs a judgement
+of what is generic, which is an LLM-shaped problem. Next, in order: wire `hybrid-rrf` into the importer; the
+LLM keyworder given the classical terms as evidence (below), with this same test set; then colouring by
+year v0 and v1 (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
+
+**Earlier, 2026-11-20:** no clear winner among `phrase-mix1`, `phrase-mix2`, `mix-rerank` and `mix-rerank-c`. The `phrase-mix` labels read more easily; the `mix-rerank`
 ones find specific concepts, as *bayesian knowledge tracing*. Judging on AOKK is confounded, its clusters
 being unfamiliar to the person reading them, so the next judgement is on the arXiv corpus, which the
 maintainer knows:
