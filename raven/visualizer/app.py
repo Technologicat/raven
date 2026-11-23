@@ -1196,7 +1196,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # names the window.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
-               env(key_indent=1, key="Shift+F10", action_indent=0, action="Switch the word cloud between phrases and words", notes="Kept between sessions"),
+               env(key_indent=1, key="Shift+F10", action_indent=0, action="Switch between phrase and word mode", notes="Kept between sessions"),
                env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),
