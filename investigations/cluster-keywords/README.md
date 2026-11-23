@@ -284,8 +284,22 @@ cannot abstract.
     its abstractions (*LLM-as-a-judge*, *theory of mind*) rather than taking the GPT-family terms the phrases
     lead with.
   - These are readings of a few clusters, not a measurement; the maintainer's read decides.
-- Next, the maintainer reads `out/arxiv-llm-evidence.md` and decides whether the evidence goes on by default;
-  colouring by year v0 follows. The other corpora are running, with no repeat.
+- **The other five corpora** (`out/<corpus>-llm-evidence.md`), with no repeat run, so read against arXiv's
+  noise floor of 0.40:
+
+  | corpus | clusters | overlap, with against without | from the phrases, without → with |
+  |---|---|---|---|
+  | biology | 10 | 0.50 | 18% → 20% |
+  | geography | 8 | 0.50 | 12% → 19% |
+  | ECCOMAS | 84 | 0.35 | 22% → 33% |
+  | AOKK, latest | 74 | 0.45 | 13% → 24% |
+  | hydrogen | 87 | 0.47 | 19% → 28% |
+
+  The same shape everywhere: the overlap is around arXiv's noise floor, and the share taken from the phrases
+  rises by two to eleven points. Each corpus's own noise floor is unmeasured, so a difference of a few
+  hundredths between corpora says nothing.
+- Next, the maintainer reads the reports, starting with `out/arxiv-llm-evidence.md`, and decides whether the
+  evidence goes on by default; colouring by year v0 follows.
 - **The README's word cloud screenshot shows words only**, and wants retaking with phrases before 0.2.11.
 
 ## Open
