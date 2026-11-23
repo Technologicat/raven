@@ -1,0 +1,14 @@
+ledger: expansions-b5d900f0.jsonl; word lists: investigations/lorebook-lemmas/data/nykysuomensanalista2024.txt (104261 words)
+51 stems kept by the guard; 12 catch at least one listed word that is not their own form
+     25  'prose'            (prose in 'Prose basilisks'): proseduuri, proseminaari, prosentiton, prosentti, prosenttikorotus, prosenttilasku, prosenttiliike, prosenttilinja, prosenttiluku, prosenttimerkki, prosenttimääräinen, prosenttinen, … (+13)
+      7  'prosess'          (prose in 'Prose basilisks'): prosessikirjoittaminen, prosessinohjaus, prosessioikeus, prosessiteollisuus, prosessoida, prosessointi, prosessori
+      5  'profiil'          (profile in 'Flat knowledge profile'): profiili, profiilikuva, profiililista, profiilipelaaja, profiiliteräs
+      3  'moment'           (moment in 'Silicon census moment'): momentaaninen, momentti, momenttiavain
+      3  'agentt'           (agent in 'Ding agent'): agentti, agenttifilmi, agenttiromaani
+      3  'design'           (design in 'Aria-worthy design'): designer, designhuume, designtuote
+      2  'gratiini'         (Gratin in 'Ancient Gratin'): gratiini, gratiinikastike
+      2  'gratiin'          (Gratin in 'Ancient Gratin'): gratiini, gratiinikastike
+      1  'jukeboks'         (jukebox in 'Jukebox random'): jukeboksi
+      1  'jukebok'          (jukebox in 'Jukebox random'): jukeboksi
+      1  'jukebo'           (jukebox in 'Jukebox random'): jukeboksi
+      1  'designe'          (design in 'Aria-worthy design'): designer

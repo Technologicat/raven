@@ -1,0 +1,9 @@
+ledger: expansions-b5d900f0.jsonl; word lists: /usr/share/dict/words, /usr/share/wordnet/index.adj, /usr/share/wordnet/index.adv, /usr/share/wordnet/index.noun, /usr/share/wordnet/index.verb (147604 words)
+51 stems kept by the guard; 7 catch at least one listed word that is not their own form
+     21  'prose'            (prose in 'Prose basilisks'): prosecute, prosecuted, prosecutes, prosecuting, prosecution, prosecutions, prosecutor, prosecutors, proselyte, proselyted, proselytes, proselyting, … (+9)
+     11  'design'           (design in 'Aria-worthy design'): designate, designated, designates, designating, designation, designations, designative, designatum, designedly, designer, designers
+      8  'moment'           (moment in 'Silicon census moment'): momentaneous, momentarily, momentary, momently, momentous, momentously, momentousness, momentum
+      5  'build'            (build in 'Build thrice, cherrypick'): builder, builders, buildings, buildup, buildups
+      4  'frame'            (frame in 'Barthesian frame'): framer, framers, framework, frameworks
+      3  'designe'          (design in 'Aria-worthy design'): designedly, designer, designers
+      2  'raptor'           (raptor in 'Raptor contingency'): raptores, raptorial

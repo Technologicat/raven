@@ -97,3 +97,23 @@ The ledger measured: all 91 glossary terms answered in 8 min 17 s, no failures (
   *hydristä*, *hydrillä*. A form nobody writes costs nothing; the stems are where an error matters.
 - **The English forms are mostly right, with one bad one in two runs**: *fup* → *fapped*, *fapping* in the
   first run (a mangled form, and a vulgar word), *fups*, *fup's* in the second.
+
+### Measured again (2026-11-23), after the floor of five and the prompt forbidding translations
+
+The same probe on a ledger asked that morning, same model and languages; `results-stems-*-2026-11-23.txt`.
+81 of the 91 terms are in it: one batch of ten was lost to a reply that looped on one Finnish form and never
+closed, which is what `lorebook_expansion.salvage` and the retries now handle.
+
+| | stems kept | catch an English word | catch a Finnish headword |
+|---|---|---|---|
+| 2026-11-20 (floor four, translations allowed) | 63 | 23 | 11 |
+| 2026-11-23 (floor five, no translations) | 51 | 7 | 12 |
+
+- **English improved most**: the four-letter stems are gone. The worst left is `prose`, 21 words (*prosecute*,
+  *proselyte*), which matters only beside *basilisks*.
+- **The Finnish catches are mostly genuine loan compounds now**: *agentti*, *profiili*, *gratiini*, *jukeboksi*,
+  *designer*. The real false positives are `prose` → *prosentti*, *proseduuri* and their compounds, 25.
+- **A stem can run past its word into another one**: `prosess`, given for *prose*, is the Finnish for *process*
+  (*prose* is *proosa*). The guard passes it, since it begins with the whole of *prose*. A limit on how far a
+  stem may extend past its word would catch it, but loans genuinely extend (*Gratin* → `gratiin`, *jukebox* →
+  `jukeboks`), and no clean bound is in sight; recorded rather than guarded.
