@@ -863,8 +863,9 @@ class HybridIR:
         with self._indexing_lock:
             fire_start = (self._indexing_count == 0)
             self._indexing_count += 1
-        # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
-        logger.info(f"HybridIR.commit: INSTR start: fire_start={fire_start}, _indexing_count(after_inc)={self._indexing_count}, on_indexing_start_wired={self._on_indexing_start is not None}")
+            count = self._indexing_count
+        logger.debug(f"HybridIR.commit: started: commits in progress {count}, fire_start={fire_start}, "
+                     f"on_indexing_start wired: {self._on_indexing_start is not None}")
         if fire_start and self._on_indexing_start is not None:
             try:
                 self._on_indexing_start()
@@ -880,8 +881,9 @@ class HybridIR:
             with self._indexing_lock:
                 self._indexing_count -= 1
                 fire_done = (self._indexing_count == 0)
-            # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
-            logger.info(f"HybridIR.commit: INSTR done: fire_done={fire_done}, _indexing_count(after_dec)={self._indexing_count}, on_indexing_done_wired={self._on_indexing_done is not None}")
+                count = self._indexing_count
+            logger.debug(f"HybridIR.commit: finished: commits in progress {count}, fire_done={fire_done}, "
+                         f"on_indexing_done wired: {self._on_indexing_done is not None}")
             if fire_done and self._on_indexing_done is not None:
                 try:
                     self._on_indexing_done()

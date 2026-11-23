@@ -1769,18 +1769,19 @@ class DPGChatController:
 
     def _on_indexing_start(self) -> None:
         """Show the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
-        # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
-        logger.info(f"DPGChatController._on_indexing_start: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
+        logger.debug(f"DPGChatController._on_indexing_start: gui_updates_safe={self.gui_updates_safe}, "
+                     f"widget={self.docs_indexing_indicator_widget!r}, "
+                     f"exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
             if self.docs_indexing_glow_animation is not None:
                 self.docs_indexing_glow_animation.reset()  # crisp phase on appear
             self.indicator_hold.show(self.docs_indexing_indicator_widget)
-            logger.info(f"DPGChatController._on_indexing_start: INSTR after show: visible={dpg.is_item_shown(self.docs_indexing_indicator_widget)}")
 
     def _on_indexing_done(self) -> None:
         """Hide the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
-        # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
-        logger.info(f"DPGChatController._on_indexing_done: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
+        logger.debug(f"DPGChatController._on_indexing_done: gui_updates_safe={self.gui_updates_safe}, "
+                     f"widget={self.docs_indexing_indicator_widget!r}, "
+                     f"exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
             self.indicator_hold.hide(self.docs_indexing_indicator_widget)
             if self.on_indexing_done is not None:
