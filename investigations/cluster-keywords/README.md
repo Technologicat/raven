@@ -260,7 +260,9 @@ cannot abstract.
   prompt otherwise unchanged.
 - **The noise floor first**: the LLM samples, so two runs of one prompt already differ. arXiv runs a second
   time without the evidence, and the evidence's effect is read against that difference.
-- Results: pending.
+- Results: pending. Next, the maintainer reads `out/arxiv-llm-evidence.md` and decides whether the evidence
+  goes on by default; colouring by year v0 follows.
+- **The README's word cloud screenshot shows words only**, and wants retaking with phrases before 0.2.11.
 
 ## Open
 
