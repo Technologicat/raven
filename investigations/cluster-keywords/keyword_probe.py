@@ -240,8 +240,10 @@ def expand_abbreviations(candidates: list[set[str]],
     paper calling its system CARE does not take over the word "care" everywhere else. Abbreviations inside
     a phrase expand too, so "generative ai" and "generative artificial intelligence" are one term.
 
-    Returns the candidates in canonical form, and `{canonical: display}`, where the display form is the
-    spelling the corpus uses most, so a label says "chatgpt" rather than its expansion.
+    Returns the candidates in canonical form, and `{canonical: display}`. The display form is the spelling
+    the corpus uses most, except for an abbreviation: that shows as its short form only when most records
+    using it do not define it. A corpus that uses "ChatGPT" unexplained knows it; one that defines "FWP"
+    wherever it appears does not, and neither will its reader, who sees "fast weight programmer".
     """
     counts = collections.defaultdict(collections.Counter)
     for pairs in definitions:
@@ -268,15 +270,26 @@ def expand_abbreviations(candidates: list[set[str]],
     folds = plural_map({c for record in expanded for c in record.values()})
 
     surface = collections.defaultdict(collections.Counter)
+    short_use = collections.defaultdict(lambda: [0, 0])  # canonical -> [records defining it, records not]
     out = []
-    for record in expanded:
+    for record, pairs in zip(expanded, definitions):
+        defined_here = {short for short, _ in pairs}
         canonical = set()
         for term, c in record.items():
             c = folds.get(c, c)
             surface[c][term] += 1
             canonical.add(c)
+            if term in corpus_map or term in defined_here:  # the bare short form of an abbreviation
+                short_use[c][0 if term in defined_here else 1] += 1
         out.append(canonical)
-    display = {c: forms.most_common(1)[0][0] for c, forms in surface.items()}
+    display = {}
+    for c, forms in surface.items():
+        defining, undefined = short_use.get(c, (0, 0))
+        if defining and undefined < defining:  # mostly explained where used: the reader needs the long form
+            long_forms = [(n, f) for f, n in forms.items() if " " in f or "-" in f]
+            display[c] = max(long_forms)[1] if long_forms else c
+        else:
+            display[c] = forms.most_common(1)[0][0]
     return out, display
 
 
@@ -504,6 +517,39 @@ def rerank(ranked: dict[int, list[tuple[str, float, float]]], members: dict[int,
     return out
 
 
+def relevance_order(items: list[tuple[str, float, float]], centroid: np.ndarray,
+                    term_vectors: dict[str, np.ndarray]) -> list[tuple[str, float, float]]:
+    """`items` sorted by their term's cosine similarity to `centroid`, a unit vector, most similar first."""
+    if not items:
+        return []
+    vectors = unit(np.stack([term_vectors[t] for t, _, _ in items]))
+    order = np.argsort(-(vectors @ centroid), kind="stable")
+    return [items[k] for k in order]
+
+
+def fuse(rankings: list[list[tuple[str, float, float]]], *, k: int = 60) -> list[tuple[str, float, float]]:
+    """Reciprocal rank fusion (Cormack, Clarke and Buettcher 2009): each term scores the sum of 1 / (k + rank)
+    over the rankings that hold it, and the fused ranking is by that score. k = 60 is theirs."""
+    score = collections.Counter()
+    item_of = {}
+    for ranking in rankings:
+        for rank, item in enumerate(ranking, start=1):
+            score[item[0]] += 1.0 / (k + rank)
+            item_of[item[0]] = item
+    return [item_of[t] for t, _ in sorted(score.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def interleave(rankings: list[list[tuple[str, float, float]]]) -> list[tuple[str, float, float]]:
+    """The rankings' items taken in turn, first of each, then second of each, a term only the first time."""
+    out, seen = [], set()
+    for row in zip(*rankings):
+        for item in row:
+            if item[0] not in seen:
+                seen.add(item[0])
+                out.append(item)
+    return out
+
+
 # --------------------------------------------------------------------------------
 # Measures
 
@@ -557,6 +603,10 @@ def main():
     # candidates, which undercounts them, a keyword being an abstraction over its cluster.
     stored = {cid: [kw.lower() for kw in dataset["vis_keywords_by_cluster"][cid]] for cid in members}
     stored_space = "phrase-ab" if any(" " in kw for kws in stored.values() for kw in kws) else "unigram"
+    # Fold the stored keywords' plurals as the candidates' were, so "transformers" matches "transformer".
+    stored_vocabulary = set().union(*candidates[stored_space]) | {kw for kws in stored.values() for kw in kws}
+    stored_folds = plural_map(stored_vocabulary)
+    stored = {cid: [stored_folds.get(kw, kw) for kw in kws] for cid, kws in stored.items()}
     unigram_ranked = ctfidf(candidates["unigram"], labels)
     phrase_ab_ranked = ctfidf(candidates["phrase-ab"], labels)
     umbrella = umbrella_terms(candidates["phrase-ab"], labels)
@@ -602,12 +652,23 @@ def main():
             tails = rerank(distinctive, members, doc_vectors, term_vectors, args.top - 1, pool=args.pool,
                            centered=centered, bare=BARE_STOPWORDS)
             methods[name] = {cid: common[cid] + tails[cid] for cid in members}
+        # The hybrids: one common term, then the distinctive pool ordered two ways -- by c-TF-IDF, and by
+        # similarity to the cluster's centroid -- and combined, alternately or by rank fusion.
+        for name, combine in (("hybrid-alt", interleave), ("hybrid-rrf", fuse)):
+            methods[name] = {}
+            for cid in members:
+                by_ctfidf = [item for item in distinctive[cid] if item[0] not in BARE_STOPWORDS][:args.pool]
+                centroid = unit(doc_vectors[members[cid]].mean(axis=0))
+                by_relevance = relevance_order(by_ctfidf, centroid, term_vectors)
+                tail = pick(combine([by_ctfidf, by_relevance]), args.top - 1, suppress_nested=True)
+                methods[name][cid] = common[cid] + tail
     labels_canonical = {name: {cid: [kw for kw, _ in kws] for cid, kws in labelling.items()} for name, labelling in methods.items()}
-    for name in [n for n in methods if n.startswith(("phrase", "rerank", "mix"))]:
+    for name in [n for n in methods if n.startswith(("phrase", "rerank", "mix", "hybrid"))]:
         methods[name] = {cid: [(display.get(kw, kw), share) for kw, share in kws] for cid, kws in methods[name].items()}
     coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab",
                       "phrase-mix1": "phrase-ab", "phrase-mix2": "phrase-ab", "rerank": "phrase-ab", "rerank-c": "phrase-ab",
-                      "mix-rerank": "phrase-ab", "mix-rerank-c": "phrase-ab"}
+                      "mix-rerank": "phrase-ab", "mix-rerank-c": "phrase-ab",
+                      "hybrid-alt": "phrase-ab", "hybrid-rrf": "phrase-ab"}
 
     lines = [f"# Cluster keywords: {args.dataset.name}", "",
              f"{len(records)} records, {len(members)} clusters, {sum(1 for x in labels if x < 0)} outliers; "

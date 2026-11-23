@@ -183,6 +183,36 @@ of clusters it is present in; *clusters per pick* that number averaged over the 
   share of the corpus.
 - **Centering makes the picks more generic on hydrogen and AOKK**, the opposite of its intent.
 
+## The hybrids, 2026-11-23
+
+Read on the arXiv corpus, the five largest clusters (the maintainer, 2026-11-23): no one method won.
+`phrase-mix1` was acceptable or best on four, `mix-rerank` on three or four, and they failed on different
+clusters. `phrase-mix` fails on an abstract cluster, where the terms covering most of it are ordinary words
+(*interest, world, machine, definition* for papers on AGI and AI risk); `mix-rerank` fails on a concrete
+technical one, reaching for narrow terms (it missed *verifiable reward* in the RLVR cluster) or, centered,
+unexplained ones (*fwp*).
+
+So two hybrids, each one common term and then the distinctive pool ordered two ways, by c-TF-IDF and by
+similarity to the cluster's centroid:
+
+- `hybrid-alt`: the two orderings taken in turn.
+- `hybrid-rrf`: reciprocal rank fusion ([Cormack, Clarke and Büttcher,
+  2009](https://doi.org/10.1145/1571941.1572114)), a term scoring 1 / (60 + rank) in each ordering, so a term
+  high in only one loses to a term fair in both.
+
+`hybrid-rrf` on the same five: *reinforcement learning, reasoning capability, large reasoning model, llm
+reasoning, reasoning performance, verifiable reward*; *diffusion model, generative model, stable diffusion,
+image generation, image synthesis, gan*; *transformer, language modeling, recurrent model, recurrent neural
+network, attention mechanism, linear attention*. 94% distinct at 82% coverage, as `phrase-mix1`.
+
+Two fixes in the same round:
+
+- **An abbreviation shows as its long form where most records using it define it**, and as its short form
+  where most use it unexplained: *fwp* became *fast weight programmer*, *chatgpt* stays. The half is a choice.
+- **The stored keywords' plurals are folded before matching**, as the candidates' are: the LLM writes
+  *transformers* and *diffusion models*, which matched nothing. Its arXiv coverage is 70%, not 38%; the
+  earlier tables here undercount it the same way.
+
 ## Open
 
 **Which method, not yet decided** (the maintainer, 2026-11-20): no clear winner among `phrase-mix1`,
