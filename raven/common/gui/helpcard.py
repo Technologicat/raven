@@ -40,6 +40,7 @@ _COLUMN_GUTTER = 8
 
 hotkey_new_column = sym("next_column")
 hotkey_blank_entry = env(key_indent=0, key="", action_indent=0, action="", notes="")
+_HOTKEY_FIELDS = ("key_indent", "key", "action_indent", "action")  # what every hotkey row must have; `notes` may be left out
 
 
 def page(name: str,
@@ -164,6 +165,9 @@ class HelpWindow:
             - Each entry is an `unpythonic.env.env` (a fancy namespace). The format for one entry is::
 
                   env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="Use this to create a dataset")
+
+              `notes` may be left out, for a row with nothing to note. The indents may not: they say how the row
+              groups with its neighbours, which a default would decide silently.
 
               You can group hotkeys using the `indent` parameters::
 
@@ -304,6 +308,16 @@ class HelpWindow:
                 raise ValueError("HelpWindow: nothing to show; pass `hotkey_info`, `on_render_extras`, "
                                  "or `pages`.")
             self._pages = [env(name=None, hotkey_info=hotkey_info, on_render_extras=on_render_extras)]
+        # Here rather than when the card is first shown, which is where a malformed row would otherwise fail:
+        # partway through building the window, leaving it half-built so that every later attempt fails too.
+        for one_page in self._pages:
+            for entry in one_page.hotkey_info or ():
+                if entry is hotkey_new_column:
+                    continue
+                missing = [field for field in _HOTKEY_FIELDS if not hasattr(entry, field)]
+                if missing:
+                    raise ValueError(f"HelpWindow: the hotkey row for {getattr(entry, 'key', '?')!r} has no "
+                                     f"{', '.join(missing)}; every row needs all of {', '.join(_HOTKEY_FIELDS)}.")
         self._page_index = 0
         self._page_groups = []  # populated by `_render`, one per page, in the same order
         self._toolbar = None  # populated by `_render` when there is more than one page
@@ -632,7 +646,7 @@ class HelpWindow:
                     dpg.add_text(help_entry.action, wrap=0, color=self.dimmed_color,
                                  parent=table_row)
 
-                dpg.add_text(help_entry.notes, wrap=0, color=self.dimmed_color,
+                dpg.add_text(getattr(help_entry, "notes", ""), wrap=0, color=self.dimmed_color,
                              parent=table_row)
 
         # End spacer for table of hotkeys

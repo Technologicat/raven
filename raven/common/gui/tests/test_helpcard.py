@@ -238,6 +238,26 @@ class TestDeclaringPages:
         with pytest.raises(ValueError, match="empty"):
             self._card(pages=[])
 
+    def test_a_row_missing_a_field_is_refused_and_named(self):
+        # Built from such a row, the card fails partway through its first build, and the half-built window
+        # makes every later attempt fail too: F1 does nothing for the rest of the session.
+        row = env(key_indent=0, key="Shift+F10", action="Do a thing")
+        with pytest.raises(ValueError, match="'Shift\\+F10'.*action_indent"):
+            self._card(hotkey_info=[row])
+
+    def test_a_row_may_leave_out_its_notes(self, dpg_context):
+        self._card(hotkey_info=[env(key_indent=0, key="F1", action_indent=0, action="Help")])
+
+    def test_a_row_missing_a_field_on_a_page_is_refused(self):
+        row = env(key_indent=0, key="F2", action="Do a thing", notes="")
+        with pytest.raises(ValueError, match="action_indent"):
+            self._card(pages=[helpcard.page("Keys", hotkey_info=[row])])
+
+    def test_the_column_break_and_blank_row_pass(self, dpg_context):
+        """Negative control: the sentinels are rows too, and must not be refused."""
+        full = env(key_indent=0, key="F1", action_indent=0, action="Help", notes="")
+        self._card(hotkey_info=[full, helpcard.hotkey_blank_entry, helpcard.hotkey_new_column, full])
+
     def test_a_single_screen_card_is_one_page(self, dpg_context):
         card = self._card(hotkey_info=[])
         assert card.page_count == 1
