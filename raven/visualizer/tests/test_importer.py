@@ -901,25 +901,34 @@ class TestPhraseKeywords:
                       [{"phrases": ["diffusion model", "image generation"], "definitions": [], "nouns": []}] * 3 +
                       [{"phrases": ["outlier topic"], "definitions": [], "nouns": []}])
         all_vectors = np.random.default_rng(0).standard_normal((7, 4))
-        return vis_data, candidates, all_vectors
+        terms, display = importer._normalize_keyphrases(env(keyphrases=candidates), vis_data)
+        return vis_data, terms, display, all_vectors
+
+    def test_each_record_is_tagged_with_its_terms(self, two_clusters):
+        vis_data, _terms, _display, _all_vectors = two_clusters
+        assert vis_data[0].keyphrases == ["deep learning", "neural network"]
+        assert vis_data[-1].keyphrases == ["outlier topic"]
 
     def test_each_cluster_gets_its_own_phrases(self, two_clusters):
-        vis_data, candidates, all_vectors = two_clusters
-        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates)
+        vis_data, terms, display, all_vectors = two_clusters
+        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
+                                                             keyphrase_display=display)
         assert set(keywords[0]) == {"deep learning", "neural network"}
         assert set(keywords[1]) == {"diffusion model", "image generation"}
 
     def test_the_longer_lists_begin_with_the_keywords_and_carry_shares(self, two_clusters):
-        vis_data, candidates, all_vectors = two_clusters
-        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates)
+        vis_data, terms, display, all_vectors = two_clusters
+        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
+                                                             keyphrase_display=display)
         for cluster_id in range(2):
             assert [k for k, _ in lists[cluster_id][:len(keywords[cluster_id])]] == keywords[cluster_id]
             assert all(share == 1.0 for _, share in lists[cluster_id])
 
-    def test_candidates_out_of_step_with_the_records_are_refused(self, two_clusters):
-        vis_data, candidates, all_vectors = two_clusters
+    def test_terms_out_of_step_with_the_records_are_refused(self, two_clusters):
+        vis_data, terms, display, all_vectors = two_clusters
         with pytest.raises(ValueError, match="one item per record"):
-            importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates[:-1])
+            importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms[:-1],
+                                               keyphrase_display=display)
 
 
 class TestKeywordMethodCheck:

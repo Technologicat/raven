@@ -39,7 +39,7 @@ BUTTON = "word_cloud_button"  # tag
 class RecordingDPG:
     """Stands in for `dearpygui.dearpygui`, recording what `word_cloud` does to the GUI.
 
-    `visible` is the one piece of GUI state the module reads back, so it is the one a test sets up.
+    `visible` and `existing` are the GUI state the module reads back, so they are what a test sets up.
     """
 
     def __init__(self, real_dpg):
@@ -49,9 +49,17 @@ class RecordingDPG:
         self.hidden = []  # tags, in call order
         self.labels = {}  # tag -> label, as last set
         self.values = {}  # tag -> value, as last set
+        self.existing = set()  # tags that `does_item_exist` reports
+        self.configured = {}  # tag -> {option: value}, as last configured
 
     def __getattr__(self, name):
         return getattr(self._real_dpg, name)
+
+    def does_item_exist(self, tag):
+        return tag in self.existing
+
+    def configure_item(self, tag, **options):
+        self.configured.setdefault(tag, {}).update(options)
 
     def is_item_visible(self, tag):
         return self.visible.get(tag, False)
@@ -113,6 +121,8 @@ def gui(monkeypatch):
     monkeypatch.setattr(word_cloud, "_image_box",
                         box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4], dtype=np.float64)))
     monkeypatch.setattr(word_cloud, "_data_box", box(None))
+    monkeypatch.setattr(word_cloud, "_mode_box", box("phrases"))
+    monkeypatch.setattr(word_cloud, "_last_mode", None)
 
     dataset = env(sorted_entries=[make_entry(laser=3, ablation=1),
                                   make_entry(laser=2, welding=5),
@@ -451,3 +461,89 @@ class TestHandleKey:
         opened = self.calls(monkeypatch)
         assert word_cloud.handle_key(word_cloud.dpg.mvKey_S, ctrl_pressed=False, shift_pressed=False) is False
         assert opened == []
+
+
+# --------------------------------------------------------------------------------
+# Phrase mode
+
+def make_phrase_entry(phrases, **keywords):
+    return env(keywords=keywords, keyphrases=sorted(phrases))
+
+
+@pytest.fixture
+def phrase_gui(gui, monkeypatch):
+    """The `gui` fixture, with a dataset that carries phrases."""
+    dataset = env(sorted_entries=[make_phrase_entry({"large language model", "language model"}, model=2),
+                                  make_phrase_entry({"large language model", "language model"}, model=1),
+                                  make_phrase_entry({"self-regulated learning"}, learning=3)],
+                  file_content=env(keyphrase_display={"self-regulated learning": "self-regulated learning",
+                                                      "large language model": "large language model",
+                                                      "language model": "language model"}))
+    monkeypatch.setattr(app_state, "dataset", dataset, raising=False)
+    monkeypatch.setattr(app_state, "selection_data_idxs_box", box(np.array([0, 1, 2])), raising=False)
+    gui.dataset = dataset
+    return gui
+
+
+class TestPhraseMode:
+    def test_phrases_are_counted_by_record_with_nested_ones_once(self, phrase_gui):
+        render([0, 1, 2])
+        assert FakeWordCloud.instances[0].frequencies == {"large language model": 2, "self-regulated learning": 1}
+
+    def test_word_mode_sums_the_word_counts(self, phrase_gui):
+        """Negative control for the test above: the same selection, in the other mode."""
+        word_cloud._mode_box << "words"
+        render([0, 1, 2])
+        assert FakeWordCloud.instances[0].frequencies == {"model": 3, "learning": 3}
+
+    def test_a_display_form_is_what_the_cloud_shows(self, phrase_gui):
+        phrase_gui.dataset.file_content.keyphrase_display["self-regulated learning"] = "SRL"
+        render([2])
+        assert FakeWordCloud.instances[0].frequencies == {"SRL": 1}
+
+    def test_a_dataset_without_phrases_draws_words_whatever_the_mode(self, gui):
+        assert word_cloud.get_mode() == "phrases"
+        render([0, 1])
+        assert FakeWordCloud.instances[0].frequencies == {"laser": 5, "ablation": 1, "welding": 5}
+
+    def test_changing_the_mode_renders_the_same_selection_again(self, phrase_gui):
+        render([0, 1, 2])
+        word_cloud._mode_box << "words"
+        render([0, 1, 2])
+        assert len(FakeWordCloud.instances) == 2, "the render cache must key on the mode too"
+
+    def test_a_selection_with_nothing_to_draw_clears_the_cloud(self, phrase_gui):
+        phrase_gui.dataset.sorted_entries.append(make_phrase_entry(set()))
+        render([3])
+        assert FakeWordCloud.instances == [], "an empty cloud raises in the generator"
+        assert texture_is_blank(phrase_gui)
+
+
+class TestTheModeControl:
+    def test_set_mode_rejects_an_unknown_mode(self, phrase_gui):
+        with pytest.raises(ValueError):
+            word_cloud.set_mode("letters")
+
+    def test_toggle_flips_the_mode(self, phrase_gui):
+        word_cloud.toggle_mode()
+        assert word_cloud.get_mode() == "words"
+        word_cloud.toggle_mode()
+        assert word_cloud.get_mode() == "phrases"
+
+    def test_toggle_does_nothing_without_phrases(self, gui, monkeypatch):
+        monkeypatch.setattr(app_state, "selection_data_idxs_box", box(np.array([0])), raising=False)
+        word_cloud.toggle_mode()
+        assert word_cloud.get_mode() == "phrases"
+
+    def test_the_control_shows_the_mode_and_is_enabled_with_phrases(self, phrase_gui):
+        phrase_gui.dpg.existing.add("word_cloud_mode_radio")  # tag
+        render([0])
+        assert phrase_gui.dpg.values["word_cloud_mode_radio"] == "Phrases"  # tag
+        assert phrase_gui.dpg.configured["word_cloud_mode_radio"]["enabled"] is True  # tag
+
+    def test_the_control_is_disabled_and_shows_words_without_phrases(self, gui):
+        gui.dpg.existing.add("word_cloud_mode_radio")  # tag
+        render([0])
+        assert gui.dpg.values["word_cloud_mode_radio"] == "Words"  # tag
+        assert gui.dpg.configured["word_cloud_mode_radio"]["enabled"] is False  # tag
+

@@ -1,7 +1,8 @@
 """Visualizer state kept between sessions: choices made in the GUI, as they were when the app last closed.
 
 A small JSON file. `load` reads it at startup, filling in a default for anything missing or unusable, and
-`save` writes it at shutdown. Currently one entry, `panel_side`.
+`save` writes it at shutdown. The entries: `panel_side`, which side of the window the info panel is on, and
+`word_cloud_mode`, whether the word cloud is built from phrases or from words.
 
 Adding an entry means adding it to `DEFAULTS` and `ALLOWED`; `load`, `save` and the tests derive from those.
 """
@@ -17,10 +18,12 @@ import pathlib
 from ..common import utils as common_utils
 
 #: Each entry's value when the file does not say, or says something unusable.
-DEFAULTS = {"panel_side": "left"}  # which side of the window the info panel is on
+DEFAULTS = {"panel_side": "left",  # which side of the window the info panel is on
+            "word_cloud_mode": "phrases"}  # what the word cloud is built from
 
 #: The values each entry may take. A saved value outside these is replaced by the default.
-ALLOWED = {"panel_side": ("left", "right")}
+ALLOWED = {"panel_side": ("left", "right"),
+           "word_cloud_mode": ("phrases", "words")}
 
 
 def load(path: str | pathlib.Path) -> dict:
@@ -64,4 +67,4 @@ def save(path: str | pathlib.Path, state: dict) -> None:
     path = pathlib.Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with common_utils.atomic_write(path) as state_file:
-        json.dump({key: state[key] for key in DEFAULTS}, state_file, indent=2)
+        json.dump({key: state[key] for key in DEFAULTS if key in state}, state_file, indent=2)

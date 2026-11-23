@@ -37,7 +37,7 @@ class TestLoad:
     def test_an_unknown_entry_is_ignored(self, state_path):
         state_path.parent.mkdir()
         state_path.write_text(json.dumps({"panel_side": "right", "from_the_future": 42}))
-        assert savedstate.load(state_path) == {"panel_side": "right"}
+        assert savedstate.load(state_path) == {**savedstate.DEFAULTS, "panel_side": "right"}
 
     @pytest.mark.parametrize("text", ["{not json", "[1, 2]", ""])
     def test_a_malformed_file_gives_the_defaults_with_a_warning(self, state_path, caplog, text):
@@ -55,8 +55,14 @@ class TestLoad:
 
 class TestSave:
     def test_a_save_round_trips_through_load(self, state_path):
+        state = {"panel_side": "right", "word_cloud_mode": "words"}
+        assert state != savedstate.DEFAULTS, "this fixture must differ from the defaults, or a lost save reads as kept"
+        savedstate.save(state_path, state)
+        assert savedstate.load(state_path) == state
+
+    def test_a_partial_state_saves_what_it_has(self, state_path):
         savedstate.save(state_path, {"panel_side": "right"})
-        assert savedstate.load(state_path) == {"panel_side": "right"}
+        assert savedstate.load(state_path) == {**savedstate.DEFAULTS, "panel_side": "right"}
 
     def test_the_directory_is_created(self, state_path):
         assert not state_path.parent.exists()
@@ -69,7 +75,7 @@ class TestSave:
 
     def test_a_str_path_works_as_well_as_a_pathlib_path(self, state_path):
         savedstate.save(str(state_path), {"panel_side": "right"})
-        assert savedstate.load(str(state_path)) == {"panel_side": "right"}
+        assert savedstate.load(str(state_path))["panel_side"] == "right"
 
 
 class TestDeclarations:

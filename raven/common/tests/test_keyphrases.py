@@ -237,6 +237,29 @@ class TestLabelGroups:
         assert longer[0][:2] == alone[0]
 
 
+class TestTopTerms:
+    def test_terms_are_counted_by_record(self):
+        assert keyphrases.top_terms([{"a", "b"}, {"a"}, {"a", "c"}], 10) == [("a", 3), ("b", 1), ("c", 1)]
+
+    def test_a_dominant_longer_phrase_stands_in_for_the_shorter(self):
+        records = [{"large language model", "language model"}] * 20 + [{"small language model", "language model"}] * 5
+        terms = dict(keyphrases.top_terms(records, 10))
+        assert "language model" not in terms
+        assert terms == {"large language model": 20, "small language model": 5}
+
+    def test_a_minor_longer_phrase_leaves_the_shorter(self):
+        """Negative control for the test above: the longer form in under half the shorter's records."""
+        records = [{"small language model", "language model"}] * 5 + [{"language model"}] * 20
+        terms = dict(keyphrases.top_terms(records, 10))
+        assert terms["language model"] == 25
+
+    def test_excluded_terms_are_left_out(self):
+        assert keyphrases.top_terms([{"challenge", "x"}] * 2, 10) == [("x", 2)]
+
+    def test_top_caps_the_list(self):
+        assert len(keyphrases.top_terms([{f"t{i}" for i in range(50)}], 7)) == 7
+
+
 @pytest.fixture(scope="module")
 def nlp():
     spacy = pytest.importorskip("spacy")

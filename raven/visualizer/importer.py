@@ -1500,8 +1500,8 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
-def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_candidates=None, max_vis_kw=6,
-                              max_prompt_entries=60, max_keyword_attempts=3):
+def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_terms=None, keyphrase_display=None,
+                              max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), by `config.clusters_keyword_method`.
 
     `vis_data`: output of `_cluster_vis_data`, which see.
@@ -1511,10 +1511,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                    `vis_data`. Required. With `"phrases"`, a cluster's centroid is the mean of its records'
                    vectors; with `"llm"`, they choose which entries of an oversized cluster to describe it by.
 
-    `keyphrase_candidates`: Used when `config.clusters_keyword_method == "phrases"`, and required in that case.
+    `keyphrase_terms`, `keyphrase_display`: Used when `config.clusters_keyword_method == "phrases"`, and
+                                            required in that case.
 
-                            `input_data.keyphrases`, as `_extract_keywords` leaves it: one item per record, in
-                            the order of `vis_data`.
+                                            Output of `_normalize_keyphrases`, which see: each record's phrase
+                                            terms, in the order of `vis_data`, and their display forms.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
@@ -1549,12 +1550,10 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
     keyword_method = _effective_keyword_method()
     maybe_keyword_lists_by_cluster = None
     if keyword_method == "phrases":
-        if keyphrase_candidates is None or len(keyphrase_candidates) != len(vis_data):
-            raise ValueError("_collect_cluster_keywords: `keyphrase_candidates` must hold one item per record of "
-                             "`vis_data`; run `_extract_keywords` first")
+        if keyphrase_terms is None or keyphrase_display is None or len(keyphrase_terms) != len(vis_data):
+            raise ValueError("_collect_cluster_keywords: `keyphrase_terms` must hold one item per record of "
+                             "`vis_data`, with `keyphrase_display` beside it; see `_normalize_keyphrases`")
         with timer() as tim:
-            terms, display = keyphrases.normalize(keyphrase_candidates,
-                                                  short_form_share=visualizer_config.clusters_keyword_short_form_share)
             groups = [int(entry.cluster_id) if entry.cluster_id >= 0 else None for entry in vis_data]
             embedder = _make_embedder()
 
@@ -1562,8 +1561,8 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                 logger.info(f"        Embedding {len(texts)} candidate keywords...")
                 return np.asarray(embedder.encode(texts))
 
-            lists = keyphrases.label_groups(terms, groups,
-                                            display=display,
+            lists = keyphrases.label_groups(keyphrase_terms, groups,
+                                            display=keyphrase_display,
                                             record_vectors=all_vectors,
                                             embed_terms=embed_terms,
                                             top=visualizer_config.clusters_keyword_list_length,
@@ -1679,6 +1678,28 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         raise ValueError(error_msg)
 
     return vis_keywords_by_cluster, maybe_keyword_lists_by_cluster
+
+
+def _normalize_keyphrases(input_data, vis_data):
+    """Normalize the records' phrase candidates over the whole corpus, and tag each record with its terms.
+
+    `input_data`: output of `_parse_input_files`, after `_extract_keywords`, which leaves `input_data.keyphrases`.
+    `vis_data`: output of `_cluster_vis_data` (or `_cluster_with_llm`): the records, in the order of
+                `input_data.keyphrases`.
+
+    Returns `(terms, display)`, as `keyphrases.normalize` does: each record's set of canonical terms, and the
+    form each term is displayed in.
+
+    Mutates `vis_data`, adding `item.keyphrases`, a sorted list of the record's terms, which is what the
+    phrase word cloud sums over a selection.
+    """
+    with timer() as tim:
+        terms, display = keyphrases.normalize(input_data.keyphrases,
+                                              short_form_share=visualizer_config.clusters_keyword_short_form_share)
+        for entry, record_terms in zip(vis_data, terms):
+            entry.keyphrases = sorted(record_terms)
+    logger.info(f"    Normalized the phrase candidates of {len(terms)} records in {tim.dt:0.6g}s.")
+    return terms, display
 
 
 def _summarize(input_data):
@@ -2079,8 +2100,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
+        keyphrase_terms = keyphrase_display = None
         if visualizer_config.extract_keywords:
             all_keywords = _extract_keywords(input_data)
+            if _is_cancelled():
+                return False
+            keyphrase_terms, keyphrase_display = _normalize_keyphrases(input_data, vis_data)
         else:
             logger.info("Keyword extraction disabled, skipping NLP analysis.")
             all_keywords = {}
@@ -2096,7 +2121,8 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
             vis_keywords_by_cluster = [[theme["name"]] for theme in maybe_llm_themes]
         elif visualizer_config.extract_keywords:
             vis_keywords_by_cluster, maybe_keyword_lists_by_cluster = _collect_cluster_keywords(
-                vis_data, n_vis_clusters, all_vectors, keyphrase_candidates=input_data.keyphrases)
+                vis_data, n_vis_clusters, all_vectors,
+                keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display)
         else:
             vis_keywords_by_cluster = []
         progress.tock()
@@ -2154,6 +2180,9 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            # beginning with its `vis_keywords_by_cluster`; `None` otherwise. Nothing in the
                            # GUI reads it yet.
                            "cluster_keyword_lists": maybe_keyword_lists_by_cluster,
+                           # How each record's `keyphrases` term is displayed; `None` when keywords were not
+                           # extracted. The phrase word cloud reads both.
+                           "keyphrase_display": keyphrase_display,
                            "cluster_purities": cluster_purities,  # per cluster ID, see `_cluster_purities`; `None` where undefined
                            "dataset_purity": maybe_dataset_purity}  # `None` when no record is in a cluster
             with open(output_filename, "wb") as output_file:

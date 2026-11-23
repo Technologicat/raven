@@ -81,6 +81,10 @@
   - With the keyboard on the year selector (**Ctrl+E**), **Left** and **Right** slide the range a year at a time, keeping its width; with **Shift** they move the first year only, and with **Ctrl** the last. **F5** switches between grayed and hidden.
   - The year filter and the Misc selector apply together: a record is in colour only if both show it.
   - Each filter has a reset of its own, beside the one that shows everything, so one can be undone while the other is kept.
+- **The word cloud can show phrases.** It now draws the selection's noun phrases by default, each sized by how many of the selected studies use it, with the single words one switch away.
+  - Two radio buttons in the word cloud window choose, and **Shift+F10** switches from anywhere. The choice is kept between sessions.
+  - Phrases are counted as the cluster keywords are, an abbreviation and its long form being one phrase.
+  - A dataset imported before this has words only; import it again for phrases.
 
 #### Raven-server
 

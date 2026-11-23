@@ -28,7 +28,8 @@ __all__ = ["EXTRACTION_VERSION",
            "sentence_case", "nfkc", "extract",
            "normalize",
            "rank_terms", "umbrella_terms", "fuse",
-           "label_groups"]
+           "label_groups",
+           "top_terms"]
 
 import collections
 import math
@@ -490,3 +491,23 @@ def label_groups(terms: Sequence[set[str]], groups: Sequence[Hashable | None], *
             tail = []
         labels[group] = [(display.get(t, t), share) for t, share in heads[group] + tail]
     return labels
+
+
+def top_terms(record_terms: Sequence[set[str]], top: int, *,
+              exclude: Container[str] = raven_stopwords.bare_keyword_stopwords) -> list[tuple[str, int]]:
+    """The most common terms of a set of records, as `[(term, count), ...]`, most common first.
+
+    For a summary of an arbitrary selection, such as a word cloud: `count` is how many of the records contain the
+    term. Two terms nested in each other count as one, by the rule a group's label uses, so the two agree: a
+    longer phrase stands in for a shorter one it contains where it is found in at least half as many records.
+
+    `record_terms`: the selected records' terms, as `normalize` returns them.
+    `top`: how many terms to return at most.
+    `exclude`: as for `label_groups`.
+    """
+    counts: collections.Counter = collections.Counter()
+    for terms in record_terms:
+        counts.update(terms)
+    ranked = sorted(((term, count, count) for term, count in counts.items() if term not in exclude),
+                    key=lambda item: (-item[1], item[0]))
+    return [(term, int(count)) for term, count in _pick(ranked, top)]

@@ -1106,7 +1106,9 @@ with timer() as tim:
             dpg.move_item(column, parent="main_container")  # tag
 
     # Which side the info panel is on: the command line if it says, else as when the app last closed.
-    panel_side = opts.panel_side if opts.panel_side is not None else savedstate.load(visualizer_config.state_file)["panel_side"]
+    saved_state = savedstate.load(visualizer_config.state_file)
+    panel_side = opts.panel_side if opts.panel_side is not None else saved_state["panel_side"]
+    word_cloud.set_mode(saved_state["word_cloud_mode"])
     # The plot column is drawn first in the first frame whatever the side, and a left panel is moved into
     # place a few frames later (below). DPG refuses `focus_item` into a child window moved in front of a
     # sibling that the first frame drew before it: with the plot column drawn second, every swap that brought
@@ -1136,6 +1138,7 @@ with timer() as tim:
             # Self-sizing: the save acknowledgment names the file, which is longer than the caption.
             app_state.word_cloud_save_tooltip = gui_tooltip.Tooltip("word_cloud_save_button",  # tag
                                                                      "Save word cloud as PNG [Ctrl+S]")
+            word_cloud.add_mode_control()
 
     # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
     importer_gui.setup_themes()  # its ambient glow registers with the animator, so once per app, not per window
@@ -1193,6 +1196,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # names the window.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
+               env(key_indent=1, key="Shift+F10", action_indent=0, action="Switch the word cloud between phrases and words", notes="Kept between sessions"),
                env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),
@@ -1295,13 +1299,13 @@ def render_help_extras(self: helpcard.HelpWindow,
             f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it."),
          helpcard.section(
             "**The word cloud**",
-            'Built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.',
+            'Built from whatever is selected: from its noun phrases, each sized by how many of the studies use it, or from its single words, each sized by how often it occurs. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.',
             # A key mentioned in prose is bold and in the text colour, across the constellation. The
             # highlight is for emphasis — `**near**` above — and a key that took it read as a different
             # kind of thing from the same key one card over. This section used the colour to mark "a key
             # worth reaching for", leaving the Esc plain to say it does nothing here; that distinction was
             # carried by a colour already doing other work two lines up, so the sentence says it instead.
-            '**F10** opens and closes it, **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
+            '**F10** opens and closes it, **Shift+F10** switches phrases and words, and **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
          helpcard.section(
             "**The importer**",
             'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
@@ -1688,7 +1692,10 @@ def hotkeys_callback(sender, app_data):
     elif key == dpg.mvKey_F9:  # Use an F-key, because this too needs selection mode modifiers.
         select_visible_all()
     elif key == dpg.mvKey_F10:
-        word_cloud.toggle_window()
+        if shift_pressed:
+            word_cloud.toggle_mode()
+        else:
+            word_cloud.toggle_window()
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_F:
@@ -1930,7 +1937,8 @@ finally:
     logger.info("App render loop exited.")
 
     try:
-        savedstate.save(visualizer_config.state_file, {"panel_side": panel_side})
+        savedstate.save(visualizer_config.state_file, {"panel_side": panel_side,
+                                                       "word_cloud_mode": word_cloud.get_mode()})
     except Exception as exc:
         logger.warning(f"Could not save the app state to '{visualizer_config.state_file}': {type(exc)}: {exc}")
 

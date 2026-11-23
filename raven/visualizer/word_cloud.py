@@ -1,5 +1,8 @@
 """Word cloud rendering, display, and PNG save for the Visualizer.
 
+Two modes: phrases (the default), summing the noun phrases each record carries, and words, summing its
+single-word counts. A dataset imported before records carried phrases has only words.
+
 Fairly self-contained: the only cross-module dependencies are
 `app_state.{dataset, bg, filedialog_save, themes_and_fonts,
 selection_data_idxs_box, enter_modal_mode, exit_modal_mode}`.
@@ -9,7 +12,9 @@ dataset id, the last-rendered selection, the texture array, the last
 generated `WordCloud` object — stays module-local.
 """
 
-__all__ = ["update",
+__all__ = ["MODES",
+           "get_mode", "set_mode", "toggle_mode", "phrases_available", "add_mode_control",
+           "update",
            "toggle_window",
            "handle_key",
            "show_save_dialog",
@@ -33,7 +38,9 @@ from unpythonic.env import env as envcls
 from wordcloud import WordCloud
 
 from ..common import bgtask
+from ..common import keyphrases
 from ..common.gui import animation as gui_animation
+from ..common.gui import tooltip as gui_tooltip
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
@@ -52,6 +59,71 @@ _last_data_idxs = set()  # last selection, to detect selection changes
 _image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4],  # texture data; array is mutated in place
                          dtype=np.float64))
 _data_box = box(None)  # the last generated `WordCloud` object, for `save_to_file`
+
+MODES = ("phrases", "words")
+_mode_box = box("phrases")  # what the user chose; the app sets it from the saved state at startup
+_last_mode = None  # the mode the last cloud was rendered in, which is part of what the render cache keys on
+
+_MODE_TOOLTIP = "Build the word cloud from noun phrases, or from single words [Shift+F10]"
+_MODE_TOOLTIP_NO_PHRASES = ("This dataset has no phrases, so the word cloud uses words.\n"
+                            "Import it again to get them.")
+
+
+# --------------------------------------------------------------------------------
+# The mode
+
+def get_mode() -> str:
+    """The mode the user chose, `"phrases"` or `"words"`, whether or not the current dataset can render it."""
+    return unbox(_mode_box)
+
+
+def set_mode(mode: str) -> None:
+    """Choose what the word cloud is built from, `"phrases"` or `"words"`, and redraw it if it is open."""
+    if mode not in MODES:
+        raise ValueError(f"set_mode: unknown mode {mode!r}; expected one of {MODES}")
+    _mode_box << mode
+    if not dpg.does_item_exist("word_cloud_window"):  # tag  # at startup, restoring the saved mode before the GUI exists
+        return
+    _sync_mode_control(app_state.dataset)
+    update(unbox(app_state.selection_data_idxs_box), only_if_visible=True)
+
+
+def toggle_mode() -> None:
+    """Switch between phrases and words. Does nothing while the dataset has no phrases to switch to."""
+    if phrases_available(app_state.dataset):
+        set_mode("words" if get_mode() == "phrases" else "phrases")
+
+
+def phrases_available(ds) -> bool:
+    """Whether dataset `ds` carries the phrases phrase mode needs; it does not when imported by an older version."""
+    file_content = getattr(ds, "file_content", None)
+    return getattr(file_content, "keyphrase_display", None) is not None
+
+
+def _effective_mode(ds) -> str:
+    return get_mode() if phrases_available(ds) else "words"
+
+
+def _sync_mode_control(ds) -> None:
+    """Show the effective mode in the window's control, disabled when the dataset has no phrases."""
+    if not dpg.does_item_exist("word_cloud_mode_radio"):  # tag  # not built yet, or in a test without the window
+        return
+    available = phrases_available(ds)
+    dpg.set_value("word_cloud_mode_radio", _effective_mode(ds).capitalize())  # tag
+    dpg.configure_item("word_cloud_mode_radio", enabled=available)  # tag
+    maybe_tooltip = getattr(app_state, "word_cloud_mode_tooltip", None)
+    if maybe_tooltip is not None:
+        maybe_tooltip.text = _MODE_TOOLTIP if available else _MODE_TOOLTIP_NO_PHRASES
+
+
+def add_mode_control() -> None:
+    """Add the phrases/words control to the current DPG container, with its tooltip. Call once, when building the window."""
+    def callback(sender, app_data, user_data):  # `app_data` is the label chosen, "Phrases" or "Words"
+        set_mode(app_data.lower())
+    dpg.add_radio_button(items=("Phrases", "Words"), tag="word_cloud_mode_radio", horizontal=True,
+                         default_value=get_mode().capitalize(), callback=callback)
+    # Self-sizing, as its text changes with what the loaded dataset can do.
+    app_state.word_cloud_mode_tooltip = gui_tooltip.Tooltip("word_cloud_mode_radio", _MODE_TOOLTIP)  # tag
 
 
 def _get_task_manager():
@@ -107,6 +179,7 @@ def _render_worker(*, task_env):
     """
     global _last_dataset_addr
     global _last_data_idxs
+    global _last_mode
 
     logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task running.")
     try:
@@ -123,8 +196,10 @@ def _render_worker(*, task_env):
             arr = unbox(_image_box)
             arr[:, :, :3] = 0.0
         else:
+            mode = _effective_mode(ds)
+            _sync_mode_control(ds)
             # No need to recompute -> just show the window.
-            if id(ds) == _last_dataset_addr and set(data_idxs) == _last_data_idxs:
+            if id(ds) == _last_dataset_addr and set(data_idxs) == _last_data_idxs and mode == _last_mode:
                 logger.debug(f"_render_worker: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
                 dpg.show_item("word_cloud_window")
                 return
@@ -140,27 +215,41 @@ def _render_worker(*, task_env):
                 gui_animation.flash_button(button="word_cloud_button",  # tag
                                            duration=gui_config.acknowledgment_duration)  # the tooltip is handled manually, so it is not flashed along
 
-                # Combine keyword counts of the specified items
-                logger.debug(f"_render_worker: {task_env.task_name}: Collecting keywords for selected data points.")
+                # Combine the keyword counts of the specified items: in phrase mode, how many of them hold each
+                # phrase, nested phrases counting once as in the cluster labels; in word mode, each word's count.
+                logger.debug(f"_render_worker: {task_env.task_name}: Collecting {mode} for selected data points.")
                 keywords = collections.defaultdict(lambda: 0)
+                record_terms = []
                 for data_idx in data_idxs:
                     if task_env.cancelled:
                         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task cancelled (while collecting keywords).")
                         return
-                    for kw, count in ds.sorted_entries[data_idx].keywords.items():
-                        keywords[kw] += count
+                    entry = ds.sorted_entries[data_idx]
+                    if mode == "phrases":
+                        record_terms.append(set(getattr(entry, "keyphrases", ())))
+                    else:
+                        for kw, count in entry.keywords.items():
+                            keywords[kw] += count
+                if mode == "phrases":
+                    display = ds.file_content.keyphrase_display
+                    for term, count in keyphrases.top_terms(record_terms, gui_config.word_cloud_max_phrases):
+                        keywords[display.get(term, term)] += count
 
-                logger.debug(f"_render_worker: {task_env.task_name}: Invoking word cloud generator.")
-                wc = WordCloud(width=gui_config.word_cloud_w,
-                               height=gui_config.word_cloud_h,
-                               background_color=gui_config.word_cloud_background_color,
-                               colormap=gui_config.word_cloud_colormap,
-                               max_words=1000)
-                wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]
-                _data_box << wc
+                if not keywords:  # `generate_from_frequencies` raises on nothing; a selection can hold no words at all
+                    logger.debug(f"_render_worker: {task_env.task_name}: Nothing to draw for this selection. Clearing texture.")
+                    arr[:, :, :3] = 0.0
+                else:
+                    logger.debug(f"_render_worker: {task_env.task_name}: Invoking word cloud generator.")
+                    wc = WordCloud(width=gui_config.word_cloud_w,
+                                   height=gui_config.word_cloud_h,
+                                   background_color=gui_config.word_cloud_background_color,
+                                   colormap=gui_config.word_cloud_colormap,
+                                   max_words=1000)
+                    wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]
+                    _data_box << wc
 
-                logger.debug(f"_render_worker: {task_env.task_name}: Updating texture.")
-                arr[:, :, :3] = wc.to_array() / 255  # RGB, range [0, 255] -> RGBA, range [0, 1]
+                    logger.debug(f"_render_worker: {task_env.task_name}: Updating texture.")
+                    arr[:, :, :3] = wc.to_array() / 255  # RGB, range [0, 255] -> RGBA, range [0, 1]
 
         logger.debug(f"_render_worker: {task_env.task_name}: Sending updated texture to GUI. Showing word cloud window.")
         raw_data = array.array('f', arr.ravel())  # shape [h, w, c] -> linearly indexed
@@ -169,6 +258,7 @@ def _render_worker(*, task_env):
 
         _last_dataset_addr = id(ds)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
         _last_data_idxs = set(data_idxs)
+        _last_mode = _effective_mode(ds) if ds is not None else None
 
         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task completed.")
 

@@ -307,6 +307,7 @@ gui_config = env(  # ----------------------------------------
                  word_cloud_w=768, word_cloud_h=768,
                  word_cloud_background_color="black",
                  word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
+                 word_cloud_max_phrases=300,  # phrase mode: at most this many phrases (words mode draws up to 1000 words)
                  # ----------------------------------------
                  # Plotter
                  #

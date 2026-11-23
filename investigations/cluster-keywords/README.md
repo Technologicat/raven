@@ -276,6 +276,11 @@ maintainer knows:
   shows; the LLM's wander, as *AI safety* in the diffusion cluster), and the statistics cover the whole
   cluster where the prompt holds at most 60 records. Its bias wants measuring: the same clusters with and
   without the evidence. Importer work, not this probe's.
+- **Each mention counted once, under the most specific form shown.** The nested-phrase rule lets a dominant
+  longer form replace a shorter one, so the papers writing only the bare shorter form (*language model*, where
+  others write *large* or *small language model*) lose their word. Keeping it needs per-record bookkeeping;
+  if it is ever added, it goes into the labels and the phrase word cloud alike, which share the rule (the
+  maintainer, 2026-11-23).
 - **"state of the art" yields *art***, and *GIS* did not merge with *geographical information system*.
 - **Against the LLM keyworder**: `run_llm_imports.sh` imports each corpus with LLM keywords on agglomerative
   clusters into `data/`, one corpus at a time, resuming after the last one finished.
