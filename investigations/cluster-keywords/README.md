@@ -213,6 +213,17 @@ Two fixes in the same round:
   *transformers* and *diffusion models*, which matched nothing. Its arXiv coverage is 70%, not 38%; the
   earlier tables here undercount it the same way.
 
+### MMR over the fused ranking (`hybrid-rrf-mmr`)
+
+Tried for the near-duplicates `hybrid-rrf` keeps (*recurrent model* beside *recurrent neural network*):
+maximal marginal relevance over the fused ranking, relevance the rank scaled to [0, 1], diversity 0.3 (a
+choice), with the common term counted as already chosen. **It changes almost nothing**: the duplicate pairs
+stay, and where a pick moves it is no better (*synthesis* for *image synthesis*'s slot). The pairs are
+close, at cosines of 0.94 (*recurrent model* / *recurrent neural network*) and 0.92 (*image generation* /
+*image synthesis*), but distinct related terms are close too (0.77 for *consciousness* / *existential
+risk*), so a stronger diversity weight chosen from these few pairs would be fitted to them. Whether
+near-duplicates separate from related terms at all wants the distribution over every label first.
+
 ## Open
 
 **Which method, not yet decided** (the maintainer, 2026-11-20): no clear winner among `phrase-mix1`,

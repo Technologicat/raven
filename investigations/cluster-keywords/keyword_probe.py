@@ -231,8 +231,8 @@ def fold_plurals(candidates: list[set[str]]) -> list[set[str]]:
     return [{mapping.get(term, term) for term in terms} for terms in candidates]
 
 
-def expand_abbreviations(candidates: list[set[str]],
-                         definitions: list[list[tuple[str, str]]]) -> tuple[list[set[str]], dict[str, str]]:
+def expand_abbreviations(candidates: list[set[str]], definitions: list[list[tuple[str, str]]], *,
+                         short_form_share: float = 0.5) -> tuple[list[set[str]], dict[str, str]]:
     """Merge each abbreviation with its long form, word by word, in every record.
 
     A definition two or more records make applies corpus-wide, including to the many records that use the
@@ -241,8 +241,8 @@ def expand_abbreviations(candidates: list[set[str]],
     a phrase expand too, so "generative ai" and "generative artificial intelligence" are one term.
 
     Returns the candidates in canonical form, and `{canonical: display}`. The display form is the spelling
-    the corpus uses most, except for an abbreviation: that shows as its short form only when most records
-    using it do not define it. A corpus that uses "ChatGPT" unexplained knows it; one that defines "FWP"
+    the corpus uses most, except for an abbreviation: that shows as its short form only when at least
+    `short_form_share` of the records using it do not define it. A corpus that uses "ChatGPT" unexplained knows it; one that defines "FWP"
     wherever it appears does not, and neither will its reader, who sees "fast weight programmer".
     """
     counts = collections.defaultdict(collections.Counter)
@@ -285,7 +285,7 @@ def expand_abbreviations(candidates: list[set[str]],
     display = {}
     for c, forms in surface.items():
         defining, undefined = short_use.get(c, (0, 0))
-        if defining and undefined < defining:  # mostly explained where used: the reader needs the long form
+        if defining and undefined < short_form_share * (defining + undefined):  # explained where used: spell it out
             long_forms = [(n, f) for f, n in forms.items() if " " in f or "-" in f]
             display[c] = max(long_forms)[1] if long_forms else c
         else:
@@ -539,6 +539,35 @@ def fuse(rankings: list[list[tuple[str, float, float]]], *, k: int = 60) -> list
     return [item_of[t] for t, _ in sorted(score.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
+def mmr_pick(ranked: list[tuple[str, float, float]], already: list[str], top: int,
+             term_vectors: dict[str, np.ndarray], *, diversity: float = 0.3) -> list[tuple[str, float]]:
+    """`top` terms of `ranked` by maximal marginal relevance, as `(term, share)`.
+
+    Relevance is the position in `ranked`, scaled from 1 at its head to 0 at its tail, so that any ordering
+    can be diversified; `already` are terms chosen before, against which redundancy counts too.
+    """
+    if not ranked:
+        return []
+    n = len(ranked)
+    relevance = np.array([1.0 - k / max(1, n - 1) for k in range(n)])
+    vectors = unit(np.stack([term_vectors[t] for t, _, _ in ranked]))
+    previous = unit(np.stack([term_vectors[t] for t in already])) if already else np.zeros((0, vectors.shape[1]))
+    chosen: list[int] = []
+    while len(chosen) < min(top, n):
+        against = np.concatenate([previous, vectors[chosen]]) if chosen else previous
+        redundancy = (vectors @ against.T).max(axis=1) if len(against) else np.zeros(n)
+        score = (1.0 - diversity) * relevance - diversity * redundancy
+        score[chosen] = -np.inf
+        for k in range(n):  # a phrase nested in one already taken is the same term, whatever its vector says
+            if any(nested(ranked[k][0], ranked[j][0]) for j in chosen):
+                score[k] = -np.inf
+        best = int(np.argmax(score))
+        if score[best] == -np.inf:
+            break
+        chosen.append(best)
+    return [(ranked[k][0], ranked[k][2]) for k in chosen]
+
+
 def interleave(rankings: list[list[tuple[str, float, float]]]) -> list[tuple[str, float, float]]:
     """The rankings' items taken in turn, first of each, then second of each, a term only the first time."""
     out, seen = [], set()
@@ -582,6 +611,9 @@ def main():
     parser.add_argument("--top", type=int, default=6, help="keywords per cluster (default: 6, as the importer)")
     parser.add_argument("--rerank", action="store_true", help="add the embedding rerank (needs the embedder)")
     parser.add_argument("--pool", type=int, default=30, help="for --rerank: candidates per cluster from c-TF-IDF (default: 30)")
+    parser.add_argument("--short-form-share", type=float, default=0.5,
+                        help="an abbreviation shows as its short form when at least this share of the records "
+                             "using it leave it undefined, else as its long form (default: 0.5)")
     parser.add_argument("--show", type=int, default=15, help="clusters shown in full, of the largest and of a random draw each")
     args = parser.parse_args()
 
@@ -597,7 +629,8 @@ def main():
     candidates = extract(args.dataset, records)
     definitions = candidates["abbreviations"]
     candidates = {space: fold_plurals(candidates[space]) for space in ("unigram", "phrase")}
-    candidates["phrase-ab"], display = expand_abbreviations(candidates["phrase"], definitions)
+    candidates["phrase-ab"], display = expand_abbreviations(candidates["phrase"], definitions,
+                                                            short_form_share=args.short_form_share)
 
     # Stored LLM keywords are phrases in their own capitalization; they are matched against the phrase
     # candidates, which undercounts them, a keyword being an abstraction over its cluster.
@@ -662,13 +695,27 @@ def main():
                 by_relevance = relevance_order(by_ctfidf, centroid, term_vectors)
                 tail = pick(combine([by_ctfidf, by_relevance]), args.top - 1, suppress_nested=True)
                 methods[name][cid] = common[cid] + tail
+        # The fused ranking again, diversified: MMR against the common term and the terms already taken.
+        common_terms_needed = {t for cid in members for t, _ in common[cid]} - set(term_vectors)
+        if common_terms_needed:
+            term_vectors = cached_vectors(embedder_box, HERE / "cache" / f"{stem}-termvectors.pickle",
+                                          sorted(set(term_vectors) | common_terms_needed))
+        methods["hybrid-rrf-mmr"] = {}
+        for cid in members:
+            by_ctfidf = [item for item in distinctive[cid] if item[0] not in BARE_STOPWORDS][:args.pool]
+            centroid = unit(doc_vectors[members[cid]].mean(axis=0))
+            fused = fuse([by_ctfidf, relevance_order(by_ctfidf, centroid, term_vectors)])
+            fused = [item for item in fused
+                     if not any(nested(item[0], t) for t, _ in common[cid])]
+            methods["hybrid-rrf-mmr"][cid] = common[cid] + mmr_pick(fused, [t for t, _ in common[cid]],
+                                                                    args.top - 1, term_vectors)
     labels_canonical = {name: {cid: [kw for kw, _ in kws] for cid, kws in labelling.items()} for name, labelling in methods.items()}
     for name in [n for n in methods if n.startswith(("phrase", "rerank", "mix", "hybrid"))]:
         methods[name] = {cid: [(display.get(kw, kw), share) for kw, share in kws] for cid, kws in methods[name].items()}
     coverage_space = {"stored": stored_space, "unigram": "unigram", "phrase-ab": "phrase-ab", "phrase-cut": "phrase-ab", "phrase-bare": "phrase-ab",
                       "phrase-mix1": "phrase-ab", "phrase-mix2": "phrase-ab", "rerank": "phrase-ab", "rerank-c": "phrase-ab",
                       "mix-rerank": "phrase-ab", "mix-rerank-c": "phrase-ab",
-                      "hybrid-alt": "phrase-ab", "hybrid-rrf": "phrase-ab"}
+                      "hybrid-alt": "phrase-ab", "hybrid-rrf": "phrase-ab", "hybrid-rrf-mmr": "phrase-ab"}
 
     lines = [f"# Cluster keywords: {args.dataset.name}", "",
              f"{len(records)} records, {len(members)} clusters, {sum(1 for x in labels if x < 0)} outliers; "
