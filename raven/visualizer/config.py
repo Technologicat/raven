@@ -121,9 +121,9 @@ clusters_keyword_list_length = 30
 # For "phrases": how many of a cluster's most particular phrases the label's tail is chosen from.
 clusters_keyword_pool = 30
 
-# For "phrases": a phrase found in at least this share of the clusters (and in no fewer than five, where there
-# are five) says nothing about how one cluster stands out, and stays out of a label's tail. It can still be a
-# cluster's leading phrase, which says what the cluster is.
+# For "phrases": a label's first phrase says what the cluster is about, and the rest how it differs from the
+# other clusters. A phrase found in at least this share of the clusters (and in no fewer than five, where there
+# are five) cannot say how one differs, so it is never among the rest; it can still come first.
 clusters_keyword_umbrella_fraction = 0.1
 
 # For "phrases": an abbreviation is shown as written ("ChatGPT") when at least this share of the records using
