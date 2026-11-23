@@ -603,7 +603,7 @@ What a host has to supply differs, which is what the guide is for:
     one more reason its format is documented.
   - **Not verified**: whether a plugin's MCP server gives the model a callable lookup tool (standard MCP, by
     the docs' account), and which Python runs the hook (whatever `python3` is on the path), so the guide states
-    the core's floor, Python 3.10, for its `X | None` annotations.
+    the core's floor: Python 3.11, the oldest still supported (3.10 reached its end of life in October 2026).
 - **LM Studio and pi** are TypeScript, so one TS port of the core serves both.
   - **pi** (read 2026-11-20, `docs.pi.dev` and its `extensions.md`): an extension's `before_agent_start` can
     return a message with a `customType`, stored in the session and sent to the model — the nearest thing to
