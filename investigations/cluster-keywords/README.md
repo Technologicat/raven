@@ -260,8 +260,32 @@ cannot abstract.
   prompt otherwise unchanged.
 - **The noise floor first**: the LLM samples, so two runs of one prompt already differ. arXiv runs a second
   time without the evidence, and the evidence's effect is read against that difference.
-- Results: pending. Next, the maintainer reads `out/arxiv-llm-evidence.md` and decides whether the evidence
-  goes on by default; colouring by year v0 follows.
+- **arXiv** (68 clusters; `out/arxiv-llm-evidence.md`):
+
+  | comparison | mean keyword overlap (Jaccard) |
+  |---|---|
+  | without, run twice (the noise floor) | 0.40 |
+  | with against without | 0.38 |
+  | with against the repeat | 0.40 |
+
+  | run | keywords found among the cluster's phrases |
+  |---|---|
+  | without | 22% |
+  | without, again | 21% |
+  | with | 31% |
+
+  - **Which keywords a label gets changes no more than between two runs without the evidence**: the overlap
+    with it is the overlap of the noise floor. So no measurable wholesale anchoring.
+  - **Its pull toward the phrases is modest**: a share of 31% against 21–22%, about half a keyword per label.
+  - **The changes go where the earlier review found the LLM wandering.** The diffusion cluster loses the safety
+    term both runs without gave it (*AI Safety*, *generative AI safety*) and gains *Stable Diffusion*, *image
+    editing*, *generative models*; the distillation cluster loses the *reinforcement learning* of both runs
+    without, for *model compression*; the attack cluster gains *backdoor attacks*. The evaluation cluster keeps
+    its abstractions (*LLM-as-a-judge*, *theory of mind*) rather than taking the GPT-family terms the phrases
+    lead with.
+  - These are readings of a few clusters, not a measurement; the maintainer's read decides.
+- Next, the maintainer reads `out/arxiv-llm-evidence.md` and decides whether the evidence goes on by default;
+  colouring by year v0 follows. The other corpora are running, with no repeat.
 - **The README's word cloud screenshot shows words only**, and wants retaking with phrases before 0.2.11.
 
 ## Open
