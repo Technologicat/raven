@@ -1,7 +1,7 @@
 # What spaCy's lemmatizer makes of a glossary's terms
 
 **Question:** the lorebook is to match a term on its lemma as well as its surface form, so that inflected uses
-fire it (decided 2026-11-16, in `briefs/librarian-extension/05_librarian-lorebook-brief.md`). Before building
+fire it (decided 2026-11-16, in `briefs/librarian-extension/done/05_librarian-lorebook-brief.md`). Before building
 that: what does the lemmatizer do with *coinages* — words it has never seen — and with hyphenated and
 possessive terms? Does lemma matching add real matches, and does it add wrong ones?
 

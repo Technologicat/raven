@@ -280,7 +280,7 @@ different reasons:
 - **04 — MCP client** (`04_librarian-mcp-client-brief.md`). The most practical going forward: it is how
   external tools arrive, which is what an agentic per-document pass wants, and it is tool *supply* rather
   than a plugin system (see the scriptable-scaffold item in `TODO.md`).
-- **05 — lorebook** (`05_librarian-lorebook-brief.md`). A UX improvement.
+- **05 — lorebook** (`done/05_librarian-lorebook-brief.md`). A UX improvement. **Done 2026-11-23.**
 - **06 — memory / Hindsight standup** (`06_hindsight-standup-brief.md`). The most interesting from a
   research standpoint, and the one closest to the co-researcher line in the ECCOMAS talk — memory is what
   separates a chat frontend from a collaborator that accumulates context about the work. Adjacent reading:

@@ -314,6 +314,15 @@ class TestUserTurnLorebook:
         node = self._send(book, forest, node, "Thanks.")
         assert self._given(forest, node) == ["spork"], "the reply right before the message is in the window"
 
+    def test_a_tool_result_is_scanned_too(self, book, populated_forest, monkeypatch):
+        monkeypatch.setattr(scaffold.librarian_config, "lorebook_scan_messages", 1)
+        forest, head = populated_forest
+        node = self._send(book, forest, head, "Search the drawer.", enabled=False)
+        message = chatutil.create_chat_message(llm_settings=book, role="tool", text="Found: one spork.")
+        node = forest.create_node(payload=chatutil.create_payload(llm_settings=book, message=message), parent_id=node)
+        node = self._send(book, forest, node, "Thanks.")
+        assert self._given(forest, node) == ["spork"], "the tool result right before the message is in the window"
+
     def test_the_scan_does_not_read_further_back(self, book, populated_forest, monkeypatch):
         monkeypatch.setattr(scaffold.librarian_config, "lorebook_scan_messages", 1)
         forest, head = populated_forest

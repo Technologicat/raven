@@ -1312,7 +1312,7 @@ what was there at start.
 
 ## Let the scaffolding be hidden: the system prompt, tool rounds, lorebook definitions
 
-*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09 · See also: `briefs/librarian-extension/05_librarian-lorebook-brief.md`*
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09 · See also: `briefs/librarian-extension/done/05_librarian-lorebook-brief.md`*
 
 Librarian shows the system prompt, on purpose — it is a teaching tool as much as a chat client, and seeing
 what the model was actually set up with is a large part of what there is to learn. But it is not always

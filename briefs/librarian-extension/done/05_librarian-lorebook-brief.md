@@ -155,7 +155,8 @@ would be knowledge left on the floor. So this clears the bar the project already
     - The portability step: `lorebookcore.py` (standard library, Python 3.11), `tests/lorebook_conformance.json`
       (90 cases, Raven's core tests moved into data), `lorebook-porting.md`, and `sweep-ledger.md` for the
       ledger's format, which the papers tools share.
-    - **Next: a port**, Claude Code's being the cheapest and the one the maintainer would use daily.
+    - **The brief is closed** (2026-11-23), every acceptance item met or superseded. Ports to other frontends
+      are new work, Claude Code's first, LM Studio's and pi's after it.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 
@@ -679,5 +680,7 @@ Scope and constraints:
 - Definitions reach the model through `_synthetic_tool_exchange`, the path the clock and the document
   search use, not through a second mechanism.
 - Saving an entry by temp file and rename, and editing the target of a symlinked source, both take effect.
-- The LM Studio plugin, on the same source files, produces equivalent injection to the native
-  lorebook (same triggers fire, recursion included).
+- ~~The LM Studio plugin, on the same source files, produces equivalent injection to the native
+  lorebook.~~ **Superseded** (2026-11-20, the maintainer): the plugin was set aside, and the portability work
+  took its place — `lorebookcore.py`, `tests/lorebook_conformance.json` and `lorebook-porting.md`, done
+  2026-11-23. A port to any particular frontend is new work.

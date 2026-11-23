@@ -99,7 +99,7 @@ def test_a_link_quoted_in_an_inline_code_span_is_not_a_link():
     """Prose *about* link syntax names no heading, and a brief explaining the notation is not rot.
 
     Found by running the checker over every tracked document rather than the README it was written
-    for: `briefs/librarian-extension/05_librarian-lorebook-brief.md` describes `[text](#anchor)` as the
+    for: `briefs/librarian-extension/done/05_librarian-lorebook-brief.md` describes `[text](#anchor)` as the
     thing it walks, and both examples were reported as broken references.
     """
     quoted = ["# Real", "", "The notation `[term](#term-anchor)` is what it follows."]
