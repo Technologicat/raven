@@ -337,7 +337,7 @@ class TestOversizedClusters:
                             raising=False)
         monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
-        importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=5)
+        importer._collect_cluster_keywords(vis_data, 1, all_vectors, max_prompt_entries=5)
 
         assert len(prompts) == 1
         body = prompts[0].split("-----", 1)[1]
@@ -370,7 +370,7 @@ class TestOversizedClusters:
                             raising=False)
         monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
-        importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=60)
+        importer._collect_cluster_keywords(vis_data, 1, all_vectors, max_prompt_entries=60)
 
         body = prompts[0].split("-----", 1)[1]
         for i in range(4):
@@ -576,6 +576,16 @@ class TestProgressReporting:
 
 
 class TestFormattingAnEntryForKeywordExtraction:
+    def test_a_title_case_title_is_sentence_cased(self):
+        from unpythonic.env import env
+        entry = env(title="Free Vibration Of Rectangular Plates", abstract="An abstract.", author="", year="")
+        assert importer._format_entry_for_keyword_extraction(entry) == "free vibration of rectangular plates.\n\nAn abstract."
+
+    def test_compatibility_characters_are_normalized(self):
+        from unpythonic.env import env
+        entry = env(title="Photocatalysis on TiO\u2082", abstract="", author="", year="")  # SUBSCRIPT TWO
+        assert importer._format_entry_for_keyword_extraction(entry) == "Photocatalysis on TiO2"
+
     def test_an_entry_with_an_abstract_is_its_title_then_the_abstract(self):
         from unpythonic.env import env
         entry = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
@@ -871,7 +881,62 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
     monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
     with caplog.at_level("WARNING"):
-        return importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors)
+        vis_keywords_by_cluster, _maybe_lists = importer._collect_cluster_keywords(vis_data, 1, all_vectors)
+        return vis_keywords_by_cluster
+
+
+class TestPhraseKeywords:
+    """The `"phrases"` branch of `_collect_cluster_keywords`, on hand-built candidates and a stand-in embedder."""
+
+    @pytest.fixture
+    def two_clusters(self, monkeypatch):
+        import numpy as np
+        from unpythonic.env import env
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "phrases")
+        monkeypatch.setattr(importer, "_make_embedder",
+                            lambda: type("_E", (), {"encode": staticmethod(lambda texts: np.ones((len(texts), 4)))})())
+        vis_data = [env(title=f"paper {i}", abstract="", cluster_id=c, cluster_probability=1.0)
+                    for i, c in enumerate([0, 0, 0, 1, 1, 1, -1])]
+        candidates = ([{"phrases": ["deep learning", "neural network"], "definitions": [], "nouns": []}] * 3 +
+                      [{"phrases": ["diffusion model", "image generation"], "definitions": [], "nouns": []}] * 3 +
+                      [{"phrases": ["outlier topic"], "definitions": [], "nouns": []}])
+        all_vectors = np.random.default_rng(0).standard_normal((7, 4))
+        return vis_data, candidates, all_vectors
+
+    def test_each_cluster_gets_its_own_phrases(self, two_clusters):
+        vis_data, candidates, all_vectors = two_clusters
+        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates)
+        assert set(keywords[0]) == {"deep learning", "neural network"}
+        assert set(keywords[1]) == {"diffusion model", "image generation"}
+
+    def test_the_longer_lists_begin_with_the_keywords_and_carry_shares(self, two_clusters):
+        vis_data, candidates, all_vectors = two_clusters
+        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates)
+        for cluster_id in range(2):
+            assert [k for k, _ in lists[cluster_id][:len(keywords[cluster_id])]] == keywords[cluster_id]
+            assert all(share == 1.0 for _, share in lists[cluster_id])
+
+    def test_candidates_out_of_step_with_the_records_are_refused(self, two_clusters):
+        vis_data, candidates, all_vectors = two_clusters
+        with pytest.raises(ValueError, match="one item per record"):
+            importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_candidates=candidates[:-1])
+
+
+class TestKeywordMethodCheck:
+    def test_the_retired_frequency_method_names_its_replacement(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        with pytest.raises(ValueError, match='replaced by "phrases"'):
+            importer._check_keyword_method()
+
+    def test_an_unknown_method_is_refused(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "vibes")
+        with pytest.raises(ValueError, match="Unknown"):
+            importer._check_keyword_method()
+
+    @pytest.mark.parametrize("method", importer.KEYWORD_METHODS)
+    def test_the_supported_methods_pass(self, monkeypatch, method):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", method)
+        importer._check_keyword_method()
 
 
 # ---------------------------------------------------------------------------
@@ -908,13 +973,13 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
         # went unrecorded would show up here as the two agreeing.
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
         monkeypatch.setattr(importer, "llm_settings", None, raising=False)
-        assert importer._effective_keyword_method() == "frequencies"
+        assert importer._effective_keyword_method() == "phrases"
 
     @pytest.mark.parametrize("settings", [object(), None], ids=["backend", "no backend"])
-    def test_configured_frequency_keywords_are_recorded_whatever_the_backend_did(self, monkeypatch, settings):
-        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+    def test_configured_phrase_keywords_are_recorded_whatever_the_backend_did(self, monkeypatch, settings):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "phrases")
         monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
-        assert importer._effective_keyword_method() == "frequencies"
+        assert importer._effective_keyword_method() == "phrases"
 
     def test_a_required_backend_that_does_not_answer_stops_the_run(self, no_backend):
         with pytest.raises(importer.LLMBackendUnavailable):
@@ -945,11 +1010,11 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
         monkeypatch.setattr(llmclient, "test_connection", must_not_be_called)
         importer._setup_llm_backend(llm_policy=importer.llm_disabled)
         assert importer.llm_settings is None
-        assert importer._effective_keyword_method() == "frequencies"
+        assert importer._effective_keyword_method() == "phrases"
         assert unbox(importer.llm_fallback_box) is None, "nothing was given up that was not declined"
 
     def test_a_run_that_gives_up_nothing_publishes_no_fallback(self, monkeypatch):
-        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "phrases")
         monkeypatch.setattr(visualizer_config, "summarize", False)
         monkeypatch.setattr(importer, "llm_fallback_box", box("stale, from an earlier run"), raising=False)
         importer._setup_llm_backend(llm_policy=importer.llm_optional)
@@ -958,14 +1023,14 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
     def test_every_llm_stage_drops_together(self, no_backend):
         """Keywords fall back and summaries are skipped, rather than one of the two going ahead."""
         importer._setup_llm_backend(llm_policy=importer.llm_optional)
-        assert importer._effective_keyword_method() == "frequencies"
+        assert importer._effective_keyword_method() == "phrases"
         # What the summarize gate in `import_bibtex` tests. Summaries are still *configured* -- the run simply
         # has nothing to make them with, which is the state the gate has to notice.
         assert visualizer_config.summarize is True
         assert importer.llm_settings is None
 
     def test_a_configuration_wanting_no_llm_names_no_stages(self, monkeypatch):
-        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "phrases")
         monkeypatch.setattr(visualizer_config, "summarize", False)
         assert importer.llm_backed_stages() == ()
 
@@ -1449,6 +1514,15 @@ class TestTheStepsThatNeedAModel:
         with_abstract, without_abstract = entries
         assert with_abstract.keywords, f"nothing was extracted from an abstract-bearing entry: {with_abstract.title}"
         assert len(with_abstract.keywords) > len(without_abstract.keywords)
+
+    def test_keyword_extraction_leaves_one_set_of_phrase_candidates_per_record(self, initialized_api,
+                                                                               two_entry_input_data):
+        importer._extract_keywords(two_entry_input_data)
+        entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+        assert len(two_entry_input_data.keyphrases) == len(entries)
+        with_abstract, without_abstract = two_entry_input_data.keyphrases
+        assert with_abstract["phrases"], "no phrases were extracted from an abstract-bearing entry"
+        assert len(with_abstract["phrases"]) > len(without_abstract["phrases"])
 
     def test_the_dataset_wide_keyword_counts_are_sorted_by_frequency(self, initialized_api, two_entry_input_data):
         all_keywords = importer._extract_keywords(two_entry_input_data)

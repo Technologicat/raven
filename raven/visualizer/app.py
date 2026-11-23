@@ -34,7 +34,7 @@ parser.add_argument('--backend-url', metavar='URL', default=None,
                     help='LLM backend the importer should use, overriding the configured one; e.g. '
                          'http://localhost:1234. Consulted only when the import settings ask for an LLM '
                          '(cluster keywords, or summaries), so pointing this at nothing is how to exercise '
-                         'the fallback to frequency keywords.')
+                         'the fallback to phrase keywords.')
 parser.add_argument('--panel-side', choices=['left', 'right'], default=None,
                     help='which side of the window the info panel is on, with the plot on the other and the toolbar '
                          'between them; Ctrl+Shift+P swaps them while the app runs (default: as when the app last '

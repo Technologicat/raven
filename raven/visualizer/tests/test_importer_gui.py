@@ -432,19 +432,19 @@ class TestTheNoticeThatARunWentAheadWithoutItsLLMBackedStages:
         assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
 
     def test_the_notice_names_both_stages_when_both_were_configured(self, gui):
-        gui._llm_stages = (FakeStage("using frequency keywords"), FakeStage("no summaries"))
+        gui._llm_stages = (FakeStage("using phrase keywords"), FakeStage("no summaries"))
         gui.llm_fallback_box << FakeFallback()
         importer_gui.update_status()
         assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True
-        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords; no summaries."
+        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using phrase keywords; no summaries."
 
     def test_the_notice_names_only_the_stage_that_was_configured(self, gui):
         # The pair with the test above: a run that asked for LLM keywords and no summaries must not be told
         # its summaries were dropped, there having been none to drop.
-        gui._llm_stages = (FakeStage("using frequency keywords"),)
+        gui._llm_stages = (FakeStage("using phrase keywords"),)
         gui.llm_fallback_box << FakeFallback()
         importer_gui.update_status()
-        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords."
+        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using phrase keywords."
 
     def test_the_notice_carries_the_full_diagnosis_in_its_tooltip(self, gui):
         """The line has room for what happened; which backend, and what to do about it, go underneath."""

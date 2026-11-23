@@ -40,7 +40,7 @@ def main() -> None:
     llm_group.add_argument('--llm', choices=['required', 'optional'], default='required',
                            help='what to do when the configuration has a stage that needs an LLM and no '
                                 'backend answers: "required" (the default) stops before the import starts; '
-                                '"optional" imports without those stages, with frequency keywords and no '
+                                '"optional" imports without those stages, with phrase keywords and no '
                                 'summaries, and says so at the end.')
     llm_group.add_argument('--no-llm', dest='llm', action='store_const', const='off',
                            help='import without the stages that need an LLM, this run only, and do not '
@@ -110,9 +110,9 @@ def main() -> None:
                                    clustering_method=opts.clustering, clustering_aim=clustering_aim)
     except importer.LLMBackendUnavailable as exc:
         # A batch tool stops rather than starting. The check runs before any of the expensive stages, so
-        # nothing is lost by stopping here, and the alternative — finishing with frequency keywords where
-        # the configuration asked for LLM ones — would write a dataset whose keywords are quietly worse
-        # than the ones that were asked for.
+        # nothing is lost by stopping here, and the alternative — finishing with phrase keywords where
+        # the configuration asked for LLM ones — would write a dataset whose keywords are quietly not the
+        # ones that were asked for.
         from mcpyrate import colorizer  # noqa: PLC0415 -- intentional deferred import
         # Named as a labelled list rather than as a sentence about them, so that nothing in the line has to
         # agree with how many there turn out to be. The settings are spelled out because a terminal has the

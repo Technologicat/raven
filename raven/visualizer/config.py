@@ -91,26 +91,45 @@ extract_keywords = True
 #
 # One of:
 #
-#     "frequencies": Perform a frequency analysis of aggregated per-item data (after stopwording,
-#                    stemming, and named entity recognition), and pick words that are not too common
-#                    between different clusters, but not uselessly rare either (e.g. appearing in
-#                    just a few items).
+#     "phrases":     Extract the noun phrases of each cluster's titles and abstracts, and pick the ones
+#                    that say what the cluster is about and how it stands out from the others: its most
+#                    telling phrase, then phrases ranked both by how particular they are to the cluster
+#                    and by how close their meaning is to the cluster's (see `raven.common.keyphrases`).
+#                    Abbreviations are merged with their long forms.
 #
-#                    Fast, but not very accurate.
+#                    Fast, deterministic, needs no LLM backend. Also what "llm" falls back to when no
+#                    backend answers.
 #
 #     "llm":         Send the title/abstract pairs for each cluster (one cluster at a time)
 #                    to a language model, and ask it what it thinks are the common themes
 #                    between the items in the cluster.
 #
-#                    Slow, accurate, requires an LLM backend to be available.
+#                    Slow, can abstract where "phrases" can only quote, requires an LLM backend.
 #
 #                    This uses the LLM settings from Librarian's configuration
 #                    (including also the system prompt and the AI character;
 #                     the configured character will be asked to perform the task).
 #                    See `raven.librarian.config`.
 #
-clusters_keyword_method = "frequencies"
+clusters_keyword_method = "phrases"
 # clusters_keyword_method = "llm"
+
+# For "phrases": how many of each cluster's phrases to keep in the dataset, best first, each with the share
+# of the cluster's records containing it. The label shows the first few; the rest are there to look further.
+clusters_keyword_list_length = 30
+
+# For "phrases": how many of a cluster's most particular phrases the label's tail is chosen from.
+clusters_keyword_pool = 30
+
+# For "phrases": a phrase found in at least this share of the clusters (and in no fewer than five, where there
+# are five) says nothing about how one cluster stands out, and stays out of a label's tail. It can still be a
+# cluster's leading phrase, which says what the cluster is.
+clusters_keyword_umbrella_fraction = 0.1
+
+# For "phrases": an abbreviation is shown as written ("ChatGPT") when at least this share of the records using
+# it leave it unexplained, the corpus's readers evidently knowing it; otherwise spelled out ("FWP" becomes
+# "fast weight programmer").
+clusters_keyword_short_form_share = 0.5
 
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     **Instructions**

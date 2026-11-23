@@ -50,6 +50,7 @@ from ..client import mayberemote
 
 from ..common import bgtask
 from ..common import deviceinfo
+from ..common import keyphrases
 from ..common import nlptools
 from ..common import text as textutil
 from ..common import utils as common_utils
@@ -93,7 +94,7 @@ class LLMBackendUnavailable(RuntimeError):
 
 # All three bound by `_setup_llm_backend`, at the start of a run that needs a backend, and `None` until
 # then. The two modules are deferred for the reason `importer_gui._importer` defers *this* module, one
-# layer up: the LLM stack costs over a second to import, and a dataset built with frequency keywords and
+# layer up: the LLM stack costs over a second to import, and a dataset built with phrase keywords and
 # no summaries never touches it.
 agent = None
 llmclient = None
@@ -114,7 +115,7 @@ class LLMBackedStage(NamedTuple):
 
     `name`: what it is, for a reader — "cluster keywords".
     `setting`: the configuration line that asks for it — `clusters_keyword_method = "llm"`.
-    `without`: what a run that cannot have it does instead — "using frequency keywords".
+    `without`: what a run that cannot have it does instead — "using phrase keywords".
     """
     name: str
     setting: str
@@ -135,7 +136,7 @@ def llm_backed_stages(clustering_method: Optional[str] = None) -> tuple[LLMBacke
     the parts rather than a finished line.
     """
     return tuple(stage for stage, wanted in
-                 ((LLMBackedStage("cluster keywords", 'clusters_keyword_method = "llm"', "using frequency keywords"),
+                 ((LLMBackedStage("cluster keywords", 'clusters_keyword_method = "llm"', "using phrase keywords"),
                    visualizer_config.clusters_keyword_method == "llm"),
                   (LLMBackedStage("entry summaries", "summarize = True", "no summaries"),
                    visualizer_config.summarize),
@@ -148,7 +149,7 @@ def _effective_keyword_method() -> str:
     """Which cluster keyword method this run is actually using.
 
     The configured `raven.visualizer.config.clusters_keyword_method`, except that `"llm"` reads as
-    `"frequencies"` where no usable LLM backend answered for this run.
+    `"phrases"` where no usable LLM backend answered for this run.
 
     Meaningful only once `_setup_llm_backend` has run, which is what binds `llm_settings`; before that
     it reports a fallback that has not been decided yet.
@@ -156,8 +157,26 @@ def _effective_keyword_method() -> str:
     if _effective_clustering_method() == "llm":
         return "llm grouping"  # the theme names are the keywords
     if visualizer_config.clusters_keyword_method == "llm" and llm_settings is None:
-        return "frequencies"
+        return "phrases"
     return visualizer_config.clusters_keyword_method
+
+
+KEYWORD_METHODS = ("phrases", "llm")
+
+
+def _check_keyword_method() -> None:
+    """Raise `ValueError` for a configured `clusters_keyword_method` this version does not have.
+
+    Called before any expensive stage, so that a stale configuration costs nothing to find out about.
+    """
+    method = visualizer_config.clusters_keyword_method
+    if method == "frequencies":
+        raise ValueError('`clusters_keyword_method = "frequencies"` was replaced by "phrases", which picks noun '
+                         'phrases rather than single words. Please update `raven.visualizer.config` (or your '
+                         'overrides file).')
+    if method not in KEYWORD_METHODS:
+        raise ValueError(f"Unknown `clusters_keyword_method` {method!r}; expected one of {KEYWORD_METHODS}. "
+                         f"Please check `raven.visualizer.config`.")
 
 
 def _effective_clustering_method() -> str:
@@ -555,6 +574,14 @@ def _cache_mismatch(maybe_cached_digest: str | None, cached_count: int, texts: l
         return f"cache file holds {cached_count} rows for {len(texts)} records"
     return None
 
+def _make_embedder():
+    """The configured embedding model, through Raven-server when it answers, else loaded here."""
+    return mayberemote.Embedder(allow_local=True,
+                                model_name=visualizer_config.embedding_model,
+                                device_string=client_config.devices["embeddings"]["device_string"],
+                                dtype=client_config.devices["embeddings"]["dtype"])
+
+
 def _get_highdim_semantic_vectors(input_data):
     """Compute (or read from disk cache) the semantic embedding vectors for the given dataset.
 
@@ -614,10 +641,7 @@ def _get_highdim_semantic_vectors(input_data):
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
             if embedder is None:  # delayed init - load only if needed, on first use
-                embedder = mayberemote.Embedder(allow_local=True,
-                                                model_name=visualizer_config.embedding_model,
-                                                device_string=client_config.devices["embeddings"]["device_string"],
-                                                dtype=client_config.devices["embeddings"]["dtype"])
+                embedder = _make_embedder()
             logger.info("        Encoding...")
             with timer() as tim:
                 all_vectors = embedder.encode(all_inputs)
@@ -1115,18 +1139,20 @@ def _format_entry_for_keyword_extraction(entry: env) -> str:
             Blah blah...
 
         The full-stop and the two newlines after the title are added.
-        Both the title and the abstract are pasted as-is.
 
         If the entry has only one of them — no abstract, or a title its database omitted:
 
             Entry title or abstract here
 
-        That one is pasted as-is.
+    Two changes on the way, both for the keyword extraction's sake: a title in Title Case or ALL CAPS is
+    lowercased (`keyphrases.sentence_case`), and the whole is Unicode-NFKC-normalized ("TiO₂" to "TiO2").
 
     Note that authors and year are never mentioned.
     This is because they are not relevant for keyword extraction.
     """
-    return _format_entry_for_analysis(entry)
+    title = keyphrases.sentence_case(_analysis_title(entry))
+    text = title + ".\n\n" + entry.abstract if title and entry.abstract else title or entry.abstract
+    return keyphrases.nfkc(text)
 
 
 def _extract_keywords(input_data, max_vis_kw=6):
@@ -1147,13 +1173,20 @@ def _extract_keywords(input_data, max_vis_kw=6):
         `item.vis_keywords` is a `list` of `str`, which contains the `max_vis_kw` highest-frequency keywords in that item,
                             and all detected named entities that did not already occur among those highest-frequency keywords.
 
-    Currently, Raven only uses the per-item `vis_keywords` to compute the per-cluster `vis_keywords` (which are shown in the visualizer GUI).
+    and a field to `input_data` itself:
+        `input_data.keyphrases` is a `list`, one item per record in the order the input files' records are
+                                concatenated in, each `keyphrases.extract`'s output for that record. What the
+                                `"phrases"` cluster keywords are made from. Kept here rather than on the records,
+                                so that it does not go into the dataset file.
+
+    The per-item `keywords` are what the word cloud sums over a selection.
     """
     logger.info("NLP analysis...")
 
     # Caches are per input file, so that it is fast to concatenate new files to the dataset.
     nlp_cache_filenames = {fn: common_utils.make_cache_filename(fn, "nlp_cache", "pickle") for fn in input_data.resolved_filenames}
-    nlp_cache_version = 1
+    nlp_cache_version = 2  # 2: the records' keyphrase candidates
+    input_data.keyphrases = []
 
     all_keywords_by_filename = {}
     nlp = None
@@ -1179,6 +1212,8 @@ def _extract_keywords(input_data, max_vis_kw=6):
                                                  all_texts_for_nlp_for_this_file)
                 if nlp_cached_data["version"] != nlp_cache_version:
                     cache_state = f"cache file has version {nlp_cached_data['version']}, expected {nlp_cache_version}"
+                elif nlp_cached_data.get("keyphrase_extraction_version") != keyphrases.EXTRACTION_VERSION:
+                    cache_state = "cache file's keyphrases were extracted by another version"
                 elif maybe_mismatch is not None:
                     cache_state = maybe_mismatch
                 else:
@@ -1192,6 +1227,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
             all_keywords_for_this_file = nlp_cached_data["all_keywords"]
             entry_keywords_for_this_file = nlp_cached_data["entry_keywords"]
             entry_entities_for_this_file = nlp_cached_data["entry_entities"]
+            entry_keyphrases_for_this_file = nlp_cached_data["entry_keyphrases"]
             logger.info(f"        {len(all_keywords_for_this_file)} keywords collected from {filename} (cached).")
 
             all_keywords_by_filename[filename] = all_keywords_for_this_file
@@ -1245,6 +1281,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
             with timer() as tim:
                 entry_keywords_for_this_file = []
                 entry_entities_for_this_file = []
+                entry_keyphrases_for_this_file = []
                 for entry, doc in zip(entries, all_docs_for_this_file):
                     if _is_cancelled():
                         return
@@ -1269,14 +1306,17 @@ def _extract_keywords(input_data, max_vis_kw=6):
                     # for cache saving (and unified handling)
                     entry_keywords_for_this_file.append(kws)
                     entry_entities_for_this_file.append(ents)
+                    entry_keyphrases_for_this_file.append(keyphrases.extract(doc, stopwords=extended_stopwords))
             logger.info(f"            Done in {tim.dt:0.6g}s (frequency analysis {math.fsum(fa_times):0.6g}s, NER {math.fsum(ner_times):0.6g}s).")
 
             # Save into cache
             logger.info(f"        Caching NLP data '{nlp_cache_filename}'...")
             with timer() as tim:
                 nlp_cached_data = {"version": nlp_cache_version,
+                                   "keyphrase_extraction_version": keyphrases.EXTRACTION_VERSION,
                                    "entry_keywords": entry_keywords_for_this_file,
                                    "entry_entities": entry_entities_for_this_file,
+                                   "entry_keyphrases": entry_keyphrases_for_this_file,
                                    "all_keywords": all_keywords_for_this_file,
                                    "inputs_digest": _inputs_digest(all_texts_for_nlp_for_this_file)}
                 with open(nlp_cache_filename, "wb") as nlp_cache_file:
@@ -1290,6 +1330,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
             for entry, kws, ents in zip(entries, entry_keywords_for_this_file, entry_entities_for_this_file):
                 entry.keywords = kws  # counter
                 entry.entities = ents  # no frequency information, so just a set
+            input_data.keyphrases.extend(entry_keyphrases_for_this_file)
         logger.info(f"            Done in {tim.dt:0.6g}s.")
         progress.tick()
 
@@ -1459,27 +1500,23 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
-def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors=None, max_vis_kw=6, fraction=0.1,
+def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_candidates=None, max_vis_kw=6,
                               max_prompt_entries=60, max_keyword_attempts=3):
-    """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
+    """Collect a set of keywords for each visualization cluster (2D), by `config.clusters_keyword_method`.
 
     `vis_data`: output of `_cluster_vis_data`, which see.
     `n_vis_clusters`: output of `_cluster_vis_data`, which see.
 
-    `all_keywords`: Used when `config.clusters_keyword_method == "frequencies"`.
+    `all_vectors`: Output of `_get_highdim_semantic_vectors`, which see. Must be in the same order as
+                   `vis_data`. Required. With `"phrases"`, a cluster's centroid is the mean of its records'
+                   vectors; with `"llm"`, they choose which entries of an oversized cluster to describe it by.
 
-                    Output of `_extract_keywords`, which see.
+    `keyphrase_candidates`: Used when `config.clusters_keyword_method == "phrases"`, and required in that case.
 
-    `all_vectors`: Used when `config.clusters_keyword_method == "llm"`, and required in that case.
-
-                   Output of `_get_highdim_semantic_vectors`, which see. Must be in the same order as
-                   `vis_data`. Used to choose which entries of an oversized cluster to describe it by.
+                            `input_data.keyphrases`, as `_extract_keywords` leaves it: one item per record, in
+                            the order of `vis_data`.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
-
-    `fraction`: Used when `config.clusters_keyword_method == "frequencies"`.
-
-                IMPORTANT. The source of the keyword suggestion magic. See `nlptools.suggest_keywords`.
 
     `max_prompt_entries`: Used when `config.clusters_keyword_method == "llm"`.
 
@@ -1495,32 +1532,47 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
                             being a valid answer. Running out logs an error and leaves the cluster with
                             `"<unknown topic>"`.
 
-    Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
-    For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
+    Returns `(vis_keywords_by_cluster, maybe_keyword_lists_by_cluster)`:
+
+      - `vis_keywords_by_cluster`: a list, where the `k`th item is the list of keywords (`str`) for cluster ID
+        `k`, the most telling first.
+      - `maybe_keyword_lists_by_cluster`: with `"phrases"`, a list, where the `k`th item is cluster `k`'s longer
+        list of `(keyword, share)`, `config.clusters_keyword_list_length` of them at most, the share being that
+        of the cluster's records containing the keyword; it begins with the cluster's `vis_keywords_by_cluster`.
+        With `"llm"`, `None`.
     """
     _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
-    # The *effective* method throughout, so that a run whose backend did not answer takes the frequency
+    # The *effective* method throughout, so that a run whose backend did not answer takes the phrase
     # branch here rather than the LLM one it was configured for. Under `llm_required` the two agree, the
     # run having stopped before reaching this.
     keyword_method = _effective_keyword_method()
-    if keyword_method == "frequencies":
+    maybe_keyword_lists_by_cluster = None
+    if keyword_method == "phrases":
+        if keyphrase_candidates is None or len(keyphrase_candidates) != len(vis_data):
+            raise ValueError("_collect_cluster_keywords: `keyphrase_candidates` must hold one item per record of "
+                             "`vis_data`; run `_extract_keywords` first")
         with timer() as tim:
-            logger.info("        Collecting keywords from data points in each cluster (`suggest_keywords` will treat each cluster as a 'document')...")
-            keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
-            for entry in vis_data:
-                if entry.cluster_id >= 0:  # not an outlier
-                    # Update cluster keyword counters from this entry.
-                    # NOTE: We operate on the already-filtered data that excludes stopwords (see `_extract_keywords` for details).
-                    # TODO: We could also use `entry.cluster_probability` for something here.
-                    # TODO: Including entities would be nice, but they don't currently have frequency information.
-                    keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
+            terms, display = keyphrases.normalize(keyphrase_candidates,
+                                                  short_form_share=visualizer_config.clusters_keyword_short_form_share)
+            groups = [int(entry.cluster_id) if entry.cluster_id >= 0 else None for entry in vis_data]
+            embedder = _make_embedder()
 
-            # Here, each cluster is a "document" for the purposes of suggesting keywords.
-            vis_keywords_by_cluster = nlptools.suggest_keywords(per_document_frequencies=keywords_by_cluster,
-                                                                corpus_frequencies=all_keywords,
-                                                                threshold_fraction=fraction,
-                                                                max_keywords=max_vis_kw)
+            def embed_terms(texts):
+                logger.info(f"        Embedding {len(texts)} candidate keywords...")
+                return np.asarray(embedder.encode(texts))
+
+            lists = keyphrases.label_groups(terms, groups,
+                                            display=display,
+                                            record_vectors=all_vectors,
+                                            embed_terms=embed_terms,
+                                            top=visualizer_config.clusters_keyword_list_length,
+                                            shown=max_vis_kw,
+                                            pool=visualizer_config.clusters_keyword_pool,
+                                            umbrella_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
+            maybe_keyword_lists_by_cluster = [lists.get(cluster_id, []) for cluster_id in range(n_vis_clusters)]
+            vis_keywords_by_cluster = [[keyword for keyword, _share in keyword_list[:max_vis_kw]]
+                                       for keyword_list in maybe_keyword_lists_by_cluster]
         logger.info(f"        Done in {tim.dt:0.6g}s.")
     elif keyword_method == "llm":
         # First, group entries by cluster. The index of each entry is kept alongside it, because
@@ -1622,11 +1674,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
         # this can be done, and why it is a second pass rather than part of the loop.
         vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
     else:
-        error_msg = f"Unknown cluster keyword method '{keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
+        error_msg = f"Unknown cluster keyword method '{keyword_method}'; valid: {KEYWORD_METHODS}. Please check your `raven.visualizer.config`."
         logger.error(f"_collect_cluster_keywords: {error_msg}")
         raise ValueError(error_msg)
 
-    return vis_keywords_by_cluster
+    return vis_keywords_by_cluster, maybe_keyword_lists_by_cluster
 
 
 def _summarize(input_data):
@@ -1954,6 +2006,8 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
 
     if clustering_method is not None and clustering_method not in CLUSTERING_METHODS:
         raise ValueError(f"import_bibtex: unknown `clustering_method` {clustering_method!r}; expected one of {CLUSTERING_METHODS}")
+    if visualizer_config.extract_keywords:
+        _check_keyword_method()
 
     with dyn.let(maybe_update_status=maybe_update_status,
                  clustering_method_override=clustering_method,
@@ -2037,10 +2091,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find a set of keywords for each cluster
 
+        maybe_keyword_lists_by_cluster = None
         if maybe_llm_themes is not None:
             vis_keywords_by_cluster = [[theme["name"]] for theme in maybe_llm_themes]
         elif visualizer_config.extract_keywords:
-            vis_keywords_by_cluster = _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors)
+            vis_keywords_by_cluster, maybe_keyword_lists_by_cluster = _collect_cluster_keywords(
+                vis_data, n_vis_clusters, all_vectors, keyphrase_candidates=input_data.keyphrases)
         else:
             vis_keywords_by_cluster = []
         progress.tock()
@@ -2094,6 +2150,10 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            "clusters_keyword_method": _effective_keyword_method(),
                            "all_keywords": all_keywords,
                            "vis_keywords_by_cluster": vis_keywords_by_cluster,
+                           # With `"phrases"`, each cluster's longer keyword list, `(keyword, share)` pairs
+                           # beginning with its `vis_keywords_by_cluster`; `None` otherwise. Nothing in the
+                           # GUI reads it yet.
+                           "cluster_keyword_lists": maybe_keyword_lists_by_cluster,
                            "cluster_purities": cluster_purities,  # per cluster ID, see `_cluster_purities`; `None` where undefined
                            "dataset_purity": maybe_dataset_purity}  # `None` when no record is in a cluster
             with open(output_filename, "wb") as output_file:
