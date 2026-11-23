@@ -225,6 +225,14 @@ would be knowledge left on the floor. So this clears the bar the project already
     length minus two letters *and* at least four: minus two alone let *fup* keep *f*, and *hydra* keep *hyd*,
     which catches *hydrogen*. The four is chosen, not derived. So a word of three letters or fewer gets forms
     only.
+  - **Only a term's last word matches by its forms and stems** (2026-11-23). In English it is a phrase's
+    head that inflects, usually its last word (*hydra taxes*), and Finnish, using an English phrase as a
+    loan, puts the ending on its last word; an earlier word inflecting is a misfire — *prose* in *Prose
+    basilisks*, measured catching *prosentti* (maintainer's observation). Exceptions are out of scope:
+    English head-first phrases (*attorneys general*) are rare, and a Finnish translation, where an
+    adjective agrees with its noun or the whole becomes a compound (*proosabasiliskit*), belongs to the
+    translation follow-up. The matcher enforces it, the expansions being keyed by word; the expansion asks
+    only for the last word, which halves a request.
   - **Stems only for a language that needs them** (2026-11-20). A stem followed by any letters is loose even at
     full length — *hydra* catches *hydrangea*, *lint* catches *lintel* — so the prompt asks for stems only for
     an agglutinative language such as Finnish, where suffixes stack without limit and no list of forms can

@@ -301,6 +301,17 @@ class TestExpansion:
         assert found.exact and found.maybe_entry.id == "hydra-tax"
         assert not lorebook.lookup(entries, "hydra taxes").exact, "without them, a near miss at best"
 
+    def test_only_a_terms_last_word_matches_by_its_forms(self):
+        entries = _by_id(_parse("## Prose basilisks\nText that harms.\n"))
+        expansions = {"prose": lorebook.clean_expansion("prose", forms=["proses"], stems=["prosess"]),
+                      "basilisks": lorebook.clean_expansion("basilisks", forms=[], stems=["basilisk"])}
+        assert set(lorebook.find_matches(entries, "prose basiliskeista", expansions=expansions)) == {"prose-basilisks"}
+        assert set(lorebook.find_matches(entries, "proses basilisks", expansions=expansions)) == set()
+        assert set(lorebook.find_matches(entries, "prosessi basilisks", expansions=expansions)) == set()
+        assert not lorebook.lookup(entries, "proses basilisks", expansions=expansions).exact
+        # The rule is about the word's place in the term, not in the text, which may put the words in any order.
+        assert set(lorebook.find_matches(entries, "basiliskeista prose", expansions=expansions)) == {"prose-basilisks"}
+
     def test_an_inflected_compound_fires_and_is_found(self, entries, expansions):
         assert self._ids(entries, "let's not get hydra-taxed", expansions) == {"hydra-tax"}
         found = lorebook.lookup(entries, "hydra-taxed", expansions=expansions)

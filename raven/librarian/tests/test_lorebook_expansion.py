@@ -45,14 +45,14 @@ class FakeModel:
         self.prompts: list[str] = []
 
     def terms_asked(self) -> list[str]:
-        return [term for prompt in self.prompts for term in re.findall(r"^\d+\. (.*?) — words:", prompt, re.MULTILINE)]
+        return [term for prompt in self.prompts for term in re.findall(r"^\d+\. (.*?) — inflect:", prompt, re.MULTILINE)]
 
     def __call__(self, settings, prompt, *args, **kwargs):
         self.prompts.append(prompt)
         if self.garbled or len(self.prompts) <= self.fail_first:
             return _Turn("I am sorry, I cannot do that.")
         reply = {}
-        for number, words in re.findall(r"^(\d+)\. .*? — words: (.*)$", prompt, re.MULTILINE):
+        for number, words in re.findall(r"^(\d+)\. .*? — inflect: (.*)$", prompt, re.MULTILINE):
             reply[number] = {}
             for word in words.split(", "):
                 by_language = {"English": {"forms": [word + "s", word + "ed"], "stems": [word] if self.stems else []}}
@@ -161,6 +161,8 @@ class TestExpander:
             assert set(lorebook.find_matches(book.entries, "a hydra taxed twice",
                                              expansions=llm_settings.lorebook_expansions)) == {"hydra-tax"}
             assert sorted(model.terms_asked()) == ["Hydra tax", "Spork", "sporks"]
+            assert "1. Hydra tax — inflect: tax" in model.prompts[0], "only a term's last word is asked about"
+            assert "hydra" not in book.expansions
         finally:
             expander.shutdown()
             book.shutdown()
@@ -232,9 +234,9 @@ class TestExpander:
         monkeypatch.setattr(agent, "ask_record", FakeModel(stems=True, finnish=True))
         book, expander = self._start(llm_settings, folder)
         try:
-            assert _wait_until(lambda: "hydra" in book.expansions)
+            assert _wait_until(lambda: "spork" in book.expansions)
             assert all(expansion.stems == () for expansion in book.expansions.values()), "English asks for forms only"
-            assert book.expansions["hydra"].forms == ("hydras", "hydraed"), "and Finnish was not asked for at all"
+            assert book.expansions["spork"].forms == ("sporks", "sporked"), "and Finnish was not asked for at all"
         finally:
             expander.shutdown()
             book.shutdown()
@@ -246,8 +248,8 @@ class TestExpander:
         expander = lorebook_expansion.Expander(llm_settings, book, languages={"English": "forms", "Finnish": "stems"})
         expander.start()
         try:
-            assert _wait_until(lambda: "hydra" in book.expansions)
-            assert book.expansions["hydra"] == lorebook.Expansion(forms=("hydras", "hydraed", "hydraissa"), stems=("hydra",))
+            assert _wait_until(lambda: "spork" in book.expansions)
+            assert book.expansions["spork"] == lorebook.Expansion(forms=("sporks", "sporked", "sporkissa"), stems=("spork",))
         finally:
             expander.shutdown()
             book.shutdown()

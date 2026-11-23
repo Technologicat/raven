@@ -54,11 +54,12 @@ def material(settings: env, languages: Mapping[str, str] | None = None) -> str:
     return f"{settings.lorebook_expansion_instruction}\n\nLanguages:\n{listing}"
 
 def _items(entries: Mapping[str, lorebook.Entry]) -> list[tuple[str, dict]]:
-    return [(phrase, {"term": phrase, "words": list(words)}) for phrase, words in lorebook.terms(entries).items()]
+    # Only a term's last word is asked about, being the only one `lorebook.find_matches` matches by its forms.
+    return [(phrase, {"term": phrase, "words": [words[-1]]}) for phrase, words in lorebook.terms(entries).items()]
 
 def _render(item: dict) -> str:
     """A term as the prompt shows it."""
-    return f"{item['term']} — words: {', '.join(item['words'])}"
+    return f"{item['term']} — inflect: {', '.join(item['words'])}"
 
 def _digest(item: dict) -> str:
     """What says an answer is about this term as it is now: words added to it, or taken away, ask it again."""

@@ -308,14 +308,24 @@ class Match:
     end: int
     wording: str
 
+def _expansion_for(key: tuple[str, ...], index: int, expansions: Mapping[str, Expansion]) -> Expansion | None:
+    """The expansion the key's word at `index` may match by: only the last word's.
+
+    In English it is a phrase's head that inflects, usually its last word ("hydra taxes"), and Finnish, using an
+    English phrase, puts its ending on the last word; inflecting an earlier word is a misfire ("prose" in "Prose
+    basilisks" catching "prosentti").
+    """
+    return expansions.get(key[index]) if index == len(key) - 1 else None
+
 def _window_matches(key: tuple[str, ...], window: list[str], expansions: Mapping[str, Expansion]) -> bool:
     """Whether the words of `window` are the words of `key`, in any order: paired one to one, each pair accepted.
 
-    A key word in lowercase matches in any case; a key word with an uppercase letter only as written. Either
-    also matches its forms and stems in `expansions`.
+    A key word in lowercase matches in any case; a key word with an uppercase letter only as written. The key's
+    last word also matches its forms and stems in `expansions`.
     """
     # A key is a few words long, so trying every pairing costs less than anything cleverer would to write.
-    return any(all(_accepts(key_word, text_word, expansions.get(key_word)) for key_word, text_word in zip(key, order))
+    return any(all(_accepts(key_word, text_word, _expansion_for(key, index, expansions))
+                   for index, (key_word, text_word) in enumerate(zip(key, order)))
                for order in itertools.permutations(window))
 
 def find_matches(entries: Mapping[str, Entry], text: str, *,
@@ -328,7 +338,7 @@ def find_matches(entries: Mapping[str, Entry], text: str, *,
     written, except that a title's first letter does not count, being capitalized as a sentence's would be.
 
     `expansions`: key word, as the key has it (lowercase unless it matches only as written) -> its other forms,
-                  which then match it too.
+                  which then match it too where it is the last word of a term.
     """
     expansions = expansions or {}
     normalized = _normalize(text)
@@ -345,7 +355,9 @@ def find_matches(entries: Mapping[str, Entry], text: str, *,
         best: tuple[int, int] | None = None  # (start, end) in the text, of the last match
         for key in _keys(entry):
             # Which of the text's words each key word accepts, worked out once for both readings.
-            accepted = {key_word: {word for word in distinct if _accepts(key_word, word, expansions.get(key_word))}
+            # Only the last word may match by its expansion (`_expansion_for`).
+            accepted = {key_word: {word for word in distinct
+                                   if _accepts(key_word, word, expansions.get(key_word) if key_word == key[-1] else None)}
                         for key_word in set(key)}
             for units in readings:
                 maybe_span = _last_match(key, units, accepted, expansions)
@@ -517,8 +529,8 @@ def lookup(entries: Mapping[str, Entry], term: str, *, expansions: Mapping[str, 
     for entry in entries.values():
         for key in _keys(entry):
             if any(len(key) == len(words) and any(
-                    all(_accepts(key_word, word, expansions.get(key_word), ignore_case=True)
-                        for key_word, word in zip(key, order))
+                    all(_accepts(key_word, word, _expansion_for(key, index, expansions), ignore_case=True)
+                        for index, (key_word, word) in enumerate(zip(key, order)))
                     for order in itertools.permutations(words))
                    for words in readings):
                 return Lookup(maybe_entry=entry, exact=True, candidates=())
