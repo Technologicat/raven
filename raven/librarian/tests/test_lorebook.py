@@ -425,7 +425,7 @@ class TestLookup:
     def test_an_entry_whose_content_mentions_the_term_is_named(self, entries):
         found = lorebook.lookup(entries, "Introspection")
         assert found.mentioned_in == ("Endognosis",)
-        answer = lorebook._answer(entries, "Introspection")
+        answer = lorebook.answer(entries, "Introspection")
         assert lorebook.CANONICAL_MENTIONED_IN.format(titles="'Endognosis'") in answer
         assert answer.startswith(lorebook.CANONICAL_NO_ENTRY.format(term="Introspection"))
 
@@ -449,10 +449,10 @@ class TestLookup:
         assert found.maybe_entry is None and found.candidates == ()
 
     def test_the_answers_the_model_reads(self, entries):
-        assert lorebook._answer(entries, "spork") == "Spork\n\nA utensil."
-        assert lorebook._answer(entries, "sprok").startswith(lorebook.CANONICAL_NEAR_MISS.format(term="sprok", title="Spork"))
-        assert "'Hydra tax'" in lorebook._answer(entries, "hydra te")
-        assert lorebook._answer(entries, "photosynthesis") == lorebook.CANONICAL_NOT_DEFINED.format(term="photosynthesis")
+        assert lorebook.answer(entries, "spork") == "Spork\n\nA utensil."
+        assert lorebook.answer(entries, "sprok").startswith(lorebook.CANONICAL_NEAR_MISS.format(term="sprok", title="Spork"))
+        assert "'Hydra tax'" in lorebook.answer(entries, "hydra te")
+        assert lorebook.answer(entries, "photosynthesis") == lorebook.CANONICAL_NOT_DEFINED.format(term="photosynthesis")
 
 
 class TestLorebook:

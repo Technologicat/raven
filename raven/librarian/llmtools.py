@@ -72,6 +72,7 @@ from ..common import text as common_text
 
 from . import chatutil
 from . import config as librarian_config
+from . import lorebookcore
 
 # The retriever is duck-typed at every use site, so that this module does not acquire a runtime dependency
 # on `hybridir`'s chromadb / bm25s / watchdog stack. Same arrangement as `llmclient` and `scaffold`.
@@ -892,7 +893,8 @@ TOOL_ENTRYPOINTS = {"websearch": websearch,
 SKILL_TOOL_NAME = "activate_skill"
 
 # The tool the lorebook's definitions are looked up with, when there are any; see `raven.librarian.lorebook`.
-LOREBOOK_TOOL_NAME = "lorebook_lookup"
+# Named by the lorebook's core, whose `tool_spec` is the tool as the model sees it.
+LOREBOOK_TOOL_NAME = lorebookcore.TOOL_NAME
 
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool,
