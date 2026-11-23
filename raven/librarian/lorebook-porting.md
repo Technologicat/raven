@@ -60,7 +60,15 @@ field means.
 
 **Ahead of the user's message, as material the model reads before answering it.** In Raven they are stored in the
 chat as a round of `lorebook_lookup` calls nobody made, each answered by an entry, so that the model reads them as
-looked up before the question came. A host that cannot store a tool round adds them as context instead.
+looked up before the question came.
+
+- **That shape was measured, and it matters most on local models.** Raven's measurement of injected material
+  (`investigations/context-injects/`) found it best placed *before* the user's question, in an honest tool role
+  with the call that asked for it — one model family would not take a tool result without that call. Across the
+  local models tested, a tool round was the only shape that worked for all of them, which is why Raven gives
+  definitions only on a turn where the model has tools.
+- **A host that cannot store a tool round adds them as context instead**, as Claude Code's hooks do. On a local
+  model, check that it works before relying on it.
 
 ### What has already been given
 
