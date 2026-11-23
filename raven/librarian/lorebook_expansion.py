@@ -15,9 +15,11 @@ the earlier answers.
 model. A script reads what is cached for its model with `cached`, and never asks.
 """
 
-__all__ = ["material", "expansions_from", "cached", "Expander"]
+__all__ = ["material", "salvage", "expansions_from", "cached", "Expander"]
 
+import json
 import logging
+import re
 import threading
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -33,6 +35,7 @@ from . import sweep
 logger = logging.getLogger(__name__)
 
 _LEDGER_NAME = "expansions"
+_RETRIES = 2  # more attempts, within one run, at the terms that failed, before leaving them to the next refresh
 
 def _languages(maybe_languages: Mapping[str, str] | None) -> dict[str, str]:
     languages = dict(maybe_languages if maybe_languages is not None else librarian_config.lorebook_languages)
@@ -72,7 +75,11 @@ def _ask_batch_for(languages: Mapping[str, str]):
         try:
             reply = agent.parse_json_reply(record.reply)
         except ValueError:
-            return {}, [record]  # every term in the batch is recorded as failed, and asked again next run
+            # Typically a reply that ran on and never closed, a model repeating one form until its reply
+            # ended: the terms answered before that are complete, and kept. The rest fail, and are asked again.
+            reply = salvage(record.reply)
+            logger.warning(f"Expander: a reply that is not JSON as a whole; kept the {len(reply)} of "
+                           f"{len(batch)} terms complete in it.")
         answers: dict[str, Any] = {}
         for number, (item_id, item) in enumerate(batch, start=1):
             got = reply.get(str(number)) if isinstance(reply, dict) else None
@@ -86,6 +93,28 @@ def _ask_batch_for(languages: Mapping[str, str]):
                                 if word in item["words"] and isinstance(by_language, dict)}
         return answers, [record]
     return ask_batch
+
+_NUMBERED_KEY = re.compile(r'\s*,?\s*"(\d+)"\s*:\s*')
+
+def salvage(text: str) -> dict[str, Any]:
+    """The complete entries of a JSON object keyed by number, from a reply that does not parse as a whole.
+
+    Reads `"1": {...}, "2": {...}` from the first `{` on, one value at a time, and stops at the first that is
+    not complete. Returns them by key; `{}` when not even the first is.
+    """
+    decoder = json.JSONDecoder()
+    start = text.find("{")
+    found: dict[str, Any] = {}
+    if start == -1:
+        return found
+    position = start + 1
+    while (match := _NUMBERED_KEY.match(text, position)) is not None:
+        try:
+            value, position = decoder.raw_decode(text, match.end())
+        except json.JSONDecodeError:
+            break
+        found[match.group(1)] = value
+    return found
 
 def _strings_of(given: dict) -> dict[str, list[str]]:
     """A language's answer for one word, with anything that is not a list of strings left out."""
@@ -151,7 +180,8 @@ class Expander:
                the LLM has answered every term it asked about. Not after a run that stopped early, nor when
                everything was already cached and nothing was asked.
 
-    `start` gives the lorebook what is cached at once, then asks for the rest. Then call `poll` as often as is
+    `start` gives the lorebook what is cached at once, then asks for the rest, twice more for any that fail.
+    Then call `poll` as often as is
     convenient, a GUI's frame update included: it notices an edit to the lorebook, a model swap, which needs a
     ledger of its own, and a backend back up after a run stopped for want of one, by reading a few attributes,
     and asks nothing otherwise.
@@ -170,8 +200,9 @@ class Expander:
         self.on_done = on_done
         self._lock = threading.Lock()  # the state below
         self._refresh_lock = threading.Lock()  # one refresh at a time: from the lorebook's watcher, and from `poll`
-        self._maybe_sweep: sweep.Sweep | None = None
+        self._maybe_sweep: sweep.Sweep | None = None  # the one asking now, for `progress` and for cancelling
         self._maybe_thread: threading.Thread | None = None
+        self._run_id = 0  # counts the runs started and stopped, so a run can tell it has been superseded
         self._model: tuple | None = None  # the model the current expansions were made with
         self._generation: int | None = None  # the lorebook's, when they were made
         self._waiting_for_backend = False  # the last run stopped because the backend was not there
@@ -261,35 +292,56 @@ class Expander:
                 self._waiting_for_backend = True  # `poll` notices it coming back
                 logger.info("Expander.refresh: the backend is not ready; asking for the inflected forms once it is.")
                 return
-            the_sweep = sweep.Sweep(self.settings, _ask_batch_for(self.languages), missing, ledger,
-                                    batch_size=self.batch_size,
-                                    header=sweep.instrument_header(self.settings),
-                                    digest=_digest)
-            self._maybe_sweep = the_sweep
+            self._run_id += 1
             noun = "term" if len(missing) == 1 else "terms"  # plural
             logger.info(f"Expander.refresh: asking for the inflected forms of {len(missing)} {noun}, in the background.")
-            thread = threading.Thread(target=self._run, args=(the_sweep, items, ledger),
+            thread = threading.Thread(target=self._run, args=(self._run_id, missing, items, ledger),
                                       name="lorebook_expansion", daemon=True)
             self._maybe_thread = thread
             thread.start()
 
-    def _run(self, the_sweep: sweep.Sweep, items: list[tuple[str, dict]], ledger: sweep.Ledger) -> None:
-        """Run the sweep, then give the lorebook everything answered. On the expander's own thread."""
-        try:
-            result = the_sweep.run()
-        except Exception:  # noqa: BLE001 -- the next refresh gets another try
-            logger.exception("Expander: asking for the inflected forms failed")
-            return
+    def _run(self, run_id: int, missing: list[tuple[str, dict]], items: list[tuple[str, dict]],
+             ledger: sweep.Ledger) -> None:
+        """Ask for `missing`, again for any that failed, then give the lorebook everything answered.
+
+        On the expander's own thread. Each attempt is a sweep of its own over what is still unanswered, up to
+        `_RETRIES` more after the first; a run that stops for another reason than failed terms is not repeated.
+        """
+        todo = missing
+        result = None
+        for attempt in range(1 + _RETRIES):
+            with self._lock:
+                if self._closed or run_id != self._run_id:
+                    return  # superseded by a refresh, or shut down
+                the_sweep = sweep.Sweep(self.settings, _ask_batch_for(self.languages), todo, ledger,
+                                        batch_size=self.batch_size,
+                                        header=sweep.instrument_header(self.settings),
+                                        digest=_digest)
+                self._maybe_sweep = the_sweep
+            try:
+                result = the_sweep.run()
+            except Exception:  # noqa: BLE001 -- the next refresh gets another try
+                logger.exception("Expander: asking for the inflected forms failed")
+                break
+            with self._lock:
+                if self._closed or run_id != self._run_id:
+                    return
+                answered = _current_answers(ledger, items)
+                self.book.expansions = expansions_from(answered, self.languages)
+                todo = [(item_id, item) for item_id, item in todo if item_id not in answered]
+                self._waiting_for_backend = result.outcome is sweep.backend_unavailable
+            if result.outcome is not sweep.completed or not todo or attempt == _RETRIES:
+                break
+            noun = "term" if len(todo) == 1 else "terms"  # plural
+            logger.info(f"Expander: {len(todo)} {noun} failed; asking again ({attempt + 1} of {_RETRIES}).")
         with self._lock:
-            if self._closed or self._maybe_sweep is not the_sweep:
-                return  # superseded by a refresh, or shut down, while it ran
+            if run_id != self._run_id:
+                return
             self._maybe_sweep = None  # nothing is being asked now, which is what `progress` reports
-            self._waiting_for_backend = result.outcome is sweep.backend_unavailable
             answered = _current_answers(ledger, items)
-            self.book.expansions = expansions_from(answered, self.languages)
-        logger.info(f"Expander: {result.outcome} {result.message}; inflected forms for {len(answered)} of "
-                    f"{len(items)} terms.")
-        if result.outcome is sweep.completed and not result.failed and self.on_done is not None:
+        outcome = "stopped by an error" if result is None else f"{result.outcome} {result.message}".strip()
+        logger.info(f"Expander: {outcome}; inflected forms for {len(answered)} of {len(items)} terms.")
+        if result is not None and result.outcome is sweep.completed and not todo and self.on_done is not None:
             try:
                 self.on_done(len(answered))
             except Exception:  # noqa: BLE001 -- a frontend's handler must not take the expander down
@@ -299,6 +351,7 @@ class Expander:
         with self._lock:
             maybe_sweep, maybe_thread = self._maybe_sweep, self._maybe_thread
             self._maybe_sweep = self._maybe_thread = None
+            self._run_id += 1  # a run between two of its sweeps sees this, and stops
         if maybe_sweep is not None:
             maybe_sweep.cancel()
         if maybe_thread is not None:

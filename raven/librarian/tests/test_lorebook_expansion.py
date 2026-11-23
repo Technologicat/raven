@@ -31,11 +31,17 @@ class FakeModel:
     `stems`: also offer the word itself as a stem, which a model might do whatever it was asked.
     `garbled`: reply with something that is not JSON.
     `finnish`: also answer in Finnish, unasked or not: the word plus "issa", and the word as a stem.
+    `fail_first`: reply with something that is not JSON to this many calls first.
+    `truncate`: end each reply right after its first term, mid-way through the second, as a reply that ran on
+                and stopped does.
     """
-    def __init__(self, *, stems: bool = False, garbled: bool = False, finnish: bool = False):
+    def __init__(self, *, stems: bool = False, garbled: bool = False, finnish: bool = False, fail_first: int = 0,
+                 truncate: bool = False):
         self.stems = stems
         self.garbled = garbled
         self.finnish = finnish
+        self.fail_first = fail_first
+        self.truncate = truncate
         self.prompts: list[str] = []
 
     def terms_asked(self) -> list[str]:
@@ -43,7 +49,7 @@ class FakeModel:
 
     def __call__(self, settings, prompt, *args, **kwargs):
         self.prompts.append(prompt)
-        if self.garbled:
+        if self.garbled or len(self.prompts) <= self.fail_first:
             return _Turn("I am sorry, I cannot do that.")
         reply = {}
         for number, words in re.findall(r"^(\d+)\. .*? — words: (.*)$", prompt, re.MULTILINE):
@@ -53,7 +59,11 @@ class FakeModel:
                 if self.finnish:
                     by_language["Finnish"] = {"forms": [word + "issa"], "stems": [word]}
                 reply[number][word] = by_language
-        return _Turn(json.dumps(reply))
+        text = json.dumps(reply)
+        if self.truncate and len(reply) > 1:
+            second = text.index('"2":')
+            text = text[:second + 20]  # into the second term, which is then never closed
+        return _Turn(text)
 
 
 @pytest.fixture
@@ -109,6 +119,19 @@ class TestExpansionsFrom:
     def test_a_word_left_with_nothing_is_left_out(self):
         answers = {"Fup": {"fup": {"Finnish": {"forms": ["fup"], "stems": ["f"]}}}}
         assert lorebook_expansion.expansions_from(answers, self.BOTH) == {}
+
+
+class TestSalvage:
+    def test_the_complete_entries_of_a_reply_that_ran_on_are_kept(self):
+        text = '{"1": {"a": {"English": {"forms": ["as"]}}}, "2": {"b": {"English": {"forms": ["b", "b", "b'
+        assert lorebook_expansion.salvage(text) == {"1": {"a": {"English": {"forms": ["as"]}}}}
+
+    def test_a_fence_or_a_preamble_before_the_object_is_skipped(self):
+        assert lorebook_expansion.salvage('Here:\n```json\n{"1": [1], "2": [2') == {"1": [1]}
+
+    def test_nothing_complete_is_nothing(self):
+        assert lorebook_expansion.salvage("I cannot do that.") == {}
+        assert lorebook_expansion.salvage('{"1": {"a":') == {}
 
 
 class TestMaterial:
@@ -282,6 +305,50 @@ class TestExpander:
             release.set()
             assert _wait_until(lambda: reported == [3]), "on_done gets the number of terms with forms"
             assert expander.progress is None, "nothing is being asked now"
+        finally:
+            expander.shutdown()
+            book.shutdown()
+
+    def _start_reporting(self, llm_settings, folder):
+        reported = []
+        book = lorebook.Lorebook(llm_settings, directory=folder)
+        book.start()
+        expander = lorebook_expansion.Expander(llm_settings, book, on_done=reported.append)
+        expander.start()
+        return book, expander, reported
+
+    def test_failed_terms_are_asked_again_in_the_same_run(self, llm_settings, folder, ledger_dir, monkeypatch):
+        flaky = FakeModel(fail_first=1)
+        monkeypatch.setattr(agent, "ask_record", flaky)
+        book, expander, reported = self._start_reporting(llm_settings, folder)
+        try:
+            assert _wait_until(lambda: reported == [3]), "the retry answered them, so the run is done"
+            assert len(flaky.prompts) == 2
+        finally:
+            expander.shutdown()
+            book.shutdown()
+
+    def test_after_the_retries_it_waits_for_the_next_refresh(self, llm_settings, folder, ledger_dir, monkeypatch):
+        garbled = FakeModel(garbled=True)
+        monkeypatch.setattr(agent, "ask_record", garbled)
+        book, expander, reported = self._start_reporting(llm_settings, folder)
+        try:
+            assert _wait_until(lambda: len(garbled.prompts) == 1 + lorebook_expansion._RETRIES)
+            time.sleep(0.3)
+            assert len(garbled.prompts) == 1 + lorebook_expansion._RETRIES and reported == []
+            assert expander.progress is None, "nothing is being asked any more"
+        finally:
+            expander.shutdown()
+            book.shutdown()
+
+    def test_the_terms_complete_in_a_reply_that_ran_on_are_kept(self, llm_settings, folder, ledger_dir, monkeypatch):
+        truncating = FakeModel(truncate=True)
+        monkeypatch.setattr(agent, "ask_record", truncating)
+        book, expander, reported = self._start_reporting(llm_settings, folder)
+        try:
+            # One term survives each reply, so the three take the first try and both retries.
+            assert _wait_until(lambda: reported == [3])
+            assert len(truncating.prompts) == 3
         finally:
             expander.shutdown()
             book.shutdown()
