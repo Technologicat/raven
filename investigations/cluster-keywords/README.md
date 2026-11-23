@@ -252,6 +252,13 @@ of what is generic, which is an LLM-shaped problem. Next, in order: wire `hybrid
 LLM keyworder given the classical terms as evidence (below), with this same test set; then colouring by
 year v0 and v1 (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
 
+**The importer wiring, settled the same day** (the maintainer): the method lives in a new module,
+`raven.common.keyphrases`, generic over the grouping so that v1's years use it too; it **replaces**
+`clusters_keyword_method = "frequencies"` as `"phrases"`, the default and the fallback when the LLM backend
+is down; and the dataset **stores each cluster's top 30 terms with their shares** beside the six shown, for
+the expandable list the keyword-pools brief plans and for v1. The probe stays as it is, the record of what
+was measured; the module is the maintained copy.
+
 **Earlier, 2026-11-20:** no clear winner among `phrase-mix1`, `phrase-mix2`, `mix-rerank` and `mix-rerank-c`. The `phrase-mix` labels read more easily; the `mix-rerank`
 ones find specific concepts, as *bayesian knowledge tracing*. Judging on AOKK is confounded, its clusters
 being unfamiliar to the person reading them, so the next judgement is on the arXiv corpus, which the
