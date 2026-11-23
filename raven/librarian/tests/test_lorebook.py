@@ -231,6 +231,20 @@ class TestFindMatches:
         assert match.wording == "different bath, same shampoo"
         assert lorebook.find_matches(entries, "Hydra tax here, hydra tax there")["hydra-tax"].wording == "hydra tax"
 
+    def test_a_compound_of_a_terms_words_fires_it(self, entries):
+        assert self._ids(entries, "another hydra-tax situation") == {"hydra-tax"}
+        assert lorebook.find_matches(entries, "another hydra-tax situation")["hydra-tax"].wording == "hydra-tax"
+
+    def test_a_word_joined_by_an_apostrophe_is_read_as_its_parts_too(self, entries):
+        assert self._ids(entries, "the cat's toy") == {"cat"}, "a possessive, with no form listed"
+        names = _by_id(_parse("## Bordeaux\nA city.\n"))
+        assert self._ids(names, "Bordeaux'n viinit") == {"bordeaux"}, "Finnish inflects such a name with an apostrophe"
+
+    def test_a_term_with_a_hyphen_of_its_own_still_matches_the_word_whole(self):
+        entries = _by_id(_parse("## Aria-worthy design\nClearing the bar.\n"))
+        assert self._ids(entries, "an aria-worthy design") == {"aria-worthy-design"}
+        assert self._ids(entries, "an aria worthy design") == set(), "its hyphen is part of the term"
+
     def test_a_colon_suffix_needs_nothing_of_its_own(self, entries):
         # Finnish inflects an abbreviation or a foreign name with a colon and an ending on its last word. The
         # ending is read as a word of its own, after the term, so the term's words still stand together.
@@ -272,7 +286,7 @@ class TestExpansion:
     def test_a_stem_fires_with_letters_after_it(self, entries, expansions):
         assert self._ids(entries, "Asun kaupungissa.", expansions) == {"kaupunki"}
         assert self._ids(entries, "kaupunkien", expansions) == {"kaupunki"}
-        assert self._ids(entries, "kaupung-ssa", expansions) == set(), "only letters may follow a stem"
+        assert self._ids(entries, "kaupung2ssa", expansions) == set(), "only letters may follow a stem"
 
     def test_an_exact_word_takes_only_lowercase_after_a_stem(self, entries, expansions):
         assert self._ids(entries, "Kerbal Space Programissa", expansions) == {"kerbal-space-program"}
@@ -286,6 +300,11 @@ class TestExpansion:
         found = lorebook.lookup(entries, "hydra taxes", expansions=expansions)
         assert found.exact and found.maybe_entry.id == "hydra-tax"
         assert not lorebook.lookup(entries, "hydra taxes").exact, "without them, a near miss at best"
+
+    def test_an_inflected_compound_fires_and_is_found(self, entries, expansions):
+        assert self._ids(entries, "let's not get hydra-taxed", expansions) == {"hydra-tax"}
+        found = lorebook.lookup(entries, "hydra-taxed", expansions=expansions)
+        assert found.exact and found.maybe_entry.id == "hydra-tax"
 
     def test_select_passes_them_on(self, entries, expansions):
         firings = lorebook.select(entries, "two hydra taxes", count_tokens=_chars, budget=1000, max_depth=0,

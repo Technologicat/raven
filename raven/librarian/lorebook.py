@@ -332,29 +332,55 @@ def find_matches(entries: Mapping[str, Entry], text: str, *,
     """
     expansions = expansions or {}
     normalized = _normalize(text)
-    words = _words(normalized)
-    text_words = [match.group() for match in words]
-    distinct = set(text_words)
+    whole = [(match.group(), match.start(), match.end()) for match in _words(normalized)]
+    # A word joined from parts by a hyphen or an apostrophe is also read as its parts, so that "hydra-taxed"
+    # and "Bordeaux'n" fire the terms their parts are, and a possessive fires with no form listed. A term with
+    # a hyphen of its own ("co-pter") still matches the word whole, in the first reading.
+    split = [part for unit in whole for part in _parts(unit)]
+    readings = [whole] if split == whole else [whole, split]
+    distinct = {word for units in readings for word, _, _ in units}
 
     found: dict[str, Match] = {}
     for entry in entries.values():
-        best: tuple[int, int] | None = None  # (start word, end word) of the last match
+        best: tuple[int, int] | None = None  # (start, end) in the text, of the last match
         for key in _keys(entry):
-            n = len(key)
-            # Every window holding the key holds a word for each key word, so only the windows around the
-            # occurrences of the key word with the fewest are worth looking at.
+            # Which of the text's words each key word accepts, worked out once for both readings.
             accepted = {key_word: {word for word in distinct if _accepts(key_word, word, expansions.get(key_word))}
                         for key_word in set(key)}
-            rarest = min(accepted.values(), key=len)
-            for position in (position for position, word in enumerate(text_words) if word in rarest):
-                for first in range(max(0, position - n + 1), min(position, len(words) - n) + 1):
-                    window = text_words[first:first + n]
-                    if (best is None or first > best[0]) and _window_matches(key, window, expansions):
-                        best = (first, first + n - 1)
+            for units in readings:
+                maybe_span = _last_match(key, units, accepted, expansions)
+                if maybe_span is not None and (best is None or maybe_span[0] > best[0]):
+                    best = maybe_span
         if best is not None:
-            start, end = words[best[0]].start(), words[best[1]].end()
+            start, end = best
             found[entry.id] = Match(entry_id=entry.id, start=start, end=end, wording=normalized[start:end])
     return found
+
+def _parts(unit: tuple[str, int, int]) -> list[tuple[str, int, int]]:
+    """A word as its parts, where a hyphen or an apostrophe joins them; the word itself, when it has one part."""
+    word, start, _ = unit
+    parts = [(match.group(), start + match.start(), start + match.end()) for match in re.finditer(r"\w+", word)]
+    return parts if len(parts) > 1 else [unit]
+
+def _last_match(key: tuple[str, ...], units: list[tuple[str, int, int]], accepted: Mapping[str, set[str]],
+                expansions: Mapping[str, Expansion]) -> tuple[int, int] | None:
+    """Where in the text the last run of `units` matching `key` is, as (start, end); `None` if none does.
+
+    `accepted`: key word -> the words of the text it accepts.
+    """
+    n = len(key)
+    text_words = [word for word, _, _ in units]
+    # Every window holding the key holds a word for each key word, so only the windows around the occurrences
+    # of the key word with the fewest are worth looking at.
+    rarest = min(accepted.values(), key=len)
+    best: int | None = None  # first word of the last match
+    for position in (position for position, word in enumerate(text_words) if word in rarest):
+        for first in range(max(0, position - n + 1), min(position, len(units) - n) + 1):
+            if (best is None or first > best) and _window_matches(key, text_words[first:first + n], expansions):
+                best = first
+    if best is None:
+        return None
+    return units[best][1], units[best + n - 1][2]
 
 
 # ----------------------------------------
@@ -484,13 +510,17 @@ def lookup(entries: Mapping[str, Entry], term: str, *, expansions: Mapping[str, 
     """
     expansions = expansions or {}
     wanted = _key(term, sentence_case=False)
+    # The term's words, and the same with a hyphenated or apostrophized word in parts, as `find_matches` reads.
+    split = tuple(part for word in wanted for part, _, _ in _parts((word, 0, len(word))))
+    readings = [wanted] if split == wanted else [wanted, split]
     spellings: dict[str, str] = {}  # a key as written, lowercased -> the entry it belongs to
     for entry in entries.values():
         for key in _keys(entry):
-            if len(key) == len(wanted) and any(
+            if any(len(key) == len(words) and any(
                     all(_accepts(key_word, word, expansions.get(key_word), ignore_case=True)
                         for key_word, word in zip(key, order))
-                    for order in itertools.permutations(wanted)):
+                    for order in itertools.permutations(words))
+                   for words in readings):
                 return Lookup(maybe_entry=entry, exact=True, candidates=())
         for phrase in (entry.title, *entry.aliases):
             spellings.setdefault(_normalize(phrase).lower(), entry.id)

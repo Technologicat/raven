@@ -592,6 +592,7 @@ What an open item costs everyone who has to read past it.
 - **Other spellings** go in parentheses in the header, comma-separated.
 - **Case:** a term in lowercase matches any case. One with a capital letter after its first matches only as written, so `EQ curve` is not set off by "eq". The first letter does not count, headers being capitalized as sentences are.
 - **Word order:** the words of a term match in any order, as long as they are next to each other.
+- **Compounds:** the words of a term also match joined by a hyphen or an apostrophe — "hydra-tax" fires *Hydra tax*, and "the cat's" fires *Cat*. A term with a hyphen of its own, such as *Aria-worthy design*, matches only with its hyphen.
 - **Links:** an entry's `[text](#anchor)` links bring the entries they point to along with it, a couple of links deep.
 - **A file can be a link** to one kept elsewhere, so a glossary you maintain somewhere else needs no copying. Changes are picked up while the app runs.
 - **How a file is split:** the header level that delimits the entries is read from the file. A file it reads wrongly can be given its level in `lorebook_entry_levels`, in `raven.librarian.config`.

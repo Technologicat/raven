@@ -131,7 +131,9 @@ would be knowledge left on the floor. So this clears the bar the project already
   - **Progress (2026-11-20, end of day):** the key expansion is built (`lorebook_expansion`), tested, measured
     (`investigations/lorebook-lemmas/`) and pushed. Not yet seen in the GUI: the app asks for the English forms
     in the background on its first launch with the new prompt, about two and a half minutes for the glossary.
-    **First on Monday: a hyphenated compound of a term's words does not fire it** — "let's not get
+    **Done 2026-11-23**, below: a word joined by a hyphen or an apostrophe is read a second time as its parts,
+    in `find_matches` and `lookup` alike; the second reading costs a scan about a third more, with the accepted
+    words worked out once for both. **First on Monday: a hyphenated compound of a term's words does not fire it** — "let's not get
     *hydra-taxed*" misses *Hydra tax*, and *flash-attentionin* misses *Flash attention*, where the unhyphenated
     forms fire (checked 2026-11-20). The tokenizer keeps a hyphenated word whole. Fix: where a text word is
     hyphenated, also try its parts as separate words; a term with a hyphen of its own (*co-pter*) still matches
