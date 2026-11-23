@@ -252,20 +252,22 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_color)
         gui_animation.animator.add(pulsating_red_text_glow)
 
-    # animation for the INDEXING indicator, while RAG is updating its database (cyclic, runs in the background).
-    # Same color as the mic-recording theme — semantically both are "recording" — but a separate theme
-    # and pulsator, so resetting the mic phase on recording start doesn't yank the INDEXING pulsation.
-    with dpg.theme(tag="my_pulsating_red_indexing_theme"):
+    # animation for the background-job indicators, INDEXING and LOREBOOK: work that runs on its own, apart from
+    # any turn (cyclic, runs in the background). Shared, as both lights mean the same thing, so a restyle of one
+    # is meant to reach the other; they pulse in phase. Same color as the mic-recording theme — semantically
+    # both are "recording" — but a separate theme and pulsator, so resetting the mic phase on recording start
+    # doesn't yank the background jobs' pulsation.
+    with dpg.theme(tag="my_pulsating_red_background_job_theme"):
         with dpg.theme_component(dpg.mvAll):
-            pulsating_red_indexing_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
-        pulsating_red_indexing_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
-                                                                   theme_color_widget=pulsating_red_indexing_color)
-        gui_animation.animator.add(pulsating_red_indexing_glow)
+            pulsating_red_background_job_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+        pulsating_red_background_job_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                                         theme_color_widget=pulsating_red_background_job_color)
+        gui_animation.animator.add(pulsating_red_background_job_glow)
 
-    # Steady (non-pulsating) themes for the indicator rows' text: red for INDEXING, gray for the rest. On every
+    # Steady (non-pulsating) themes for the indicator rows' text: red for the background jobs, gray for the rest. On every
     # row the icon carries the pulsation cue and the words stay still, the name and the progress label alike,
     # at full alpha in the row's color — words are there to be read, and a pulsating word is hard to read.
-    with dpg.theme(tag="my_steady_red_indexing_theme"):
+    with dpg.theme(tag="my_steady_red_background_job_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
     with dpg.theme(tag="my_steady_gray_indicator_theme"):
@@ -274,8 +276,9 @@ with timer() as tim:
 
     # An attachment whose text could not be extracted. Steady, not pulsating: the pulsation means "working
     # on it", so a failed chip must stop moving or the two states read the same at a glance. Its own theme
-    # rather than `my_steady_red_indexing_theme` above, whose name says who owns it — and an owner's name on a
-    # shared theme is how a later edit for one owner silently restyles the other.
+    # rather than `my_steady_red_background_job_theme` above, whose name says what it is for — and a theme
+    # shared between things that only happen to look alike is how a later edit for one silently restyles the
+    # other.
     with dpg.theme(tag="my_attachment_error_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
@@ -2175,20 +2178,20 @@ with timer() as tim:
                             with dpg.group(show=False, horizontal=True) as lorebook_expansion_indicator_group:
                                 dpg.add_text(fa.ICON_BOOK, tag="lorebook_expansion_symbol")
                                 dpg.bind_item_font("lorebook_expansion_symbol", themes_and_fonts.icon_font_solid)  # tag
-                                dpg.bind_item_theme("lorebook_expansion_symbol", "my_pulsating_gray_text_theme")  # tag
+                                dpg.bind_item_theme("lorebook_expansion_symbol", "my_pulsating_red_background_job_theme")  # tag
                                 dpg.add_text("LOREBOOK", tag="lorebook_expansion_text")
-                                dpg.bind_item_theme("lorebook_expansion_text", "my_steady_gray_indicator_theme")  # tag
+                                dpg.bind_item_theme("lorebook_expansion_text", "my_steady_red_background_job_theme")  # tag
                                 dpg.add_text("", tag="lorebook_expansion_progress_text")
-                                dpg.bind_item_theme("lorebook_expansion_progress_text", "my_steady_gray_indicator_theme")  # tag
+                                dpg.bind_item_theme("lorebook_expansion_progress_text", "my_steady_red_background_job_theme")  # tag
 
                             with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
                                 dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
                                 dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
-                                dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
+                                dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_background_job_theme")  # tag
                                 dpg.add_text("INDEXING", tag="docs_indexing_text")
-                                dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
+                                dpg.bind_item_theme("docs_indexing_text", "my_steady_red_background_job_theme")  # tag
                                 dpg.add_text("", tag="docs_indexing_progress_text")
-                                dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
+                                dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_background_job_theme")  # tag
 
                         with dpg.group(horizontal=True):
                             with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
@@ -3686,7 +3689,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
                                     think_glow_animation=pulsating_think_glow,
-                                    docs_indexing_glow_animation=pulsating_red_indexing_glow,
+                                    docs_indexing_glow_animation=pulsating_red_background_job_glow,
                                     attachment_read_indicator_widget=attachment_read_indicator_group,
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indexing_indicator_widget=docs_indexing_indicator_group,

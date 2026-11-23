@@ -42,7 +42,7 @@ Layer 4 - Controller/GUI:   chat_controller.py (~3.2k), chatmessage.py (~2.5k), 
                             chatlog_search.py (~390)
 Layer 4 - Scripting:        agent.py (~880), the headless sibling of the controller;
                             sweep.py (~600), one question over a set of items;
-                            lorebook_expansion.py (~280), the lorebook's inflected forms, asked as a sweep
+                            lorebook_expansion.py (~310), the lorebook's inflected forms, asked as a sweep
 Layer 3 - Orchestration:    scaffold.py (~2.0k)
 Layer 2 - Backends:         llmclient.py (~3.1k), llmtools.py (~1.3k), mcpclient.py (~760), skills.py (~330), lorebook.py (~700),
                             hybridir.py (~2.0k)
