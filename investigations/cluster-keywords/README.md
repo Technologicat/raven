@@ -13,6 +13,11 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 - **`measure_centroids.py DATASET.pickle ...`**: whether the rerank favours terms many clusters share,
   from the caches `keyword_probe.py --rerank` leaves; embeds nothing.
+- **`run_llm_evidence_imports.sh`**: the same corpora with the LLM given the phrase evidence, through
+  **`import_with_evidence.py`**, which switches `clusters_llm_keyword_evidence` for one run without touching the
+  machine's configuration; and arXiv a second time without it, for the noise floor.
+- **`compare_llm_runs.py CORPUS`**: the LLM's keywords with the evidence against without, by keyword overlap
+  between runs and by how many of them come from the cluster's phrases, and side by side for reading.
 - **`run_llm_imports.sh`**: imports the test corpora with LLM cluster keywords, for the comparison.
 - **`keyword_probe.py DATASET.pickle`**: reads a dataset as the importer wrote it, extracts candidate terms
   afresh with spaCy (`en_core_web_sm`, CPU), and writes `out/<dataset>.md`, setting the methods below side by
@@ -242,6 +247,20 @@ modifier is a word before the head in either term (`shares_modifier`). Each run 
   model*, and the slot goes to the bare *synthesis*.
 - **Some firings separate distinct terms**: *data analysis* / *data visualisation*, and *perceived ease of
   use* / *perceived usefulness*, two constructs of the technology acceptance model.
+
+## The LLM given the phrases as evidence, 2026-11-23
+
+`clusters_llm_keyword_evidence` ends each cluster's prompt with its 30 phrases and their shares, framed as data
+about the whole cluster and not as suggested keywords; the records the prompt holds are a sample when a cluster
+is big, where the phrases count every record. The question is whether that grounds the LLM's labels, which
+abstract well and wander (*AI safety* on a diffusion cluster), without anchoring them onto the phrases, which
+cannot abstract.
+
+- **Measured against the imports of 2026-11-20**, same clusters (agglomerative on cached embeddings), the
+  prompt otherwise unchanged.
+- **The noise floor first**: the LLM samples, so two runs of one prompt already differ. arXiv runs a second
+  time without the evidence, and the evidence's effect is read against that difference.
+- Results: pending.
 
 ## Open
 
