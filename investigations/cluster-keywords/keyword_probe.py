@@ -43,6 +43,7 @@ BARE_STOPWORDS = raven_stopwords.bare_keyword_stopwords
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
 EDGE_POS = {"DET", "PRON", "NUM", "PUNCT", "ADP", "CCONJ", "SCONJ", "PART", "SYM", "AUX", "X", "SPACE"}
 MAX_PHRASE_WORDS = 4
+EXTRACTION_VERSION = 3  # part of the candidate cache's key: bump it when extraction changes
 MIN_CHARS = 3
 
 
@@ -75,6 +76,33 @@ def record_text(entry) -> str:
     return unicodedata.normalize("NFKC", title or abstract)
 
 
+def head_form(token) -> str:
+    """A noun's lemma, lowercased, except where spaCy's small English pipeline lemmatizes wrongly here.
+
+    "data" becomes "datum", a word the literature does not use, so it keeps its spelling. A word in "-ics"
+    keeps it too, being either a singular mass noun ("physics", which the pipeline makes "physic") or a
+    plural ("characteristics"); `resolve_ics` tells the two apart once the whole corpus has been seen.
+    """
+    text = token.text.lower()
+    if text.endswith("ics") or text == "data":
+        return text
+    return token.lemma_.lower()
+
+
+def resolve_ics(candidates: list[set[str]], nouns_seen: set[str]) -> list[set[str]]:
+    """Fold a final word in "-ics" to "-ic" where the corpus uses the "-ic" form as a noun itself.
+
+    "a key characteristic" occurs, so "characteristics" is a plural; nobody writes "a physic", so
+    "physics" is a word of its own and stays.
+    """
+    def fold(term: str) -> str:
+        words = term.split()
+        if words[-1].endswith("ics") and words[-1][:-1] in nouns_seen:
+            words[-1] = words[-1][:-1]
+        return " ".join(words)
+    return [{fold(t) for t in terms} for terms in candidates]
+
+
 def unigrams(doc) -> set[str]:
     """The nouns and proper nouns of a document, lemmatized, as `nlptools.count_frequencies` filters them —
     except that one occurrence is enough, where the importer's per-record count needs two."""
@@ -82,7 +110,7 @@ def unigrams(doc) -> set[str]:
     for token in doc:
         if token.pos_ not in ("NOUN", "PROPN") or not token.lemma_.isalnum():
             continue
-        word = token.lemma_.lower()
+        word = head_form(token)
         if len(word) >= MIN_CHARS and word not in STOPWORDS:
             out.add(word)
     return out
@@ -97,7 +125,7 @@ def phrase_words(tokens) -> list[str]:
     """
     words = []
     for k, token in enumerate(tokens):
-        form = token.lemma_.lower() if k == len(tokens) - 1 else token.text.lower()
+        form = head_form(token) if k == len(tokens) - 1 else token.text.lower()
         if words and (token.text == "-" or words[-1].endswith("-")):
             words[-1] += form
         else:
@@ -166,8 +194,14 @@ def phrases(doc) -> set[str]:
         tokens = list(chunk)
         while tokens and (tokens[0].pos_ in EDGE_POS or tokens[0].lemma_.lower() in STOPWORDS):
             tokens.pop(0)
-        while tokens and (tokens[-1].pos_ in EDGE_POS or tokens[-1].lemma_.lower() in STOPWORDS):
+        # A stopword at the end is the head of the phrase. Qualified by a noun it names something ("tool use",
+        # "sensitivity analysis") and stays; qualified by an adjective it does not ("remarkable ability",
+        # "empirical study") and goes, as does a stopword alone, below.
+        while tokens and (tokens[-1].pos_ in EDGE_POS or
+                          (tokens[-1].lemma_.lower() in STOPWORDS and
+                           (len(tokens) < 2 or tokens[-2].pos_ not in ("NOUN", "PROPN")))):
             tokens.pop()
+        tokens = [t for t in tokens if t.tag_ != "POS"]  # the possessive: "GPT-4's performance"
         # Punctuation inside a chunk, other than a hyphen, separates two phrases: "large language models
         # (LLMs" is "large language models" and "LLMs". Keep the head's side.
         cut = max((k for k, t in enumerate(tokens) if t.is_punct and t.text != "-"), default=-1)
@@ -177,6 +211,8 @@ def phrases(doc) -> set[str]:
         words = phrase_words(tokens)
         for start in range(max(0, len(words) - MAX_PHRASE_WORDS), len(words)):
             if words[start] in STOPWORDS:  # "dark- and photo-fermentation" yields "and photo-fermentation"
+                continue
+            if not any(ch.isalpha() for ch in words[start]):  # "the Apache 2.0 license" yields "2.0 license"
                 continue
             phrase = " ".join(words[start:])
             if len(phrase) < MIN_CHARS or phrase in STOPWORDS:
@@ -190,7 +226,8 @@ def phrases(doc) -> set[str]:
 def extract(dataset_path: pathlib.Path, records) -> dict:
     """Candidate sets per record, `{"unigram": [set, ...], "phrase": [set, ...]}`, cached."""
     stat = dataset_path.stat()
-    key = hashlib.sha256(f"{dataset_path.resolve()}|{stat.st_mtime_ns}|{stat.st_size}".encode()).hexdigest()[:16]
+    key = hashlib.sha256(f"{dataset_path.resolve()}|{stat.st_mtime_ns}|{stat.st_size}|{EXTRACTION_VERSION}"
+                         .encode()).hexdigest()[:16]
     cache_path = HERE / "cache" / f"{dataset_path.stem}-{key}.pickle"
     if cache_path.exists():
         with open(cache_path, "rb") as f:
@@ -199,13 +236,17 @@ def extract(dataset_path: pathlib.Path, records) -> dict:
     print(f"Extracting candidates from {len(records)} records (spaCy, CPU)...", flush=True)
     nlp = nlptools.load_spacy_pipeline("en_core_web_sm", "cpu")
     result = {"unigram": [], "phrase": [], "abbreviations": []}
+    nouns_seen = set()
     texts = [record_text(entry) for entry in records]
     for j, doc in enumerate(nlp.pipe(texts, batch_size=64)):
         if j % 1000 == 0:
             print(f"    {j} / {len(texts)}", flush=True)
+        nouns_seen.update(t.text.lower() for t in doc if t.pos_ in ("NOUN", "PROPN"))
         result["unigram"].append(unigrams(doc))
         result["phrase"].append(phrases(doc))
         result["abbreviations"].append(abbreviations(doc))
+    for space in ("unigram", "phrase"):
+        result[space] = resolve_ics(result[space], nouns_seen)
 
     cache_path.parent.mkdir(exist_ok=True)
     with open(cache_path, "wb") as f:
@@ -216,7 +257,7 @@ def extract(dataset_path: pathlib.Path, records) -> dict:
 def plural_map(vocabulary: set[str]) -> dict[str, str]:
     """`{plural: singular}` for the terms of `vocabulary` that `fold_plurals` folds."""
     return {term: term[:-1] for term in vocabulary
-            if term.endswith("s") and not term.endswith("ss") and term[:-1] in vocabulary}
+            if term.endswith("s") and not term.endswith(("ss", "ics")) and term[:-1] in vocabulary}
 
 
 def fold_plurals(candidates: list[set[str]]) -> list[set[str]]:
