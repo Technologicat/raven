@@ -48,7 +48,8 @@ tests/test_plotter.py         (38) — the cluster sort, and the plotter-space q
 tests/test_importer_gui.py    (36) — the filename tables, the start/stop decision table, the dialogs
 tests/test_entry_renderer.py  (19) — grouping, and the `max_n` budget
 tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
-tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
+tests/test_word_cloud.py      (42) — the two render guards, summing in phrase and word mode, the mode control,
+                                     cancellation, saving
 tests/test_search.py          (20) — what counts as a match, and the three GUI elements reporting it
 ```
 

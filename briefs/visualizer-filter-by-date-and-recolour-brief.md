@@ -104,12 +104,12 @@ a reset per filter is Nielsen's *user control and freedom*, an exit from one act
   - **Per-year keywords stop being precomputable there** (the maintainer): an arbitrary time range has no fixed
     groups. LLM keywords do not add up over a bin, so they would want precomputed bins at a fixed base
     granularity, or generating on demand.
-  - **Frequency keywords add up over any bin**, as each record's keyword counts are already in the dataset (which
-    is how the word cloud sums a selection), **but are useless as they stand** (the maintainer). The fix is planned
-    in `briefs/visualizer-keyword-pools-brief.md`, *An improved classical mode, worth trying*: phrases as candidates, then c-TF-IDF,
-    then an embedding rerank. The first two keep the additivity, needing only each bin's term counts against the
-    corpus totals, so an improved frequency keyworder would serve arbitrary time ranges. The rerank needs each
-    bin's centroid embedding, one more reason for the embeddings in the dataset.
+  - **Phrase keywords add up over any bin.** Since 2026-11-23 each record carries its normalized phrases in the
+    dataset (`entry.keyphrases`, which the phrase word cloud sums over a selection), and c-TF-IDF over a bin needs
+    only those and the corpus totals, so the `"phrases"` method (`raven.common.keyphrases`) can serve arbitrary
+    time ranges. Its fusion with centroid similarity needs each bin's centroid embedding, one more reason for the
+    embeddings in the dataset. The frequency keywords this replaced added up too, and were useless as they stood
+    (the maintainer).
 - **The embeddings in the dataset move to the format redesign** too (candidate 3); same item.
 - **The two-handle range slider** replaces the two year fields later (*Decided: the year filter*, above).
 - **The comparison of year-specific maps against the filtered whole map waits for the AOKK team's final keeps**,

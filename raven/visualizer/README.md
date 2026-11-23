@@ -249,8 +249,8 @@ that were the part worth reading.
 while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *propose* — describe what
 a paper *does*, are the same in every field, and crowd the head of the frequency list without saying
 anything. This is also why *learning* and *learn* are counted separately, and should be: as a noun it is the
-topic, as a verb it is prose. Affects the word cloud and the per-entry keywords, for datasets imported from
-now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the
+topic, as a verb it is prose. Affects the word cloud's word mode and the per-entry keywords, for datasets
+imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the
 older, wider behaviour.
 
 **A publisher's rights notice is stripped off an abstract.** `© 2022 IEEE.` and *This article is distributed

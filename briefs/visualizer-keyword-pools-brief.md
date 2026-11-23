@@ -298,8 +298,8 @@ Opened from a toolbutton. Two sections, in this order:
 `raven/visualizer/` outside the importer. The importer prints the first 20 of it to the log and that is
 the only place it has ever been seen. So this section is pure GUI work over an existing field.
 
-**It does not duplicate the word cloud.** That is built from `entry.keywords` of the *currently
-selected* points (`word_cloud.py:143`), so it is selection-scoped, visual and approximate. This is
+**It does not duplicate the word cloud.** That is built from the phrases or the words of the *currently
+selected* points (`raven.visualizer.word_cloud`), so it is selection-scoped, visual and approximate. This is
 corpus-scoped, numeric and exact. Different questions.
 
 ## The parser needs a guard, and the ranking makes that urgent rather than cosmetic
@@ -412,7 +412,8 @@ and the shares are counted from the tags.**
     never are (`generative` 155 ADJ / 110 NOUN, against `effective` 101 ADJ / 0 NOUN). So the noun
     filter already recovers much of the topical signal and excludes the filler outright.
   - Revisit including ADJ **after this brief's split exists**, since that mechanism is what would demote
-    the filler automatically. The word cloud is what argues against it today, having nothing that filters.
+    the filler automatically. The word cloud's word mode is what argues against it today, having nothing that
+    filters.
 
 ## Open
 
