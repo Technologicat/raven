@@ -931,6 +931,52 @@ class TestPhraseKeywords:
                                                keyphrase_display=display)
 
 
+class TestLLMKeywordEvidence:
+    """The LLM branch given the phrases over the whole cluster, beside the records it is shown."""
+
+    def _run(self, monkeypatch, *, evidence):
+        import numpy as np
+        from unpythonic.env import env
+        prompts = []
+
+        def fake_turn(settings, prompt, **kwargs):
+            prompts.append(prompt)
+            return env(reply="neural networks", reasoning=[])
+
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", evidence)
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        monkeypatch.setattr(importer, "_make_embedder",
+                            lambda: type("_E", (), {"encode": staticmethod(lambda texts: np.ones((len(texts), 4)))})())
+        vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0) for i in range(3)]
+        candidates = [{"phrases": ["deep learning", "neural network"], "definitions": [], "nouns": []}] * 3
+        terms, display = importer._normalize_keyphrases(env(keyphrases=candidates), vis_data)
+        result = importer._collect_cluster_keywords(vis_data, 1, np.ones((3, 4)), keyphrase_terms=terms,
+                                                    keyphrase_display=display)
+        return prompts, result
+
+    def test_the_prompt_carries_the_phrases_and_their_shares(self, monkeypatch):
+        prompts, _ = self._run(monkeypatch, evidence=True)
+        assert "Evidence from the whole cluster" in prompts[0]
+        assert "3 items" in prompts[0]
+        assert "- deep learning (100%)" in prompts[0]
+
+    def test_without_the_setting_the_prompt_is_as_before(self, monkeypatch):
+        """Negative control for the test above: the same cluster, with the evidence off."""
+        prompts, (_keywords, lists) = self._run(monkeypatch, evidence=False)
+        assert "Evidence" not in prompts[0]
+        assert lists is None
+
+    def test_the_phrase_lists_are_kept_with_the_llm_keywords(self, monkeypatch):
+        _prompts, (keywords, lists) = self._run(monkeypatch, evidence=True)
+        assert keywords == [["neural networks"]]
+        assert [k for k, _ in lists[0]] == ["deep learning", "neural network"]
+
+
 class TestKeywordMethodCheck:
     def test_the_retired_frequency_method_names_its_replacement(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")

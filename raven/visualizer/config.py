@@ -160,6 +160,24 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     The set of items to be analyzed is below.
 """).strip()
 
+# For "llm": after a cluster's items, also give the model the phrases the "phrases" method finds over all of
+# the cluster's items, each with the share of the items containing it, as evidence. The items sent are a
+# sample when the cluster is big; the phrases count every item. Off while being measured against without.
+clusters_llm_keyword_evidence = False
+
+# For "llm", with the evidence on: what precedes the phrases. `{n}` is the number of items in the cluster.
+clusters_llm_keyword_evidence_prompt = textwrap.dedent("""
+    **Evidence from the whole cluster**
+
+    The items above may be only a sample of the cluster. Below are noun phrases found automatically in all
+    {n} items of the cluster, each with the share of the items whose title or abstract contains it, the most
+    telling first. They were picked by a statistical method that cannot abstract: it quotes the texts, so a
+    phrase may be too narrow, too generic, or one of several wordings of the same idea.
+
+    Treat them as data about what the whole cluster contains, beside the items shown. They are not
+    suggested keywords: choose the keywords by your own judgement of the cluster's themes.
+""").strip()
+
 # Each cluster is keyworded on its own, with nothing tying the runs together, so one concept can come back
 # spelled several ways across clusters -- an acronym here, its expansion there, a capital letter elsewhere.
 # Two clusters that share a concept then look no more alike than two that merely spell one alike, which is

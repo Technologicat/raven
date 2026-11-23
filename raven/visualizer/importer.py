@@ -1500,6 +1500,32 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
+def _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors, keyphrase_terms, keyphrase_display, max_vis_kw):
+    """Each cluster's list of `(phrase, share)`, best first, by `keyphrases.label_groups`.
+
+    The arguments are `_collect_cluster_keywords`'s, which see. Returns a list indexed by cluster ID.
+    """
+    if keyphrase_terms is None or keyphrase_display is None or len(keyphrase_terms) != len(vis_data):
+        raise ValueError("_collect_cluster_keywords: `keyphrase_terms` must hold one item per record of "
+                         "`vis_data`, with `keyphrase_display` beside it; see `_normalize_keyphrases`")
+    groups = [int(entry.cluster_id) if entry.cluster_id >= 0 else None for entry in vis_data]
+    embedder = _make_embedder()
+
+    def embed_terms(texts):
+        logger.info(f"        Embedding {len(texts)} candidate keywords...")
+        return np.asarray(embedder.encode(texts))
+
+    lists = keyphrases.label_groups(keyphrase_terms, groups,
+                                    display=keyphrase_display,
+                                    record_vectors=all_vectors,
+                                    embed_terms=embed_terms,
+                                    top=visualizer_config.clusters_keyword_list_length,
+                                    shown=max_vis_kw,
+                                    pool=visualizer_config.clusters_keyword_pool,
+                                    umbrella_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
+    return [lists.get(cluster_id, []) for cluster_id in range(n_vis_clusters)]
+
+
 def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_terms=None, keyphrase_display=None,
                               max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), by `config.clusters_keyword_method`.
@@ -1511,8 +1537,8 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                    `vis_data`. Required. With `"phrases"`, a cluster's centroid is the mean of its records'
                    vectors; with `"llm"`, they choose which entries of an oversized cluster to describe it by.
 
-    `keyphrase_terms`, `keyphrase_display`: Used when `config.clusters_keyword_method == "phrases"`, and
-                                            required in that case.
+    `keyphrase_terms`, `keyphrase_display`: Required when `config.clusters_keyword_method == "phrases"`, and
+                                            with `"llm"` when `config.clusters_llm_keyword_evidence` is on.
 
                                             Output of `_normalize_keyphrases`, which see: each record's phrase
                                             terms, in the order of `vis_data`, and their display forms.
@@ -1540,7 +1566,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
       - `maybe_keyword_lists_by_cluster`: with `"phrases"`, a list, where the `k`th item is cluster `k`'s longer
         list of `(keyword, share)`, `config.clusters_keyword_list_length` of them at most, the share being that
         of the cluster's records containing the keyword; it begins with the cluster's `vis_keywords_by_cluster`.
-        With `"llm"`, `None`.
+        With `"llm"`, the same phrase lists when the evidence setting computed them, else `None`.
     """
     _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
@@ -1550,26 +1576,9 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
     keyword_method = _effective_keyword_method()
     maybe_keyword_lists_by_cluster = None
     if keyword_method == "phrases":
-        if keyphrase_terms is None or keyphrase_display is None or len(keyphrase_terms) != len(vis_data):
-            raise ValueError("_collect_cluster_keywords: `keyphrase_terms` must hold one item per record of "
-                             "`vis_data`, with `keyphrase_display` beside it; see `_normalize_keyphrases`")
         with timer() as tim:
-            groups = [int(entry.cluster_id) if entry.cluster_id >= 0 else None for entry in vis_data]
-            embedder = _make_embedder()
-
-            def embed_terms(texts):
-                logger.info(f"        Embedding {len(texts)} candidate keywords...")
-                return np.asarray(embedder.encode(texts))
-
-            lists = keyphrases.label_groups(keyphrase_terms, groups,
-                                            display=keyphrase_display,
-                                            record_vectors=all_vectors,
-                                            embed_terms=embed_terms,
-                                            top=visualizer_config.clusters_keyword_list_length,
-                                            shown=max_vis_kw,
-                                            pool=visualizer_config.clusters_keyword_pool,
-                                            umbrella_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
-            maybe_keyword_lists_by_cluster = [lists.get(cluster_id, []) for cluster_id in range(n_vis_clusters)]
+            maybe_keyword_lists_by_cluster = _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors,
+                                                                   keyphrase_terms, keyphrase_display, max_vis_kw)
             vis_keywords_by_cluster = [[keyword for keyword, _share in keyword_list[:max_vis_kw]]
                                        for keyword_list in maybe_keyword_lists_by_cluster]
         logger.info(f"        Done in {tim.dt:0.6g}s.")
@@ -1581,6 +1590,12 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         for idx, entry in enumerate(vis_data):
             if entry.cluster_id >= 0:  # not an outlier
                 entries_by_cluster[entry.cluster_id].append((idx, entry))
+
+        # The phrases over each whole cluster, given to the model as evidence beside the records it is shown,
+        # which for a big cluster are a sample. Computed before the loop, being one pass over every cluster.
+        if visualizer_config.clusters_llm_keyword_evidence:
+            maybe_keyword_lists_by_cluster = _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors,
+                                                                   keyphrase_terms, keyphrase_display, max_vis_kw)
 
         eta_estimator = ETAEstimator(total=len(entries_by_cluster), keep_last=50)
         vis_keywords_by_cluster = []
@@ -1621,6 +1636,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             # Use two blank lines as an entry separator (works also when the abstract has paragraph breaks; also clearly associates which title goes with which abstract).
             cluster_texts = "\n\n\n".join(_format_entry_for_keyword_extraction(entry).strip() for entry in entries)
             prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{cluster_texts}"
+            if maybe_keyword_lists_by_cluster is not None and maybe_keyword_lists_by_cluster[cluster_id]:
+                evidence = "\n".join(f"- {phrase} ({share:.0%})"
+                                     for phrase, share in maybe_keyword_lists_by_cluster[cluster_id])
+                evidence_intro = visualizer_config.clusters_llm_keyword_evidence_prompt.format(n=len(indexed_entries))
+                prompt = f"{prompt}\n\n-----\n\n{evidence_intro}\n\n{evidence}"
 
             logger.info(f"        LLM prompt for cluster #{cluster_id}:\n{prompt}")
 

@@ -131,6 +131,10 @@ class TestUmbrellaTerms:
             groups += [g, g]
         assert keyphrases.umbrella_terms(terms, groups) == {"everywhere"}
 
+    def test_a_single_group_has_no_umbrella_terms(self):
+        """With one group, the threshold is one group, so every term would be "too common" without this."""
+        assert keyphrases.umbrella_terms([{"a"}, {"a"}], [0, 0]) == set()
+
     def test_presence_needs_min_support(self):
         """Once in each of ten groups is not presence at `min_support=2`."""
         terms = [{"thin"} for _ in range(10)]

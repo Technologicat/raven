@@ -350,10 +350,13 @@ def umbrella_terms(terms: Sequence[set[str]], groups: Sequence[Hashable | None],
     """Terms present in too many groups to say how any one of them stands out.
 
     A term is present in a group when at least `min_support` of the group's records contain it, and too common
-    when present in at least max(min(5, n), ceil(threshold_fraction n)) of the n groups.
+    when present in at least max(min(5, n), ceil(threshold_fraction n)) of the n groups. With fewer than two
+    groups there is nothing to stand out from, and no term is.
     """
     tf, _size = _group_counts(terms, groups)
     n = len(tf)
+    if n < 2:
+        return set()
     threshold = max(min(5, n), math.ceil(threshold_fraction * n))
     presence: collections.Counter = collections.Counter()
     for counts in tf.values():
