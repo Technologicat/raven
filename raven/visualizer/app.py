@@ -1195,7 +1195,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # from the main window, so the distinction is worth keeping even though the grouping already
                # names the window.
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
+               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the selection"),
                env(key_indent=1, key="Shift+F10", action_indent=0, action="Switch between phrase and word mode", notes="Kept between sessions"),
                env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
                helpcard.hotkey_blank_entry,
