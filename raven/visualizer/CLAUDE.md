@@ -7,7 +7,7 @@ package, not as a figure to quote. Re-measure before quoting one. `python script
 checks this table against the package, including whether every module is in it.
 
 ```
-importer.py       (~2.0k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+importer.py       (~2.2k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
 app.py            (~1.9k) — GUI app: window layout, event wiring, the main render loop
