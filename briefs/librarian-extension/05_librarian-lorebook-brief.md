@@ -147,6 +147,15 @@ would be knowledge left on the floor. So this clears the bar the project already
     a recurring headache for Finnish writers. Then the GUI check, with an inflected term. **Then: making the lorebook portable** —
     fixtures as data, the core as one dependency-free file, the porting guide (the LM Studio section below).
     Whether thinking improves the forms is a TODO at the call.
+  - **Progress (2026-11-23):** all of Monday's list is done.
+    - The compound split, checked live (`hydra-taxed` gave *Hydra tax*).
+    - The LOREBOOK light and the two completion notices.
+    - Salvaging a broken reply, and retries within a run.
+    - Only a term's last word matching by its forms.
+    - The portability step: `lorebookcore.py` (standard library, Python 3.11), `tests/lorebook_conformance.json`
+      (90 cases, Raven's core tests moved into data), `lorebook-porting.md`, and `sweep-ledger.md` for the
+      ledger's format, which the papers tools share.
+    - **Next: a port**, Claude Code's being the cheapest and the one the maintainer would use daily.
 - **A stored definition is a snapshot.** Editing an entry after it fired leaves the chats that hold it with the
   old text; documented, not fixed.
 

@@ -607,7 +607,7 @@ What an open item costs everyone who has to read past it.
 
 The AI can also look a term up itself, with the `lorebook_lookup` tool. Asked for a term that is not there, it gets the entry spelled nearly like it, if there is one. Otherwise it gets the names of the entries spelled closest and of those whose definitions mention the term, or, with neither, the answer that the term is not defined.
 
-The **Lorebook** toggle (`Alt+L`) switches it on or off, and `!lorebook` does the same in `raven-minichat`. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`.
+The **Lorebook** toggle (`Alt+L`) switches it on or off, and `!lorebook` does the same in `raven-minichat`. From a script, it is available inside a `with lorebook.loaded(llm_settings):` block, and `agent.turn` uses it when given `lorebook_enabled=True`. To give the same lorebook to another frontend, see [`lorebook-porting.md`](lorebook-porting.md).
 
 ### Security warning
 

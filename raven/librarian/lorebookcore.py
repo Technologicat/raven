@@ -11,7 +11,8 @@ replies, and `tool_spec` the tool as the model is shown it.
 
 This is the part of the lorebook that another frontend can take as it is: it needs Python 3.11 and the
 standard library, and nothing of Raven's. Raven's own half, which reads a folder, follows it and offers the
-tool, is `raven.librarian.lorebook`.
+tool, is `raven.librarian.lorebook`. `lorebook-porting.md`, beside this file, says what a host has to add,
+and `tests/lorebook_conformance.json` is what a port checks itself against.
 """
 
 __all__ = ["README_FILENAME", "Entry", "slugify",

@@ -1,0 +1,1732 @@
+{
+ "about": "Conformance cases for the lorebook's core (raven.librarian.lorebookcore). A port runs every case against its own implementation; raven/librarian/tests/test_lorebookcore.py is Raven's runner, and raven/librarian/lorebook-porting.md says what each section means.",
+ "version": 1,
+ "token_count": "characters: the size of an entry is the length of format_entry(entry)",
+ "glossaries": {
+  "field-guide": [
+   "# Field Guide",
+   "",
+   "A glossary of terms, with a letter index.",
+   "",
+   "[A](#A) [B](#B)",
+   "",
+   "---",
+   "",
+   "# A",
+   "",
+   "## Attention rent",
+   "",
+   "**Meaning:** What an open item costs. See *[hydra tax](#hydra-tax)*.",
+   "",
+   "## Approach memory",
+   "Remembering how, not what.",
+   "",
+   "---",
+   "",
+   "# H",
+   "",
+   "## Hydra tax",
+   "",
+   "Closing one item opens two. Paid as *[attention rent](#attention-rent)*.",
+   "",
+   "### Example",
+   "",
+   "A backlog."
+  ],
+  "two-h1-entries": [
+   "# Fron",
+   "A front, of a kind.",
+   "## Etymology",
+   "From front.",
+   "",
+   "# Fup",
+   "Not a typo."
+  ],
+  "single-h1-with-subsection": [
+   "# Fron",
+   "A front, of a kind.",
+   "## Etymology",
+   "From front."
+  ],
+  "fenced-header": [
+   "## Shell",
+   "Example:",
+   "```",
+   "# not a header",
+   "```",
+   "## Spork",
+   "A utensil."
+  ],
+  "aliases": [
+   "## Fup (fuppable, fupped)",
+   "Not a typo.",
+   "",
+   "## Digital nature reserve (for prose basilisks)",
+   "A refuge."
+  ],
+  "matching": [
+   "## Hydra tax",
+   "Closing one opens two.",
+   "## EQ curve",
+   "A shape.",
+   "## True Name",
+   "What a thing is called.",
+   "## Same bath, different shampoo",
+   "A rerun.",
+   "## co-",
+   "A prefix.",
+   "## Chekhov's landmine",
+   "A trap set early.",
+   "## Cat",
+   "An animal.",
+   "## Fup (fuppable)",
+   "Not a typo."
+  ],
+  "bordeaux": [
+   "## Bordeaux",
+   "A city."
+  ],
+  "own-hyphen": [
+   "## Aria-worthy design",
+   "Clearing the bar."
+  ],
+  "inflecting": [
+   "## Hydra tax",
+   "Closing one opens two.",
+   "## Kaupunki",
+   "A town.",
+   "## Kerbal Space Program",
+   "A game.",
+   "## EQ",
+   "Equalization."
+  ],
+  "prose-basilisks": [
+   "## Prose basilisks",
+   "Text that harms."
+  ],
+  "selecting": [
+   "# Field Guide",
+   "",
+   "A glossary of terms, with a letter index.",
+   "",
+   "[A](#A) [B](#B)",
+   "",
+   "---",
+   "",
+   "# A",
+   "",
+   "## Attention rent",
+   "",
+   "**Meaning:** What an open item costs. See *[hydra tax](#hydra-tax)*.",
+   "",
+   "## Approach memory",
+   "Remembering how, not what.",
+   "",
+   "---",
+   "",
+   "# H",
+   "",
+   "## Hydra tax",
+   "",
+   "Closing one item opens two. Paid as *[attention rent](#attention-rent)*.",
+   "",
+   "### Example",
+   "",
+   "A backlog.",
+   "",
+   "## Jazz",
+   "Improvised, the way an approach memory is.",
+   "",
+   "## Spork",
+   "A utensil."
+  ],
+  "lookup": [
+   "## Hydra tax",
+   "Closing one opens two.",
+   "## Hydra test",
+   "A test with heads.",
+   "## Same bath, different shampoo",
+   "A rerun.",
+   "## Fup (fuppable)",
+   "Not a typo.",
+   "## Spork",
+   "A utensil.",
+   "## Miroconnection",
+   "A link between two minds, seen in a mirror.",
+   "## Endognosis",
+   "What a system knows about itself from inside; introspection names the act, this the result."
+  ]
+ },
+ "parse": [
+  {
+   "name": "a glossary splits at its entries, not its letters",
+   "glossary": "field-guide",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Attention rent",
+    "Approach memory",
+    "Hydra tax"
+   ],
+   "entries": {
+    "hydra-tax": {
+     "content_includes": [
+      "### Example"
+     ],
+     "content_ends_with": "A backlog."
+    },
+    "approach-memory": {
+     "content_not_ends_with": "---"
+    },
+    "attention-rent": {
+     "crossrefs": [
+      "hydra-tax"
+     ]
+    }
+   }
+  },
+  {
+   "name": "entries are numbered in order from first_order",
+   "glossary": "field-guide",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 10,
+   "titles": [
+    "Attention rent",
+    "Approach memory",
+    "Hydra tax"
+   ],
+   "entries": {
+    "attention-rent": {
+     "order": 10
+    },
+    "approach-memory": {
+     "order": 11
+    },
+    "hydra-tax": {
+     "order": 12
+    }
+   }
+  },
+  {
+   "name": "several h1s with prose are the entries",
+   "glossary": "two-h1-entries",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Fron",
+    "Fup"
+   ],
+   "entries": {
+    "fron": {
+     "content_includes": [
+      "## Etymology"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a lone h1 with nothing deeper is a single entry",
+   "glossary": [
+    "# Spork",
+    "",
+    "A fork that is also a spoon."
+   ],
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Spork"
+   ]
+  },
+  {
+   "name": "h2s with no h1 are the entries",
+   "glossary": [
+    "## Jazz",
+    "Improvised.",
+    "",
+    "## Spork",
+    "A utensil."
+   ],
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Jazz",
+    "Spork"
+   ]
+  },
+  {
+   "name": "a file with no headers is one entry named for the file",
+   "glossary": [
+    "Only prose, no headers."
+   ],
+   "file_name": "duolect",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "duolect"
+   ],
+   "entries": {
+    "duolect": {
+     "content": "Only prose, no headers."
+    }
+   }
+  },
+  {
+   "name": "one titled h1 with subsections reads as a collection of them",
+   "glossary": "single-h1-with-subsection",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Etymology"
+   ]
+  },
+  {
+   "name": "an explicit entry level overrides the rule",
+   "glossary": "single-h1-with-subsection",
+   "file_name": "glossary",
+   "entry_level": 1,
+   "first_order": 0,
+   "titles": [
+    "Fron"
+   ]
+  },
+  {
+   "name": "a header in fenced code is not a header",
+   "glossary": "fenced-header",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Shell",
+    "Spork"
+   ],
+   "entries": {
+    "shell": {
+     "content_includes": [
+      "# not a header"
+     ]
+    }
+   }
+  },
+  {
+   "name": "parentheses in a header are aliases",
+   "glossary": "aliases",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Fup",
+    "Digital nature reserve"
+   ],
+   "entries": {
+    "fup": {
+     "aliases": [
+      "fuppable",
+      "fupped"
+     ]
+    },
+    "digital-nature-reserve": {
+     "aliases": [
+      "for prose basilisks"
+     ],
+     "anchors_include": [
+      "digital-nature-reserve-for-prose-basilisks"
+     ]
+    }
+   }
+  },
+  {
+   "name": "closing hashes are not part of the title",
+   "glossary": [
+    "## Jazz ##",
+    "Improvised."
+   ],
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "Jazz"
+   ]
+  }
+ ],
+ "slugify": [
+  [
+   "Hydra tax",
+   "hydra-tax"
+  ],
+  [
+   "Chekhov's landmine",
+   "chekhovs-landmine"
+  ],
+  [
+   "Build thrice, cherrypick",
+   "build-thrice-cherrypick"
+  ],
+  [
+   "co-",
+   "co-"
+  ],
+  [
+   "EQ curve",
+   "eq-curve"
+  ]
+ ],
+ "load": [
+  {
+   "name": "every Markdown file but the README, in name order",
+   "files": {
+    "b.md": [
+     "## Spork",
+     "A utensil."
+    ],
+    "a.md": [
+     "## Jazz",
+     "Improvised."
+    ],
+    "README.md": [
+     "# Put your lorebook entries here",
+     "",
+     "How to write them."
+    ],
+    "notes.txt": [
+     "## Ignored",
+     "Not Markdown."
+    ]
+   },
+   "ids": [
+    "jazz",
+    "spork"
+   ],
+   "orders": [
+    0,
+    1
+   ],
+   "problem_files": []
+  },
+  {
+   "name": "two entries with one title keep the first",
+   "files": {
+    "a.md": [
+     "## Jazz",
+     "Improvised."
+    ],
+    "b.md": [
+     "## Jazz",
+     "A band."
+    ]
+   },
+   "ids": [
+    "jazz"
+   ],
+   "contents": {
+    "jazz": "Improvised."
+   },
+   "problem_files": [
+    "b.md"
+   ]
+  },
+  {
+   "name": "an entry level per file, by the rule",
+   "files": {
+    "fron.md": [
+     "# Fron",
+     "A front, of a kind.",
+     "## Etymology",
+     "From front."
+    ]
+   },
+   "ids": [
+    "etymology"
+   ],
+   "problem_files": []
+  },
+  {
+   "name": "an entry level per file, given",
+   "files": {
+    "fron.md": [
+     "# Fron",
+     "A front, of a kind.",
+     "## Etymology",
+     "From front."
+    ]
+   },
+   "entry_levels": {
+    "fron.md": 1
+   },
+   "ids": [
+    "fron"
+   ],
+   "problem_files": []
+  }
+ ],
+ "find_matches": [
+  {
+   "name": "a term is matched as words",
+   "glossary": "matching",
+   "text": "The cat sat.",
+   "expansions": null,
+   "ids": [
+    "cat"
+   ]
+  },
+  {
+   "name": "never inside a word",
+   "glossary": "matching",
+   "text": "Concatenate the files.",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "a title's first letter is sentence case",
+   "glossary": "matching",
+   "text": "we pay a hydra tax on it",
+   "expansions": null,
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "a title's first letter is sentence case, capitalized",
+   "glossary": "matching",
+   "text": "Hydra tax again",
+   "expansions": null,
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "an uppercase letter past the first matches as written",
+   "glossary": "matching",
+   "text": "the EQ curve",
+   "expansions": null,
+   "ids": [
+    "eq-curve"
+   ]
+  },
+  {
+   "name": "...and not otherwise",
+   "glossary": "matching",
+   "text": "the eq curve",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "an exact word after a forgiving first word",
+   "glossary": "matching",
+   "text": "its True Name",
+   "expansions": null,
+   "ids": [
+    "true-name"
+   ]
+  },
+  {
+   "name": "the first word is forgiving even capitalized in the title",
+   "glossary": "matching",
+   "text": "its true Name",
+   "expansions": null,
+   "ids": [
+    "true-name"
+   ]
+  },
+  {
+   "name": "an exact word not as written does not match",
+   "glossary": "matching",
+   "text": "its true name",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "words in any order, next to each other",
+   "glossary": "matching",
+   "text": "different bath, same shampoo",
+   "expansions": null,
+   "ids": [
+    "same-bath-different-shampoo"
+   ]
+  },
+  {
+   "name": "words apart do not match",
+   "glossary": "matching",
+   "text": "same bath, quite a different shampoo",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "a suspended hyphen is part of the word",
+   "glossary": "matching",
+   "text": "the co- prefix",
+   "expansions": null,
+   "ids": [
+    "co-"
+   ]
+  },
+  {
+   "name": "a suspended hyphen does not match a compound",
+   "glossary": "matching",
+   "text": "a co-author",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "a suspended hyphen does not match the bare letters",
+   "glossary": "matching",
+   "text": "CO poisoning",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "curly apostrophes match straight ones",
+   "glossary": "matching",
+   "text": "a Chekhov’s landmine",
+   "expansions": null,
+   "ids": [
+    "chekhovs-landmine"
+   ]
+  },
+  {
+   "name": "an alias fires its entry",
+   "glossary": "matching",
+   "text": "is that fuppable?",
+   "expansions": null,
+   "ids": [
+    "fup"
+   ]
+  },
+  {
+   "name": "the wording is the text at the last match",
+   "glossary": "matching",
+   "text": "a hydra tax, then a different bath, same shampoo",
+   "expansions": null,
+   "ids": [
+    "hydra-tax",
+    "same-bath-different-shampoo"
+   ],
+   "wording": {
+    "same-bath-different-shampoo": "different bath, same shampoo",
+    "hydra-tax": "hydra tax"
+   }
+  },
+  {
+   "name": "the wording is that of the last occurrence",
+   "glossary": "matching",
+   "text": "Hydra tax here, hydra tax there",
+   "expansions": null,
+   "ids": [
+    "hydra-tax"
+   ],
+   "wording": {
+    "hydra-tax": "hydra tax"
+   }
+  },
+  {
+   "name": "a compound of a term's words fires it",
+   "glossary": "matching",
+   "text": "another hydra-tax situation",
+   "expansions": null,
+   "ids": [
+    "hydra-tax"
+   ],
+   "wording": {
+    "hydra-tax": "hydra-tax"
+   }
+  },
+  {
+   "name": "a possessive fires its term with no form listed",
+   "glossary": "matching",
+   "text": "the cat's toy",
+   "expansions": null,
+   "ids": [
+    "cat"
+   ]
+  },
+  {
+   "name": "a name inflected with an apostrophe fires",
+   "glossary": "bordeaux",
+   "text": "Bordeaux'n viinit",
+   "expansions": null,
+   "ids": [
+    "bordeaux"
+   ]
+  },
+  {
+   "name": "a term with a hyphen of its own matches the word whole",
+   "glossary": "own-hyphen",
+   "text": "an aria-worthy design",
+   "expansions": null,
+   "ids": [
+    "aria-worthy-design"
+   ]
+  },
+  {
+   "name": "...and not without its hyphen",
+   "glossary": "own-hyphen",
+   "text": "an aria worthy design",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "a colon suffix on the last word needs nothing",
+   "glossary": "matching",
+   "text": "EQ curve:n muoto",
+   "expansions": null,
+   "ids": [
+    "eq-curve"
+   ]
+  },
+  {
+   "name": "without expansions an inflected term does not fire",
+   "glossary": "inflecting",
+   "text": "two hydra taxes",
+   "expansions": null,
+   "ids": []
+  },
+  {
+   "name": "a form fires its term",
+   "glossary": "inflecting",
+   "text": "two hydra taxes",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "a form fires in any order",
+   "glossary": "inflecting",
+   "text": "the taxes hydra levies",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "a lowercase key word's forms match in any case",
+   "glossary": "inflecting",
+   "text": "HYDRA TAXED",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "a stem fires with letters after it",
+   "glossary": "inflecting",
+   "text": "Asun kaupungissa.",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "kaupunki"
+   ]
+  },
+  {
+   "name": "another stem of the same word",
+   "glossary": "inflecting",
+   "text": "kaupunkien",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "kaupunki"
+   ]
+  },
+  {
+   "name": "only letters may follow a stem",
+   "glossary": "inflecting",
+   "text": "kaupung2ssa",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": []
+  },
+  {
+   "name": "an exact word's stem takes lowercase letters after it",
+   "glossary": "inflecting",
+   "text": "Kerbal Space Programissa",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "kerbal-space-program"
+   ]
+  },
+  {
+   "name": "...and not uppercase ones",
+   "glossary": "inflecting",
+   "text": "Kerbal Space ProgramISSA",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": []
+  },
+  {
+   "name": "an exact word's forms match as written",
+   "glossary": "inflecting",
+   "text": "two EQs",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "eq"
+   ]
+  },
+  {
+   "name": "...and not otherwise",
+   "glossary": "inflecting",
+   "text": "two eqs",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": []
+  },
+  {
+   "name": "an inflected compound fires",
+   "glossary": "inflecting",
+   "text": "let's not get hydra-taxed",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "hydra-tax"
+   ]
+  },
+  {
+   "name": "the last word matches by its stem",
+   "glossary": "prose-basilisks",
+   "text": "prose basiliskeista",
+   "expansions": {
+    "prose": {
+     "forms": [
+      "proses"
+     ],
+     "stems": [
+      "prosess"
+     ]
+    },
+    "basilisks": {
+     "forms": [],
+     "stems": [
+      "basilisk"
+     ]
+    }
+   },
+   "ids": [
+    "prose-basilisks"
+   ]
+  },
+  {
+   "name": "an earlier word does not match by its forms",
+   "glossary": "prose-basilisks",
+   "text": "proses basilisks",
+   "expansions": {
+    "prose": {
+     "forms": [
+      "proses"
+     ],
+     "stems": [
+      "prosess"
+     ]
+    },
+    "basilisks": {
+     "forms": [],
+     "stems": [
+      "basilisk"
+     ]
+    }
+   },
+   "ids": []
+  },
+  {
+   "name": "an earlier word does not match by its stems",
+   "glossary": "prose-basilisks",
+   "text": "prosessi basilisks",
+   "expansions": {
+    "prose": {
+     "forms": [
+      "proses"
+     ],
+     "stems": [
+      "prosess"
+     ]
+    },
+    "basilisks": {
+     "forms": [],
+     "stems": [
+      "basilisk"
+     ]
+    }
+   },
+   "ids": []
+  },
+  {
+   "name": "the last word is the term's, whatever the text's order",
+   "glossary": "prose-basilisks",
+   "text": "basiliskeista prose",
+   "expansions": {
+    "prose": {
+     "forms": [
+      "proses"
+     ],
+     "stems": [
+      "prosess"
+     ]
+    },
+    "basilisks": {
+     "forms": [],
+     "stems": [
+      "basilisk"
+     ]
+    }
+   },
+   "ids": [
+    "prose-basilisks"
+   ]
+  }
+ ],
+ "clean_expansion": [
+  {
+   "name": "a stem keeps all but the last two letters of its word",
+   "word": "kaupunki",
+   "forms": [],
+   "stems": [
+    "kaupun",
+    "kaupu"
+   ],
+   "expect": {
+    "forms": [],
+    "stems": [
+     "kaupun"
+    ]
+   }
+  },
+  {
+   "name": "and never fewer than five",
+   "word": "hydra",
+   "forms": [],
+   "stems": [
+    "hydra",
+    "hydr"
+   ],
+   "expect": {
+    "forms": [],
+    "stems": [
+     "hydra"
+    ]
+   }
+  },
+  {
+   "name": "even the whole word, under five",
+   "word": "lint",
+   "forms": [],
+   "stems": [
+    "lint"
+   ],
+   "expect": {
+    "forms": [],
+    "stems": []
+   }
+  },
+  {
+   "name": "a short word keeps no stem",
+   "word": "fup",
+   "forms": [],
+   "stems": [
+    "fup",
+    "f"
+   ],
+   "expect": {
+    "forms": [],
+    "stems": []
+   }
+  },
+  {
+   "name": "a stem that wanders off the word is dropped",
+   "word": "duolect",
+   "forms": [],
+   "stems": [
+    "duolekt",
+    "dialekt"
+   ],
+   "expect": {
+    "forms": [],
+    "stems": [
+     "duolekt"
+    ]
+   }
+  },
+  {
+   "name": "the word itself and malformed forms are dropped, the rest lowercased and deduplicated",
+   "word": "fup",
+   "forms": [
+    "fup",
+    "Fups",
+    "fups",
+    "fupped up",
+    ""
+   ],
+   "stems": [],
+   "expect": {
+    "forms": [
+     "fups"
+    ],
+    "stems": []
+   }
+  },
+  {
+   "name": "an exact word's case is kept",
+   "word": "EQ",
+   "forms": [
+    "EQs",
+    "EQ"
+   ],
+   "stems": [],
+   "expect": {
+    "forms": [
+     "EQs"
+    ],
+    "stems": []
+   }
+  }
+ ],
+ "select": [
+  {
+   "name": "a term fires, its links follow, and a cycle ends",
+   "glossary": "selecting",
+   "text": "the attention rent is high",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "attention-rent",
+     "depth": 0,
+     "wording": "attention rent",
+     "via": null
+    },
+    {
+     "id": "hydra-tax",
+     "depth": 1,
+     "wording": null,
+     "via": "attention-rent"
+    }
+   ]
+  },
+  {
+   "name": "an entry without links leads to the terms in its content",
+   "glossary": "selecting",
+   "text": "some jazz",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "jazz",
+     "depth": 0,
+     "wording": "jazz",
+     "via": null
+    },
+    {
+     "id": "approach-memory",
+     "depth": 1,
+     "wording": null,
+     "via": "jazz"
+    }
+   ]
+  },
+  {
+   "name": "depth is bounded",
+   "glossary": "selecting",
+   "text": "the attention rent is high",
+   "budget": 10000,
+   "max_depth": 0,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "attention-rent",
+     "depth": 0,
+     "wording": "attention rent",
+     "via": null
+    }
+   ]
+  },
+  {
+   "name": "shallower first, and in order within a depth",
+   "glossary": "selecting",
+   "text": "spork, jazz and attention rent",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "attention-rent",
+     "depth": 0,
+     "wording": "attention rent",
+     "via": null
+    },
+    {
+     "id": "jazz",
+     "depth": 0,
+     "wording": "jazz",
+     "via": null
+    },
+    {
+     "id": "spork",
+     "depth": 0,
+     "wording": "spork",
+     "via": null
+    },
+    {
+     "id": "approach-memory",
+     "depth": 1,
+     "wording": null,
+     "via": "jazz"
+    },
+    {
+     "id": "hydra-tax",
+     "depth": 1,
+     "wording": null,
+     "via": "attention-rent"
+    }
+   ]
+  },
+  {
+   "name": "what does not fit is skipped, leads nowhere, and later ones that fit are taken",
+   "glossary": "selecting",
+   "text": "spork, jazz and attention rent",
+   "budget": 65,
+   "max_depth": 2,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "jazz",
+     "depth": 0,
+     "wording": "jazz",
+     "via": null
+    },
+    {
+     "id": "spork",
+     "depth": 0,
+     "wording": "spork",
+     "via": null
+    }
+   ]
+  },
+  {
+   "name": "an entry already given neither fires nor leads anywhere",
+   "glossary": "selecting",
+   "text": "the attention rent is high",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [
+    "attention-rent"
+   ],
+   "expansions": null,
+   "firings": []
+  },
+  {
+   "name": "an entry already given is not given again at depth",
+   "glossary": "selecting",
+   "text": "the attention rent is high",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [
+    "hydra-tax"
+   ],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "attention-rent",
+     "depth": 0,
+     "wording": "attention rent",
+     "via": null
+    }
+   ]
+  },
+  {
+   "name": "the wording is the text as written",
+   "glossary": "selecting",
+   "text": "Attention rent!",
+   "budget": 10000,
+   "max_depth": 1,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "attention-rent",
+     "depth": 0,
+     "wording": "Attention rent",
+     "via": null
+    },
+    {
+     "id": "hydra-tax",
+     "depth": 1,
+     "wording": null,
+     "via": "attention-rent"
+    }
+   ]
+  },
+  {
+   "name": "nothing in the text fires nothing",
+   "glossary": "selecting",
+   "text": "nothing relevant here",
+   "budget": 10000,
+   "max_depth": 2,
+   "already_fired": [],
+   "expansions": null,
+   "firings": []
+  },
+  {
+   "name": "expansions are passed on",
+   "glossary": "inflecting",
+   "text": "two hydra taxes",
+   "budget": 1000,
+   "max_depth": 0,
+   "already_fired": [],
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "firings": [
+    {
+     "id": "hydra-tax",
+     "depth": 0,
+     "wording": "hydra taxes",
+     "via": null
+    }
+   ]
+  },
+  {
+   "name": "...and without them the inflected term does not fire",
+   "glossary": "inflecting",
+   "text": "two hydra taxes",
+   "budget": 1000,
+   "max_depth": 0,
+   "already_fired": [],
+   "expansions": null,
+   "firings": []
+  }
+ ],
+ "lookup": [
+  {
+   "name": "a term's own entry, its answer the entry",
+   "glossary": "lookup",
+   "term": "spork",
+   "expansions": null,
+   "entry": "spork",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": [],
+   "answer": "Spork\n\nA utensil."
+  },
+  {
+   "name": "an unrelated word is no near miss however alike it looks",
+   "glossary": "lookup",
+   "term": "introspection",
+   "expansions": null,
+   "entry": null,
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": [
+    "Endognosis"
+   ]
+  },
+  {
+   "name": "an entry whose content mentions the term is named",
+   "glossary": "lookup",
+   "term": "Introspection",
+   "expansions": null,
+   "entry": null,
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": [
+    "Endognosis"
+   ],
+   "answer_starts_with": "There is no entry for 'Introspection'.",
+   "answer_contains": [
+    "It is mentioned in: 'Endognosis'."
+   ]
+  },
+  {
+   "name": "the words of a key, in any case and order",
+   "glossary": "lookup",
+   "term": "SHAMPOO different same bath",
+   "expansions": null,
+   "entry": "same-bath-different-shampoo",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "an alias is a key",
+   "glossary": "lookup",
+   "term": "fuppable",
+   "expansions": null,
+   "entry": "fup",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "one near miss is taken as meant",
+   "glossary": "lookup",
+   "term": "sprok",
+   "expansions": null,
+   "entry": "spork",
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": [],
+   "answer_starts_with": "There is no entry for 'sprok'. The closest is 'Spork':"
+  },
+  {
+   "name": "several near misses are offered by title",
+   "glossary": "lookup",
+   "term": "hydra te",
+   "expansions": null,
+   "entry": null,
+   "exact": false,
+   "candidates": [
+    "Hydra tax",
+    "Hydra test"
+   ],
+   "mentioned_in": [],
+   "answer_contains": [
+    "'Hydra tax'",
+    "'Hydra test'"
+   ]
+  },
+  {
+   "name": "nothing close is not defined",
+   "glossary": "lookup",
+   "term": "photosynthesis",
+   "expansions": null,
+   "entry": null,
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": [],
+   "answer": "The term 'photosynthesis' is not defined in the lorebook. It holds only the terms the user has defined, so most words are not in it."
+  },
+  {
+   "name": "a term found by its forms",
+   "glossary": "inflecting",
+   "term": "hydra taxes",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "entry": "hydra-tax",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "...and without them a near miss at best",
+   "glossary": "inflecting",
+   "term": "hydra taxes",
+   "expansions": null,
+   "entry": "hydra-tax",
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "an inflected compound is found",
+   "glossary": "inflecting",
+   "term": "hydra-taxed",
+   "expansions": {
+    "tax": {
+     "forms": [
+      "taxes",
+      "taxed"
+     ],
+     "stems": []
+    },
+    "kaupunki": {
+     "forms": [],
+     "stems": [
+      "kaupung",
+      "kaupunk"
+     ]
+    },
+    "Program": {
+     "forms": [],
+     "stems": [
+      "Program"
+     ]
+    },
+    "EQ": {
+     "forms": [
+      "EQs"
+     ],
+     "stems": []
+    }
+   },
+   "entry": "hydra-tax",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "an earlier word's forms do not find the term",
+   "glossary": "prose-basilisks",
+   "term": "proses basilisks",
+   "expansions": {
+    "prose": {
+     "forms": [
+      "proses"
+     ],
+     "stems": [
+      "prosess"
+     ]
+    },
+    "basilisks": {
+     "forms": [],
+     "stems": [
+      "basilisk"
+     ]
+    }
+   },
+   "entry": "prose-basilisks",
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": []
+  }
+ ]
+}
