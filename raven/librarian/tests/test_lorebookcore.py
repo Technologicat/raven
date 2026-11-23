@@ -2,6 +2,9 @@
 
 The cases are `lorebook_conformance.json`, beside this file, which a port to another frontend runs too; this is
 Raven's runner for them. Read it as the reference for what each section's fields mean.
+
+A Python port copies this file unchanged, with the cases beside it, into a `tests/` directory beside its copy of
+`lorebookcore.py`, and runs it under pytest's `--import-mode=importlib`, as Raven does.
 """
 
 import ast
@@ -12,7 +15,7 @@ import sys
 
 import pytest
 
-from raven.librarian import lorebookcore
+from .. import lorebookcore
 
 CORE = pathlib.Path(lorebookcore.__file__)
 CASES = json.loads((pathlib.Path(__file__).parent / "lorebook_conformance.json").read_text(encoding="utf-8"))

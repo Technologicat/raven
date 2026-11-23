@@ -17,7 +17,7 @@ A port is three things:
 
 **`lorebookcore.py` is one file, Python 3.11 or later, standard library only.** Raven's tests hold it to that.
 
-- **A Python host copies it as it is.**
+- **A Python host copies it as it is**, with its conformance runner.
 - **Any other host translates it**, and the conformance cases are how the translation is checked.
 
 What it offers, all of it stateless:
@@ -38,6 +38,11 @@ Each function's docstring is the reference for its arguments.
 **`tests/lorebook_conformance.json` is the spec that cannot drift from the code**: Raven's own tests run it
 (`tests/test_lorebookcore.py`), and a port runs it too. The runner is short, and is the reference for what each
 field means.
+
+**A Python port copies the runner as it is**, into a `tests/` directory beside its copy of the core, with the cases
+beside it. It imports the core relatively, so it needs nothing of Raven's; run it under pytest's
+`--import-mode=importlib`, as Raven does, which needs no `__init__.py` files. Any other port translates the runner
+along with the core.
 
 - **`glossaries`**: small lorebooks, each a list of lines, referred to by name from the cases. A case may also
   carry its glossary's lines itself.
