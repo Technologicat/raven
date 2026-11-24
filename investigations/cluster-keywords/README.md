@@ -11,6 +11,8 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 ## The script
 
+- **`measure_single_words.py`**: whether the similarity order demotes single-word terms, on the six `-evidence`
+  datasets and their embeddings caches, with each term's specificity as the control.
 - **`measure_centroids.py DATASET.pickle ...`**: whether the rerank favours terms many clusters share,
   from the caches `keyword_probe.py --rerank` leaves; embeds nothing.
 - **`run_llm_evidence_imports.sh`**: the same corpora with the LLM given the phrase evidence, through
@@ -322,6 +324,22 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   - **A separate defect: the label carries *retrieval-augmented generation* and *retrieval augmented generation*
     both.** `normalize` folds plurals and abbreviations but not hyphen and space variants, and the nesting test
     in `label_groups` compares the raw strings, so neither notices they are one term.
+  - **The single-word bias, measured on all six corpora** (`measure_single_words.py`, `out/single-words.md`; the
+    hyphen defect is fixed, the same day). It holds everywhere, and mostly as an effect of embedding a short
+    text rather than of single words being generic:
+    - **In their own cluster's similarity order, single words sit at the 29th–44th percentile**, two-word terms
+      at the 52nd–72nd, longer ones at the 63rd–84th.
+    - **Of the terms in a pool's first three places by c-TF-IDF, the label keeps 45–59% of the single words**,
+      against 57–80% of the two-word terms and 78–100% of longer ones.
+    - **The control, specificity: where a term places its own cluster among all the clusters' centroids.** A
+      generic term sits near many and places its own low. Single words place it nearly as high as phrases do:
+      0.79 against 0.81 on ECCOMAS, 0.80 against 0.81 on hydrogen, with a larger gap on arXiv and AOKK (0.69 and
+      0.68 against 0.77). On the two small corpora, with 8 and 10 clusters, it does not separate at all.
+    - **So the similarity order demotes single words far more than their specificity warrants.** A single word
+      is somewhat more generic on the single-topic corpora, which accounts for some of the fall, not most.
+    - **A fix would compare each term's similarity to its own centroid with its similarity to the others**,
+      removing a per-term offset, as the control does. That is different from the centering rejected on
+      2026-11-23, which moved the centroids. Not built: it reopens tuning, the maintainer's call.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
