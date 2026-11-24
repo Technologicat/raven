@@ -169,8 +169,9 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
 
 # For "llm" and "hybrid": after a cluster's items, also give the model the phrases the "phrases" method finds over
 # all of the cluster's items, each with the share of the items containing it, as evidence. The items sent are a
-# sample when the cluster is big; the phrases count every item. Off while being measured against without.
-clusters_llm_keyword_evidence = False
+# sample when the cluster is big; the phrases count every item. It grounds the model's keywords in the corpus
+# without making it copy the phrases.
+clusters_llm_keyword_evidence = True
 
 # For "llm" and "hybrid", with the evidence on: what precedes the phrases. `{n}` is the number of items in the
 # cluster.

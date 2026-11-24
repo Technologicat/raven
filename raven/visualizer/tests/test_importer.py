@@ -329,6 +329,7 @@ class TestOversizedClusters:
             return FakeRecord("Keyword A, Keyword B")
 
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
         monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
         monkeypatch.setattr(importer, "llmclient",
@@ -362,6 +363,7 @@ class TestOversizedClusters:
             return FakeRecord("Keyword A")
 
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
         monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
         monkeypatch.setattr(importer, "llmclient",
@@ -872,6 +874,7 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
     all_vectors = np.array([[1.0, 0.0]] * 2)
 
     monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
     monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
     monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
     monkeypatch.setattr(importer, "llmclient",
@@ -1033,6 +1036,7 @@ class TestHybridKeywords:
         import numpy as np
         from unpythonic.env import env
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(
             lambda settings, prompt, **kw: env(reply="Foundation Models, Solomonoff Induction", reasoning=[]))}),
             raising=False)
@@ -1119,6 +1123,7 @@ def no_backend(monkeypatch):
     """
     from raven.librarian import llmclient
     monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
     monkeypatch.setattr(visualizer_config, "summarize", True)
     monkeypatch.setattr(importer, "llm_fallback_box", box(None), raising=False)
     monkeypatch.setattr(llmclient, "test_connection", lambda url: False)
@@ -1127,6 +1132,7 @@ def no_backend(monkeypatch):
 class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
     def test_a_run_that_had_a_backend_records_the_llm_method(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
         assert importer._effective_keyword_method() == "llm"
 
@@ -1134,6 +1140,7 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
         # The pair with the test above: same configuration, and only `llm_settings` differs, so a fallback that
         # went unrecorded would show up here as the two agreeing.
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "llm_settings", None, raising=False)
         assert importer._effective_keyword_method() == "phrases"
 
@@ -1198,6 +1205,7 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
 
     def test_each_named_stage_says_what_a_run_without_it_does(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(visualizer_config, "summarize", True)
         stages = importer.llm_backed_stages()
         assert [stage.name for stage in stages] == ["cluster keywords", "entry summaries"]
