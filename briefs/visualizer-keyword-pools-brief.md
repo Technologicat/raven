@@ -418,6 +418,19 @@ phrase list as the cluster's own words, and the LLM's keywords that no phrase ma
   papers that say it as protection, privacy, style mimicry and a safety filter, which no phrase covers
   (`investigations/cluster-keywords/README.md`).
 
+## Fewer than six, where a cluster has fewer (2026-11-24)
+
+**To consider when the expandable list is built; the acceptance criteria are not yet known (the maintainer).** A
+fixed six assumes every cluster has six good terms. The arXiv read suggests some do not: in cluster 12, the five
+leading terms agree across every labelling variant tried and the sixth scatters (*net*, *localization*, *miou*),
+which reads as a cluster with five themes and a sixth slot filled with whatever ranks next. The other side of the
+same question is whether six are enough for a large or mixed cluster
+(`investigations/cluster-keywords/README.md`, *Hybrid's first weakness*).
+
+- **A label could stop where the terms stop being telling**, and show fewer. What would decide that is open: a
+  drop in score, a share below a floor, or disagreement between rankings, as in cluster 12.
+- **The expandable list is where the rest goes**, so stopping early hides nothing.
+
 ## Settled
 
 - ~~**Does the model produce twelve meaningful keywords?**~~ **Yes** — measured 2026-09-01, see above.
