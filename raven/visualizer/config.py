@@ -106,29 +106,36 @@ extract_keywords = True
 #
 #                    Slow, can abstract where "phrases" can only quote, requires an LLM backend.
 #
-#                    This uses the LLM settings from Librarian's configuration
-#                    (including also the system prompt and the AI character;
-#                     the configured character will be asked to perform the task).
-#                    See `raven.librarian.config`.
+#                    This uses the LLM backend from Librarian's configuration (see `raven.librarian.config`),
+#                    but not its AI character: the task is put to the model directly.
+#
+#     "hybrid":      Both: the LLM's first few keywords, which name the cluster's theme, then the phrases that
+#                    add something new to them, which quote what the cluster's items actually say.
+#
+#                    As slow as "llm", and with the same requirements. Falls back to "phrases" in the same way.
 #
 clusters_keyword_method = "phrases"
 # clusters_keyword_method = "llm"
+# clusters_keyword_method = "hybrid"
 
-# For "phrases": how many of each cluster's phrases to keep in the dataset, best first, each with the share
-# of the cluster's records containing it. The label shows the first few; the rest are there to look further.
+# For "hybrid": how many of the LLM's keywords lead each cluster's label, before the phrases.
+clusters_keyword_hybrid_llm_count = 2
+
+# For "phrases" and "hybrid": how many of each cluster's phrases to keep in the dataset, best first, each with the
+# share of the cluster's records containing it. The label shows the first few; the rest are there to look further.
 clusters_keyword_list_length = 30
 
-# For "phrases": how many of a cluster's most particular phrases the label's tail is chosen from.
+# For "phrases" and "hybrid": how many of a cluster's most particular phrases the label's tail is chosen from.
 clusters_keyword_pool = 30
 
-# For "phrases": a label's first phrase says what the cluster is about, and the rest how it differs from the
-# other clusters. A phrase found in at least this share of the clusters (and in no fewer than five, where there
-# are five) cannot say how one differs, so it is never among the rest; it can still come first.
+# For "phrases" and "hybrid": a label's first phrase says what the cluster is about, and the rest how it differs
+# from the other clusters. A phrase found in at least this share of the clusters (and in no fewer than five, where
+# there are five) cannot say how one differs, so it is never among the rest; it can still come first.
 clusters_keyword_umbrella_fraction = 0.1
 
-# For "phrases": an abbreviation is shown as written ("ChatGPT") when at least this share of the records using
-# it leave it unexplained, the corpus's readers evidently knowing it; otherwise spelled out ("FWP" becomes
-# "fast weight programmer").
+# For "phrases" and "hybrid": an abbreviation is shown as written ("ChatGPT") when at least this share of the
+# records using it leave it unexplained, the corpus's readers evidently knowing it; otherwise spelled out ("FWP"
+# becomes "fast weight programmer").
 clusters_keyword_short_form_share = 0.5
 
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
@@ -160,12 +167,13 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     The set of items to be analyzed is below.
 """).strip()
 
-# For "llm": after a cluster's items, also give the model the phrases the "phrases" method finds over all of
-# the cluster's items, each with the share of the items containing it, as evidence. The items sent are a
+# For "llm" and "hybrid": after a cluster's items, also give the model the phrases the "phrases" method finds over
+# all of the cluster's items, each with the share of the items containing it, as evidence. The items sent are a
 # sample when the cluster is big; the phrases count every item. Off while being measured against without.
 clusters_llm_keyword_evidence = False
 
-# For "llm", with the evidence on: what precedes the phrases. `{n}` is the number of items in the cluster.
+# For "llm" and "hybrid", with the evidence on: what precedes the phrases. `{n}` is the number of items in the
+# cluster.
 clusters_llm_keyword_evidence_prompt = textwrap.dedent("""
     **Evidence from the whole cluster**
 

@@ -977,6 +977,78 @@ class TestLLMKeywordEvidence:
         assert [k for k, _ in lists[0]] == ["deep learning", "neural network"]
 
 
+class TestHybridKeywords:
+    """`"hybrid"`: the LLM's first keywords lead each label, and the phrases that add something follow."""
+
+    def _run(self, monkeypatch, replies, *, evidence=False, n_leading=2):
+        import numpy as np
+        from unpythonic.env import env
+        prompts = []
+        replies = list(replies)
+
+        def fake_turn(settings, prompt, **kwargs):
+            prompts.append(prompt)
+            return env(reply=replies.pop(0), reasoning=[])
+
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "hybrid")
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_hybrid_llm_count", n_leading)
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", evidence)
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        monkeypatch.setattr(importer, "_make_embedder",
+                            lambda: type("_E", (), {"encode": staticmethod(lambda texts: np.ones((len(texts), 4)))})())
+        vis_data = [env(title=f"paper {i}", abstract="", cluster_id=c, cluster_probability=1.0)
+                    for i, c in enumerate([0, 0, 0, 1, 1, 1])]
+        candidates = ([{"phrases": ["deep learning", "neural network"], "definitions": [], "nouns": []}] * 3 +
+                      [{"phrases": ["diffusion model", "image generation"], "definitions": [], "nouns": []}] * 3)
+        terms, display = importer._normalize_keyphrases(env(keyphrases=candidates), vis_data)
+        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, np.random.default_rng(0).standard_normal((6, 4)),
+                                                             keyphrase_terms=terms, keyphrase_display=display)
+        return prompts, keywords, lists
+
+    def test_the_llm_leads_and_the_phrases_that_add_something_follow(self, monkeypatch):
+        _prompts, keywords, lists = self._run(monkeypatch, ["machine learning, neural networks, artificial intelligence",
+                                                            "generative models"])
+        assert "neural network" in [p for p, _ in lists[0]], "no phrase repeats the LLM's, so nothing is tested"
+        assert keywords[0] == ["machine learning", "neural networks", "deep learning"]
+        assert keywords[1][0] == "generative models"
+        assert set(keywords[1][1:]) == {"diffusion model", "image generation"}
+
+    def test_only_the_configured_number_of_llm_keywords_lead(self, monkeypatch):
+        _prompts, keywords, _lists = self._run(monkeypatch, ["machine learning, artificial intelligence, robots",
+                                                             "generative models"], n_leading=1)
+        assert keywords[0][0] == "machine learning"
+        assert "artificial intelligence" not in keywords[0]
+
+    def test_a_cluster_the_llm_found_no_theme_in_gets_its_phrase_label(self, monkeypatch):
+        _prompts, keywords, lists = self._run(monkeypatch, ["keyword extraction failed", "generative models"])
+        assert set(keywords[0]) == {"deep learning", "neural network"}
+        assert keywords[0] == [p for p, _ in lists[0]][:len(keywords[0])]
+
+    def test_the_phrase_lists_are_kept_without_the_evidence_setting(self, monkeypatch):
+        prompts, _keywords, lists = self._run(monkeypatch, ["machine learning", "generative models"], evidence=False)
+        assert lists is not None and all(lists)
+        assert "Evidence from the whole cluster" not in prompts[0]
+
+    def test_the_evidence_setting_reaches_the_prompt_as_with_llm(self, monkeypatch):
+        prompts, _keywords, _lists = self._run(monkeypatch, ["machine learning", "generative models"], evidence=True)
+        assert "Evidence from the whole cluster" in prompts[0]
+
+    def test_without_a_backend_it_falls_back_to_phrases(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "hybrid")
+        monkeypatch.setattr(importer, "llm_settings", None, raising=False)
+        monkeypatch.setattr(importer, "_effective_clustering_method", lambda: "agglomerative")
+        assert importer._effective_keyword_method() == "phrases"
+
+    def test_it_is_named_as_a_stage_needing_the_llm(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "hybrid")
+        stages = importer.llm_backed_stages(clustering_method="agglomerative")
+        assert [s.setting for s in stages if s.name == "cluster keywords"] == ['clusters_keyword_method = "hybrid"']
+
+
 class TestKeywordMethodCheck:
     def test_the_retired_frequency_method_names_its_replacement(self, monkeypatch):
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")

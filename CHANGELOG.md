@@ -202,6 +202,9 @@
   - This is `clusters_keyword_method = "phrases"`, the new default and the fallback when no LLM backend answers, in [`raven.visualizer.config`](raven/visualizer/config.py). It needs no LLM.
   - It replaces `"frequencies"`, which an import now refuses, saying what to write instead.
   - Datasets imported before keep their keywords; import again for the new ones.
+- **Cluster keywords can combine an LLM and the phrases**, with `clusters_keyword_method = "hybrid"`: the LLM's first keywords name the cluster's theme, and the phrases that add something new follow, quoting the papers.
+  - It needs an LLM backend, and falls back to `"phrases"` without one, as `"llm"` does.
+  - `clusters_keyword_hybrid_llm_count`, in [`raven.visualizer.config`](raven/visualizer/config.py), sets how many of the LLM's keywords lead; 2 by default.
 
 #### Raven-deduplicate
 

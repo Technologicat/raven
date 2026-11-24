@@ -35,7 +35,7 @@ def main() -> None:
     parser.add_argument('--backend-url', metavar='URL', default=None,
                         help='LLM backend to talk to, overriding the configured one; e.g. http://localhost:1234. '
                              'Used only when this configuration has a stage that needs an LLM — cluster keywords '
-                             'set to "llm", or summaries enabled — and ignored otherwise.')
+                             'set to "llm" or "hybrid", or summaries enabled — and ignored otherwise.')
     llm_group = parser.add_mutually_exclusive_group()
     llm_group.add_argument('--llm', choices=['required', 'optional'], default='required',
                            help='what to do when the configuration has a stage that needs an LLM and no '

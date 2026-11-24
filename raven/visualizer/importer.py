@@ -136,8 +136,10 @@ def llm_backed_stages(clustering_method: Optional[str] = None) -> tuple[LLMBacke
     the parts rather than a finished line.
     """
     return tuple(stage for stage, wanted in
-                 ((LLMBackedStage("cluster keywords", 'clusters_keyword_method = "llm"', "using phrase keywords"),
-                   visualizer_config.clusters_keyword_method == "llm"),
+                 ((LLMBackedStage("cluster keywords",
+                                  f'clusters_keyword_method = "{visualizer_config.clusters_keyword_method}"',
+                                  "using phrase keywords"),
+                   visualizer_config.clusters_keyword_method in LLM_KEYWORD_METHODS),
                   (LLMBackedStage("entry summaries", "summarize = True", "no summaries"),
                    visualizer_config.summarize),
                   (LLMBackedStage("clusters", 'clustering_method = "llm"', "clustering agglomeratively instead"),
@@ -148,20 +150,21 @@ def llm_backed_stages(clustering_method: Optional[str] = None) -> tuple[LLMBacke
 def _effective_keyword_method() -> str:
     """Which cluster keyword method this run is actually using.
 
-    The configured `raven.visualizer.config.clusters_keyword_method`, except that `"llm"` reads as
-    `"phrases"` where no usable LLM backend answered for this run.
+    The configured `raven.visualizer.config.clusters_keyword_method`, except that `"llm"` and `"hybrid"`
+    read as `"phrases"` where no usable LLM backend answered for this run.
 
     Meaningful only once `_setup_llm_backend` has run, which is what binds `llm_settings`; before that
     it reports a fallback that has not been decided yet.
     """
     if _effective_clustering_method() == "llm":
         return "llm grouping"  # the theme names are the keywords
-    if visualizer_config.clusters_keyword_method == "llm" and llm_settings is None:
+    if visualizer_config.clusters_keyword_method in LLM_KEYWORD_METHODS and llm_settings is None:
         return "phrases"
     return visualizer_config.clusters_keyword_method
 
 
-KEYWORD_METHODS = ("phrases", "llm")
+KEYWORD_METHODS = ("phrases", "llm", "hybrid")
+LLM_KEYWORD_METHODS = ("llm", "hybrid")  # the ones that ask the LLM backend
 
 
 def _check_keyword_method() -> None:
@@ -1537,22 +1540,23 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                    `vis_data`. Required. With `"phrases"`, a cluster's centroid is the mean of its records'
                    vectors; with `"llm"`, they choose which entries of an oversized cluster to describe it by.
 
-    `keyphrase_terms`, `keyphrase_display`: Required when `config.clusters_keyword_method == "phrases"`, and
-                                            with `"llm"` when `config.clusters_llm_keyword_evidence` is on.
+    `keyphrase_terms`, `keyphrase_display`: Required with `config.clusters_keyword_method` `"phrases"` or
+                                            `"hybrid"`, and with `"llm"` when
+                                            `config.clusters_llm_keyword_evidence` is on.
 
                                             Output of `_normalize_keyphrases`, which see: each record's phrase
                                             terms, in the order of `vis_data`, and their display forms.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
-    `max_prompt_entries`: Used when `config.clusters_keyword_method == "llm"`.
+    `max_prompt_entries`: Used with `"llm"` and `"hybrid"`.
 
                           At most this many of a cluster's entries are sent to the LLM to be described.
                           A cluster with more is sampled evenly, ordered from its center outwards; a
                           cluster with fewer is sent whole. Exists because a large cluster with abstracts
                           otherwise builds a prompt no backend will accept.
 
-    `max_keyword_attempts`: Used when `config.clusters_keyword_method == "llm"`.
+    `max_keyword_attempts`: Used with `"llm"` and `"hybrid"`.
 
                             How many times to ask before giving a cluster up as unlabelled. A reply that
                             is not a keyword list at all is retried; the model *declining* is not, that
@@ -1566,7 +1570,12 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
       - `maybe_keyword_lists_by_cluster`: with `"phrases"`, a list, where the `k`th item is cluster `k`'s longer
         list of `(keyword, share)`, `config.clusters_keyword_list_length` of them at most, the share being that
         of the cluster's records containing the keyword; it begins with the cluster's `vis_keywords_by_cluster`.
-        With `"llm"`, the same phrase lists when the evidence setting computed them, else `None`.
+        With `"hybrid"`, the same phrase lists. With `"llm"`, the same when the evidence setting computed them,
+        else `None`.
+
+    With `"hybrid"`, a cluster's keywords are the LLM's first `config.clusters_keyword_hybrid_llm_count`, then
+    its phrases that add something new (`keyphrases.lead_with`); a cluster the LLM found no theme in gets its
+    phrase keywords alone.
     """
     _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
@@ -1582,7 +1591,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             vis_keywords_by_cluster = [[keyword for keyword, _share in keyword_list[:max_vis_kw]]
                                        for keyword_list in maybe_keyword_lists_by_cluster]
         logger.info(f"        Done in {tim.dt:0.6g}s.")
-    elif keyword_method == "llm":
+    elif keyword_method in LLM_KEYWORD_METHODS:
         # First, group entries by cluster. The index of each entry is kept alongside it, because
         # `all_vectors` is in the same order as `vis_data` - both are the per-input-file lists
         # concatenated the same way - and the capping below needs the vector for each entry.
@@ -1591,14 +1600,16 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             if entry.cluster_id >= 0:  # not an outlier
                 entries_by_cluster[entry.cluster_id].append((idx, entry))
 
-        # The phrases over each whole cluster, given to the model as evidence beside the records it is shown,
-        # which for a big cluster are a sample. Computed before the loop, being one pass over every cluster.
-        if visualizer_config.clusters_llm_keyword_evidence:
+        # The phrases over each whole cluster: given to the model as evidence beside the records it is shown,
+        # which for a big cluster are a sample, and in hybrid mode the second half of each label. Computed
+        # before the loop, being one pass over every cluster.
+        if keyword_method == "hybrid" or visualizer_config.clusters_llm_keyword_evidence:
             maybe_keyword_lists_by_cluster = _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors,
                                                                    keyphrase_terms, keyphrase_display, max_vis_kw)
 
         eta_estimator = ETAEstimator(total=len(entries_by_cluster), keep_last=50)
         vis_keywords_by_cluster = []
+        llm_cluster_ids = []  # which cluster each item of `vis_keywords_by_cluster` belongs to
         for cluster_id, indexed_entries in sorted(entries_by_cluster.items()):  # default sort is fine, since the key is the cluster ID
             logger.info(f"        Extracting keywords for cluster #{cluster_id} (number of clusters: {len(entries_by_cluster.items())}); {eta_estimator.formatted_eta}")
 
@@ -1636,7 +1647,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             # Use two blank lines as an entry separator (works also when the abstract has paragraph breaks; also clearly associates which title goes with which abstract).
             cluster_texts = "\n\n\n".join(_format_entry_for_keyword_extraction(entry).strip() for entry in entries)
             prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{cluster_texts}"
-            if maybe_keyword_lists_by_cluster is not None and maybe_keyword_lists_by_cluster[cluster_id]:
+            if visualizer_config.clusters_llm_keyword_evidence and maybe_keyword_lists_by_cluster[cluster_id]:
                 evidence = "\n".join(f"- {phrase} ({share:.0%})"
                                      for phrase, share in maybe_keyword_lists_by_cluster[cluster_id])
                 evidence_intro = visualizer_config.clusters_llm_keyword_evidence_prompt.format(n=len(indexed_entries))
@@ -1686,12 +1697,21 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                              f"{max_keyword_attempts} attempts; the LLM never answered with a keyword list.")
                 cluster_keywords = ["<unknown topic>"]
             vis_keywords_by_cluster.append(cluster_keywords)
+            llm_cluster_ids.append(cluster_id)
             eta_estimator.tick()
 
         # Each cluster above was keyworded on its own, so one concept can have come back under several
         # spellings. Fold them together now that the whole vocabulary is known - which is the earliest
         # this can be done, and why it is a second pass rather than part of the loop.
         vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
+
+        if keyword_method == "hybrid":
+            n_leading = visualizer_config.clusters_keyword_hybrid_llm_count
+            for k, (cluster_id, llm_keywords) in enumerate(zip(llm_cluster_ids, vis_keywords_by_cluster)):
+                phrase_list = maybe_keyword_lists_by_cluster[cluster_id]
+                leading = [] if llm_keywords == ["<unknown topic>"] else llm_keywords[:n_leading]
+                if leading or phrase_list:
+                    vis_keywords_by_cluster[k] = keyphrases.lead_with(leading, phrase_list, max_vis_kw)
     else:
         error_msg = f"Unknown cluster keyword method '{keyword_method}'; valid: {KEYWORD_METHODS}. Please check your `raven.visualizer.config`."
         logger.error(f"_collect_cluster_keywords: {error_msg}")

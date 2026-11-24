@@ -283,8 +283,11 @@ and *effluent*.
   it never names a topic the cluster does not have, but it cannot name what the papers share when each words
   it differently. An LLM (`clusters_keyword_method = "llm"`) can, and now and then names a theme the cluster
   does not have. Phrases need no LLM backend, and give the same labels on every import.
+- **`"hybrid"` takes each for the part it is good at**: the LLM's first two keywords name the theme, and the
+  phrases that add something new follow, in the papers' own words. It needs an LLM backend, as `"llm"` does.
+  `clusters_keyword_hybrid_llm_count` sets how many of the LLM's keywords lead.
 - The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
-  no LLM, and is what `"llm"` falls back to when no backend answers. It replaces `"frequencies"`; a
+  no LLM, and is what `"llm"` and `"hybrid"` fall back to when no backend answers. It replaces `"frequencies"`; a
   configuration still naming that is refused, with a message saying what to write instead.
 
 **LLM cluster keywords are made comparable across clusters**, if you have set `clusters_keyword_method =

@@ -310,7 +310,9 @@ quote and an LLM abstracts, so each takes the part of the label it is good at.
 - **Done:** `keyphrases.lead_with(leading, ranked, top)`, with tests: the leading terms, then ranked terms that
   neither repeat one already taken nor nest in one or contain one (compared without case, hyphens or a final
   plural "s").
-- **To wire into the importer, as designed:**
+- **Wired into the importer, as designed (2026-11-24)**, with tests. One thing the tests found: the evidence
+  went into the prompt whenever phrase lists existed, which in hybrid mode is always; it now follows
+  `clusters_llm_keyword_evidence` alone. Not yet imported on a corpus. The design, for the record:
   - `"hybrid"` joins `KEYWORD_METHODS`; the LLM branch runs as for `"llm"`, then each cluster's label is
     `lead_with(llm_keywords[:n], phrase_list, max_vis_kw)`, with `n` a setting,
     `clusters_keyword_hybrid_llm_count = 2` (the 2 is a choice, unmeasured).
