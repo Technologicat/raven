@@ -493,6 +493,10 @@ the rest with the GPT-series phrases.
   - **Ordering needs care in the wording.** The keyword-pools brief measured that the model front-loads its
     general terms, positions 13–15 of fifteen being the most distinctive on all five corpora; "most important
     first" may well strengthen that. What is wanted is closer to "most specific to this cluster first".
+- **Built the same day: `keyphrases.without_umbrella_terms`**, used by hybrid before it takes the LLM's first
+  two. On the stored arXiv evidence run it drops only *large language models* (23 clusters) and *language
+  models* (8), and cluster 44 then leads with *LLM evaluation, LLM-as-a-judge*. Left: an abbreviation is not a
+  repeat to `lead_with`, so cluster 38 reads *low-rank adaptation*, then the phrases' *lora*.
 - **The question behind the share: are six keywords enough, and at which cluster sizes?** Two questions in one:
   how many to show, which the header and tooltip limit and the planned expandable list relaxes; and how many to
   extract and store, which nothing limits. Unmeasured. A cheap first measurement from data already stored: per

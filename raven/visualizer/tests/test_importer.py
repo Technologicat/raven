@@ -1045,6 +1045,13 @@ class TestHybridKeywords:
                                                                     casing={"solomonoff": "Solomonoff"})
         assert keywords == [["foundation models", "Solomonoff induction"]]
 
+    def test_a_term_the_llm_gives_every_cluster_does_not_lead(self, monkeypatch):
+        _prompts, keywords, _lists, llm = self._run(monkeypatch, ["large language models, machine learning",
+                                                                  "large language models, generative models"])
+        assert all("large language models" in kws for kws in llm), "the LLM did not repeat the term; nothing tested"
+        assert keywords[0][0] == "machine learning"
+        assert "large language models" not in keywords[0] + keywords[1]
+
     def test_only_the_configured_number_of_llm_keywords_lead(self, monkeypatch):
         _prompts, keywords, _lists, _llm = self._run(monkeypatch, ["machine learning, artificial intelligence, robots",
                                                      "generative models"], n_leading=1)

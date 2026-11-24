@@ -30,7 +30,7 @@ __all__ = ["EXTRACTION_VERSION",
            "rank_terms", "umbrella_terms", "fuse",
            "label_groups",
            "top_terms",
-           "lead_with"]
+           "without_umbrella_terms", "lead_with"]
 
 import collections
 import math
@@ -593,6 +593,21 @@ def _comparable(term: str) -> str:
     if words and words[-1].endswith("s") and not words[-1].endswith(("ss", "ics")):
         words[-1] = words[-1][:-1]
     return " ".join(words)
+
+
+def without_umbrella_terms(lists: Sequence[Sequence[str]], *, threshold_fraction: float = 0.1) -> list[list[str]]:
+    """Each of `lists` without the terms too many of the lists share, as `umbrella_terms` counts them.
+
+    `lists`: one list of terms per group, such as an LLM's keywords for each cluster.
+
+    A term is shared by a list when the list holds it, compared without case, hyphens or a final plural "s". So
+    *large language models*, which an LLM names for most clusters of a corpus about them, goes from every list,
+    leaving what tells the clusters apart. Order is kept.
+    """
+    groups = list(range(len(lists)))
+    umbrella = umbrella_terms([{_comparable(t) for t in terms} for terms in lists], groups,
+                              min_support=1, threshold_fraction=threshold_fraction)
+    return [[t for t in terms if _comparable(t) not in umbrella] for terms in lists]
 
 
 def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int) -> list[str]:

@@ -1581,9 +1581,9 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         `"phrases"`, `None`. In hybrid mode it is what says which of a label's terms the LLM gave, and which of
         its themes the label had no room for.
 
-    With `"hybrid"`, a cluster's keywords are the LLM's first `config.clusters_keyword_hybrid_llm_count`, then
-    its phrases that add something new (`keyphrases.lead_with`); a cluster the LLM found no theme in gets its
-    phrase keywords alone.
+    With `"hybrid"`, a cluster's keywords are the LLM's first `config.clusters_keyword_hybrid_llm_count`, leaving
+    out those it gives too many clusters (`keyphrases.without_umbrella_terms`), then its phrases that add
+    something new (`keyphrases.lead_with`); a cluster the LLM found no theme in gets its phrase keywords alone.
     """
     _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
@@ -1722,10 +1722,14 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             maybe_llm_keywords_by_cluster[cluster_id] = list(llm_keywords)
 
         if keyword_method == "hybrid":
+            # The LLM's terms for most clusters ("large language models", in a corpus about them) say what the
+            # corpus is about rather than the cluster, and would take a leading place from one that does.
             n_leading = visualizer_config.clusters_keyword_hybrid_llm_count
+            distinctive = keyphrases.without_umbrella_terms(
+                vis_keywords_by_cluster, threshold_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
             for k, (cluster_id, llm_keywords) in enumerate(zip(llm_cluster_ids, vis_keywords_by_cluster)):
                 phrase_list = maybe_keyword_lists_by_cluster[cluster_id]
-                leading = [] if llm_keywords == ["<unknown topic>"] else llm_keywords[:n_leading]
+                leading = [] if llm_keywords == ["<unknown topic>"] else distinctive[k][:n_leading]
                 if leading or phrase_list:
                     vis_keywords_by_cluster[k] = keyphrases.lead_with(leading, phrase_list, max_vis_kw)
     else:

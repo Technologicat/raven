@@ -326,6 +326,19 @@ class TestTopTerms:
         assert len(keyphrases.top_terms([{f"t{i}" for i in range(50)}], 7)) == 7
 
 
+class TestWithoutUmbrellaTerms:
+    def test_a_term_most_lists_share_goes_from_all_of_them(self):
+        lists = [["Large Language Models", f"topic {i}"] for i in range(6)] + [["large language model", "other"]]
+        out = keyphrases.without_umbrella_terms(lists)
+        assert out == [[f"topic {i}"] for i in range(6)] + [["other"]]
+
+    def test_a_term_few_lists_share_stays(self):
+        """Control for the test above: the same term in two lists of seven is not shared widely enough."""
+        lists = [["large language models", "a"], ["large language models", "b"]] + [[f"t{i}"] for i in range(5)]
+        assert keyphrases.without_umbrella_terms(lists)[:2] == [["large language models", "a"],
+                                                                ["large language models", "b"]]
+
+
 class TestLeadWith:
     def test_the_leading_terms_come_first_and_the_ranking_fills_the_rest(self):
         assert keyphrases.lead_with(["AI safety"], [("prompt injection", 0.4), ("jailbreak", 0.3)], 3) == \
