@@ -388,7 +388,21 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
         *predictor*; 65 gains *license* and *long document*; 2 turns more generic (*star, measurement,
         detection*). A sentence embedding says what the sentence is about, so a generic word in a typical
         sentence scores as typical of the cluster.
-      - Not decided; the maintainer reads `out/context-embedding.md`.
+      - **Rejected, on the maintainer's read of the arXiv labels (2026-11-24): the sentences lose more often than
+        they win.** Worse in 2, 6 (*brain* where a reader would search *neuroscience*), 7 (generic words, and the
+        central *alignment research* gone), 10 (*label*), 12 (*cat*), 15, 16 (*single model*), 19 (*gan* gone), 20
+        (*Solomonoff induction* gone), 26 (*news*) and 27.
+      - **Why the table above misled: it measured whether the bias was gone, not whether the labels were good.**
+        It counts single words kept, and credits *news* exactly as it credits *hallucination*.
+      - **The mechanism, as read from those failures and not measured separately:** the label fuses two orders
+        meant to fail in opposite places, c-TF-IDF (frequent in the cluster, ordinary words included) and
+        similarity to the centroid (close in meaning, which demotes the ordinary words). The mean of a cluster's
+        sentences lies near its centroid whatever the term, so the similarity comes to say how typical the
+        sentences are, which follows how frequent the term is: the second order turns into a copy of the first. A
+        word frequent in typical sentences wins both; a specific name in a few unusual sentences loses both.
+      - **So a fix for the single-word bias must keep the similarity order independent of frequency**: the bare
+        word loses its sense, the sentence its specificity. Hybrid covers the gap from the other side, the LLM
+        naming the single-word and abstract concepts and the phrases the specific names.
     - **Joined spellings now fold too** (*bitwidth*, *bit-width*), since the same day.
 - **Cluster 65: both methods find good terms, and different ones.** The phrases quote the Qwen family
   (*qwen3-omni, qwen series, qwen-image*), the LLM generalizes it to *open-source models* (in the run with the
