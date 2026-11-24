@@ -304,6 +304,8 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
 - **Cluster 44: the LLM catches *LLM-as-a-judge*, which looks like an important theme of the cluster**, and is
   markedly better than the phrases, which put the GPT series forward (*chatgpt, gpt-3, gpt-4 performance,
   gpt-4.5*). All three LLM runs have it, with the evidence and without; 6 of the 33 records mention judging.
+- **Cluster 38: every method points the same way** (quantization, low-rank adaptation, efficient inference), **and
+  the run with the evidence reads best.** Another win for it.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
