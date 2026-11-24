@@ -1092,6 +1092,24 @@ meeting.
 - **And the rules may have been shaped by human decisions made against a full text**, which a report of the method
   should say.
 
+## The meeting of 2026-11-24: the keep sample is rated, teachers as users are out, and clusters for the article
+
+**The keep sample is rated.** The team has tuned the rules on the 60-record blind sample of keeps (see the 11.11
+section), and the filled `sample-keeps.xlsx` has come back. A copy sits beside the blind key, as
+`AOKK/scopebib-2026-11-11-rules-v2/keeps60-blind/sample-keeps-filled.xlsx`; `draw_blind_sample.py score keeps60-blind
+FILLED.xlsx` reads it. This unblocks rules v2.
+
+**Teachers as the users of the AI are out**, as against pupils or students. Not yet in `aokk.scope.toml`; it goes in
+with rules v2.
+
+**A table of the clusters is wanted for the article**: per cluster, its size and its keywords. Whether that becomes
+an export in the Visualizer is open (`TODO.md`, Visualizer, *A table of the clusters*).
+
+**Two views for the Visualizer**: show the purest clusters, and show the largest ones (`TODO.md`, the same item).
+
+**Open: the granularity.** How many clusters do we want? That is the clustering's cutoff parameter, and a sweep over
+it could inform the choice.
+
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 
 **Question:** until 2026-11-11 a one-shot turn without the character card still sent its task as `Juha: You are

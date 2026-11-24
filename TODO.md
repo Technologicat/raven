@@ -86,6 +86,12 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Search and data access
 
+- **[Medium]** A table of the clusters, and the purest and the largest of them. Raised at the AOKK meeting of
+  2026-11-24 (`investigations/aokk-corpus-scope/README.md`).
+  - **The table is for an article**: per cluster, its size and its keywords. Whether it becomes an export in the
+    Visualizer is open.
+  - **Two views**: show the purest clusters, and show the largest ones.
+
 - **[High]** Author search: show full author list, in the info panel too, where it is already loaded but not displayed. GUI must be search-aware — when search is active, highlight where the match appears in a long author list (e.g. a 200-name list starting with "Aaltonen" and ending with "Virtanen"; user searching for "Smith" needs to see where it is, not just that it matched).
   - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Wanted for about a year.
 

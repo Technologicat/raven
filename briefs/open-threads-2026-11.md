@@ -64,4 +64,6 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   - **With the final keeps**: comparing year-specific maps against the whole map filtered by year, for the
     trends. Both routes exist (`raven-siftbib --where 'year==2023'` per slice, or the live filter).
   - Then rules v2 and probably a new LLM run.
-  `investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-19, points to each.
+  - **2026-11-24: the keep sample is rated**, which unblocks rules v2; teachers as AI users are out; a table of the
+    clusters is wanted for the article; and the number of clusters is open, perhaps to be swept.
+  `investigations/aokk-corpus-scope/README.md`, the meetings of 2026-11-19 and 2026-11-24, points to each.
