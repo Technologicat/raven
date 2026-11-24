@@ -264,6 +264,28 @@ class TestTopTerms:
         assert len(keyphrases.top_terms([{f"t{i}" for i in range(50)}], 7)) == 7
 
 
+class TestLeadWith:
+    def test_the_leading_terms_come_first_and_the_ranking_fills_the_rest(self):
+        assert keyphrases.lead_with(["AI safety"], [("prompt injection", 0.4), ("jailbreak", 0.3)], 3) == \
+            ["AI safety", "prompt injection", "jailbreak"]
+
+    def test_a_repeat_is_skipped_whatever_its_case_hyphens_or_plural(self):
+        ranked = [("reinforcement learnings", 0.9), ("Reinforcement-Learning", 0.8), ("reward model", 0.5)]
+        assert keyphrases.lead_with(["Reinforcement Learning"], ranked, 3) == ["Reinforcement Learning", "reward model"]
+
+    def test_a_nested_term_is_skipped_either_way(self):
+        ranked = [("deep reinforcement learning", 0.6), ("evaluation", 0.5), ("benchmark", 0.4)]
+        assert keyphrases.lead_with(["reinforcement learning", "LLM evaluation"], ranked, 4) == \
+            ["reinforcement learning", "LLM evaluation", "benchmark"]
+
+    def test_top_caps_the_leading_terms_too(self):
+        assert keyphrases.lead_with(["a", "b", "c"], [("d", 0.5)], 2) == ["a", "b"]
+
+    def test_with_nothing_leading_it_is_the_ranking(self):
+        """Negative control: the merge adds nothing of its own when there is nothing to lead."""
+        assert keyphrases.lead_with([], [("x", 0.5), ("y", 0.4)], 6) == ["x", "y"]
+
+
 @pytest.fixture(scope="module")
 def nlp():
     spacy = pytest.importorskip("spacy")

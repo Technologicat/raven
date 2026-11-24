@@ -302,6 +302,34 @@ cannot abstract.
   evidence goes on by default; colouring by year v0 follows.
 - **The README's word cloud screenshot shows words only**, and wants retaking with phrases before 0.2.11.
 
+## A hybrid mode: the LLM's abstraction leading, the phrases' specifics after, 2026-11-24
+
+Decided (the maintainer): build `clusters_keyword_method = "hybrid"` now, the context being warm. Phrases
+quote and an LLM abstracts, so each takes the part of the label it is good at.
+
+- **Done:** `keyphrases.lead_with(leading, ranked, top)`, with tests: the leading terms, then ranked terms that
+  neither repeat one already taken nor nest in one or contain one (compared without case, hyphens or a final
+  plural "s").
+- **To wire into the importer, as designed:**
+  - `"hybrid"` joins `KEYWORD_METHODS`; the LLM branch runs as for `"llm"`, then each cluster's label is
+    `lead_with(llm_keywords[:n], phrase_list, max_vis_kw)`, with `n` a setting,
+    `clusters_keyword_hybrid_llm_count = 2` (the 2 is a choice, unmeasured).
+  - The phrase lists are computed whenever the method is `"hybrid"` or the evidence is on (today only the
+    latter, in `_collect_cluster_keywords`).
+  - Hybrid follows `clusters_llm_keyword_evidence` as `"llm"` does.
+  - Falls back to `"phrases"` with no backend (`_effective_keyword_method`); a cluster the LLM gives up on
+    (`"<unknown topic>"`) gets its phrase label.
+  - `llm_backed_stages` treats `"hybrid"` as needing the LLM; its setting text names both methods.
+  - Tests, the config's method description, the Visualizer README's keyword bullets, a changelog entry.
+- **Preview on arXiv** (`out/arxiv-hybrid-preview.txt`, from the evidence run's stored keywords and lists, no
+  new import): it reads well where the LLM's first two are a theme (*artificial general intelligence*, *LLM
+  security*, *knowledge distillation*, *diffusion models, Stable Diffusion*). Two weaknesses to weigh before
+  or after wiring:
+  - **The LLM's first terms can be the corpus's umbrella** (*large language models* leads three clusters
+    here), which spends a slot on what every cluster is about.
+  - **The phrases' own head can follow as a near-repeat in other words** (*LLM security*, then *attack*); the
+    phrase head says what the cluster is, which the LLM already did, so skipping it in hybrid may be right.
+
 ## Open
 
 **Decided: `hybrid-rrf` ships as it is** (the maintainer, 2026-11-23). Read across the arXiv corpus, its

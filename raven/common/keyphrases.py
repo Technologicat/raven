@@ -29,7 +29,8 @@ __all__ = ["EXTRACTION_VERSION",
            "normalize",
            "rank_terms", "umbrella_terms", "fuse",
            "label_groups",
-           "top_terms"]
+           "top_terms",
+           "lead_with"]
 
 import collections
 import math
@@ -514,3 +515,34 @@ def top_terms(record_terms: Sequence[set[str]], top: int, *,
     ranked = sorted(((term, count, count) for term, count in counts.items() if term not in exclude),
                     key=lambda item: (-item[1], item[0]))
     return [(term, int(count)) for term, count in _pick(ranked, top)]
+
+
+def _comparable(term: str) -> str:
+    """`term` as compared for repeats: lowercased, hyphens as spaces, the last word's plural "s" dropped."""
+    words = term.lower().replace("-", " ").split()
+    if words and words[-1].endswith("s") and not words[-1].endswith(("ss", "ics")):
+        words[-1] = words[-1][:-1]
+    return " ".join(words)
+
+
+def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int) -> list[str]:
+    """A label of at most `top` terms: `leading`, then terms of `ranked` that add something new.
+
+    `leading`: terms to put first, as written, such as an LLM's keywords.
+    `ranked`: `(term, share)` pairs, best first, such as one group's list from `label_groups`.
+
+    A term of `ranked` is skipped when it repeats a term already taken, or is nested in one, or one in it,
+    compared without case, hyphens or a final plural "s": after *reinforcement learning*, neither
+    *Reinforcement Learning* nor *deep reinforcement learning* adds a term.
+    """
+    label = list(leading[:top])
+    taken = [_comparable(t) for t in label]
+    for term, _share in ranked:
+        if len(label) >= top:
+            break
+        c = _comparable(term)
+        if any(c == t or _nested(c, t) for t in taken):
+            continue
+        label.append(term)
+        taken.append(c)
+    return label
