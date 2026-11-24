@@ -722,23 +722,27 @@ That is also why the *closing* recipe is here while the rest went to the skill: 
 **The coordinate rule is here on a different test: how often it is forgotten.** It costs an afternoon rather than anyone's data, so by the rule above it belongs in the skill — where it has been documented the whole time, and where it keeps being read too late. The trigger fires when the arithmetic is written, which is *after* the decision to launch, and a task that presents as "take a screenshot to check this rendered" never reads as driving a GUI at all. Juha, 2026-09-07, after watching it happen again: *"the trigger for the skill isn't obvious enough — we keep running into that offset double-counting every time."* Frequency is its own argument for the always-loaded file.
 
 **Launch with something to look at, given on the command line, so no file dialog has to be driven first.**
-`raven-visualizer 00_stuff/datasets/out-2026-11.pickle` is the standard test dataset, about 12k records (`00_stuff/`
-is gitignored, so it exists only on the maintainer's machines; it is to be replaced once the dataset format is
-upgraded). `raven-xdot-viewer raven/xdot_viewer/testdata/test_callgraph.dot` for the XDot viewer, whose
+`raven-visualizer investigations/cluster-keywords/data/hydrogen-evidence.pickle` is the standard test dataset, about
+12k records (gitignored, so it exists only on the maintainer's machines; it is to be replaced once the dataset
+format is upgraded). `raven-xdot-viewer raven/xdot_viewer/testdata/test_callgraph.dot` for the XDot viewer, whose
 `testdata/` holds the rest of its test graphs.
 
 **The current Visualizer datasets, for anything that should be measured on more than one corpus** — a
 keyworder, a clustering change. Update the list when a newer version of one arrives, and replace the old
-path rather than adding beside it. All under `00_stuff/`, so on the maintainer's machines only.
+path rather than adding beside it. All gitignored, so on the maintainer's machines only.
+
+The first six are the imports of 2026-11-23 from `investigations/cluster-keywords/run_llm_evidence_imports.sh`,
+which also names each one's BibTeX sources: agglomerative clustering, LLM cluster keywords given the phrase
+evidence, and the 30 phrases per cluster stored beside them, so the word cloud's phrase mode works.
 
 | corpus | path | size |
 |---|---|---|
-| hydrogen production | `00_stuff/datasets/out-2026-11.pickle` | ~12k records |
-| AOKK, latest | `00_stuff/rawdata/AOKK/scopebib-2026-11-full/run-without-retracted/kept-and-held-agglomerative-fullmap.pickle` | ~2k |
-| ECCOMAS 2024 | `00_stuff/datasets/eccomas2024.pickle` | ~2.5k |
-| arXiv, AI papers | `00_stuff/datasets/ai_papers/ai_papers_202611.bib`, BibTeX to import | ~1.3k |
-| biology education, final | `00_stuff/rawdata/biology_geography_health_education/202508/biology.pickle` | ~170 |
-| geography education, final | `00_stuff/rawdata/biology_geography_health_education/202512/geography.pickle` | ~130, LLM keywords |
+| hydrogen production | `investigations/cluster-keywords/data/hydrogen-evidence.pickle` | ~12k records, 87 clusters |
+| AOKK, latest | `investigations/cluster-keywords/data/aokk-evidence.pickle` | ~2k, 74 |
+| ECCOMAS 2024 | `investigations/cluster-keywords/data/eccomas-evidence.pickle` | ~2.5k, 84 |
+| arXiv, AI papers | `investigations/cluster-keywords/data/arxiv-evidence.pickle` | ~1.3k, 68 |
+| biology education, final | `investigations/cluster-keywords/data/biology-evidence.pickle` | ~160, 10 |
+| geography education, final | `investigations/cluster-keywords/data/geography-evidence.pickle` | ~130, 8 |
 | health education, as in the manuscript | `00_stuff/rawdata/biology_geography_health_education/202610/scopebib-2026-10-29e/visualizer-llm-topic.pickle` | 40, 7 LLM themes |
 
 **A per-message hotkey needs the blue dot on the right message first — press End.** In Librarian the
