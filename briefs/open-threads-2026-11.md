@@ -26,14 +26,10 @@ LLM's corpus-wide terms do not lead; an abbreviation counts as a repeat of its l
 list kept in the dataset, hyphen and joined spellings folded, and keywords capitalized as the corpus does. The
 maintainer has read the whole arXiv evidence comparison.
 
-- **Tonight: `run_new_imports.sh`**, on the maintainer's go; first rename the `-evidence` datasets to
-  `*-evidence-2026-11-23.pickle`. Expected to cover arXiv, biology, geography and probably AOKK by 22:00;
-  ECCOMAS and hydrogen another evening.
-- **Then a shortlist script** for the review of the new imports: the clusters that change most, where phrases and
-  LLM disagree, the largest, and those already read. Not yet written.
-- **Decisions waiting on the maintainer**: whether the evidence goes on by default (the arXiv read favours it,
-  with one cluster worse); whether to adopt embedding terms by their sentences (`out/context-embedding.md`, mixed);
-  and the hybrid's ordering prompt (option 3), which wants its own measurement.
+- **The new imports are done** (evening of 2026-11-24, all six corpora, LLM with evidence and hybrid). Next: the
+  maintainer reads the shortlists, `investigations/cluster-keywords/out/CORPUS-shortlist.md`.
+- **Decided the same day**: the evidence is on by default; embedding terms by their sentences is rejected. Still
+  open: the hybrid's ordering prompt (option 3), which wants its own measurement.
 
 ## Ready to pick up, no deadline
 

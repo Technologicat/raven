@@ -442,6 +442,10 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   (33, 38). So the picks are, from a script rather than by eye: the clusters whose label changes most between
   the old import and the new; those where the phrase and LLM labels overlap least; the few largest; and the ones
   already read, as regression checks, being cheap to judge.
+- **The new imports ran on the evening of 2026-11-24**, all twelve, 15:13 to 22:06, none failed. Each hybrid import
+  took its LLM answers from the ledger the evidence import before it had just written (all 68 clusters on arXiv),
+  so a corpus's two datasets share one LLM sample, and differ only by the hybrid combination. Shortlists:
+  `out/CORPUS-shortlist.md`, 5–13 clusters per corpus.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
