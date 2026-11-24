@@ -1102,8 +1102,8 @@ FILLED.xlsx` reads it. This unblocks rules v2.
 **Teachers as the users of the AI are out**, as against pupils or students. Not yet in `aokk.scope.toml`; it goes in
 with rules v2.
 
-**A table of the clusters is wanted for the article**: per cluster, its size and its keywords. Whether that becomes
-an export in the Visualizer is open (`TODO.md`, Visualizer, *A table of the clusters*).
+**A table of the clusters is wanted for the article**: per cluster, its size and its keywords. It becomes an export
+in the Visualizer (decided the same day; `TODO.md`, Visualizer, *A table of the clusters*).
 
 **Two views for the Visualizer**: show the purest clusters, and show the largest ones (`TODO.md`, the same item).
 
