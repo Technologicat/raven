@@ -19,6 +19,22 @@ See *Waiting on others* for what it still needs.
 The three infographics are in `img/` and embedded in the README and the apps' manuals (papers, Librarian,
 Visualizer); the light-background plot on its own is `img/visualizer-plot-light.png`, Misc grayed, with a 2% margin.
 
+## In progress: cluster keywords (2026-11-24)
+
+`investigations/cluster-keywords/README.md` has the detail. Built today: `clusters_keyword_method = "hybrid"` (the
+LLM's corpus-wide terms do not lead; an abbreviation counts as a repeat of its long form), the LLM's whole keyword
+list kept in the dataset, hyphen and joined spellings folded, and keywords capitalized as the corpus does. The
+maintainer has read the whole arXiv evidence comparison.
+
+- **Tonight: `run_new_imports.sh`**, on the maintainer's go; first rename the `-evidence` datasets to
+  `*-evidence-2026-11-23.pickle`. Expected to cover arXiv, biology, geography and probably AOKK by 22:00;
+  ECCOMAS and hydrogen another evening.
+- **Then a shortlist script** for the review of the new imports: the clusters that change most, where phrases and
+  LLM disagree, the largest, and those already read. Not yet written.
+- **Decisions waiting on the maintainer**: whether the evidence goes on by default (the arXiv read favours it,
+  with one cluster worse); whether to adopt embedding terms by their sentences (`out/context-embedding.md`, mixed);
+  and the hybrid's ordering prompt (option 3), which wants its own measurement.
+
 ## Ready to pick up, no deadline
 
 - **Matching the three reviews' study lists against the fulltext set** that arrived on 2026-11-17:
@@ -30,8 +46,8 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
-- **Colouring the Visualizer's map by year: next, building v0** (designed and ordered 2026-11-20). Then the
-  improved keyworder, then v1 with per-year keywords, before 0.2.11 is released.
+- **Colouring the Visualizer's map by year: next after the keyword work, building v0** (designed and ordered
+  2026-11-20). Then v1 with per-year keywords, before 0.2.11 is released.
   `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Decided: colouring by year*.
 - **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as
   DPG has none. Same brief.
