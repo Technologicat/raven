@@ -1099,6 +1099,25 @@ section), and the filled `sample-keeps.xlsx` has come back. A copy sits beside t
 `AOKK/scopebib-2026-11-11-rules-v2/keeps60-blind/sample-keeps-filled.xlsx`; `draw_blind_sample.py score keeps60-blind
 FILLED.xlsx` reads it. This unblocks rules v2.
 
+- **Five of the 60 were rated out of scope, one unsure, and the rest in scope.** By stratum: 3 of the 29 rated
+  conversational keeps (an upper bound of 24.6%), and 2 of the 30 others (19.5%).
+- **Four of the five have the teacher as the subject**, which is the rule the team decided the same day (below).
+  The team's reasons, translated:
+
+  | record | stratum | reason |
+  |---|---|---|
+  | `huang_empowering_2025` | conversational | teachers as the AI's users are what is studied |
+  | `shi_investigating_2024` | conversational | the same |
+  | `alammari_evaluating_2024` | other (`not_stated`) | the effects of adopting generative AI, from the teachers' point of view |
+  | `varella_evaluating_2022` | conversational | the subjects are developers and teachers, not learners; and the context is producing content for XR |
+  | `barenji_llm_2026` | other (feedback) | a RAG system evaluated on learners' essays; no interaction |
+
+- **The fifth is an existing rule**: only direct interaction with the AI counts (the 11.11 meeting).
+- **The unsure one, `li_eduaimentor_2026`** (conversational), needed the full text, and still does not say the level
+  of education: it speaks only of students and learners, who could be in upper secondary school.
+- **The open categories are not where the errors are.** Of the 30 non-conversational keeps, one feedback record was
+  rejected, and for lack of interaction, not for being feedback. No generative-tool record was rejected.
+
 **Teachers as the users of the AI are out**, as against pupils or students. Not yet in `aokk.scope.toml`; it goes in
 with rules v2.
 
