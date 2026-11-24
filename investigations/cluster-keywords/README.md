@@ -340,6 +340,14 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
     - **A fix would compare each term's similarity to its own centroid with its similarity to the others**,
       removing a per-term offset, as the control does. That is different from the centering rejected on
       2026-11-23, which moved the centroids. Not built: it reopens tuning, the maintainer's call.
+- **Cluster 65: both methods find good terms, and different ones.** The phrases quote the Qwen family
+  (*qwen3-omni, qwen series, qwen-image*), the LLM generalizes it to *open-source models* (in the run with the
+  evidence only). Both correct and useful. Similarly a *GPT* term could have been useful in cluster 44, had it
+  not crowded out the cluster's real topic there.
+- **Capitalization is inconsistent in both methods, in opposite ways** (general observation). The LLM title-cases
+  keywords at random (*Foundation Models* beside *vision-language models* in one list) but spells proper names
+  right; the phrases lowercase everything, proper names included: cluster 20's *solomonoff induction*, where the
+  LLM, given that phrase as evidence, wrote *Solomonoff induction*.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
