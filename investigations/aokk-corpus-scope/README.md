@@ -1132,6 +1132,9 @@ FILLED.xlsx` reads it. This unblocks rules v2.
     stay in.
   - **`huang` passes both**: the extractor read its population as the students, who did use the GPTs; the team's
     reading is that the instructors' design is what is studied. A borderline case the fields cannot see.
+  - **Decided (the maintainer, 2026-11-24): both rules send to a person, as a final spot check, and v2 is rules
+    only.** Holds are easy to drop programmatically afterwards. No new LLM run is needed, both rules reading fields
+    the run already extracted.
 - **The open categories are not where the errors are.** Of the 30 non-conversational keeps, one feedback record was
   rejected, and for lack of interaction, not for being feedback. No generative-tool record was rejected.
 
