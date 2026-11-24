@@ -1530,7 +1530,7 @@ def _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors, keyphrase_terms
 
 
 def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_terms=None, keyphrase_display=None,
-                              max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
+                              casing=None, max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), by `config.clusters_keyword_method`.
 
     `vis_data`: output of `_cluster_vis_data`, which see.
@@ -1546,6 +1546,10 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
 
                                             Output of `_normalize_keyphrases`, which see: each record's phrase
                                             terms, in the order of `vis_data`, and their display forms.
+
+    `casing`: with `"llm"` and `"hybrid"`, how the corpus capitalizes its words (`keyphrases.casing_table`); the
+              LLM's keywords are recased by it (`keyphrases.recase`), undoing its random title case while keeping
+              proper names. `None` leaves them as the LLM wrote them.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
@@ -1709,6 +1713,9 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         # spellings. Fold them together now that the whole vocabulary is known - which is the earliest
         # this can be done, and why it is a second pass rather than part of the loop.
         vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
+        if casing is not None:
+            vis_keywords_by_cluster = [[keyphrases.recase(k, casing) for k in keywords]
+                                       for keywords in vis_keywords_by_cluster]
 
         maybe_llm_keywords_by_cluster = [[] for _ in range(n_vis_clusters)]
         for cluster_id, llm_keywords in zip(llm_cluster_ids, vis_keywords_by_cluster):
@@ -2149,12 +2156,13 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
-        keyphrase_terms = keyphrase_display = None
+        keyphrase_terms = keyphrase_display = keyphrase_casing = None
         if visualizer_config.extract_keywords:
             all_keywords = _extract_keywords(input_data)
             if _is_cancelled():
                 return False
             keyphrase_terms, keyphrase_display = _normalize_keyphrases(input_data, vis_data)
+            keyphrase_casing = keyphrases.casing_table(input_data.keyphrases)
         else:
             logger.info("Keyword extraction disabled, skipping NLP analysis.")
             all_keywords = {}
@@ -2172,7 +2180,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         elif visualizer_config.extract_keywords:
             vis_keywords_by_cluster, maybe_keyword_lists_by_cluster, maybe_llm_keywords_by_cluster = _collect_cluster_keywords(
                 vis_data, n_vis_clusters, all_vectors,
-                keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display)
+                keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display, casing=keyphrase_casing)
         else:
             vis_keywords_by_cluster = []
         progress.tock()

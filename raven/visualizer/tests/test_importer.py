@@ -1029,6 +1029,22 @@ class TestHybridKeywords:
         assert "artificial intelligence" not in keywords[0], "the label kept all of the LLM's, so nothing is tested"
         assert llm == [["machine learning", "neural networks", "artificial intelligence"], ["generative models"]]
 
+    def test_the_llm_s_title_case_is_undone_and_the_corpus_s_capitals_kept(self, monkeypatch):
+        import numpy as np
+        from unpythonic.env import env
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(
+            lambda settings, prompt, **kw: env(reply="Foundation Models, Solomonoff Induction", reasoning=[]))}),
+            raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0) for i in range(2)]
+        keywords, _lists, _llm = importer._collect_cluster_keywords(vis_data, 1, np.ones((2, 4)),
+                                                                    casing={"solomonoff": "Solomonoff"})
+        assert keywords == [["foundation models", "Solomonoff induction"]]
+
     def test_only_the_configured_number_of_llm_keywords_lead(self, monkeypatch):
         _prompts, keywords, _lists, _llm = self._run(monkeypatch, ["machine learning, artificial intelligence, robots",
                                                      "generative models"], n_leading=1)

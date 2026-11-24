@@ -26,7 +26,7 @@ terms. So the module itself needs only NumPy.
 
 __all__ = ["EXTRACTION_VERSION",
            "sentence_case", "nfkc", "extract",
-           "normalize",
+           "casing_table", "recase", "normalize",
            "rank_terms", "umbrella_terms", "fuse",
            "label_groups",
            "top_terms",
@@ -42,12 +42,13 @@ import numpy as np
 from .text import stopwords as raven_stopwords
 
 # A cache of `extract`'s output is valid only for the version that wrote it. Bump this when extraction changes.
-EXTRACTION_VERSION = 1
+EXTRACTION_VERSION = 2
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
 _EDGE_POS = frozenset({"DET", "PRON", "NUM", "PUNCT", "ADP", "CCONJ", "SCONJ", "PART", "SYM", "AUX", "X", "SPACE"})
 _NOUN_POS = ("NOUN", "PROPN")
+_CASED_POS = frozenset({"NOUN", "PROPN", "ADJ"})
 _MAX_PHRASE_WORDS = 4
 _MIN_CHARS = 3
 
@@ -196,15 +197,27 @@ def extract(doc, *, stopwords: Container[str]) -> dict:
                  `raven.common.text.stopwords.academic_stopwords`.
 
     Returns a picklable `dict`: `"phrases"`, a sorted list of the document's phrase terms; `"definitions"`,
-    a list of the abbreviations it defines, as `(short, long)`; and `"nouns"`, a sorted list of the nouns it
-    uses, as written.
+    a list of the abbreviations it defines, as `(short, long)`; `"nouns"`, a sorted list of the nouns it
+    uses, as written; and `"casing"`, how it capitalizes its nouns and adjectives where a sentence does not
+    start, as `{lowercased word: the form most of its occurrences take}`, for `casing_table`.
 
     The text a document was parsed from is best prepared with `sentence_case` on its title, and Unicode NFKC
     normalization, so that "TiO₂" and "TiO2" are one term.
     """
     return {"phrases": sorted(_phrases(doc, stopwords)),
             "definitions": _abbreviations(doc),
-            "nouns": sorted({t.text.lower() for t in doc if t.pos_ in _NOUN_POS})}
+            "nouns": sorted({t.text.lower() for t in doc if t.pos_ in _NOUN_POS}),
+            "casing": _casing(doc)}
+
+
+def _casing(doc) -> dict[str, str]:
+    """`{lowercased word: its usual form}` for the nouns and adjectives of `doc` not starting a sentence."""
+    # A sentence's first word is capitalized whatever it is, so it says nothing about the word.
+    forms: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    for t in doc:
+        if t.pos_ in _CASED_POS and not t.is_sent_start and any(ch.isalpha() for ch in t.text):
+            forms[t.text.lower()][t.text] += 1
+    return {word: max(c.items(), key=lambda kv: (kv[1], kv[0] == word))[0] for word, c in forms.items()}
 
 
 # --------------------------------------------------------------------------------
@@ -215,6 +228,45 @@ def _plural_map(vocabulary: set[str]) -> dict[str, str]:
     # Folding only onto a form the corpus contains keeps a word that merely ends in "s" ("process") as it is.
     return {term: term[:-1] for term in vocabulary
             if term.endswith("s") and not term.endswith(("ss", "ics")) and term[:-1] in vocabulary}
+
+
+def casing_table(extracted: Sequence[dict]) -> dict[str, str]:
+    """How the corpus capitalizes its words: `{lowercased word: form}`, for `recase`.
+
+    `extracted`: `extract`'s output for every record of the corpus.
+
+    Each record votes for the form it mostly writes a word in, away from the start of a sentence, and the form
+    with the most votes wins, lowercase on a tie. So "Solomonoff" and "LoRA" keep their capitals, and a word
+    some papers capitalize for emphasis does not.
+    """
+    votes: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    for item in extracted:
+        for word, form in item.get("casing", {}).items():
+            votes[word][form] += 1
+    return {word: max(c.items(), key=lambda kv: (kv[1], kv[0] == word))[0]
+            for word, c in votes.items() if max(c.items(), key=lambda kv: (kv[1], kv[0] == word))[0] != word}
+
+
+def recase(term: str, casing: dict[str, str]) -> str:
+    """`term` capitalized as the corpus capitalizes its words (`casing_table`).
+
+    A word the table knows takes the corpus's form. Another keeps its own, unless the term is in title case
+    throughout ("Foundation Models"), as an LLM writes at random; then a word capitalized only by that is
+    lowercased. A word with capitals past its first letter ("LLMs", "iOS") always keeps them.
+    """
+    words = term.split()
+    title_cased = len(words) > 0 and all(w[:1].isupper() for w in words)
+
+    def one(part: str) -> str:
+        if not part:
+            return part
+        if part.lower() in casing:
+            return casing[part.lower()]
+        if any(ch.isupper() for ch in part[1:]):
+            return part
+        return part.lower() if title_cased else part
+
+    return " ".join("-".join(one(p) for p in w.split("-")) for w in words)
 
 
 def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tuple[list[set[str]], dict[str, str]]:
@@ -236,9 +288,11 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
       - **An abbreviation** with its long form, word by word, so "srl" and "self-regulated learning" are one
         term, and "generative ai" and "generative artificial intelligence" another. A definition made by two
         or more records applies corpus-wide; one made by a single record applies to that record only.
-      - **A hyphen and a space**, so "retrieval-augmented generation" and "retrieval augmented generation" are
-        one term, spelled as most of the corpus's records spell it. Only those two: "re-cover" and "recover"
-        stay apart.
+      - **A hyphen, a space, or nothing between two words**, so "retrieval-augmented generation" and "retrieval
+        augmented generation" are one term, and "bit-width" and "bitwidth" another, spelled as most of the
+        corpus's records spell it. This also joins "re-cover" and "recover", a price paid knowingly, being rare.
+
+    The display form is capitalized as the corpus capitalizes its words (`casing_table`, `recase`).
     """
     # Why a single record's definition stays local: a paper calling its system CARE must not take over the
     # word "care" everywhere else.
@@ -278,13 +332,13 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
     # Fold plurals again: a long form arrives as written, and "Large Language Models (LLMs)" is plural.
     folds = _plural_map({c for record in expanded for c in record.values()})
 
-    # Then hyphens: each spelling class goes to its most common member, counted in records. Last, so that it
-    # sees the plural and abbreviation folds' output, where variants that differed in more than a hyphen have
-    # already met.
+    # Then hyphens and joins: each spelling class goes to its most common member, counted in records. Last, so
+    # that it sees the plural and abbreviation folds' output, where variants that differed in more than that
+    # have already met.
     record_counts = collections.Counter(c for record in expanded for c in {folds.get(c, c) for c in record.values()})
     by_spelling = collections.defaultdict(list)
     for c in record_counts:
-        by_spelling[c.replace("-", " ")].append(c)
+        by_spelling[c.replace("-", "").replace(" ", "")].append(c)
     hyphen_folds = {c: max(members, key=lambda m: (record_counts[m], m))
                     for members in by_spelling.values() if len(members) > 1 for c in members}
 
@@ -305,6 +359,7 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
 
     # An abbreviation the corpus uses unexplained is one its readers know ("chatgpt"); one it defines wherever
     # it appears is one they would not ("fwp"), so that one shows spelled out ("fast weight programmer").
+    casing = casing_table(extracted)
     display = {}
     for c, forms in surface.items():
         defining, undefined = short_use.get(c, (0, 0))
@@ -313,6 +368,7 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
             display[c] = max(long_forms)[1] if long_forms else c
         else:
             display[c] = forms.most_common(1)[0][0]
+        display[c] = recase(display[c], casing)
     return terms_out, display
 
 

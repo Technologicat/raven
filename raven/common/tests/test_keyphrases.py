@@ -10,9 +10,10 @@ import pytest
 from raven.common import keyphrases
 
 
-def _extracted(phrases, definitions=(), nouns=()):
+def _extracted(phrases, definitions=(), nouns=(), casing=None):
     """One record as `extract` returns it."""
-    return {"phrases": sorted(phrases), "definitions": list(definitions), "nouns": sorted(nouns)}
+    return {"phrases": sorted(phrases), "definitions": list(definitions), "nouns": sorted(nouns),
+            "casing": dict(casing or {})}
 
 
 class TestSentenceCase:
@@ -68,9 +69,22 @@ class TestNormalize:
         terms, _ = keyphrases.normalize(records)
         assert all(t == {"retrieval augmented generation"} for t in terms)
 
-    def test_a_hyphen_does_not_join_a_word(self):
-        terms, _ = keyphrases.normalize([_extracted({"re-cover"}), _extracted({"recover"})])
-        assert terms == [{"re-cover"}, {"recover"}]
+    def test_a_joined_spelling_is_one_term_with_the_hyphenated_one(self):
+        records = [_extracted({"bitwidth"}), _extracted({"bitwidth"}), _extracted({"bit-width"})]
+        terms, _ = keyphrases.normalize(records)
+        assert all(t == {"bitwidth"} for t in terms)
+
+    def test_different_letters_stay_apart(self):
+        """Control for the folds above: only the separators may differ."""
+        terms, _ = keyphrases.normalize([_extracted({"bit-width"}), _extracted({"bit-depth"})])
+        assert terms == [{"bit-width"}, {"bit-depth"}]
+
+    def test_the_display_form_takes_the_corpus_s_capitals(self):
+        records = [_extracted({"solomonoff induction"}, casing={"solomonoff": "Solomonoff"}),
+                   _extracted({"solomonoff induction"}, casing={"solomonoff": "Solomonoff"})]
+        terms, display = keyphrases.normalize(records)
+        assert terms[0] == {"solomonoff induction"}, "the term itself stays lowercase; only its display changes"
+        assert display["solomonoff induction"] == "Solomonoff induction"
 
     def test_an_abbreviation_defined_by_two_records_applies_everywhere(self):
         definition = ("srl", "self-regulated learning")
@@ -110,6 +124,36 @@ class TestNormalize:
         records = [_extracted({"fwp"}, [definition])] * 2 + [_extracted({"fwp"})]  # one record in three undefined
         terms, display = keyphrases.normalize(records, short_form_share=0.3)
         assert display[next(iter(terms[0]))] == "fwp"
+
+
+class TestCasing:
+    def test_the_form_most_records_use_wins(self):
+        records = [_extracted(set(), casing={"lora": "LoRA"}), _extracted(set(), casing={"lora": "LoRA"}),
+                   _extracted(set(), casing={"lora": "lora"})]
+        assert keyphrases.casing_table(records) == {"lora": "LoRA"}
+
+    def test_a_tie_goes_to_lowercase(self):
+        records = [_extracted(set(), casing={"model": "Model"}), _extracted(set(), casing={"model": "model"})]
+        assert keyphrases.casing_table(records) == {}
+
+    def test_a_known_word_takes_the_corpus_s_form(self):
+        assert keyphrases.recase("solomonoff induction", {"solomonoff": "Solomonoff"}) == "Solomonoff induction"
+
+    def test_random_title_case_is_undone(self):
+        assert keyphrases.recase("Foundation Models", {}) == "foundation models"
+
+    def test_title_case_does_not_undo_a_proper_name_the_corpus_knows(self):
+        assert keyphrases.recase("Solomonoff Induction", {"solomonoff": "Solomonoff"}) == "Solomonoff induction"
+
+    def test_a_partly_capitalized_term_keeps_its_unknown_capitals(self):
+        """Control for the title-case rule: not every word capitalized, so the capitals are taken as meant."""
+        assert keyphrases.recase("Bayes-optimal agents", {}) == "Bayes-optimal agents"
+
+    def test_capitals_past_the_first_letter_are_kept(self):
+        assert keyphrases.recase("Large LLMs", {}) == "large LLMs"
+
+    def test_hyphenated_parts_are_recased_one_by_one(self):
+        assert keyphrases.recase("qwen3-omni", {"qwen3": "Qwen3"}) == "Qwen3-omni"
 
 
 class TestRankTerms:
@@ -344,6 +388,12 @@ class TestExtract:
         phrases = keyphrases.extract(nlp("This paper concerns theoretical physics."), stopwords=stopwords)["phrases"]
         assert "physics" in phrases or "theoretical physics" in phrases
         assert not any(p.split()[-1] == "physic" for p in phrases)
+
+    def test_casing_records_a_proper_name_and_skips_the_sentence_start(self, nlp, stopwords):
+        doc = nlp("Induction is hard. We study Solomonoff induction with LoRA adapters.")
+        casing = keyphrases.extract(doc, stopwords=stopwords)["casing"]
+        assert casing.get("solomonoff") == "Solomonoff"
+        assert casing.get("induction") == "induction", "the sentence-initial 'Induction' must not count"
 
     def test_an_abbreviation_definition_is_found(self, nlp, stopwords):
         doc = nlp("We use self-regulated learning (SRL) in class.")

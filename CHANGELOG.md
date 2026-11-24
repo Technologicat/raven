@@ -199,7 +199,8 @@
 - **Cluster keywords are noun phrases, and say what each cluster is about.**
   - Where the keywords were single words, *palm, mill, effluent*, they are now phrases such as *palm oil mill effluent*. The first says what the cluster is about, and the rest how it differs from the others.
   - An abbreviation and its long form count as one keyword, spelled out where the papers define it each time they use it.
-  - So do spellings that differ only by a hyphen, *chain-of-thought* and *chain of thought*.
+  - So do spellings that differ only by a hyphen or a space, *chain-of-thought* and *chain of thought*, *bit-width* and *bitwidth*.
+  - Keywords are capitalized as the papers capitalize them: *Solomonoff induction*, *LoRA*. This applies to LLM keywords too, which lose their random title case.
   - This is `clusters_keyword_method = "phrases"`, the new default and the fallback when no LLM backend answers, in [`raven.visualizer.config`](raven/visualizer/config.py). It needs no LLM.
   - It replaces `"frequencies"`, which an import now refuses, saying what to write instead.
   - Datasets imported before keep their keywords; import again for the new ones.
