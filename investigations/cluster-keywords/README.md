@@ -297,6 +297,24 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
     generation*, beside *diffusion models* and *text-to-image generation*).
   - **Whether a facet of a tenth of the cluster deserves one of six places** is a judgement about labels rather
     than a fact about either method.
+
+### The maintainer's read of `out/arxiv-llm-evidence.md`, 2026-11-24
+
+- **Clusters 60 and 37: fine.**
+- **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
+- **Cluster 19, the diffusion cluster**: its *AI safety* is a grounded minority theme (above).
+- **Cluster 2: *science of science*, also a minority, in a cluster that is all minorities.** Its 45 records are the
+  corpus's papers that are not about AI: black holes and wormholes, cosmology, JWST and Sgr A* observations,
+  numerical PDE schemes, category theory, the Fermi paradox, space elevators. Three are metascience (*Growth rates
+  of modern science*, *The decline of disruptive science and technology*, *The strain on scientific publishing*).
+  The model's reasoning in both logs calls the set "very diverse", counts those three as a theme, and so gives
+  each facet a place; with no dominant theme, every keyword is a minority. Here the evidence kept it, as
+  *scientific progress*. The phrase label (*equation, universe, physics, orbit, energy, black hole*) is the
+  generic one.
+  - **Its purity is the corpus's highest**: 0.83, against a median of 0.41. Purity counts how many of a record's
+    nearest neighbours share its cluster, so in a corpus about AI, papers about anything else have only each other
+    for neighbours. **Purity measures how separate a cluster is, not how coherent**, and a catch-all of outliers
+    scores best on it. Worth remembering wherever purity is shown or used as a cutoff.
 - **The other five corpora** (`out/<corpus>-llm-evidence.md`), with no repeat run, so read against arXiv's
   noise floor of 0.40:
 
