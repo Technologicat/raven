@@ -279,6 +279,10 @@ and *effluent*.
   and spelled out where papers define it wherever they use it (*FWP* becomes *fast weight programmer*).
 - **The dataset keeps a longer list per cluster**, 30 phrases by default, each with the share of the cluster's
   records containing it.
+- **Phrases quote the papers, and an LLM can abstract.** A phrase label is made of words the papers use, so
+  it never names a topic the cluster does not have, but it cannot name what the papers share when each words
+  it differently. An LLM (`clusters_keyword_method = "llm"`) can, and now and then names a theme the cluster
+  does not have. Phrases need no LLM backend, and give the same labels on every import.
 - The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
   no LLM, and is what `"llm"` falls back to when no backend answers. It replaces `"frequencies"`; a
   configuration still naming that is refused, with a message saying what to write instead.
