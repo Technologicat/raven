@@ -1731,7 +1731,8 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                 phrase_list = maybe_keyword_lists_by_cluster[cluster_id]
                 leading = [] if llm_keywords == ["<unknown topic>"] else distinctive[k][:n_leading]
                 if leading or phrase_list:
-                    vis_keywords_by_cluster[k] = keyphrases.lead_with(leading, phrase_list, max_vis_kw)
+                    vis_keywords_by_cluster[k] = keyphrases.lead_with(leading, phrase_list, max_vis_kw,
+                                                                      display=keyphrase_display)
     else:
         error_msg = f"Unknown cluster keyword method '{keyword_method}'; valid: {KEYWORD_METHODS}. Please check your `raven.visualizer.config`."
         logger.error(f"_collect_cluster_keywords: {error_msg}")

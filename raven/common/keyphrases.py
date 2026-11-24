@@ -610,24 +610,37 @@ def without_umbrella_terms(lists: Sequence[Sequence[str]], *, threshold_fraction
     return [[t for t in terms if _comparable(t) not in umbrella] for terms in lists]
 
 
-def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int) -> list[str]:
+def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int, *,
+              display: dict[str, str] | None = None) -> list[str]:
     """A label of at most `top` terms: `leading`, then terms of `ranked` that add something new.
 
     `leading`: terms to put first, as written, such as an LLM's keywords.
     `ranked`: `(term, share)` pairs, best first, such as one group's list from `label_groups`.
+    `display`: `normalize`'s map from canonical terms to their display forms, when `ranked` holds display forms.
+               Each term is then compared in both forms, so an LLM's *low-rank adaptation* is a repeat of a
+               phrase displayed as *lora*, and the other way round.
 
     A term of `ranked` is skipped when it repeats a term already taken, or is nested in one, or one in it,
     compared without case, hyphens or a final plural "s": after *reinforcement learning*, neither
     *Reinforcement Learning* nor *deep reinforcement learning* adds a term.
     """
+    other_form = {}
+    for canonical, shown in (display or {}).items():
+        if canonical != shown:
+            other_form.setdefault(_comparable(shown), _comparable(canonical))
+            other_form.setdefault(_comparable(canonical), _comparable(shown))
+
+    def forms(term: str) -> list[str]:
+        c = _comparable(term)
+        return [c, other_form[c]] if c in other_form else [c]
+
     label = list(leading[:top])
-    taken = [_comparable(t) for t in label]
+    taken = [f for t in label for f in forms(t)]
     for term, _share in ranked:
         if len(label) >= top:
             break
-        c = _comparable(term)
-        if any(c == t or _nested(c, t) for t in taken):
+        if any(c == t or _nested(c, t) for c in forms(term) for t in taken):
             continue
         label.append(term)
-        taken.append(c)
+        taken.extend(forms(term))
     return label

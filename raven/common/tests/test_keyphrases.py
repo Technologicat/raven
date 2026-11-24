@@ -340,6 +340,18 @@ class TestWithoutUmbrellaTerms:
 
 
 class TestLeadWith:
+    def test_an_abbreviation_shown_for_a_long_form_is_a_repeat(self):
+        ranked = [("lora", 0.5), ("gpu", 0.4)]
+        display = {"low-rank adaptation": "lora"}
+        assert keyphrases.lead_with(["low-rank adaptation"], ranked, 3, display=display) == ["low-rank adaptation", "gpu"]
+        assert keyphrases.lead_with(["LoRA"], [("low-rank adaptation", 0.5)], 3,
+                                    display={"low-rank adaptation": "low-rank adaptation", "lora": "lora"}) == \
+            ["LoRA", "low-rank adaptation"], "with no mapping between them, the two are different terms"
+
+    def test_without_the_display_map_the_two_forms_are_not_matched(self):
+        """Negative control for the test above."""
+        assert keyphrases.lead_with(["low-rank adaptation"], [("lora", 0.5)], 3) == ["low-rank adaptation", "lora"]
+
     def test_the_leading_terms_come_first_and_the_ranking_fills_the_rest(self):
         assert keyphrases.lead_with(["AI safety"], [("prompt injection", 0.4), ("jailbreak", 0.3)], 3) == \
             ["AI safety", "prompt injection", "jailbreak"]

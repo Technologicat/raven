@@ -501,8 +501,9 @@ the rest with the GPT-series phrases.
     first" may well strengthen that. What is wanted is closer to "most specific to this cluster first".
 - **Built the same day: `keyphrases.without_umbrella_terms`**, used by hybrid before it takes the LLM's first
   two. On the stored arXiv evidence run it drops only *large language models* (23 clusters) and *language
-  models* (8), and cluster 44 then leads with *LLM evaluation, LLM-as-a-judge*. Left: an abbreviation is not a
-  repeat to `lead_with`, so cluster 38 reads *low-rank adaptation*, then the phrases' *lora*.
+  models* (8), and cluster 44 then leads with *LLM evaluation, LLM-as-a-judge*. An abbreviation was then not a
+  repeat to `lead_with`, so cluster 38 read *low-rank adaptation*, then the phrases' *lora*; fixed the same day,
+  `lead_with` comparing each phrase in its canonical form as well as its displayed one.
 - **The question behind the share: are six keywords enough, and at which cluster sizes?** Two questions in one:
   how many to show, which the header and tooltip limit and the planned expandable list relaxes; and how many to
   extract and store, which nothing limits. Unmeasured. A cheap first measurement from data already stored: per
