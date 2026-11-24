@@ -27,6 +27,20 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Can the lorebook's definitions round keep the model from looking a term up?
+
+*Cluster: lorebook · Cost: M · Gate: none; gufo running on the LAN · Filed: 2026-11-24 · See also: `raven/librarian/lorebook-porting.md` ("Where the definitions go"), `investigations/context-injects/`, grimoire's `briefs/ports-brief.md` (Open WebUI, "Observed in a live test")*
+
+Seen once in grimoire's Open WebUI port, which inserts definitions in Raven's shape: a round of `lorebook_lookup` calls nobody made, answered by the entries, just before the user's message. In a chat that had just discussed AI ethnographies, "Use your lorebook to look up 'aria-worthy'" went to the model with the *AI ethnography* round just before it. The model made no call, and answered "I don't have a lorebook entry for "aria-worthy" — nothing came back", as if that round had been its own lookup of the term it was asked about. In a fresh chat, the same request made the call, and the lookup found *Aria-worthy design*. `flash-next` on gufo, one trial each way: the two chats differ only in that round and the exchange before it, so the cause is inferred.
+
+Raven stores the same round in the same place, so the question is Raven's, and its answer would change the porting guide and every port together. The shape was chosen by measurement, the tool round before the question being the only one that worked across the local models tested, so a change wants measuring first, with the context-inject harness:
+
+- **Reproduce it**: a request to look up a term, with an unrelated definitions round before it, against one without, over enough trials to tell a tendency from chance, and on more than one model.
+- **Then the candidate fixes**, against the same baseline:
+  - the round says it was given: a line in the assistant message, such as "Definitions for terms in the conversation:", or a line opening each answer;
+  - the round placed elsewhere, before the stretch of conversation it was scanned from.
+- **And whether a fix costs what the shape was chosen for**: the definitions still used, on the models where the shape was measured.
+
 ## Stock-take of the backend-specific features, for strata and gufo
 
 *Cluster: llmclient · Cost: M · Gate: none; strata and gufo both running on the LAN · Filed: 2026-11-18 · See also: "Upgrade oobabooga and re-check Raven's ooba support", "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`"*
