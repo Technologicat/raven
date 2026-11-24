@@ -318,7 +318,7 @@ The BibTeX importer caches its intermediate data per input file, in a folder nam
 
 An answer is filed by its whole prompt, so anything that changes the prompt asks again, and so does another model.
 
-Currently, the dimension reduction that produces the 2D semantic map is trained using up to 10k data items, picked at random if the input data contains more.
+With t-SNE, the default (`vis_method`), the 2D semantic map is fitted on every record. With UMAP it is fitted on a sample of representative records, a few from each of the clusters found in at most 10k records picked at random, and the rest of the records are placed by that fit.
 
 Currently, it is not possible to add new data into an existing Raven-visualizer dataset (to overlay new data on an existing, already trained dimension reduction). This is currently a major usability drawback, particularly for the use case of following ongoing research trends, so this will likely change in the future.
 

@@ -236,6 +236,13 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   ([Barnes and Hut, 1986](https://en.wikipedia.org/wiki/Barnes%E2%80%93Hut_simulation)), which treats a distant
   cluster of bodies as one. What else 100k touches is not yet surveyed: the importer's stages, the hover and
   search queries, the info panel.
+  - **One importer stage is known: embeddings and NLP extraction save nothing until a whole input file is done.**
+    At these sizes that is minutes per file, NLP running at about 25 records per second by the importer's own
+    note; at 100k records it is over an hour, lost if the import stops part way. The fix is to send a file in
+    chunks of a few thousand records and save each: chunks far larger than the batches spaCy (1,000 documents in
+    3.8) and the embedder make inside one call, so the batching is kept. The LLM stages already keep their answers
+    (since 2026-11-24). Cost S–M: a chunked cache format in the input's cache folder, and a test that a stopped
+    run resumes.
 - **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering. Scoped in `briefs/visualizer-filter-by-date-and-recolour-brief.md`.
 
 - **[Low]** Convert filter to selection and vice versa (useful e.g. to select all items from 2020–2024, then invert).
