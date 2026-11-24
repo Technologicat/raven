@@ -45,13 +45,13 @@ HYDROGEN = R / "100000_most_relevant_refs_of_hydrogen_productionzip"
 
 # Each corpus's embeddings caches, in the order the import read their BibTeX files (`run_llm_evidence_imports.sh`).
 CORPORA = {
-    "arxiv": [ROOT / "00_stuff/datasets/ai_papers/ai_papers_202611_embeddings_cache.npz"],
-    "aokk": [R / "AOKK/scopebib-2026-11-full/run-without-retracted/kept-and-held_embeddings_cache.npz"],
-    "eccomas": [ROOT / "00_stuff/datasets/ECCOMAS2024/success_final_manually_fixed_and_added_missing_abstracts_embeddings_cache.npz"],
-    "hydrogen": [HYDROGEN / "savedrecs_embeddings_cache.npz", HYDROGEN / "savedrecs-2_embeddings_cache.npz",
-                 HYDROGEN / "savedrecs-3_embeddings_cache.npz"],
-    "biology": [R / "biology_geography_health_education/202508/biology_embeddings_cache.npz"],
-    "geography": [R / "biology_geography_health_education/202512/geography_embeddings_cache.npz"],
+    "arxiv": [ROOT / "00_stuff/datasets/ai_papers/ai_papers_202611/embeddings_cache.npz"],
+    "aokk": [R / "AOKK/scopebib-2026-11-full/run-without-retracted/kept-and-held/embeddings_cache.npz"],
+    "eccomas": [ROOT / "00_stuff/datasets/ECCOMAS2024/success_final_manually_fixed_and_added_missing_abstracts/embeddings_cache.npz"],
+    "hydrogen": [HYDROGEN / "savedrecs/embeddings_cache.npz", HYDROGEN / "savedrecs-2/embeddings_cache.npz",
+                 HYDROGEN / "savedrecs-3/embeddings_cache.npz"],
+    "biology": [R / "biology_geography_health_education/202508/biology/embeddings_cache.npz"],
+    "geography": [R / "biology_geography_health_education/202512/geography/embeddings_cache.npz"],
 }
 
 
