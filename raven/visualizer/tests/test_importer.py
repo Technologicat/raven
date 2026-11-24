@@ -881,7 +881,7 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
     monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
     with caplog.at_level("WARNING"):
-        vis_keywords_by_cluster, _maybe_lists = importer._collect_cluster_keywords(vis_data, 1, all_vectors)
+        vis_keywords_by_cluster, _maybe_lists, _maybe_llm = importer._collect_cluster_keywords(vis_data, 1, all_vectors)
         return vis_keywords_by_cluster
 
 
@@ -911,15 +911,21 @@ class TestPhraseKeywords:
 
     def test_each_cluster_gets_its_own_phrases(self, two_clusters):
         vis_data, terms, display, all_vectors = two_clusters
-        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
-                                                             keyphrase_display=display)
+        keywords, lists, _maybe_llm = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
+                                                                         keyphrase_display=display)
         assert set(keywords[0]) == {"deep learning", "neural network"}
         assert set(keywords[1]) == {"diffusion model", "image generation"}
 
+    def test_no_llm_keywords_are_reported(self, two_clusters):
+        vis_data, terms, display, all_vectors = two_clusters
+        _keywords, _lists, maybe_llm = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
+                                                                          keyphrase_display=display)
+        assert maybe_llm is None
+
     def test_the_longer_lists_begin_with_the_keywords_and_carry_shares(self, two_clusters):
         vis_data, terms, display, all_vectors = two_clusters
-        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
-                                                             keyphrase_display=display)
+        keywords, lists, _maybe_llm = importer._collect_cluster_keywords(vis_data, 2, all_vectors, keyphrase_terms=terms,
+                                                                         keyphrase_display=display)
         for cluster_id in range(2):
             assert [k for k, _ in lists[cluster_id][:len(keywords[cluster_id])]] == keywords[cluster_id]
             assert all(share == 1.0 for _, share in lists[cluster_id])
@@ -967,12 +973,12 @@ class TestLLMKeywordEvidence:
 
     def test_without_the_setting_the_prompt_is_as_before(self, monkeypatch):
         """Negative control for the test above: the same cluster, with the evidence off."""
-        prompts, (_keywords, lists) = self._run(monkeypatch, evidence=False)
+        prompts, (_keywords, lists, _llm) = self._run(monkeypatch, evidence=False)
         assert "Evidence" not in prompts[0]
         assert lists is None
 
     def test_the_phrase_lists_are_kept_with_the_llm_keywords(self, monkeypatch):
-        _prompts, (keywords, lists) = self._run(monkeypatch, evidence=True)
+        _prompts, (keywords, lists, _llm) = self._run(monkeypatch, evidence=True)
         assert keywords == [["neural networks"]]
         assert [k for k, _ in lists[0]] == ["deep learning", "neural network"]
 
@@ -1005,36 +1011,42 @@ class TestHybridKeywords:
         candidates = ([{"phrases": ["deep learning", "neural network"], "definitions": [], "nouns": []}] * 3 +
                       [{"phrases": ["diffusion model", "image generation"], "definitions": [], "nouns": []}] * 3)
         terms, display = importer._normalize_keyphrases(env(keyphrases=candidates), vis_data)
-        keywords, lists = importer._collect_cluster_keywords(vis_data, 2, np.random.default_rng(0).standard_normal((6, 4)),
-                                                             keyphrase_terms=terms, keyphrase_display=display)
-        return prompts, keywords, lists
+        keywords, lists, llm = importer._collect_cluster_keywords(vis_data, 2, np.random.default_rng(0).standard_normal((6, 4)),
+                                                                  keyphrase_terms=terms, keyphrase_display=display)
+        return prompts, keywords, lists, llm
 
     def test_the_llm_leads_and_the_phrases_that_add_something_follow(self, monkeypatch):
-        _prompts, keywords, lists = self._run(monkeypatch, ["machine learning, neural networks, artificial intelligence",
-                                                            "generative models"])
+        _prompts, keywords, lists, _llm = self._run(monkeypatch, ["machine learning, neural networks, artificial intelligence",
+                                                    "generative models"])
         assert "neural network" in [p for p, _ in lists[0]], "no phrase repeats the LLM's, so nothing is tested"
         assert keywords[0] == ["machine learning", "neural networks", "deep learning"]
         assert keywords[1][0] == "generative models"
         assert set(keywords[1][1:]) == {"diffusion model", "image generation"}
 
+    def test_the_llm_s_whole_list_is_kept_beside_the_label(self, monkeypatch):
+        _prompts, keywords, _lists, llm = self._run(monkeypatch, ["machine learning, neural networks, artificial intelligence",
+                                                                  "generative models"])
+        assert "artificial intelligence" not in keywords[0], "the label kept all of the LLM's, so nothing is tested"
+        assert llm == [["machine learning", "neural networks", "artificial intelligence"], ["generative models"]]
+
     def test_only_the_configured_number_of_llm_keywords_lead(self, monkeypatch):
-        _prompts, keywords, _lists = self._run(monkeypatch, ["machine learning, artificial intelligence, robots",
-                                                             "generative models"], n_leading=1)
+        _prompts, keywords, _lists, _llm = self._run(monkeypatch, ["machine learning, artificial intelligence, robots",
+                                                     "generative models"], n_leading=1)
         assert keywords[0][0] == "machine learning"
         assert "artificial intelligence" not in keywords[0]
 
     def test_a_cluster_the_llm_found_no_theme_in_gets_its_phrase_label(self, monkeypatch):
-        _prompts, keywords, lists = self._run(monkeypatch, ["keyword extraction failed", "generative models"])
+        _prompts, keywords, lists, _llm = self._run(monkeypatch, ["keyword extraction failed", "generative models"])
         assert set(keywords[0]) == {"deep learning", "neural network"}
         assert keywords[0] == [p for p, _ in lists[0]][:len(keywords[0])]
 
     def test_the_phrase_lists_are_kept_without_the_evidence_setting(self, monkeypatch):
-        prompts, _keywords, lists = self._run(monkeypatch, ["machine learning", "generative models"], evidence=False)
+        prompts, _keywords, lists, _llm = self._run(monkeypatch, ["machine learning", "generative models"], evidence=False)
         assert lists is not None and all(lists)
         assert "Evidence from the whole cluster" not in prompts[0]
 
     def test_the_evidence_setting_reaches_the_prompt_as_with_llm(self, monkeypatch):
-        prompts, _keywords, _lists = self._run(monkeypatch, ["machine learning", "generative models"], evidence=True)
+        prompts, _keywords, _lists, _llm = self._run(monkeypatch, ["machine learning", "generative models"], evidence=True)
         assert "Evidence from the whole cluster" in prompts[0]
 
     def test_without_a_backend_it_falls_back_to_phrases(self, monkeypatch):
@@ -1186,6 +1198,7 @@ class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
                              for other in node.keys)}
         assert saved_keys, "no dict literal here looks like the saved dataset, so this test checks nothing"
         assert "clusters_keyword_method" in saved_keys
+        assert "cluster_llm_keywords" in saved_keys
 
 
 class TestCachesDescribeTheirRecords:

@@ -1563,7 +1563,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                             being a valid answer. Running out logs an error and leaves the cluster with
                             `"<unknown topic>"`.
 
-    Returns `(vis_keywords_by_cluster, maybe_keyword_lists_by_cluster)`:
+    Returns `(vis_keywords_by_cluster, maybe_keyword_lists_by_cluster, maybe_llm_keywords_by_cluster)`:
 
       - `vis_keywords_by_cluster`: a list, where the `k`th item is the list of keywords (`str`) for cluster ID
         `k`, the most telling first.
@@ -1572,6 +1572,10 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         of the cluster's records containing the keyword; it begins with the cluster's `vis_keywords_by_cluster`.
         With `"hybrid"`, the same phrase lists. With `"llm"`, the same when the evidence setting computed them,
         else `None`.
+      - `maybe_llm_keywords_by_cluster`: with `"llm"` and `"hybrid"`, a list, where the `k`th item is the LLM's
+        own keywords for cluster `k`, all of them, as canonicalized; `[]` for a cluster with no records. With
+        `"phrases"`, `None`. In hybrid mode it is what says which of a label's terms the LLM gave, and which of
+        its themes the label had no room for.
 
     With `"hybrid"`, a cluster's keywords are the LLM's first `config.clusters_keyword_hybrid_llm_count`, then
     its phrases that add something new (`keyphrases.lead_with`); a cluster the LLM found no theme in gets its
@@ -1584,6 +1588,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
     # run having stopped before reaching this.
     keyword_method = _effective_keyword_method()
     maybe_keyword_lists_by_cluster = None
+    maybe_llm_keywords_by_cluster = None
     if keyword_method == "phrases":
         with timer() as tim:
             maybe_keyword_lists_by_cluster = _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors,
@@ -1705,6 +1710,10 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         # this can be done, and why it is a second pass rather than part of the loop.
         vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
 
+        maybe_llm_keywords_by_cluster = [[] for _ in range(n_vis_clusters)]
+        for cluster_id, llm_keywords in zip(llm_cluster_ids, vis_keywords_by_cluster):
+            maybe_llm_keywords_by_cluster[cluster_id] = list(llm_keywords)
+
         if keyword_method == "hybrid":
             n_leading = visualizer_config.clusters_keyword_hybrid_llm_count
             for k, (cluster_id, llm_keywords) in enumerate(zip(llm_cluster_ids, vis_keywords_by_cluster)):
@@ -1717,7 +1726,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         logger.error(f"_collect_cluster_keywords: {error_msg}")
         raise ValueError(error_msg)
 
-    return vis_keywords_by_cluster, maybe_keyword_lists_by_cluster
+    return vis_keywords_by_cluster, maybe_keyword_lists_by_cluster, maybe_llm_keywords_by_cluster
 
 
 def _normalize_keyphrases(input_data, vis_data):
@@ -2157,10 +2166,11 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # Find a set of keywords for each cluster
 
         maybe_keyword_lists_by_cluster = None
+        maybe_llm_keywords_by_cluster = None
         if maybe_llm_themes is not None:
             vis_keywords_by_cluster = [[theme["name"]] for theme in maybe_llm_themes]
         elif visualizer_config.extract_keywords:
-            vis_keywords_by_cluster, maybe_keyword_lists_by_cluster = _collect_cluster_keywords(
+            vis_keywords_by_cluster, maybe_keyword_lists_by_cluster, maybe_llm_keywords_by_cluster = _collect_cluster_keywords(
                 vis_data, n_vis_clusters, all_vectors,
                 keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display)
         else:
@@ -2216,10 +2226,14 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            "clusters_keyword_method": _effective_keyword_method(),
                            "all_keywords": all_keywords,
                            "vis_keywords_by_cluster": vis_keywords_by_cluster,
-                           # With `"phrases"`, each cluster's longer keyword list, `(keyword, share)` pairs
-                           # beginning with its `vis_keywords_by_cluster`; `None` otherwise. Nothing in the
-                           # GUI reads it yet.
+                           # Each cluster's longer phrase list, `(keyword, share)` pairs, best first: with
+                           # `"phrases"` and `"hybrid"`, and with `"llm"` when the evidence setting is on;
+                           # `None` otherwise. With `"phrases"` it begins with `vis_keywords_by_cluster`.
+                           # Nothing in the GUI reads it yet.
                            "cluster_keyword_lists": maybe_keyword_lists_by_cluster,
+                           # With `"llm"` and `"hybrid"`, each cluster's keywords as the LLM gave them, all of
+                           # them; `None` otherwise. In hybrid mode, the label holds only the first few.
+                           "cluster_llm_keywords": maybe_llm_keywords_by_cluster,
                            # How each record's `keyphrases` term is displayed; `None` when keywords were not
                            # extracted. The phrase word cloud reads both.
                            "keyphrase_display": keyphrase_display,
