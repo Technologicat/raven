@@ -390,7 +390,7 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
         sentence scores as typical of the cluster.
       - **Rejected, on the maintainer's read of the arXiv labels (2026-11-24): the sentences lose more often than
         they win.** Worse in 2, 6 (*brain* where a reader would search *neuroscience*), 7 (generic words, and the
-        central *alignment research* gone), 10 (*label*), 12 (*cat*), 15, 16 (*single model*), 19 (*gan* gone), 20
+        central *alignment research* gone), 10 (*label*), 12 (*miou*, the segmentation metric mIoU: on topic, but a measure rather than a subject), 15, 16 (*single model*), 19 (*gan* gone), 20
         (*Solomonoff induction* gone), 26 (*news*) and 27.
       - **Why the table above misled: it measured whether the bias was gone, not whether the labels were good.**
         It counts single words kept, and credits *news* exactly as it credits *hallucination*.
