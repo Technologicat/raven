@@ -106,6 +106,22 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[High]** DOI: record DOI in BibTeX importer; show DOI per item in info panel; per-item button to open official webpage (`https://dx.doi.org/...`); export list of DOIs/URLs for fulltext automation.
   - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Also wanted soon.
 
+- **[High]** Keyword search, which finds a keyword by its abbreviation too. Searching *RSI* should find the
+  cluster labelled *recursive self-improvement*, though the arXiv corpus never writes "RSI" (2026-11-24, the
+  maintainer: "an important missing feature"). Three layers, all three part of the build:
+  1. **Abbreviations the corpus defines**: the importer's short-form pairing already treats *SRL* and
+     *self-regulated learning* as one term (`raven.common.keyphrases`), so search can match either.
+  2. **Generated initialisms**: the first letter of each word of a multi-word keyword, hyphens splitting words
+     (*recursive self-improvement* → RSI, *graph neural network* → GNN), matched by a query in capitals. Ranked
+     below real matches. Collisions (RSI is also repetitive strain injury) are unlikely to meet in one corpus, so
+     they are not designed against.
+  3. **LLM aliases, whenever the import calls an LLM anyway**: one pass over the keyword vocabulary asking for each
+     term's established abbreviations and other names. This catches what no rule derives: the irregular ones, as
+     *i18n* or *T2I*, and project acronyms chosen to spell something rather than to abbreviate. Unlike
+     canonicalization's mapping, the aliases cannot be checked against the corpus, which by definition does not
+     use them.
+  - Cost: 1 and 2 are S on top of the search itself; 3 is M (a prompt, a stored field, imports with an LLM only).
+
 - **[Medium]** Fragment search across multiple fields (author, year, abstract, ...); configurable which fields to search. Add checkboxes and a select/unselect-all button below the search bar. Note: the highlighter currently only processes titles and is slow — may not be able to highlight in abstracts without performance work.
 
 - **[Medium]** Semantic orienteering: embed user-typed text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter. Later: support user-given BibTeX entry or PDF file as input.
