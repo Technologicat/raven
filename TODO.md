@@ -94,6 +94,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
       importer stores. Building the rows is a pure function, testable without DPG.
     - **The GUI half copies the word cloud's save**: a `FileDialog` set up in `app.py`'s `initialize_filedialogs`,
       a toolbar button, a hotkey and its help-card row.
+    - **The help card is the hard part**: its keyboard table is full, so the new hotkey probably means splitting
+      the table over two pages, if a logical split can be found.
     - **To decide when building it**: the format (CSV for a spreadsheet, perhaps Markdown by extension), whether
       the 30 stored phrases go in beside the label, and the hotkey.
   - **Two views**: show the purest clusters, and show the largest ones.

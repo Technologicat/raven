@@ -1115,6 +1115,23 @@ FILLED.xlsx` reads it. This unblocks rules v2.
 - **The fifth is an existing rule**: only direct interaction with the AI counts (the 11.11 meeting).
 - **The unsure one, `li_eduaimentor_2026`** (conversational), needed the full text, and still does not say the level
   of education: it speaks only of students and learners, who could be in upper secondary school.
+  - **A level the record does not state is left in** (the maintainer, 2026-11-24): neither a machine nor a person
+    can do anything about it. That is already how `wrong_level` works, being true only when the work is
+    *positively* set elsewhere. Upper secondary school is out, and has been since `Rajaus.txt` (*peruskoulu, lukio
+    ja muu K-12-taso*); the definition's `wrong_level` and the `level` field carry it.
+- **Why the judge kept them: it answered `learner_agent` true for all five**, though that test excludes an AI that
+  serves only teachers. Its own reasons show the misreading: *"educators surveyed"* (`alammari`), *"level unclear"*
+  (`shi`). So the teacher records are the judge's misses against a rule it already had. `barenji` is different: no
+  rule removes one-way feedback, the 11.11 interaction rule being `agent_kind = adaptive`.
+- **The extractor's fields separate them where the judge did not**, which suggests two rules for v2:
+  - **`focus = system`** (the system's design, or an evaluation of how well it works): all three such records in the
+    sample were rated out or unsure (`barenji`, `varella`, `li`), and none in. 54 of the 807 keeps.
+  - **`population = inservice_teachers` with `teacher_learning = not_applicable`**, teachers who are not the
+    learners: `shi` is one. 20 keeps; the 5 more with `teacher_learning = not_stated`, `alammari` among them, may
+    want a person rather than removal. Practising teachers who *are* learning, on a course an institution runs,
+    stay in.
+  - **`huang` passes both**: the extractor read its population as the students, who did use the GPTs; the team's
+    reading is that the instructors' design is what is studied. A borderline case the fields cannot see.
 - **The open categories are not where the errors are.** Of the 30 non-conversational keeps, one feedback record was
   rejected, and for lack of interaction, not for being feedback. No generative-tool record was rejected.
 
