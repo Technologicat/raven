@@ -11,6 +11,8 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 ## The script
 
+- **`try_relative_similarity.py`**: the labels with the similarity order corrected per term, two ways, against
+  the shipped order, on the same datasets.
 - **`measure_single_words.py`**: whether the similarity order demotes single-word terms, on the six `-evidence`
   datasets and their embeddings caches, with each term's specificity as the control.
 - **`measure_centroids.py DATASET.pickle ...`**: whether the rerank favours terms many clusters share,
@@ -339,7 +341,23 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
       is somewhat more generic on the single-topic corpora, which accounts for some of the fall, not most.
     - **A fix would compare each term's similarity to its own centroid with its similarity to the others**,
       removing a per-term offset, as the control does. That is different from the centering rejected on
-      2026-11-23, which moved the centroids. Not built: it reopens tuning, the maintainer's call.
+      2026-11-23, which moved the centroids.
+    - **Probed the same day, on the stored datasets** (`try_relative_similarity.py`, `out/relative-similarity.md`):
+      the order by cosine minus the term's mean cosine to all centroids, and the same as a z-score.
+      - **It lifts single words on the four large corpora**: kept from the top three 49% → 65% on AOKK, 45% →
+        53–56% on ECCOMAS, 47% → 60% on hydrogen, 59% → 60–63% on arXiv; longer terms unchanged.
+      - **It changes nearly every label**, many by reordering only (clusters 2, 19, 20). Cluster 44 gains *judge*
+        and *assessment*, which point at the LLM-as-a-judge theme; cluster 49 trades *cognition, advancement* for
+        *survey, scientific discovery*, mixed.
+      - **It does not bring back *hallucination*, the case that started this**: 23rd–25th of 30 in every
+        variant. The bare word embeds in its everyday sense: of the 68 centroids, the nearest to it is cluster
+        2, the physics and cosmology papers, and 44 are nearer to it than its own cluster. A per-term offset
+        cannot correct a word read in the wrong sense.
+      - **So the length effect is partly a sense effect**: a phrase carries its own context, a single word does
+        not. The lead this leaves is embedding a term in context (as it occurs in the cluster's records, or
+        beside the cluster's head term) rather than correcting its similarity afterwards.
+    - **Separately, joined spellings are not folded**: *bitwidth* and *bit-width* stay two terms (cluster 38);
+      the hyphen fold covers hyphen against space only.
 - **Cluster 65: both methods find good terms, and different ones.** The phrases quote the Qwen family
   (*qwen3-omni, qwen series, qwen-image*), the LLM generalizes it to *open-source models* (in the run with the
   evidence only). Both correct and useful. Similarly a *GPT* term could have been useful in cluster 44, had it
