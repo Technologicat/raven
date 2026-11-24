@@ -395,6 +395,22 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   expressivity, chain-of-thought reasoning, compositionality*), than the phrases (*multi-digit multiplication,
   quantifier*). Little difference with the evidence and without; the evidence version, winning overall, is the
   pick here too.
+- **The rest of the read**, the same day:
+  - **The LLM with the evidence is the pick, with no strong preference otherwise**: 16, 54; and 36 and 35, where
+    the evidence version reads the most fluently of the four, which makes it faster for a person to read.
+  - **The LLM wins by its level of abstraction**: 52 (the evidence version stronger), 15 (all three LLM runs).
+  - **The LLM catches what the phrases miss**: 56's *character training* (all three runs); 59's *representation
+    geometry* (two runs of three, one with the evidence and one without).
+  - **Cluster 9: *glue*, which is GLUE**; the capitalization rule of the same day takes care of it. The evidence
+    version good again.
+  - **Cluster 3: *disentanglement*, a minority theme?** Two of its 9 records mention it, and only one LLM run (one
+    without the evidence) names it. It is not the cluster's alone: clusters 1, 6, 18 and 42 have a record or two
+    each, but at 2 of 9 it is most concentrated here.
+  - **Cluster 51: no winner, the LLM's better; but nothing says *tool calling***, the feature's usual name, so a
+    keyword search for it would miss the cluster. The papers write *tool use* (five of its six records). A case
+    for the LLM aliases of the keyword-search item in `TODO.md`.
+- **Tally over the arXiv read**: the evidence version is the pick, or as good, in most clusters; it was worse in
+  one (19, which lost a grounded abstraction), and the LLM beat the phrases on abstraction in most of the rest.
 - **Reviewing the next imports: only the highest-impact clusters** (decided by the maintainer, the same day).
   Reading every cluster takes long for little gain, so the clusters already read calibrate which to pick. What
   made a cluster worth reading so far: the phrase and LLM labels disagreeing (19, 2, 33, 44, 45, 65), a minority
