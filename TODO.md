@@ -121,6 +121,9 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
      canonicalization's mapping, the aliases cannot be checked against the corpus, which by definition does not
      use them.
   - Cost: 1 and 2 are S on top of the search itself; 3 is M (a prompt, a stored field, imports with an LLM only).
+  - **The aliases also serve hybrid labels**: `keyphrases.lead_with` already treats an abbreviation and the long
+    form the corpus defines for it as one term, so cluster 38 does not show *low-rank adaptation* and then
+    *lora*. Pairs no paper in the corpus defines are left, and the same alias table would cover them.
 
 - **[Medium]** Fragment search across multiple fields (author, year, abstract, ...); configurable which fields to search. Add checkboxes and a select/unselect-all button below the search bar. Note: the highlighter currently only processes titles and is slow — may not be able to highlight in abstracts without performance work.
 
