@@ -391,6 +391,17 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   keywords at random (*Foundation Models* beside *vision-language models* in one list) but spells proper names
   right; the phrases lowercase everything, proper names included: cluster 20's *solomonoff induction*, where the
   LLM, given that phrase as evidence, wrote *Solomonoff induction*.
+- **Cluster 45: the LLM's keywords are more descriptive, at the right level of abstraction** (*computational
+  expressivity, chain-of-thought reasoning, compositionality*), than the phrases (*multi-digit multiplication,
+  quantifier*). Little difference with the evidence and without; the evidence version, winning overall, is the
+  pick here too.
+- **Reviewing the next imports: only the highest-impact clusters** (decided by the maintainer, the same day).
+  Reading every cluster takes long for little gain, so the clusters already read calibrate which to pick. What
+  made a cluster worth reading so far: the phrase and LLM labels disagreeing (19, 2, 33, 44, 45, 65), a minority
+  theme gained or lost between runs (19, 2), the corpus-wide term leading (38, 44, 57), and a duplicate spelling
+  (33, 38). So the picks are, from a script rather than by eye: the clusters whose label changes most between
+  the old import and the new; those where the phrase and LLM labels overlap least; the few largest; and the ones
+  already read, as regression checks, being cheap to judge.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
