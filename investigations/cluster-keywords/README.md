@@ -19,6 +19,11 @@ thousands of records, where the LLM keyworder's prompt does not.
   datasets and their embeddings caches, with each term's specificity as the control.
 - **`measure_centroids.py DATASET.pickle ...`**: whether the rerank favours terms many clusters share,
   from the caches `keyword_probe.py --rerank` leaves; embeds nothing.
+- **`run_new_imports.sh`**: each corpus again after the changes of 2026-11-24, with LLM keywords given the
+  evidence and with hybrid keywords; resumable one import at a time, smallest corpora first. Before the first
+  run, the previous evidence datasets are renamed `CORPUS-evidence-2026-11-23.pickle` (and `.log`), so that
+  they are kept for comparison and not taken as done. `import_with_evidence.py --method hybrid` is what runs
+  the hybrid half.
 - **`run_llm_evidence_imports.sh`**: the same corpora with the LLM given the phrase evidence, through
   **`import_with_evidence.py`**, which switches `clusters_llm_keyword_evidence` for one run without touching the
   machine's configuration; and arXiv a second time without it, for the noise floor.
