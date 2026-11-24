@@ -936,6 +936,38 @@ class TestLLMAnswersAreKept:
         assert len(calls) == 1
 
 
+class TestSummariesAreKeptPerFile:
+    def test_each_file_s_summaries_go_in_its_own_folder_and_are_reused(self, monkeypatch, tmp_path):
+        from unpythonic.env import env
+        calls = []
+
+        def fake_turn(settings, prompt, **kwargs):
+            calls.append(prompt)
+            return env(reply=f"summary {len(calls)}", reasoning=[], to_dict=lambda: {})
+
+        record = env(model_id="test-model", label="test", quantization="Q4", bits_per_weight=4.5, load_config=None)
+        settings = env(model_record=record, backend_url="http://localhost:1", backend_flavor="test", model_id="test-model")
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+        monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+
+        def input_data():
+            return env(parsed_data_by_filename={
+                str(tmp_path / f"{name}.bib"): [env(title=f"title {name}", abstract=f"abstract {name}",
+                                                    author="A", year="2026")]
+                for name in ("a", "b")})
+
+        first = input_data()
+        importer._summarize(first)
+        assert len(calls) == 2
+        assert (tmp_path / "a" / "llm").is_dir() and (tmp_path / "b" / "llm").is_dir()
+        again = input_data()
+        importer._summarize(again)
+        assert len(calls) == 2, "the second run asked again"
+        assert [e.summary for es in again.parsed_data_by_filename.values() for e in es] == ["summary 1", "summary 2"]
+
+
 class TestPhraseKeywords:
     """The `"phrases"` branch of `_collect_cluster_keywords`, on hand-built candidates and a stand-in embedder."""
 

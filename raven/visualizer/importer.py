@@ -1823,13 +1823,15 @@ def _normalize_keyphrases(input_data, vis_data):
     return terms, display
 
 
-def _summarize(input_data, maybe_answer_directory=None):
+def _summarize(input_data, *, keep_answers=True):
     """Summarize each item of the dataset, using an LLM.
 
     Requires an LLM backend and `visualizer_config.summarize = True`.
 
     `input_data`: output of `_parse_input_files`, which see.
-    `maybe_answer_directory`: as for `_collect_cluster_keywords`.
+    `keep_answers`: keep the LLM's summaries in `llm/` in each input file's cache directory, so that an import
+                    run again, or another dataset made from the same file, asks only what it has not asked
+                    (`_AnswerCache`).
 
     No return value.
 
@@ -1840,8 +1842,9 @@ def _summarize(input_data, maybe_answer_directory=None):
     logger.info("Summarizing abstracts using LLM...")
     n_total_entries = sum(len(entries) for entries in input_data.parsed_data_by_filename.values())
     progress.set_micro_count(n_total_entries)
-    answer_cache = _AnswerCache(maybe_answer_directory, "summaries")
     for k, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        # Per file, a summary being of one record, so a file used in several datasets keeps its summaries.
+        answer_cache = _AnswerCache(common_utils.cache_directory(filename) / "llm" if keep_answers else None, "summaries")
         logger.info(f"    [input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing abstracts from {filename}...")
         with timer() as tim:
             for j, entry in enumerate(entries, start=1):
@@ -2229,8 +2232,9 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
-        # The LLM's answers, for an import stopped part way and started again; in the first input's cache
-        # directory, the answers being filed by their prompts, which may draw on several inputs.
+        # The LLM's cluster keywords, for an import stopped part way and started again. A cluster's prompt draws
+        # on every input, so no one input owns it; the first one's cache directory is as good a home as any, the
+        # answers being filed by their prompts. Summaries are per input, in `_summarize`.
         answer_directory = common_utils.cache_directory(input_data.resolved_filenames[0]) / "llm"
 
         keyphrase_terms = keyphrase_display = keyphrase_casing = None
@@ -2269,7 +2273,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # Write LLM summary for each item
 
         if visualizer_config.summarize and llm_settings is not None:
-            _summarize(input_data, maybe_answer_directory=answer_directory)  # mutates its input
+            _summarize(input_data)  # mutates its input
         elif visualizer_config.summarize:
             # Distinguished from "off" in the log, because the two produce the same dataset and only one
             # of them is what was asked for. Under `llm_required` this is unreachable, the run having
