@@ -253,8 +253,7 @@ modifier is a word before the head in either term (`shares_modifier`). Each run 
 `clusters_llm_keyword_evidence` ends each cluster's prompt with its 30 phrases and their shares, framed as data
 about the whole cluster and not as suggested keywords; the records the prompt holds are a sample when a cluster
 is big, where the phrases count every record. The question is whether that grounds the LLM's labels, which
-abstract well and wander (*AI safety* on a diffusion cluster), without anchoring them onto the phrases, which
-cannot abstract.
+abstract well and sometimes seem to wander, without anchoring them onto the phrases, which cannot abstract.
 
 - **Measured against the imports of 2026-11-20**, same clusters (agglomerative on cached embeddings), the
   prompt otherwise unchanged.
@@ -279,11 +278,25 @@ cannot abstract.
   - **Its pull toward the phrases is modest**: a share of 31% against 21–22%, about half a keyword per label.
   - **The changes go where the earlier review found the LLM wandering.** The diffusion cluster loses the safety
     term both runs without gave it (*AI Safety*, *generative AI safety*) and gains *Stable Diffusion*, *image
-    editing*, *generative models*; the distillation cluster loses the *reinforcement learning* of both runs
+    editing*, *generative models* — but that safety term turned out to be grounded (below); the distillation cluster loses the *reinforcement learning* of both runs
     without, for *model compression*; the attack cluster gains *backdoor attacks*. The evaluation cluster keeps
     its abstractions (*LLM-as-a-judge*, *theory of mind*) rather than taking the GPT-family terms the phrases
     lead with.
   - These are readings of a few clusters, not a measurement; the maintainer's read decides.
+- **The diffusion cluster's *AI safety* is a real minority, not a wander** (checked 2026-11-24, on the maintainer's
+  question). Five of its 51 records are about the safety and misuse of image generators: *Glaze* (protecting
+  artists from style mimicry), *IMPRESS* (unauthorized data usage), *Red-Teaming the Stable Diffusion Safety
+  Filter*, *Extracting Training Data from Diffusion Models*, and a paper on generative AI's feedback loop with the
+  internet. The cluster is under 60 records, so the model saw all of it, and both runs' reasoning in the logs
+  (`data/arxiv.log`, `data/arxiv-repeat.log`) lists these papers, counts them at five or six, and weighs safety
+  against the four GAN papers for the last of six places.
+  - **So the evidence pushed out an abstraction over different wordings in favour of frequent phrases.** The five
+    say it as protection, privacy, style mimicry, a safety filter; no one phrase reaches a share the evidence list
+    would show. That is the anchoring the measurement was looking for, in one label: the abstraction the LLM is
+    there to make, traded for terms close to ones the label already has (*Stable Diffusion* and *image
+    generation*, beside *diffusion models* and *text-to-image generation*).
+  - **Whether a facet of a tenth of the cluster deserves one of six places** is a judgement about labels rather
+    than a fact about either method.
 - **The other five corpora** (`out/<corpus>-llm-evidence.md`), with no repeat run, so read against arXiv's
   noise floor of 0.40:
 
@@ -362,7 +375,8 @@ maintainer knows:
 - **The LLM keyworder given the classical terms as evidence**: the terms with their shares, beside the
   sampled abstracts, framed as data rather than as a suggestion, so that any anchoring pulls toward the
   corpus. The two fail in opposite directions (classical terms cannot abstract, as the evaluation cluster
-  shows; the LLM's wander, as *AI safety* in the diffusion cluster), and the statistics cover the whole
+  shows; the LLM's wander, as *AI safety* in the diffusion cluster seemed to, though it turned out grounded),
+  and the statistics cover the whole
   cluster where the prompt holds at most 60 records. Its bias wants measuring: the same clusters with and
   without the evidence. Importer work, not this probe's.
 - **Each mention counted once, under the most specific form shown.** The nested-phrase rule lets a dominant
