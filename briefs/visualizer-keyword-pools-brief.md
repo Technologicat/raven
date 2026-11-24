@@ -399,6 +399,25 @@ and the shares are counted from the tags.**
   prominence measure has to be semantic, for the reason *Measured and rejected* above gives: a keyword
   is an abstraction over the cluster, so counting its words in the text undercounts it.
 
+## Which method said what (2026-11-24)
+
+**A future refinement, raised by the maintainer once `clusters_keyword_method = "hybrid"` landed: show both what
+the phrases found and the topics only the LLM added.** Phrases quote the papers and an LLM abstracts over their
+different wordings, so the two lists say different things, and a reader may want to see which is which: the
+phrase list as the cluster's own words, and the LLM's keywords that no phrase matches as the themes it named.
+
+- **The data is half there.** A hybrid dataset stores each cluster's phrase list (30, with shares) and the
+  combined label, but not the LLM's own keyword list: only its first `clusters_keyword_hybrid_llm_count` survive,
+  inside the label. Storing the LLM's list beside the phrases is a small importer change.
+- **"Only the LLM added" can reuse `keyphrases.lead_with`'s test**: an LLM keyword that repeats no phrase, and is
+  neither nested in one nor contains one, compared without case, hyphens or a final plural "s".
+- **Where it is shown** belongs with the expandable list above: the phrases with their shares, and the LLM's
+  additions marked as such. They have no share, the LLM not tagging records; *How much of the cluster a keyword
+  covers* is the way to give them one.
+- **An example of what it would show**: on arXiv, the diffusion cluster's *AI safety*, an abstraction over five
+  papers that say it as protection, privacy, style mimicry and a safety filter, which no phrase covers
+  (`investigations/cluster-keywords/README.md`).
+
 ## Settled
 
 - ~~**Does the model produce twelve meaningful keywords?**~~ **Yes** — measured 2026-09-01, see above.
