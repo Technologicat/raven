@@ -301,6 +301,11 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
 ### The maintainer's read of `out/arxiv-llm-evidence.md`, 2026-11-24
 
 - **Clusters 60 and 37: fine.**
+- **Cluster 44: the LLM catches *LLM-as-a-judge*, which looks like an important theme of the cluster**, and is
+  markedly better than the phrases, which put the GPT series forward (*chatgpt, gpt-3, gpt-4 performance,
+  gpt-4.5*). All three LLM runs have it, with the evidence and without; 6 of the 33 records mention judging.
+- **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
+  abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
 - **Cluster 19, the diffusion cluster**: its *AI safety* is a grounded minority theme (above).
 - **Cluster 2: *science of science*, also a minority, in a cluster that is all minorities.** Its 45 records are the
