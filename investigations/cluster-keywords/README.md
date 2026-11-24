@@ -368,6 +368,23 @@ quote and an LLM abstracts, so each takes the part of the label it is good at.
   - **The phrases' own head can follow as a near-repeat in other words** (*LLM security*, then *attack*); the
     phrase head says what the cluster is, which the LLM already did, so skipping it in hybrid may be right.
 
+### Hybrid's first weakness, met on cluster 44, and the direction chosen (2026-11-24)
+
+Hybrid with two LLM keywords leading would lose cluster 44's *LLM-as-a-judge*, the term the maintainer judged the
+cluster's best (third or fifth in the LLM's lists), behind *large language models* and *LLM evaluation*, and fill
+the rest with the GPT-series phrases.
+
+- **Decided (the maintainer): drop the LLM's corpus-wide terms before taking its first n, and have the LLM order
+  its list**, rather than raising `clusters_keyword_hybrid_llm_count` blindly.
+  - **Ordering needs care in the wording.** The keyword-pools brief measured that the model front-loads its
+    general terms, positions 13–15 of fifteen being the most distinctive on all five corpora; "most important
+    first" may well strengthen that. What is wanted is closer to "most specific to this cluster first".
+- **The question behind the share: are six keywords enough, and at which cluster sizes?** Two questions in one:
+  how many to show, which the header and tooltip limit and the planned expandable list relaxes; and how many to
+  extract and store, which nothing limits. Unmeasured. A cheap first measurement from data already stored: per
+  cluster, how many of its phrases it takes to cover most of its records (greedy, on each record's `keyphrases`),
+  against cluster size, on all six corpora. Phrases undercount abstractions, so this bounds from below.
+
 ## Open
 
 **Decided: `hybrid-rrf` ships as it is** (the maintainer, 2026-11-23). Read across the arXiv corpus, its
