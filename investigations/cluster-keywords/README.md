@@ -306,6 +306,9 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   gpt-4.5*). All three LLM runs have it, with the evidence and without; 6 of the 33 records mention judging.
 - **Cluster 38: every method points the same way** (quantization, low-rank adaptation, efficient inference), **and
   the run with the evidence reads best.** Another win for it.
+- **Cluster 57: a win like 38's.** Here the evidence also dropped the umbrella: both runs without it lead with
+  *large language models*, and the run with it does not, taking *multilingual language models* instead (the
+  phrases have *multilingual llm*).
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
