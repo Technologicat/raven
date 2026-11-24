@@ -87,6 +87,14 @@ class TestMakeCacheFilename:
         assert result == "papers_vectors.npy"
 
 
+class TestCacheDirectory:
+    def test_the_directory_is_named_for_the_input_beside_it(self):
+        assert utils.cache_directory("data/papers.bib") == pathlib.Path("data") / "papers"
+
+    def test_a_str_and_a_path_give_the_same(self):
+        assert utils.cache_directory("data/papers.bib") == utils.cache_directory(pathlib.Path("data/papers.bib"))
+
+
 class TestValidateCacheMtime:
     def test_cache_newer_than_original(self, tmp_path):
         orig = tmp_path / "orig.txt"

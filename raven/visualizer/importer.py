@@ -597,7 +597,7 @@ def _get_highdim_semantic_vectors(input_data):
     logger.info("Preparing semantic space...")
 
     # Caches are per input file, to make it fast to concatenate new files to the dataset.
-    embeddings_cache_filenames = {fn: common_utils.make_cache_filename(fn, "embeddings_cache", "npz") for fn in input_data.resolved_filenames}
+    embeddings_cache_filenames = {fn: str(common_utils.cache_directory(fn) / "embeddings_cache.npz") for fn in input_data.resolved_filenames}
 
     all_vectors_by_filename = {}
     embedder = None
@@ -659,6 +659,7 @@ def _get_highdim_semantic_vectors(input_data):
 
             logger.info(f"        Caching embeddings for this dataset to '{embeddings_cache_filename}'...")
             with timer() as tim:
+                os.makedirs(os.path.dirname(embeddings_cache_filename), exist_ok=True)
                 np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=visualizer_config.embedding_model,
                                     inputs_digest=_inputs_digest(all_inputs))
             logger.info(f"            Done in {tim.dt:0.6g}s.")
@@ -1187,7 +1188,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
     logger.info("NLP analysis...")
 
     # Caches are per input file, so that it is fast to concatenate new files to the dataset.
-    nlp_cache_filenames = {fn: common_utils.make_cache_filename(fn, "nlp_cache", "pickle") for fn in input_data.resolved_filenames}
+    nlp_cache_filenames = {fn: str(common_utils.cache_directory(fn) / "nlp_cache.pickle") for fn in input_data.resolved_filenames}
     nlp_cache_version = 2  # 2: the records' keyphrase candidates
     input_data.keyphrases = []
 
@@ -1322,6 +1323,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
                                    "entry_keyphrases": entry_keyphrases_for_this_file,
                                    "all_keywords": all_keywords_for_this_file,
                                    "inputs_digest": _inputs_digest(all_texts_for_nlp_for_this_file)}
+                os.makedirs(os.path.dirname(nlp_cache_filename), exist_ok=True)
                 with open(nlp_cache_filename, "wb") as nlp_cache_file:
                     pickle.dump(nlp_cached_data, nlp_cache_file)
             logger.info(f"            Done in {tim.dt:0.6g}s.")
@@ -1503,6 +1505,52 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
+class _AnswerCache:
+    """The LLM's answers to the importer's prompts, kept in a ledger so that an import run again asks nothing twice.
+
+    `maybe_directory`: where the ledger goes, typically `llm/` in the first input's cache directory; `None` keeps
+                       nothing, as does a run with no LLM backend.
+    `task`: what is being asked, "cluster keywords" or "summaries"; one ledger each.
+
+    An answer is filed under a hash of its whole prompt, so a prompt that changes in any way, its records or its
+    evidence, is asked afresh; and the ledger's name carries a fingerprint of the model, so another model asks
+    everything afresh. Each answer's whole turn, its thinking included, goes into the ledger's traces.
+    """
+
+    def __init__(self, maybe_directory, task: str):
+        self._ledger = None
+        self._answers = {}
+        if maybe_directory is None or llm_settings is None:
+            return
+        from ..librarian import sweep  # here rather than at the top: only a run that asks an LLM needs it
+        self._sweep = sweep
+        self._ledger = sweep.Ledger(maybe_directory, task.replace(" ", "-"), sweep.fingerprint(llm_settings, task))
+        self._answers = self._ledger.answers()
+        self._header_written = False
+        if self._answers:
+            logger.info(f"        {len(self._answers)} {task} answers saved by an earlier run are reused "
+                        f"('{self._ledger.path}').")
+
+    def get(self, prompt: str):
+        """The saved reply to `prompt`, as `{"reply": str, "reasoning": [str, ...]}`, or `None`."""
+        if self._ledger is None:
+            return None
+        return self._answers.get(self._sweep.digest(prompt))
+
+    def put(self, prompt: str, record) -> None:
+        """Save `record`, an `agent.turn` result, as the reply to `prompt`."""
+        if self._ledger is None:
+            return
+        if not self._header_written:
+            self._ledger.write_header(self._sweep.instrument_header(llm_settings))
+            self._header_written = True
+        item_id = self._sweep.digest(prompt)
+        answer = {"reply": record.reply, "reasoning": list(record.reasoning)}
+        self._ledger.write_answer(item_id, answer)
+        self._ledger.write_trace([item_id], [record])
+        self._answers[item_id] = answer
+
+
 def _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors, keyphrase_terms, keyphrase_display, max_vis_kw):
     """Each cluster's list of `(phrase, share)`, best first, by `keyphrases.label_groups`.
 
@@ -1530,7 +1578,8 @@ def _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors, keyphrase_terms
 
 
 def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, keyphrase_terms=None, keyphrase_display=None,
-                              casing=None, max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
+                              casing=None, maybe_answer_directory=None,
+                              max_vis_kw=6, max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), by `config.clusters_keyword_method`.
 
     `vis_data`: output of `_cluster_vis_data`, which see.
@@ -1550,6 +1599,9 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
     `casing`: with `"llm"` and `"hybrid"`, how the corpus capitalizes its words (`keyphrases.casing_table`); the
               LLM's keywords are recased by it (`keyphrases.recase`), undoing its random title case while keeping
               proper names. `None` leaves them as the LLM wrote them.
+
+    `maybe_answer_directory`: where to keep the LLM's answers, so that a run stopped part way and started again
+                              asks only what it has not asked (`_AnswerCache`); `None` keeps nothing.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
@@ -1616,6 +1668,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             maybe_keyword_lists_by_cluster = _phrase_keyword_lists(vis_data, n_vis_clusters, all_vectors,
                                                                    keyphrase_terms, keyphrase_display, max_vis_kw)
 
+        answer_cache = _AnswerCache(maybe_answer_directory, "cluster keywords")
         eta_estimator = ETAEstimator(total=len(entries_by_cluster), keep_last=50)
         vis_keywords_by_cluster = []
         llm_cluster_ids = []  # which cluster each item of `vis_keywords_by_cluster` belongs to
@@ -1676,7 +1729,12 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             # is not a failure and is not retried: "keyword extraction failed" is a valid answer to the
             # question asked, and asking again would only pester the model into inventing a theme.
             cluster_keywords = None
-            for attempt in range(1, max_keyword_attempts + 1):
+            maybe_saved = answer_cache.get(prompt)
+            if maybe_saved is not None:  # only answers that parsed are saved, so this one does
+                parsed = _parse_keyword_list(maybe_saved["reply"])
+                cluster_keywords = ["<unknown topic>"] if parsed == [] else parsed
+                logger.info(f"        Keywords for cluster #{cluster_id}, saved by an earlier run: {maybe_saved['reply']}")
+            for attempt in (range(1, max_keyword_attempts + 1) if cluster_keywords is None else ()):
                 record = agent.turn(llm_settings,
                                     prompt,
                                     use_character_card=False,
@@ -1692,9 +1750,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                 if parsed == []:
                     logger.warning(f"        The LLM could not identify a common theme for cluster #{cluster_id}.")
                     cluster_keywords = ["<unknown topic>"]
+                    answer_cache.put(prompt, record)
                     break
                 if parsed is not None:
                     cluster_keywords = parsed
+                    answer_cache.put(prompt, record)
                     break
                 logger.warning(f"        The LLM's reply for cluster #{cluster_id} is not a keyword list "
                                f"(attempt {attempt} of {max_keyword_attempts}).")
@@ -1763,12 +1823,13 @@ def _normalize_keyphrases(input_data, vis_data):
     return terms, display
 
 
-def _summarize(input_data):
+def _summarize(input_data, maybe_answer_directory=None):
     """Summarize each item of the dataset, using an LLM.
 
     Requires an LLM backend and `visualizer_config.summarize = True`.
 
     `input_data`: output of `_parse_input_files`, which see.
+    `maybe_answer_directory`: as for `_collect_cluster_keywords`.
 
     No return value.
 
@@ -1779,6 +1840,7 @@ def _summarize(input_data):
     logger.info("Summarizing abstracts using LLM...")
     n_total_entries = sum(len(entries) for entries in input_data.parsed_data_by_filename.values())
     progress.set_micro_count(n_total_entries)
+    answer_cache = _AnswerCache(maybe_answer_directory, "summaries")
     for k, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
         logger.info(f"    [input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing abstracts from {filename}...")
         with timer() as tim:
@@ -1792,18 +1854,24 @@ def _summarize(input_data):
                     entry_text = f"Title: {entry.title}\n\nAbstract: {entry.abstract}"
                     prompt = f"{visualizer_config.summarize_llm_prompt}\n-----\n\n{entry_text}"
 
-                    # As in `_collect_cluster_keywords`: the summary goes into a dataset field, not into a
-                    # chat, and the failure sentinel below has to arrive verbatim.
-                    record = agent.turn(llm_settings,
-                                        prompt,
-                                        use_character_card=False,
-                                        tools_enabled=False,
-                                        on_progress=llmclient.make_console_progress_handler("."))
-                    scrubbed_output_text = record.reply
+                    maybe_saved = answer_cache.get(prompt)
+                    if maybe_saved is not None:
+                        scrubbed_output_text = maybe_saved["reply"]
+                        logger.info(f"        Summary saved by an earlier run:\n{scrubbed_output_text}")
+                    else:
+                        # As in `_collect_cluster_keywords`: the summary goes into a dataset field, not into a
+                        # chat, and the failure sentinel below has to arrive verbatim.
+                        record = agent.turn(llm_settings,
+                                            prompt,
+                                            use_character_card=False,
+                                            tools_enabled=False,
+                                            on_progress=llmclient.make_console_progress_handler("."))
+                        scrubbed_output_text = record.reply
+                        answer_cache.put(prompt, record)
 
-                    for reasoning in record.reasoning:
-                        logger.info(f"        LLM thoughts:\n{reasoning}")
-                    logger.info(f"        LLM output (final answer):\n{scrubbed_output_text}")
+                        for reasoning in record.reasoning:
+                            logger.info(f"        LLM thoughts:\n{reasoning}")
+                        logger.info(f"        LLM output (final answer):\n{scrubbed_output_text}")
 
                     if scrubbed_output_text.strip().lower() == "summarization failed":
                         logger.warning(f"        The LLM could not _summarize entry: {entry.author} ({entry.year}): {entry.title}")
@@ -2161,6 +2229,10 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
+        # The LLM's answers, for an import stopped part way and started again; in the first input's cache
+        # directory, the answers being filed by their prompts, which may draw on several inputs.
+        answer_directory = common_utils.cache_directory(input_data.resolved_filenames[0]) / "llm"
+
         keyphrase_terms = keyphrase_display = keyphrase_casing = None
         if visualizer_config.extract_keywords:
             all_keywords = _extract_keywords(input_data)
@@ -2185,7 +2257,8 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         elif visualizer_config.extract_keywords:
             vis_keywords_by_cluster, maybe_keyword_lists_by_cluster, maybe_llm_keywords_by_cluster = _collect_cluster_keywords(
                 vis_data, n_vis_clusters, all_vectors,
-                keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display, casing=keyphrase_casing)
+                keyphrase_terms=keyphrase_terms, keyphrase_display=keyphrase_display, casing=keyphrase_casing,
+                maybe_answer_directory=answer_directory)
         else:
             vis_keywords_by_cluster = []
         progress.tock()
@@ -2196,7 +2269,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # Write LLM summary for each item
 
         if visualizer_config.summarize and llm_settings is not None:
-            _summarize(input_data)  # mutates its input
+            _summarize(input_data, maybe_answer_directory=answer_directory)  # mutates its input
         elif visualizer_config.summarize:
             # Distinguished from "off" in the log, because the two produce the same dataset and only one
             # of them is what was asked for. Under `llm_required` this is unreachable, the run having

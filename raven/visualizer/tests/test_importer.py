@@ -888,6 +888,54 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
         return vis_keywords_by_cluster
 
 
+class TestLLMAnswersAreKept:
+    """An import stopped part way and run again asks the LLM only what it has not asked."""
+
+    def _run(self, monkeypatch, tmp_path, replies, *, titles=("paper 0", "paper 1")):
+        import numpy as np
+        from unpythonic.env import env
+        calls = []
+        replies = list(replies)
+
+        def fake_turn(settings, prompt, **kwargs):
+            calls.append(prompt)
+            return env(reply=replies.pop(0), reasoning=["thinking"], to_dict=lambda: {"reply": "..."})
+
+        record = env(model_id="test-model", label="test", quantization="Q4", bits_per_weight=4.5, load_config=None)
+        settings = env(model_record=record, backend_url="http://localhost:1", backend_flavor="test", model_id="test-model")
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+        monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        vis_data = [env(title=t, abstract="", cluster_id=0, cluster_probability=1.0) for t in titles]
+        keywords, _lists, _llm = importer._collect_cluster_keywords(vis_data, 1, np.ones((len(titles), 4)),
+                                                                    maybe_answer_directory=tmp_path / "llm")
+        return keywords, calls
+
+    def test_a_second_run_asks_nothing_and_gets_the_same_keywords(self, monkeypatch, tmp_path):
+        first, calls = self._run(monkeypatch, tmp_path, ["neural networks, deep learning"])
+        assert len(calls) == 1
+        second, calls = self._run(monkeypatch, tmp_path, [])
+        assert calls == []
+        assert second == first == [["neural networks", "deep learning"]]
+
+    def test_a_changed_prompt_is_asked_again(self, monkeypatch, tmp_path):
+        """Control for the test above: other records make another prompt."""
+        self._run(monkeypatch, tmp_path, ["neural networks"])
+        _keywords, calls = self._run(monkeypatch, tmp_path, ["robotics"], titles=("paper 7", "paper 8"))
+        assert len(calls) == 1
+
+    def test_a_reply_that_never_parsed_is_not_kept(self, monkeypatch, tmp_path):
+        malformed = "Here are the keywords:\n\n- one\n- two\n\nI hope this helps, and so on, at length."
+        keywords, calls = self._run(monkeypatch, tmp_path, [malformed] * 3)
+        assert keywords == [["<unknown topic>"]] and len(calls) == 3, "the fixture's reply parsed after all"
+        _keywords, calls = self._run(monkeypatch, tmp_path, ["neural networks"])
+        assert len(calls) == 1
+
+
 class TestPhraseKeywords:
     """The `"phrases"` branch of `_collect_cluster_keywords`, on hand-built candidates and a stand-in embedder."""
 

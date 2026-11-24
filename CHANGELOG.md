@@ -207,6 +207,9 @@
 - **Cluster keywords can combine an LLM and the phrases**, with `clusters_keyword_method = "hybrid"`: the LLM's first keywords name the cluster's theme, and the phrases that add something new follow, quoting the papers.
   - It needs an LLM backend, and falls back to `"phrases"` without one, as `"llm"` does.
   - `clusters_keyword_hybrid_llm_count`, in [`raven.visualizer.config`](raven/visualizer/config.py), sets how many of the LLM's keywords lead; 2 by default.
+- **An import stopped part way asks the LLM only what it has not asked yet.** Cluster keywords and summaries are kept as they arrive, and an import run again reuses them; another model, or anything that changes a prompt, asks again.
+- **The importer keeps its caches in a folder named after each BibTeX file**, beside it: `mydata/` for `mydata.bib`, where the `mydata_embeddings_cache.npz` and `mydata_nlp_cache.pickle` beside it used to be.
+  - The old cache files are not read any more, so the first import of a file computes them again. Delete them when convenient.
 - **LLM cluster keywords are given the cluster's phrases as evidence**, with their shares, beside the papers the prompt holds, which for a large cluster are a sample.
   - The keywords stay the LLM's own, and are better grounded in what the whole cluster says.
   - `clusters_llm_keyword_evidence`, on by default, in [`raven.visualizer.config`](raven/visualizer/config.py).

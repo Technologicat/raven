@@ -310,7 +310,9 @@ not. A second pass over the whole vocabulary folds the variants together once ev
 
 ## Good to know
 
-The BibTeX importer caches its intermediate data per input file, so you can include e.g. `file1.bib` into multiple different dataset files, and the expensive computations specific to `file1.bib` will only happen once, unless `file1.bib` itself changes. The caching mechanism checks the timestamps; when e.g. `file1.bib` is processed, computations are re-done if `file1.bib` has changed after the cache was last updated.
+The BibTeX importer caches its intermediate data per input file, in a folder named after it beside it (`file1/` for `file1.bib`), so you can include `file1.bib` into multiple different dataset files, and the expensive computations specific to `file1.bib` will only happen once, unless `file1.bib` itself changes. The caching mechanism checks the timestamps; when `file1.bib` is processed, computations are re-done if `file1.bib` has changed after the cache was last updated.
+
+**The LLM's answers are kept too**, in `llm/` in the first input file's folder, so an import stopped part way and started again asks the LLM only what it has not asked yet. An answer is filed by its whole prompt, so anything that changes the prompt asks again, and so does another model.
 
 Currently, the dimension reduction that produces the 2D semantic map is trained using up to 10k data items, picked at random if the input data contains more.
 

@@ -1,7 +1,7 @@
 """Miscellaneous general utilities."""
 
 __all__ = ["absolutize_filename", "canonical_path",
-           "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory", "atomic_write",
+           "strip_ext", "make_cache_filename", "cache_directory", "validate_cache_mtime", "create_directory", "atomic_write",
            "user_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail", "gc_suspended",
@@ -78,6 +78,15 @@ def make_cache_filename(origfullpath: Union[str, pathlib.Path], suffix: str, ext
     origdirname = os.path.dirname(origfullpath)  # "foo/bar.bib" -> "foo"
     origfilename = strip_ext(os.path.basename(origfullpath))  # "foo/bar.bib" -> "bar"
     return os.path.join(origdirname, f"{origfilename}_{suffix}.{ext}")
+
+def cache_directory(origfullpath: Union[str, pathlib.Path]) -> pathlib.Path:
+    """foo/bar.bib -> foo/bar/, the directory a tool keeps its caches for that input in.
+
+    One directory per input keeps the caches of each together and out of the way of the inputs beside it. Not
+    created here; create it when there is something to write.
+    """
+    origfullpath = pathlib.Path(origfullpath)
+    return origfullpath.parent / strip_ext(origfullpath.name)
 
 def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: Union[str, pathlib.Path]) -> bool:
     """Return whether a cache file at `cachefullpath` is valid, by comparing its mtime to that of the original file at `origfullpath`."""
