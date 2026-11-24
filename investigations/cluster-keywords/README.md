@@ -409,8 +409,9 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   - **Cluster 9: *glue*, which is GLUE**; the capitalization rule of the same day takes care of it. The evidence
     version good again.
   - **Cluster 3: *disentanglement*, a minority theme?** Two of its 9 records mention it, and only one LLM run (one
-    without the evidence) names it. It is not the cluster's alone: clusters 1, 6, 18 and 42 have a record or two
-    each, but at 2 of 9 it is most concentrated here.
+    without the evidence) names it. It is not the cluster's alone: cluster 42 has 1 of 8 records, 6 and 18 have
+    1 of 9 each, and cluster 1 has 2 of 70. At 2 of 9 it is most concentrated here, though at these counts one
+    record more or less would reorder that.
   - **Cluster 51: no winner, the LLM's better; but nothing says *tool calling***, the feature's usual name, so a
     keyword search for it would miss the cluster. The papers write *tool use* (five of its six records). A case
     for the LLM aliases of the keyword-search item in `TODO.md`.
