@@ -309,6 +309,19 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
 - **Cluster 57: a win like 38's.** Here the evidence also dropped the umbrella: both runs without it lead with
   *large language models*, and the run with it does not, taking *multilingual language models* instead (the
   phrases have *multilingual llm*).
+- **Cluster 33: the phrases miss *hallucination*, which the LLM names in all three runs.** Measured the same day
+  (the cluster's two orderings recomputed with the real embedder):
+  - **The phrase method found it and the fusion demoted it.** By c-TF-IDF it is the cluster's second term, at a
+    share of 40% (as high as the head's), so first in the tail's pool; by cosine similarity to the centroid it is
+    24th of 30 (0.45, where the pool runs 0.45–0.64), and RRF puts it 10th. The fusion is built to drop a term
+    high in only one order, and here that drops the right one.
+  - **The bare single words sit at the bottom of the similarity order**: *hallucination* 0.452, *characteristic*
+    0.448, against 0.51–0.64 for the multi-word phrases. One cluster, so a hint rather than a finding: a one-word
+    embedding may be systematically far from any centroid, which would bias the fusion against single-word
+    concepts as such.
+  - **A separate defect: the label carries *retrieval-augmented generation* and *retrieval augmented generation*
+    both.** `normalize` folds plurals and abbreviations but not hyphen and space variants, and the nesting test
+    in `label_groups` compares the raw strings, so neither notices they are one term.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
