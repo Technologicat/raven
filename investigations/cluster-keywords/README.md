@@ -11,6 +11,8 @@ thousands of records, where the LLM keyworder's prompt does not.
 
 ## The script
 
+- **`try_context_embedding.py`**: the labels with each term embedded in context, beside its cluster's head term
+  or as the cluster's sentences containing it, against the bare term.
 - **`try_relative_similarity.py`**: the labels with the similarity order corrected per term, two ways, against
   the shipped order, on the same datasets.
 - **`measure_single_words.py`**: whether the similarity order demotes single-word terms, on the six `-evidence`
@@ -356,8 +358,31 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
       - **So the length effect is partly a sense effect**: a phrase carries its own context, a single word does
         not. The lead this leaves is embedding a term in context (as it occurs in the cluster's records, or
         beside the cluster's head term) rather than correcting its similarity afterwards.
-    - **Separately, joined spellings are not folded**: *bitwidth* and *bit-width* stay two terms (cluster 38);
-      the hyphen fold covers hyphen against space only.
+    - **Probed next, the same day: embedding the term in context** (`try_context_embedding.py`,
+      `out/context-embedding.md`), two ways: the term beside its cluster's head term in parentheses, and the mean
+      embedding of up to five of the cluster's sentences containing it (the bare term where none does, about 4% of
+      terms).
+
+      | corpus | single words kept: bare / head / sentences | longer terms kept: bare / head / sentences |
+      |---|---|---|
+      | arXiv | 59% / 61% / 71% | 80% / 82% / 81% |
+      | AOKK | 49% / 53% / 62% | 82% / 78% / 80% |
+      | ECCOMAS | 45% / 52% / 59% | 79% / 73% / 80% |
+      | hydrogen | 47% / 49% / 56% | 70% / 66% / 71% |
+      | biology | 55% / 50% / 80% | 80% / 80% / 70% |
+      | geography | 56% / 56% / 69% | 62% / 50% / 88% |
+
+      - **Sentences lift single words on every corpus, by 7–25 points, and leave longer terms about where they
+        were**; the head term does little and costs the longer terms on the large corpora.
+      - **Cluster 33 gets *hallucination* back** with sentences: 5th of 30 in the similarity order, against 24th,
+        and in the label.
+      - **But the labels change throughout, and not only for the better** (arXiv, read the same day): 44 gains
+        *judge, agreement, reliability*, toward its LLM-as-a-judge theme; 20 loses *Solomonoff induction* for
+        *predictor*; 65 gains *license* and *long document*; 2 turns more generic (*star, measurement,
+        detection*). A sentence embedding says what the sentence is about, so a generic word in a typical
+        sentence scores as typical of the cluster.
+      - Not decided; the maintainer reads `out/context-embedding.md`.
+    - **Joined spellings now fold too** (*bitwidth*, *bit-width*), since the same day.
 - **Cluster 65: both methods find good terms, and different ones.** The phrases quote the Qwen family
   (*qwen3-omni, qwen series, qwen-image*), the LLM generalizes it to *open-source models* (in the run with the
   evidence only). Both correct and useful. Similarly a *GPT* term could have been useful in cluster 44, had it
