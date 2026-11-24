@@ -236,6 +236,9 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
       - **An abbreviation** with its long form, word by word, so "srl" and "self-regulated learning" are one
         term, and "generative ai" and "generative artificial intelligence" another. A definition made by two
         or more records applies corpus-wide; one made by a single record applies to that record only.
+      - **A hyphen and a space**, so "retrieval-augmented generation" and "retrieval augmented generation" are
+        one term, spelled as most of the corpus's records spell it. Only those two: "re-cover" and "recover"
+        stay apart.
     """
     # Why a single record's definition stays local: a paper calling its system CARE must not take over the
     # word "care" everywhere else.
@@ -275,6 +278,16 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
     # Fold plurals again: a long form arrives as written, and "Large Language Models (LLMs)" is plural.
     folds = _plural_map({c for record in expanded for c in record.values()})
 
+    # Then hyphens: each spelling class goes to its most common member, counted in records. Last, so that it
+    # sees the plural and abbreviation folds' output, where variants that differed in more than a hyphen have
+    # already met.
+    record_counts = collections.Counter(c for record in expanded for c in {folds.get(c, c) for c in record.values()})
+    by_spelling = collections.defaultdict(list)
+    for c in record_counts:
+        by_spelling[c.replace("-", " ")].append(c)
+    hyphen_folds = {c: max(members, key=lambda m: (record_counts[m], m))
+                    for members in by_spelling.values() if len(members) > 1 for c in members}
+
     surface: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     short_use: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])  # [records defining it, records not]
     terms_out = []
@@ -283,6 +296,7 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
         canonical = set()
         for term, c in record.items():
             c = folds.get(c, c)
+            c = hyphen_folds.get(c, c)
             surface[c][term] += 1
             canonical.add(c)
             if term in corpus_map or term in defined_here:  # the bare short form of an abbreviation

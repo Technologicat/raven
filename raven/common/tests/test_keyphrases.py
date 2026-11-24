@@ -54,6 +54,24 @@ class TestNormalize:
         terms, _ = keyphrases.normalize([_extracted({"key characteristics"}, nouns={"characteristics"})])
         assert terms[0] == {"key characteristics"}
 
+    def test_a_hyphen_and_a_space_are_one_term_spelled_as_most_records_spell_it(self):
+        records = [_extracted({"retrieval-augmented generation"}), _extracted({"retrieval-augmented generation"}),
+                   _extracted({"retrieval augmented generation"})]
+        terms, display = keyphrases.normalize(records)
+        assert all(t == {"retrieval-augmented generation"} for t in terms)
+        assert display["retrieval-augmented generation"] == "retrieval-augmented generation"
+
+    def test_the_majority_spelling_wins_either_way(self):
+        """Control for the test above: with the majority reversed, the spaced spelling is the term."""
+        records = [_extracted({"retrieval augmented generation"}), _extracted({"retrieval augmented generation"}),
+                   _extracted({"retrieval-augmented generation"})]
+        terms, _ = keyphrases.normalize(records)
+        assert all(t == {"retrieval augmented generation"} for t in terms)
+
+    def test_a_hyphen_does_not_join_a_word(self):
+        terms, _ = keyphrases.normalize([_extracted({"re-cover"}), _extracted({"recover"})])
+        assert terms == [{"re-cover"}, {"recover"}]
+
     def test_an_abbreviation_defined_by_two_records_applies_everywhere(self):
         definition = ("srl", "self-regulated learning")
         records = [_extracted({"srl"}, [definition]), _extracted({"srl"}, [definition]), _extracted({"srl"})]
