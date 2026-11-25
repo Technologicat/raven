@@ -311,6 +311,16 @@ when = { teacher_learning = ["continuing_education"] }
 action = "hold"
 
 [[rule]]
+label = "a study of the system itself, its design or how well it works: whether learners used it"
+when = { focus = ["system"] }
+action = "hold"
+
+[[rule]]
+label = "practising teachers who are not the learners: whether the AI is the learners' at all"
+when = { population = ["inservice_teachers"], teacher_learning = ["not_applicable", "not_stated"] }
+action = "hold"
+
+[[rule]]
 label = "the abstract does not settle it: deciding needs the full text"
 when = { abstract_enough = ["no"] }
 action = "hold"

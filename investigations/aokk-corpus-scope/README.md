@@ -1150,6 +1150,25 @@ in the Visualizer (decided the same day; `TODO.md`, Visualizer, *A table of the 
 **Open: the granularity.** How many clusters do we want? That is the clustering's cutoff parameter, and a sweep over
 it could inform the choice.
 
+## The run of 2026-11-25: the ProQuest-only records out, the year sift, and two hold rules
+
+Rules only, as decided on 11.24: no question was asked afresh except the reviewer's control draw, which a changed
+corpus draws anew (37 records, answered by the run's own model, `qwen3.8-27b@q4_k_xl`, on LM Studio). In
+`AOKK/scopebib-2026-11-25-rules-v3/` (the 11.11 run's directory is the one named `rules-v2`).
+
+- **The corpus**: `multisource/tekoalyagentti_tutkimus_deduped_without_retracted_without_library_only.bib`, the
+  previous corpus without the 713 records that exist only as copies from the excluded ProQuest collection (the
+  11.19 meeting); 4,449 records, each one byte for byte as before. `--where 'year>=2022'` then sifts the strays
+  from before the span (11.19), with the missing abstracts, down to 3,765.
+- **The two new rules**, in `aokk.scope.toml`, both sending to a person (11.24):
+  - *focus = system*, a study of the system rather than of learners using it: 65 records.
+  - practising teachers who are not the learners (*population = inservice_teachers*, *teacher_learning* not
+    applicable or not stated): 15.
+- **Result: removed 2,588, to a person 495, kept 682.** Of the 11.11 run's 807 keeps, 682 are kept still, 58 go to a
+  person (43 by the system rule, 15 by the teacher rule), and 67 are gone, every one of them ProQuest-only.
+- **The keep sample's rejects**: `barenji`, `varella` and the unsure `li` are held by the system rule, `alammari` by
+  the teacher rule; `shi` was ProQuest-only and is gone. `huang`, which no field separates (11.24), is kept.
+
 ## The user's persona prefix in a one-shot prompt (2026-11-11)
 
 **Question:** until 2026-11-11 a one-shot turn without the character card still sent its task as `Juha: You are
