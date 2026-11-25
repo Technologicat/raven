@@ -129,6 +129,16 @@ accepted.
   subagent — rather than a recursion limit. Part of the research group's multiagent goals.
 - **MCP server side in Librarian.** The lab system's experiment-planning agent could consult Librarian's
   document database, and could draft reports that Librarian fetches over MCP. Multiagent too; not specced.
+  - **First step done, 2026-11-25: `raven-mcp`** (`raven/tools/mcpserver.py`) serves web search, page fetch and
+    the lorebook lookup to other frontends, as Librarian's own tools.
+  - **The document database comes next, and it waits on the database moving behind Raven-server** (brief 13,
+    *Where the database lives*). Opened from a second process, the index would be written by two processes at
+    once; once the server owns it, `raven-mcp` can offer `search_documents` and `fetch_document` the way it
+    offers the web tools (maintainer, 2026-11-25: "all the more reason to do that").
+  - **The lorebook's tool is `raven-mcp`'s; the per-frontend hooks are grimoire's** (an Open WebUI filter, a
+    Claude Code hook), those being frontend-specific. `--no-lorebook` keeps a frontend that has grimoire's tool
+    from being handed it twice. Whether grimoire should keep a tool of its own, for users without Raven, is
+    open; the maintainer leans yes (2026-11-25).
 - **JavaScript avatar client.** Raven-avatar in browser-based tools, including the JAMK team's: the video
   stream, lipsync, and the rest of the client side, as a library others drop in. Wanted "soon-ish"
   (maintainer, 2026-11-13), as a colleague's browser-based conversational tools with an avatar are about to be
