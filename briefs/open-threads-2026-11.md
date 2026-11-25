@@ -19,6 +19,12 @@ See *Waiting on others* for what it still needs.
 The three infographics are in `img/` and embedded in the README and the apps' manuals (papers, Librarian,
 Visualizer); the light-background plot on its own is `img/visualizer-plot-light.png`, Misc grayed, with a 2% margin.
 
+## Next, 2026-11-26
+
+The maintainer reads the keyword shortlists (`investigations/cluster-keywords/out/CORPUS-shortlist.md`); Claude
+starts building colouring the map by year, v0 (`briefs/visualizer-filter-by-date-and-recolour-brief.md`,
+*Decided: colouring by year*). Tonight's re-import, if it runs, is on the maintainer's ping.
+
 ## In progress: cluster keywords (2026-11-24)
 
 `investigations/cluster-keywords/README.md` has the detail. Built today: `clusters_keyword_method = "hybrid"` (the
