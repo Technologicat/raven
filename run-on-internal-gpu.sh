@@ -25,7 +25,13 @@
 # reordering devices for every CUDA process in the shell. Not worth it just to
 # make one script read more obviously.)
 
-if [ $(nvidia-smi -L | wc -l) -ge 2 ]; then
+if ! command -v nvidia-smi > /dev/null; then
+    # Not an NVIDIA machine (an AMD GPU, say): there is no eGPU arrangement for this script to handle.
+    echo "run-on-internal-gpu.sh: no NVIDIA GPU; nothing to do."
+    return 0 2>/dev/null || exit 0
+fi
+
+if [ "$(nvidia-smi -L | wc -l)" -ge 2 ]; then
     # eGPU is attached, so CUDA sees it first. The internal dGPU is device 1.
     GPU_ID=1
 else
