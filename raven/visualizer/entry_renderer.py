@@ -23,6 +23,8 @@ Public API:
     (cluster `-1`) moved to the end.
   - `format_dataset_purity(file_content)`, `format_cluster_purity(file_content,
     cluster_id)` — the importer's cluster purity, in words.
+  - `format_cluster_keywords(file_content, cluster_id)` — a cluster's keywords as
+    shown: its themes and terms on two lines where the dataset has both, else its label.
 
 Cross-module state read via `app_state`:
   `dataset` (for `sorted_entries`, `file_content.keywords_available`, and
@@ -31,11 +33,13 @@ Cross-module state read via `app_state`:
 
 __all__ = ["reference_order", "get_entries_for_selection",
            "order_cluster_ids",
-           "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity"]
+           "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity",
+           "format_cluster_keywords"]
 
 import collections
 import math
 
+from ..common import keyphrases
 from ..common import utils as common_utils
 
 from .app_state import app_state
@@ -102,7 +106,7 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
         if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
             if dataset.file_content.keywords_available:
                 cluster_title = f"#{cluster_id}"
-                cluster_keywords = f"[{', '.join(dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
+                cluster_keywords = format_cluster_keywords(dataset.file_content, cluster_id)
             else:
                 cluster_title = f"#{cluster_id}"
                 cluster_keywords = ""
@@ -172,3 +176,27 @@ def format_cluster_purity(file_content, cluster_id: int) -> str | None:
     if cluster_id < 0 or purities is None or cluster_id >= len(purities) or purities[cluster_id] is None:
         return None
     return f"purity {purities[cluster_id]:.0%}"
+
+
+def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6) -> str:
+    """Cluster `cluster_id`'s keywords as the panel and the tooltip show them, ending in a newline.
+
+    `file_content`: a loaded dataset file (`dataset.file_content`).
+    `n`: how many keywords a line shows.
+
+    Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on),
+    two lines: `"Themes: ..."`, the LLM's, which name what the cluster's papers share, and `"Terms: ..."`, the
+    phrases', which quote what they say, leaving out a phrase that repeats a theme. Otherwise the cluster's label
+    in brackets, `"[keyword0, ...]"`, as every dataset has one.
+    """
+    def at(maybe_lists):
+        return list(maybe_lists[cluster_id]) if maybe_lists is not None and cluster_id < len(maybe_lists) else []
+
+    themes = at(getattr(file_content, "cluster_llm_keywords", None))
+    phrases = at(getattr(file_content, "cluster_keyword_lists", None))
+    if themes and themes != ["<unknown topic>"] and phrases:
+        themes = themes[:n]
+        display = getattr(file_content, "keyphrase_display", None) or {}
+        terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
+        return f"Themes: {', '.join(themes)}\nTerms: {', '.join(terms)}\n"
+    return f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]\n"

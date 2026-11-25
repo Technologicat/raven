@@ -178,6 +178,44 @@ class TestClusterAnnotations:
         assert cluster_keywords == ""
 
 
+class TestThemesAndTerms:
+    """Where a dataset has both the LLM's keywords and the phrases, a cluster shows both, on two lines."""
+
+    @staticmethod
+    def content(**fields):
+        return env(vis_keywords_by_cluster=[["label term"]], **fields)
+
+    def test_both_lists_give_two_lines(self):
+        fc = self.content(cluster_llm_keywords=[["existential risk", "AI safety"]],
+                          cluster_keyword_lists=[[("intelligence", 0.5), ("consciousness", 0.3)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == \
+            "Themes: existential risk, AI safety\nTerms: intelligence, consciousness\n"
+
+    def test_a_term_repeating_a_theme_is_left_out_but_a_longer_one_containing_it_is_not(self):
+        fc = self.content(cluster_llm_keywords=[["intelligence"]],
+                          cluster_keyword_lists=[[("Intelligence", 0.6), ("artificial general intelligence", 0.4)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == \
+            "Themes: intelligence\nTerms: artificial general intelligence\n"
+
+    def test_a_line_shows_at_most_n(self):
+        fc = self.content(cluster_llm_keywords=[[f"theme {i}" for i in range(15)]],
+                          cluster_keyword_lists=[[(f"term {i}", 0.1) for i in range(30)]])
+        themes, terms = entry_renderer.format_cluster_keywords(fc, 0).splitlines()
+        assert len(themes.split(", ")) == 6 and len(terms.split(", ")) == 6
+
+    def test_without_the_phrases_the_label_shows_as_before(self):
+        """Control: a dataset with the LLM's keywords alone, as `"llm"` without the evidence writes."""
+        fc = self.content(cluster_llm_keywords=[["existential risk"]], cluster_keyword_lists=None)
+        assert entry_renderer.format_cluster_keywords(fc, 0) == "[label term]\n"
+
+    def test_an_older_dataset_shows_its_label(self):
+        assert entry_renderer.format_cluster_keywords(self.content(), 0) == "[label term]\n"
+
+    def test_a_cluster_the_llm_found_no_theme_in_shows_its_label(self):
+        fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == "[label term]\n"
+
+
 # --------------------------------------------------------------------------------
 # The `max_n` budget
 

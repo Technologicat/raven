@@ -1470,7 +1470,8 @@ def _update_info_panel(*, task_env=None, env=None):
             dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)
 
             # Report: cluster heading
-            report_cluster_heading_text = f"{cluster_title} {entries_text} {cluster_keywords}".strip()
+            keywords_on_one_line = "; ".join(line for line in cluster_keywords.splitlines() if line)  # themes; terms
+            report_cluster_heading_text = f"{cluster_title} {entries_text} {keywords_on_one_line}".strip()
             report_text.write(report_cluster_heading_text + "\n")
             report_text.write("-" * len(report_cluster_heading_text) + "\n\n")
             report_md.write(f"## {report_cluster_heading_text}\n\n")

@@ -409,6 +409,13 @@ class TestExtract:
                                      stopwords=stopwords)["phrases"]
         assert "2.0 license" not in phrases
 
+    def test_a_stopword_starting_a_hyphenated_compound_is_kept(self, nlp, stopwords):
+        phrases = keyphrases.extract(nlp("We allocate test-time computation adaptively."), stopwords=stopwords)["phrases"]
+        assert "test" in stopwords or "test" in {w.lower() for w in stopwords}, \
+            "'test' is no longer a stopword, so this fixture tests nothing"
+        assert "test-time computation" in phrases
+        assert "time computation" not in phrases
+
     def test_physics_is_not_singularized(self, nlp, stopwords):
         phrases = keyphrases.extract(nlp("This paper concerns theoretical physics."), stopwords=stopwords)["phrases"]
         assert "physics" in phrases or "theoretical physics" in phrases

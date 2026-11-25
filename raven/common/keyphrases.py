@@ -42,7 +42,7 @@ import numpy as np
 from .text import stopwords as raven_stopwords
 
 # A cache of `extract`'s output is valid only for the version that wrote it. Bump this when extraction changes.
-EXTRACTION_VERSION = 2
+EXTRACTION_VERSION = 3
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
@@ -110,7 +110,10 @@ def _phrases(doc, stopwords: Container[str]) -> set[str]:
     out = set()
     for chunk in doc.noun_chunks:
         tokens = list(chunk)
-        while tokens and (tokens[0].pos_ in _EDGE_POS or tokens[0].lemma_.lower() in stopwords):
+        # A token joined to the next by a hyphen is the first half of a word ("test-time compute"), not a word
+        # of its own, so being a stopword does not strip it; stripping it would leave "time compute".
+        while tokens and (tokens[0].pos_ in _EDGE_POS or tokens[0].lemma_.lower() in stopwords) and \
+                not (len(tokens) > 1 and tokens[1].text == "-" and not tokens[0].whitespace_):
             tokens.pop(0)
         # A stopword at the end is the head of the phrase. Qualified by a noun it names something ("tool use",
         # "sensitivity analysis") and stays; qualified by an adjective it does not ("remarkable ability") and
@@ -611,7 +614,7 @@ def without_umbrella_terms(lists: Sequence[Sequence[str]], *, threshold_fraction
 
 
 def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int, *,
-              display: dict[str, str] | None = None) -> list[str]:
+              display: dict[str, str] | None = None, nested: bool = True) -> list[str]:
     """A label of at most `top` terms: `leading`, then terms of `ranked` that add something new.
 
     `leading`: terms to put first, as written, such as an LLM's keywords.
@@ -619,6 +622,10 @@ def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: 
     `display`: `normalize`'s map from canonical terms to their display forms, when `ranked` holds display forms.
                Each term is then compared in both forms, so an LLM's *low-rank adaptation* is a repeat of a
                phrase displayed as *lora*, and the other way round.
+    `nested`: whether a term nested in one already taken, or one in it, counts as a repeat. True suits one label,
+              where *deep reinforcement learning* after *reinforcement learning* spends a slot on little; False
+              keeps only exact repeats out, for two lists shown side by side, where a one-word term such as
+              *intelligence* must not take every phrase containing it.
 
     A term of `ranked` is skipped when it repeats a term already taken, or is nested in one, or one in it,
     compared without case, hyphens or a final plural "s": after *reinforcement learning*, neither
@@ -639,7 +646,7 @@ def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: 
     for term, _share in ranked:
         if len(label) >= top:
             break
-        if any(c == t or _nested(c, t) for c in forms(term) for t in taken):
+        if any(c == t or (nested and _nested(c, t)) for c in forms(term) for t in taken):
             continue
         label.append(term)
         taken.extend(forms(term))
