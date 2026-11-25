@@ -106,7 +106,11 @@ TOOLS = [
                                                           "description": "The search query."}}}}},
     {"type": "function",
      "function": {"name": "webfetch",
-                  "description": "Retrieve a web page: its main content as clean Markdown, or its raw source.",
+                  "description": ("Retrieve a web page: its main content as clean Markdown, or its raw source. "
+                                  "Some addresses are fetched in a more readable form, and the result names the "
+                                  "address actually fetched: an arXiv paper as its HTML full text, a YouTube "
+                                  "video as its transcript. A feed or an API's JSON comes back as sent, in "
+                                  "either format. A very long result is cut off, with a note saying where."),
                   "parameters": {"type": "object",
                                  "additionalProperties": False,
                                  "required": ["url"],
@@ -120,8 +124,11 @@ TOOLS = [
                                                                            "response exactly as the site sent it, such "
                                                                            "as HTML, JSON or wiki markup; use it for "
                                                                            "an API or a data file, or where the page's "
-                                                                           "markup itself is what you need. A raw page "
-                                                                           "can be very long.")}}}}},
+                                                                           "markup itself is what you need. The raw "
+                                                                           "source of a web page is mostly styling and "
+                                                                           "navigation, and can run to millions of "
+                                                                           "characters, so for reading a page, "
+                                                                           "'markdown' is the better choice.")}}}}},
     # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
     # synthetic call naming a function the model was never offered is a fiction the model can act on.
     # That is not a guess — it is the situation the document-matches inject was in before
