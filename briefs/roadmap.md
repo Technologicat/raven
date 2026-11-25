@@ -138,7 +138,8 @@ accepted.
   - **The lorebook's tool is `raven-mcp`'s; the per-frontend hooks are grimoire's** (an Open WebUI filter, a
     Claude Code hook), those being frontend-specific. `--no-lorebook` keeps a frontend that has grimoire's tool
     from being handed it twice. Whether grimoire should keep a tool of its own, for users without Raven, is
-    open; the maintainer leans yes (2026-11-25).
+    open; the maintainer leans yes (2026-11-25). Where Raven is installed, the preference is the other way
+    round: offer `raven-mcp`'s tool, which is easier to keep current, and uninstall grimoire's from the frontend.
 - **JavaScript avatar client.** Raven-avatar in browser-based tools, including the JAMK team's: the video
   stream, lipsync, and the rest of the client side, as a library others drop in. Wanted "soon-ish"
   (maintainer, 2026-11-13), as a colleague's browser-based conversational tools with an avatar are about to be
