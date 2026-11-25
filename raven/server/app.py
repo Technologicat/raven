@@ -33,6 +33,7 @@ replserver.add_argument(parser)
 args = parser.parse_args()
 
 import logging
+import signal
 from ..common import logsetup
 from ..common import quitsignal
 logsetup.configure(level=getattr(logging, args.log_level),
@@ -2016,9 +2017,27 @@ print(f"{Fore.GREEN}{Style.BRIGHT}Listening for connections from {where}{Style.R
 # `serve`, so that the `atexit` handlers run: they quit the headless browsers of `websearch` and `webfetch`,
 # which a terminated process otherwise leaves running, and shut the avatar down. After every module has
 # initialized, since anything initializing SDL would replace the handler.
+#
+# Both say so the moment the signal arrives: the shutdown takes a few seconds, and without a word the
+# terminal looks as if it had not heard. Once only, so that a second Ctrl+C cuts the shutdown short quietly.
+_exit_announced = False
+
+def _announce_exit() -> None:
+    global _exit_announced
+    if not _exit_announced:
+        _exit_announced = True
+        print(f"{Fore.YELLOW}{Style.BRIGHT}Raven-server exiting…{Style.RESET_ALL}", flush=True)
+
 def _exit_on_quit_signal() -> None:
+    _announce_exit()
     raise SystemExit(0)
+
+def _exit_on_interrupt() -> None:
+    _announce_exit()
+    raise KeyboardInterrupt
+
 quitsignal.install(_exit_on_quit_signal)
+quitsignal.install(_exit_on_interrupt, signals=(signal.SIGINT,))
 
 # With a request lookahead, a connection stays readable while its request is being served, which is what
 # lets `waitress.client_disconnected` see a client that has gone (`serverutil.stream_job` asks it). At
