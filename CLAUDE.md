@@ -1078,7 +1078,7 @@ take.
   that picking silently would be worse than asking. The error names the candidates.
 - **Apple Silicon is a supported target with a real user**, and it is the case that shows the promise
   working: no CUDA exists there, PyPI's macOS wheels carry MPS, and `"gpu"` finds it unaided. The
-  install-side half — removing the `pytorch-cu128` source, which has no macOS wheels because there is
+  install-side half — removing the `pytorch-gpu` source, which has no macOS wheels because there is
   nothing for them to be — is in the README under *Install on an Apple Silicon Mac*.
 
 ### Avatar Lipsync

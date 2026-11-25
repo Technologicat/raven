@@ -77,7 +77,7 @@ dependencies = [
     "sentence_transformers>=6.2.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
     "spacy>=3.8.18",  # BibTeX importer: NLP analysis. Its language models are downloaded on first use (`nlptools.load_spacy_pipeline`), not declared here: PyPI refuses a direct URL dependency.
     "sseclient-py>=1.9.0",  # librarian: streaming transport for receiving data from LLM
-    # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
+    # The torch trio is version-pinned (not floored) and sourced from the `pytorch-gpu` index declared under
     # `[[tool.pdm.source]]` below — so a re-lock keeps the validated `+cu128` build set instead of drifting the
     # versions (and, worse, the audio wheel's CUDA runtime) on its own. Bump these three together, deliberately.
     "torch==2.11.0",
@@ -307,8 +307,11 @@ verify_ssl = true
 # `torchaudio>=2.4.0` floor lets `pdm lock` silently drift the audio wheel onto the CUDA-13 PyPI build while
 # torch/torchvision stay `+cu128`, and the mismatched runtime breaks at import. Bump the `cuXYZ` in the URL to
 # move the whole stack to a different CUDA version.
+#
+# On an AMD GPU (Linux), point the URL at a ROCm build set instead, e.g. `.../whl/rocm7.2`; see the README,
+# "Install on Linux with an AMD GPU (ROCm)".
 [[tool.pdm.source]]
-name = "pytorch-cu128"
+name = "pytorch-gpu"
 url = "https://download.pytorch.org/whl/cu128"
 verify_ssl = true
 include_packages = ["torch", "torchvision", "torchaudio"]

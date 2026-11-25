@@ -600,7 +600,7 @@ builds very likely lack Blackwell (`sm_120`) kernels, which would drop RTX 50-se
 with `torch.cuda.get_arch_list()` if the question ever reopens).
 
 What the move involves:
-- **The trio**: the three pins in `pyproject.toml`, and the `pytorch-cu128` source renamed and pointed at
+- **The trio**: the three pins in `pyproject.toml`, and the `pytorch-gpu` source pointed at
   `cu130`. Its comment and the pins' comment both describe the CUDA 12.8 build set.
 - **The `[cuda]` extra**, which is CUDA 12 throughout: `cupy-cuda12x` → `cupy-cuda13x`, every `nvidia-*-cu12`
   to its `-cu13` counterpart, and a check that the `tensorrt` it pulls in matches. The header comment says
@@ -4029,7 +4029,7 @@ whatever their OS and whichever brand of GPU they run. **A CPU build is the fall
 compatible GPU, and never what a machine that has one gets by default** — on CPU, Raven is uselessly slow.
 This is the install-side half of the root `CLAUDE.md`'s *a supported platform needs no configuration*, which
 `deviceinfo`'s `"gpu"` autodetection already keeps at run time. CUDA exists only on Linux and Windows;
-macOS gets MPS from PyPI's own wheels, and today a Mac user must remove the `pytorch-cu128` source by hand.
+macOS gets MPS from PyPI's own wheels, and today a Mac user must remove the `pytorch-gpu` source by hand.
 Whether PDM can choose the torch index per platform is unknown and is the first thing to probe.
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
@@ -6149,7 +6149,7 @@ settled. The invisibility is the part that bites: an ignored file is not in `git
 prompts anyone to notice it disagreeing with `pyproject.toml`.
 
 **What blocks simply committing it: the CUDA wheels.** Raven resolves `torch`/`torchvision`/`torchaudio`
-from a dedicated `pytorch-cu128` index as a matched `+cu128` set, and it is not established what a lock
+from a dedicated `pytorch-gpu` index as a matched `+cu128` set, and it is not established what a lock
 generated on a CUDA machine does to an installer who is on macOS or CPU-only. The possibilities differ
 enough to matter — a cross-platform lock that resolves per-marker and is simply fine, versus one that
 pins a CUDA-only set nobody else can install, versus needing separate lock targets — and picking wrong
@@ -6162,7 +6162,7 @@ check first.
 carries one target, `requires_python = ">=3.11,<3.13"`, and 418 `macosx`/`win_amd64` wheel entries, so it
 *is* cross-platform in general. `torch` is the exception and the only one that matters — the recorded
 wheels are `manylinux_2_28_{x86_64,aarch64}` and `win_amd64`, all `+cu128`, with no macOS build at all,
-because the `pytorch-cu128` index publishes none.
+because the `cu128` index publishes none.
 
 **But that restriction is inherited, not introduced, which is the part that decides the item.** macOS has
 had no CUDA since 2018 and Apple Silicon never did — the M series runs torch on MPS over unified memory —
