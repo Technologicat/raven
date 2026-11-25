@@ -34,6 +34,14 @@ fi
 NVIDIA_BASE="${VIRTUAL_ENV}/lib/python$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/nvidia"
 
 if [ ! -d "$NVIDIA_BASE" ]; then
+    # `/dev/kfd` is the amdgpu kernel driver's compute interface, which is what a ROCm build of torch talks to.
+    # Tested instead of `amd-smi` or `rocminfo`, which come with a system ROCm install that Raven does not need:
+    # the ROCm torch wheels bundle their own runtime libraries, so there is nothing for this script to set up.
+    if [ -e /dev/kfd ]; then
+        echo "env.sh: no NVIDIA packages; this looks like an AMD GPU machine, where ROCm torch needs no setup."
+        unset NVIDIA_BASE
+        return 0 2>/dev/null || exit 0
+    fi
     echo "env.sh: ${NVIDIA_BASE} not found — no pip-installed NVIDIA packages?" >&2
     return 1 2>/dev/null || exit 1
 fi
