@@ -62,6 +62,8 @@
 
 *Fragment search* means that e.g. *"cat photo"* matches *"photocatalytic"*. This is the same kind of search provided by the Firefox address bar, or by the `helm-swoop` function in Emacs. Currently the search looks only in the title field of the data; this may change in the future.
 
+To find a cluster by its number, search for `#` and the number: *#7* finds cluster 7's studies.
+
 **Raven is NOT a search engine.** Rather, for its input, it uses research literature metadata (title, authors, year, abstract) for thousands of papers, as returned by a search engine, and plots that data in an interactive semantic visualization.
 
 *Raven-visualizer* is fully operational, and under active development.
@@ -297,6 +299,15 @@ and *effluent*.
 - The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
   no LLM, and is what `"llm"` and `"hybrid"` fall back to when no backend answers. It replaces `"frequencies"`; a
   configuration still naming that is refused, with a message saying what to write instead.
+
+**A cluster shows its themes and its terms**, where the LLM keyworded the dataset along with the phrases
+(`"hybrid"`, or `"llm"` with the evidence on). Its header in the info panel and in the plot tooltip has two lines:
+**Themes**, the LLM's keywords, which name what the cluster's studies share, and **Terms**, the phrases, which
+quote what they say. The two catch different things, the themes the ideas the studies word differently, the terms
+the names they use: *double descent* is a theme, *ImageNet* a term.
+
+- **A theme the LLM gave most clusters is left out**, as is a term repeating a theme.
+- **A tooltip over more than two clusters shows the themes alone**, to leave room for the titles.
 
 **LLM cluster keywords are made comparable across clusters**, if you have set `clusters_keyword_method =
 "llm"`. Each cluster is keyworded on its own, so one concept can come back under several spellings — an
