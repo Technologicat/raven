@@ -81,18 +81,22 @@ def _autodetect_gpu() -> str:
     logger.info(f"get_device_and_dtype: 'gpu' autodetect resolved to {label} (device_string='{resolved}').")
     return resolved
 
-def _libstdcxx_include_dirs() -> List[str]:
+def _libstdcxx_include_dirs(*, timeout: float = 30.0) -> List[str]:
     """Return the C++ standard library's header directories, as the system's C++ compiler reports them.
 
-    Empty when there is no compiler, or its output cannot be read.
+    `timeout`: seconds to wait for the compiler. A first start can be slow on a cold machine.
+
+    Empty when there is no compiler, it does not answer within `timeout`, or its output cannot be read.
     """
     compiler = shutil.which("g++") or shutil.which("c++")
     if compiler is None:
+        logger.debug("_libstdcxx_include_dirs: no C++ compiler on PATH")
         return []
     try:
         result = subprocess.run([compiler, "-E", "-x", "c++", "-v", os.devnull],
-                                capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
+                                capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug(f"_libstdcxx_include_dirs: asking '{compiler}' failed: {type(exc)}: {exc}")
         return []
     # The compiler lists its search path on stderr, between these two lines.
     lines = result.stderr.splitlines()
@@ -128,9 +132,9 @@ def _prepare_rocm_compiler() -> None:
 
     include_dirs = _libstdcxx_include_dirs()
     if not include_dirs:
-        logger.error("_prepare_rocm_compiler: no C++ compiler found, so the GPU cannot compile the MIOpen "
-                     "kernels that need C++ standard headers, and some models will fail on this AMD GPU. "
-                     "Install `g++` (on Debian and Ubuntu: `sudo apt install g++`).")
+        logger.error("_prepare_rocm_compiler: could not find the C++ standard headers (no C++ compiler, or it did "
+                     "not answer), so the GPU cannot compile the MIOpen kernels that need them, and some models "
+                     "will fail on this AMD GPU. Install `g++` (on Debian and Ubuntu: `sudo apt install g++`).")
         return
     options = " ".join(f"-I{path}" for path in include_dirs)
     existing = os.environ.get(_HIPRTC_OPTIONS_VARIABLE, "")

@@ -325,6 +325,12 @@ class TestLibstdcxxIncludeDirs:
         with patch.object(deviceinfo.shutil, "which", return_value=None):
             assert deviceinfo._libstdcxx_include_dirs() == []
 
+    def test_a_compiler_that_does_not_answer_gives_nothing(self):
+        timeout = subprocess.TimeoutExpired(cmd="g++", timeout=30)
+        with patch.object(deviceinfo.shutil, "which", return_value="/usr/bin/g++"), \
+             patch.object(deviceinfo.subprocess, "run", side_effect=timeout):
+            assert deviceinfo._libstdcxx_include_dirs() == []
+
     def test_unreadable_output_gives_nothing(self):
         which, run = _compiler_reports("clang: error: unknown argument\n")
         with which, run:
@@ -333,8 +339,9 @@ class TestLibstdcxxIncludeDirs:
     @pytest.mark.skipif(not (deviceinfo.shutil.which("g++") or deviceinfo.shutil.which("c++")),
                         reason="no C++ compiler on this machine")
     def test_the_real_compiler_names_a_directory_with_type_traits(self):
-        # Against the installed compiler rather than a fixture, so a change in its output format shows here.
-        include_dirs = deviceinfo._libstdcxx_include_dirs()
+        # Against the installed compiler rather than a fixture, so a change in its output format shows here. With
+        # a long timeout: a CI runner's first compiler start can be slow, and this is not a test of the timeout.
+        include_dirs = deviceinfo._libstdcxx_include_dirs(timeout=120)
         assert any(os.path.isfile(os.path.join(path, "type_traits")) for path in include_dirs), include_dirs
 
 
