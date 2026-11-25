@@ -27,6 +27,16 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## How do other web-fetch tools handle Reddit, now that it needs a login?
+
+*Cluster: ? · Cost: ? · Gate: none; low priority (maintainer, 2026-11-25) · Filed: 2026-11-25*
+
+Raven-server's `webfetch` used to rewrite Reddit addresses to `old.reddit.com`, which a logged-out visitor
+could read. Checked 2026-11-25, that now answers with a 403 and a login page, the `.json` endpoint is refused
+the same way, and `www.reddit.com` rendered in the headless browser gives too little text to extract; the
+rewrite was removed. Look at npacker's web tools in the LM Studio marketplace: if they have been updated since,
+they may show a route that still works, or confirm that Reddit cannot be read anonymously any more.
+
 ## Autotune: pick CPU or GPU per module by timing both
 
 *Cluster: devices · Cost: M · Gate: none; reuses `raven-bench-devices` (raven/tools/bench_devices.py) for the timing · Filed: 2026-11-25 · See also: README, "Choose which GPU to use (optional)"*
