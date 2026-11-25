@@ -255,6 +255,7 @@
 
 #### Constellation-wide
 
+- **A fetched web page keeps its links**, with their targets, in Raven-librarian's `webfetch`, `raven-web fetch` and `raven-mcp`. A page whose content is mostly where it links to, a list of sources or a disambiguation page, was useless without them. A page comes out somewhat longer for it.
 - **The PyTorch package source in `pyproject.toml` is named `pytorch-gpu`**, where it was `pytorch-cu128`, as it now serves AMD GPUs too. It is the same entry; instructions that name it, such as removing it on a Mac, mean this one.
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
 - **For scripts: the `raven.client.mayberemote` services take their arguments by name only**, `allow_local=True` rather than a bare `True`. A script passing them positionally needs the names added.

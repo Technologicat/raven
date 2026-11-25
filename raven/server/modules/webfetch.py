@@ -266,7 +266,11 @@ def _http_get(url: str) -> Tuple[Optional[str], Optional[int]]:
     return response.text, response.status_code
 
 def _extract_clean_text(html: Optional[str], *, url: str, output_format: str = "markdown") -> str:
-    """Run `trafilatura` readability extraction over `html`. Returns "" if nothing extractable."""
+    """Run `trafilatura` readability extraction over `html`. Returns "" if nothing extractable.
+
+    Markdown keeps the links, with their targets: a page whose payload is where it links to is useless without
+    them, and a model reading it cannot follow a link it was not given.
+    """
     if not html:
         return ""
     import trafilatura  # noqa: PLC0415 -- deferred: keep trafilatura out of pure-helper imports
@@ -274,6 +278,7 @@ def _extract_clean_text(html: Optional[str], *, url: str, output_format: str = "
                                     url=url,
                                     output_format=output_format,
                                     include_tables=True,
+                                    include_links=(output_format == "markdown"),
                                     favor_recall=True)
     return extracted or ""
 

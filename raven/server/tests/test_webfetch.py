@@ -250,3 +250,30 @@ class TestTier2DeadBrowser:
         monkeypatch.setattr(webcommon, "get_driver", lambda page_load_timeout=None: None)
         with pytest.raises(webfetch._NoBrowser):
             self._fetch()
+
+
+class TestExtractionKeepsLinks:
+    """Markdown extraction keeps each link's target, so a page whose payload is its links is still usable."""
+
+    PARAGRAPH = ("<p>Paragraph {i} discusses the subject at some length, so that the extractor sees prose rather "
+                 "than boilerplate; it mentions <a href=\"https://example.org/page-{i}\">the related page number "
+                 "{i}</a> in the middle of a sentence, and then carries on for a while longer before it ends.</p>")
+
+    @pytest.fixture
+    def page(self):
+        pytest.importorskip("trafilatura", reason="trafilatura is not installed")
+        return ("<html><head><title>Fixture</title></head><body><article><h1>A heading</h1>"
+                + "".join(self.PARAGRAPH.format(i=i) for i in range(4)) + "</article></body></html>")
+
+    def test_markdown_keeps_the_link_targets(self, page):
+        import trafilatura
+        without_links = trafilatura.extract(page, output_format="markdown", include_tables=True, favor_recall=True)
+        assert "](https://" not in without_links, "trafilatura kept links by itself, so this fixture tests nothing"
+        extracted = webfetch._extract_clean_text(page, url="https://example.org/", output_format="markdown")
+        for i in range(4):
+            assert f"](https://example.org/page-{i})" in extracted
+
+    def test_plain_text_has_no_link_markup(self, page):
+        extracted = webfetch._extract_clean_text(page, url="https://example.org/", output_format="txt")
+        assert "](https://" not in extracted
+        assert "the related page number 0" in extracted
