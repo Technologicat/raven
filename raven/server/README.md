@@ -1719,6 +1719,8 @@ Input is JSON:
 `"url"` is required. `"format"` is optional: `"markdown"` (default), `"text"` or `"raw"`.
 
   - `"markdown"` keeps the page's headings, lists and links, with the links' targets.
+  - A response that is text but not HTML, such as a feed or an API's JSON, comes back as the site sent it, in any
+    format: extraction is for pages, and would strip its markup.
   - `"raw"` is the response as the site sent it, for any text type: HTML, JSON, XML, wiki markup and the like.
     The URL is not rewritten and nothing is extracted, so it suits an API endpoint or a data file. A type that is
     not text is refused. A site that refuses the plain request is tried in the headless browser, whose page

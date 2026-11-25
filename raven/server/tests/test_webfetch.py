@@ -158,7 +158,7 @@ class TestFetchOutcome:
     def short_tier1(self, monkeypatch):
         """Tier 1 got nothing and no status, as a failed GET leaves it; the gate lets every URL through."""
         monkeypatch.setattr(webfetch, "_classify_url_network_safety", lambda url, allow_private: None)
-        monkeypatch.setattr(webfetch, "_http_get", lambda url: (None, None))
+        monkeypatch.setattr(webfetch, "_http_get", lambda url: (None, None, ""))
         monkeypatch.setattr(webfetch, "_extract_clean_text", lambda html, url, output_format="markdown": "")
         monkeypatch.setattr(webfetch, "_extract_title", lambda html: None)
 
@@ -394,3 +394,45 @@ class TestRawBodyLimit:
         serve(b"\x89PNG", content_type="image/png")
         body, status, content_type, _ = webfetch._http_get_raw("https://example.org/")
         assert body is None and status == 200 and content_type == "image/png"
+
+
+class TestDataIsNotExtracted:
+    """A response that is text but not HTML, a feed or an API's JSON, is passed on as sent in any format."""
+
+    ATOM = ('<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><id>http://arxiv.org/api/x</id>'
+            '<entry><summary>Some abstract.</summary></entry></feed>')
+
+    @pytest.fixture
+    def tier1(self, monkeypatch):
+        """Script the plain GET; extraction returns a marker, so a test can tell whether it ran."""
+        script = {}
+        monkeypatch.setattr(webfetch, "_classify_url_network_safety", lambda url, allow_private: None)
+        monkeypatch.setattr(webfetch, "_http_get", lambda url: script["get"])
+        monkeypatch.setattr(webfetch, "_extract_clean_text", lambda html, url, output_format="markdown": "EXTRACTED " + "x" * 400)
+        monkeypatch.setattr(webfetch, "_extract_title", lambda html: None)
+        return script
+
+    def _fetch(self):
+        return webfetch.fetch("https://export.arxiv.org/api/query?search_query=x", output_format="markdown")
+
+    def test_a_feed_comes_back_with_its_markup(self, tier1):
+        tier1["get"] = (self.ATOM, 200, "application/atom+xml; charset=utf-8")
+        result = self._fetch()
+        assert result["fetched"] and result["content"] == self.ATOM
+
+    def test_json_comes_back_as_sent(self, tier1):
+        tier1["get"] = ('{"a": [1, 2]}', 200, "application/json")
+        assert self._fetch()["content"] == '{"a": [1, 2]}'
+
+    def test_a_page_is_still_extracted(self, tier1):
+        # The control for the two above: the same path, with an HTML content type.
+        tier1["get"] = ("<html><body>page</body></html>", 200, "text/html; charset=utf-8")
+        assert self._fetch()["content"].startswith("EXTRACTED")
+
+    def test_a_response_without_a_content_type_is_extracted_as_before(self, tier1):
+        tier1["get"] = ("<html><body>page</body></html>", 200, "")
+        assert self._fetch()["content"].startswith("EXTRACTED")
+
+    def test_an_error_response_is_not_passed_on_as_content(self, tier1):
+        tier1["get"] = ("<error>not found</error>", 404, "application/xml")
+        assert not self._fetch()["content"].startswith("<error>")

@@ -176,11 +176,11 @@ def _extract_arxiv(url: str) -> Tuple[str, Optional[str]]:
     Returns `(content, title)`. `url` is the `arxiv.org/html/ID` form produced by `_rewrite_url`.
     Older papers have no HTML rendering (404); for those, fall back to `arxiv.org/abs/ID`.
     """
-    html, status = _http_get(url)
+    html, status, _ = _http_get(url)
     if status == 404 and (m := _ARXIV_ID_RE.search(url)) is not None:
         arxiv_id = m.group("arxiv_id")
         logger.info(f"_extract_arxiv: HTML form 404 for arXiv {arxiv_id}, falling back to abstract page.")
-        html, status = _http_get(f"https://arxiv.org/abs/{arxiv_id}")
+        html, status, _ = _http_get(f"https://arxiv.org/abs/{arxiv_id}")
     if not html:
         return "", None
     return _extract_clean_text(html, url=url), _extract_title(html)
@@ -255,10 +255,10 @@ def _classify_url_network_safety(url: str, *, allow_private: bool) -> Optional[s
 # --------------------------------------------------------------------------------
 # The two-tier fetch.
 
-def _http_get(url: str) -> Tuple[Optional[str], Optional[int]]:
-    """Tier 1 transport: plain `requests` GET. Returns `(html_or_None, status_code_or_None)`.
+def _http_get(url: str) -> Tuple[Optional[str], Optional[int], str]:
+    """Tier 1 transport: plain `requests` GET. Returns `(body_or_None, status_code_or_None, content_type)`.
 
-    On a network-level failure (timeout, connection error), returns `(None, None)`; the
+    On a network-level failure (timeout, connection error), returns `(None, None, "")`; the
     caller escalates to Tier 2.
     """
     from .. import config as server_config
@@ -269,8 +269,8 @@ def _http_get(url: str) -> Tuple[Optional[str], Optional[int]]:
                                 allow_redirects=True)
     except requests.RequestException as exc:
         logger.info(f"_http_get: Tier 1 GET failed for '{url}', reason {type(exc)}: {exc}")
-        return None, None
-    return response.text, response.status_code
+        return None, None, ""
+    return response.text, response.status_code, response.headers.get("Content-Type", "")
 
 def _is_text_type(content_type: str) -> bool:
     """Return whether a `Content-Type` header names text: `text/*`, or structured data such as JSON and XML.
@@ -284,6 +284,11 @@ def _is_text_type(content_type: str) -> bool:
     if main_type == "text":
         return True
     return subtype in _TEXT_SUBTYPES or subtype.endswith(("+json", "+xml"))
+
+def _is_html_type(content_type: str) -> bool:
+    """Return whether a `Content-Type` header names an HTML page. An empty header counts, so that such a response is extracted as before."""
+    media_type = content_type.split(";")[0].strip().lower()
+    return media_type in ("", "text/html", "application/xhtml+xml")
 
 def _http_get_raw(url: str) -> tuple[Optional[str], Optional[int], str, str]:
     """A plain GET for a raw fetch. Returns `(body_or_None, status_or_None, content_type, final_url)`.
@@ -461,7 +466,9 @@ def fetch(url: str, output_format: str = "markdown",
     when neither fetch tier could extract usable content (heavy SPA, login wall, captcha). `title` is
     the page title on success, else `None`.
 
-    `output_format` is "markdown" (default, preserves headings/lists/links), "text", or "raw". Raw is the response
+    `output_format` is "markdown" (default, preserves headings/lists/links), "text", or "raw". A response that is
+    text but not HTML, such as a feed or an API's JSON, is passed on as sent whatever the format, extraction being
+    for pages. Raw is the response
     body as the site sent it, for any text type (HTML, JSON, XML, wiki markup and the like), with no URL rewriting
     and no extraction, read up to `server_config.webfetch_raw_max_bytes`. A site that refuses the plain request is
     tried in the browser, whose page source is the page as its scripts left it. A type that is not text is refused.
@@ -500,7 +507,13 @@ def fetch(url: str, output_format: str = "markdown",
         # A special extractor that came up short (e.g. no YouTube transcript) falls through
         # to the standard two-tier fetch on the same URL, which may still find something.
 
-    html, status = _http_get(effective_url)
+    html, status, content_type = _http_get(effective_url)
+    if html and status is not None and status < 400 and _is_text_type(content_type) and not _is_html_type(content_type):
+        # Not a page but data, such as a feed or an API's JSON: extraction would eat its markup, so it is passed
+        # on as sent, whatever format was asked for. Capped as a raw fetch is, having skipped the same work.
+        limit = server_config.webfetch_raw_max_bytes
+        body = html if len(html) <= limit else html[:limit] + CANONICAL_RAW_TRUNCATED.format(limit=limit)
+        return _make_result(common_text.normalize(body), url=effective_url, fetched=True)
     content = _extract_clean_text(html, url=effective_url, output_format=trafilatura_format)
     title = _extract_title(html)  # from the (Tier 1) static HTML; usually present even on SPAs, whose shell carries a <title>
 
