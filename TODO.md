@@ -126,6 +126,16 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     *lora*. Pairs no paper in the corpus defines are left, and the same alias table would cover them.
 
 - **[Medium]** Fragment search across multiple fields (author, year, abstract, ...); configurable which fields to search. Add checkboxes and a select/unselect-all button below the search bar. Note: the highlighter currently only processes titles and is slow — may not be able to highlight in abstracts without performance work.
+  - **Design decided 2026-11-25** (the maintainer): finding matches is cheap, showing them is the expensive half,
+    so a match outside the title shows as **one-line snippets of context**, each with the match highlighted, under
+    the record's title in the info panel; the full abstract renders only when the reader opens it, with its
+    matches highlighted, **toggling between the snippets and the full text**.
+    - **Every matching snippet of a record is shown**, capped at a few for a query that matches nearly everything
+      (the letter "e").
+    - **A snippet is one line, so native DPG text can highlight it**: before, match and after as three text
+      widgets side by side. Highlighting inside a wrapped paragraph needs line breaking of our own, which the
+      Markdown renderer does and which is likely part of why it is slow; the snippets avoid needing it.
+    - Cost: the field toggles and the scan S; the snippets and the toggle S–M, mostly in the info panel's build.
 
 - **[Medium]** Semantic orienteering: embed user-typed text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter. Later: support user-given BibTeX entry or PDF file as input.
 
