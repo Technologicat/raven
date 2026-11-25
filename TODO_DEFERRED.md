@@ -6850,6 +6850,12 @@ has no live item to point at, it does not belong here yet.
   is that `arrow-down-to-bracket` does not exist in this version, which is why the tool-call navigation uses
   the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair — a two-line change in `add_tool_call_invocation`
   and `build_buttons` if it is ever revisited. (Declined 2026-08-12.)
+- **Strip author lists from arXiv API responses in `webfetch`** — proposed by a model using `raven-mcp`,
+  after a big-collaboration paper's ~90 authors outweighed its abstract in an Atom feed. Declined as asked:
+  it special-cases one API's payload, and the API's own `max_results` already bounds it. The general form, a
+  field filter for XML or JSON that the model supplies (an XPath or a jq-style expression), is a sizable
+  feature of its own, not worth building yet; reconsider if models keep fetching data they then have to
+  wade through. (Declined 2026-11-25.)
 
 ## Waiting on upstream
 
