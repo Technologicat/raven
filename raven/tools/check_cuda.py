@@ -46,6 +46,17 @@ def main():
         backend = " via ROCm" if is_rocm else ""
         print_success(f"✅ (Using {device}{backend})")
 
+        if is_rocm:
+            # e.g. "gfx1151", possibly followed by feature flags such as ":sramecc+:xnack-"
+            arch = torch.cuda.get_device_properties(0).gcnArchName.split(":")[0]
+            print(f"   GPU architecture {arch}", end=" ")
+            if arch in torch.cuda.get_arch_list():
+                print_success("✅ (supported by this PyTorch build)")
+            else:
+                print_error("❌ (not in this PyTorch build)")
+                print(f"   This build supports: {', '.join(torch.cuda.get_arch_list())}")
+                print("   A different ROCm version in pyproject.toml's `pytorch-gpu` source may support it.")
+
         print("3. CuPy & CuPyX (for spaCy NLP)", end=" ")
         try:
             import cupy  # noqa: F401, only for checking.
