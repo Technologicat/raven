@@ -23,7 +23,8 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 The maintainer reads the keyword shortlists (`investigations/cluster-keywords/out/CORPUS-shortlist.md`); Claude
 starts building colouring the map by year, v0 (`briefs/visualizer-filter-by-date-and-recolour-brief.md`,
-*Decided: colouring by year*). Tonight's re-import, if it runs, is on the maintainer's ping.
+*Decided: colouring by year*). The re-import ran on the evening of 2026-11-25, and the shortlists are made
+again from it.
 
 ## In progress: cluster keywords (2026-11-24)
 
@@ -40,8 +41,8 @@ maintainer has read the whole arXiv evidence comparison.
   heading reads *68 clusters + Misc*.
 - **In progress: the shortlist read**, `investigations/cluster-keywords/out/CORPUS-shortlist.md`; arXiv clusters 1
   and 7 read.
-- **Tonight (2026-11-25): re-import** with `run_new_imports.sh`, on the maintainer's go, for the hyphen fix and the
-  fifteen-keyword lists; first move the `-evidence` and `-hybrid` datasets aside, as on 2026-11-24.
+- **Done, evening of 2026-11-25: the re-import**, with the hyphen fix and the fifteen-keyword lists; the shortlists
+  are made again from it.
 - **Still open**: the hybrid's ordering prompt (option 3), to be measured against tonight's import.
 
 ## Ready to pick up, no deadline

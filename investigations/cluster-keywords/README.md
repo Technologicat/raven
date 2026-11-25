@@ -446,6 +446,10 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   took its LLM answers from the ledger the evidence import before it had just written (all 68 clusters on arXiv),
   so a corpus's two datasets share one LLM sample, and differ only by the hybrid combination. Shortlists:
   `out/CORPUS-shortlist.md`, 5–13 clusters per corpus.
+- **Imported again on the evening of 2026-11-25**, all twelve, 16:18 to 23:03, none failed: extraction version 3
+  (*test-time* compounds kept whole) and the LLM asked for up to fifteen keywords (14–15 per cluster on arXiv).
+  The previous night's datasets are kept as `CORPUS-{evidence,hybrid}-2026-11-24.pickle`, and the shortlists
+  were made again from the new ones, against the imports of 2026-11-23.
 - **The shortlist read, 2026-11-25, opening finding: show both lists, not only a hybrid of them** (the maintainer).
   The two methods catch different aspects, and six terms cannot hold the variety. Cluster 1: the phrases have
   the specifics (*ImageNet, SGD, ResNet, MNIST*), the LLM the concepts (*double descent, catastrophic
