@@ -272,6 +272,7 @@ on the Librarian backend).
 | `raven-qoi2png` | image format conversion |
 | `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
 | `raven-bench-devices` | time the speech models on GPU and CPU, and print the overrides that run each on the faster one |
+| `raven-mcp` | an MCP server for other LLM frontends: web search and fetch through Raven-server, and the lorebook lookup, as the Librarian's own tools |
 
 **Two instruments are not console scripts and are easy to miss**, because they live inside the package
 tree rather than in `scripts/`: `python -m raven.common.video.tests.bench_postprocessor` costs each

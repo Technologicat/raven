@@ -371,6 +371,10 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
 - **`raven-web`** runs *Raven-server*'s web search and page fetch from the command line: `raven-web search QUERY` lists the results, `raven-web fetch URL` prints a page's main content as Markdown. With `--json` it prints the server's result as it came, which makes it a web tool for any agent that can run a shell command. A server on another machine must be started with `--listen`.
+- **`raven-mcp`** offers Raven's tools to other LLM frontends over MCP, the Model Context Protocol: web search and page fetch through *Raven-server*, and the lookup in *Raven-librarian*'s lorebook. The tools are *Librarian*'s own, so they are described and behave as they do there, `webfetch_allowlist` included.
+  - **For Open WebUI**, run `raven-mcp` and add `http://127.0.0.1:8130/mcp` in Open WebUI as an MCP server (Streamable HTTP). For a frontend on another machine, start it with `--listen` — which lets anyone who can reach the port search and fetch through your *Raven-server*, so on a trusted network only.
+  - **For Claude Code**, which starts the server itself: `claude mcp add raven -- raven-mcp --stdio`.
+  - **`--no-lorebook`** leaves the lorebook out, for a frontend that has it already from [grimoire](https://github.com/Technologicat/grimoire), so that the LLM is not handed the tool twice.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 - **`raven-bench-devices`** times the speech models on the GPU and on the CPU, and prints the settings that run each on the faster one. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).
 
@@ -578,6 +582,7 @@ raven-checkrefs                   →    python -m raven.papers.checkrefs
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-web                         →    python -m raven.tools.web
+raven-mcp                         →    python -m raven.tools.mcpserver
 raven-csv2bib                     →    python -m raven.papers.csv2bib
 raven-wos2bib                     →    python -m raven.papers.wos2bib
 raven-pdf2bib                     →    python -m raven.papers.pdf2bib_cli
