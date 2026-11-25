@@ -229,4 +229,5 @@ def test_the_aokk_definition_stays_valid():
                                                         "learner_agent"]
     assert [rule.action for rule in definition.rules] == ["remove", "remove", "remove", "remove", "remove", "remove",
                                                           "remove", "remove",
-                                                          "hold", "hold", "hold", "hold", "hold", "hold", "hold"]
+                                                          "hold", "hold", "hold", "hold", "hold", "hold", "hold",
+                                                          "hold", "hold"]
