@@ -26,10 +26,17 @@ LLM's corpus-wide terms do not lead; an abbreviation counts as a repeat of its l
 list kept in the dataset, hyphen and joined spellings folded, and keywords capitalized as the corpus does. The
 maintainer has read the whole arXiv evidence comparison.
 
-- **The new imports are done** (evening of 2026-11-24, all six corpora, LLM with evidence and hybrid). Next: the
-  maintainer reads the shortlists, `investigations/cluster-keywords/out/CORPUS-shortlist.md`.
-- **Decided the same day**: the evidence is on by default; embedding terms by their sentences is rejected. Still
-  open: the hybrid's ordering prompt (option 3), which wants its own measurement.
+- **The new imports are done** (evening of 2026-11-24, all six corpora, LLM with evidence and hybrid).
+- **Decided the same day**: the evidence is on by default; embedding terms by their sentences is rejected.
+- **Built 2026-11-25**: a cluster shows **Themes** (the LLM's) and **Terms** (the phrases) on two lines, in the
+  info panel and the tooltip (the shortlist read's first finding: six terms cannot hold both); the LLM is asked for
+  up to fifteen keywords; *test-time* compounds kept whole; `#7` in the search field finds cluster 7; the selection
+  heading reads *68 clusters + Misc*.
+- **In progress: the shortlist read**, `investigations/cluster-keywords/out/CORPUS-shortlist.md`; arXiv clusters 1
+  and 7 read.
+- **Tonight (2026-11-25): re-import** with `run_new_imports.sh`, on the maintainer's go, for the hyphen fix and the
+  fifteen-keyword lists; first move the `-evidence` and `-hybrid` datasets aside, as on 2026-11-24.
+- **Still open**: the hybrid's ordering prompt (option 3), to be measured against tonight's import.
 
 ## Ready to pick up, no deadline
 
@@ -39,6 +46,8 @@ maintainer has read the whole arXiv evidence comparison.
   and tested on the local AI server. `TODO_DEFERRED.md`, the stock-take item.
 - **Release 0.2.11 before the health-education paper comes out**, so that its methods can cite a released
   version (2026-11-19). No date yet; it follows the paper's schedule. The `release` skill has the process.
+- **All-fields search with one-line snippets** around each match and a toggle to the full abstract, designed
+  2026-11-25: `TODO.md`, *Fragment search across multiple fields*. M.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
@@ -75,7 +84,11 @@ maintainer has read the whole arXiv evidence comparison.
   - **Also from the team**: confirming that the full-text fetch may send DOIs to an outside service.
   - **With the final keeps**: comparing year-specific maps against the whole map filtered by year, for the
     trends. Both routes exist (`raven-siftbib --where 'year==2023'` per slice, or the live filter).
-  - Then rules v2 and probably a new LLM run.
   - **2026-11-24: the keep sample is rated**, which unblocks rules v2; teachers as AI users are out; a table of the
     clusters is wanted for the article; and the number of clusters is open, perhaps to be swept.
+  - **Rules v2 is ready to build, ours**: rules only, no new LLM run. The two new rules hold for a person rather
+    than remove (*focus = system*; practising teachers who are not the learners), and the 713 ProQuest-only
+    records come out. `investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-24.
+  - **Then, on the final keeps**: the cluster table export (a Visualizer feature, `TODO.md`; its hotkey needs the
+    help card split) and the cluster-count sweep.
   `investigations/aokk-corpus-scope/README.md`, the meetings of 2026-11-19 and 2026-11-24, points to each.
