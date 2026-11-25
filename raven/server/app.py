@@ -34,6 +34,7 @@ args = parser.parse_args()
 
 import logging
 from ..common import logsetup
+from ..common import quitsignal
 logsetup.configure(level=getattr(logging, args.log_level),
                    logfile=args.log)
 logger = logging.getLogger(__name__)
@@ -2010,6 +2011,14 @@ replserver.maybe_start(args.repl, globals(), f"Raven-server {__version__}")
 print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
 where = "all IPv4 addresses" if args.listen else "localhost"
 print(f"{Fore.GREEN}{Style.BRIGHT}Listening for connections from {where}{Style.RESET_ALL}")
+
+# A `SIGTERM` (what a service manager stops a process with) exits the way Ctrl+C does, by unwinding out of
+# `serve`, so that the `atexit` handlers run: they quit the headless browsers of `websearch` and `webfetch`,
+# which a terminated process otherwise leaves running, and shut the avatar down. After every module has
+# initialized, since anything initializing SDL would replace the handler.
+def _exit_on_quit_signal() -> None:
+    raise SystemExit(0)
+quitsignal.install(_exit_on_quit_signal)
 
 # With a request lookahead, a connection stays readable while its request is being served, which is what
 # lets `waitress.client_disconnected` see a client that has gone (`serverutil.stream_job` asks it). At

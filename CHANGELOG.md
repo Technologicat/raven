@@ -295,6 +295,7 @@
 #### Raven-server
 
 - **Web search and page fetch recover when their browser stops answering.** Raven-server keeps one headless browser for each, and once its tab had crashed, every search (or every page needing the browser) failed until the server was restarted. A dead browser is now replaced, and the request tried again, once.
+- **Stopping Raven-server with `SIGTERM` shuts it down cleanly**, as Ctrl+C does. It was killed where it stood, which left its headless browsers running after it was gone, one set per stop; a service manager stopping or restarting it piled them up.
 
 #### Raven-avatar
 
