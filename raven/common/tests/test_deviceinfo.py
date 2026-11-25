@@ -6,6 +6,7 @@ NVRTC sanity check) are out of scope for unit tests; they live with the apps
 that call them.
 """
 
+import os
 import subprocess
 import sys
 from unittest.mock import patch
@@ -14,6 +15,16 @@ import pytest
 import torch
 
 from raven.common import deviceinfo
+
+
+@pytest.fixture(autouse=True)
+def isolate_rocm_compiler_setup(monkeypatch):
+    """Keep `get_device_and_dtype`'s once-per-process ROCm compiler setup from leaking between tests.
+
+    On a ROCm build of Torch, any test that resolves a `cuda` device runs it, and it writes `os.environ`.
+    """
+    monkeypatch.setattr(deviceinfo, "_rocm_compiler_prepared", False)
+    monkeypatch.delenv(deviceinfo._HIPRTC_OPTIONS_VARIABLE, raising=False)
 
 
 def _mock_backends(*, cuda: bool = False, mps: bool = False, xpu: bool = False, vulkan: bool = False):
@@ -259,3 +270,99 @@ class TestVRAMLedger:
         with ledger.measure("somemodule", "cpu"):
             pass
         assert ledger.totals() == {}
+
+
+# ---------------------------------------------------------------------------
+# Tests: the ROCm run-time compiler setup
+# ---------------------------------------------------------------------------
+
+# What `g++ -E -x c++ -v /dev/null` prints on stderr on a Debian-family system, trimmed.
+_COMPILER_STDERR = """\
+ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"
+#include "..." search starts here:
+#include <...> search starts here:
+ /usr/include/c++/13
+ /usr/include/x86_64-linux-gnu/c++/13
+ /usr/include/c++/13/backward
+ /usr/lib/gcc/x86_64-linux-gnu/13/include
+ /usr/local/include
+ /usr/include
+End of search list.
+"""
+
+
+def _compiler_reports(stderr: str):
+    """Patch a C++ compiler into existence that prints `stderr` when asked for its search path."""
+    completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=stderr)
+    return (patch.object(deviceinfo.shutil, "which", return_value="/usr/bin/g++"),
+            patch.object(deviceinfo.subprocess, "run", return_value=completed))
+
+
+class TestLibstdcxxIncludeDirs:
+    """The C++ library's header directories, read from the compiler's own search path."""
+
+    def test_keeps_only_the_cxx_library_directories(self):
+        which, run = _compiler_reports(_COMPILER_STDERR)
+        with which, run:
+            assert deviceinfo._libstdcxx_include_dirs() == ["/usr/include/c++/13",
+                                                            "/usr/include/x86_64-linux-gnu/c++/13",
+                                                            "/usr/include/c++/13/backward"]
+
+    def test_no_compiler_gives_nothing(self):
+        with patch.object(deviceinfo.shutil, "which", return_value=None):
+            assert deviceinfo._libstdcxx_include_dirs() == []
+
+    def test_unreadable_output_gives_nothing(self):
+        which, run = _compiler_reports("clang: error: unknown argument\n")
+        with which, run:
+            assert deviceinfo._libstdcxx_include_dirs() == []
+
+    @pytest.mark.skipif(not (deviceinfo.shutil.which("g++") or deviceinfo.shutil.which("c++")),
+                        reason="no C++ compiler on this machine")
+    def test_the_real_compiler_names_a_directory_with_type_traits(self):
+        # Against the installed compiler rather than a fixture, so a change in its output format shows here.
+        include_dirs = deviceinfo._libstdcxx_include_dirs()
+        assert any(os.path.isfile(os.path.join(path, "type_traits")) for path in include_dirs), include_dirs
+
+
+class TestPrepareRocmCompiler:
+    """On a ROCm build, the C++ headers are appended to hiprtc's options, once."""
+
+    VARIABLE = deviceinfo._HIPRTC_OPTIONS_VARIABLE
+
+    def test_appends_to_what_the_user_set(self, monkeypatch):
+        monkeypatch.setattr(torch.version, "hip", "7.2.0")
+        monkeypatch.setenv(self.VARIABLE, "-O3")
+        with patch.object(deviceinfo, "_libstdcxx_include_dirs", return_value=["/a/c++/13", "/b/c++/13"]):
+            deviceinfo._prepare_rocm_compiler()
+        assert os.environ[self.VARIABLE] == "-O3 -I/a/c++/13 -I/b/c++/13"
+
+    def test_runs_once_per_process(self, monkeypatch):
+        monkeypatch.setattr(torch.version, "hip", "7.2.0")
+        with patch.object(deviceinfo, "_libstdcxx_include_dirs", return_value=["/a/c++/13"]) as include_dirs:
+            deviceinfo._prepare_rocm_compiler()
+            deviceinfo._prepare_rocm_compiler()
+        assert include_dirs.call_count == 1
+        assert os.environ[self.VARIABLE] == "-I/a/c++/13"
+
+    def test_does_nothing_on_a_build_without_hip(self, monkeypatch):
+        monkeypatch.setattr(torch.version, "hip", None)
+        with patch.object(deviceinfo, "_libstdcxx_include_dirs", return_value=["/a/c++/13"]) as include_dirs:
+            deviceinfo._prepare_rocm_compiler()
+        include_dirs.assert_not_called()
+        assert self.VARIABLE not in os.environ
+
+    def test_reports_an_error_and_leaves_the_variable_alone_without_a_compiler(self, monkeypatch, caplog):
+        monkeypatch.setattr(torch.version, "hip", "7.2.0")
+        with patch.object(deviceinfo, "_libstdcxx_include_dirs", return_value=[]):
+            with caplog.at_level("ERROR", logger=deviceinfo.logger.name):
+                deviceinfo._prepare_rocm_compiler()
+        assert self.VARIABLE not in os.environ
+        assert "g++" in caplog.text
+
+    def test_resolving_a_cuda_device_prepares_it(self, monkeypatch):
+        monkeypatch.setattr(torch.version, "hip", "7.2.0")
+        with _mock_backends(cuda=True):
+            with patch.object(deviceinfo, "_libstdcxx_include_dirs", return_value=["/a/c++/13"]):
+                deviceinfo.get_device_and_dtype({"device_string": "gpu", "dtype": torch.float16})
+        assert os.environ[self.VARIABLE] == "-I/a/c++/13"

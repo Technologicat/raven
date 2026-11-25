@@ -15,6 +15,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 import contextlib
+import os
+import shutil
+import subprocess
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import torch
@@ -76,6 +79,59 @@ def _autodetect_gpu() -> str:
     resolved = f"{prefix}:0" if prefix == "cuda" else prefix
     logger.info(f"get_device_and_dtype: 'gpu' autodetect resolved to {label} (device_string='{resolved}').")
     return resolved
+
+def _libstdcxx_include_dirs() -> List[str]:
+    """Return the C++ standard library's header directories, as the system's C++ compiler reports them.
+
+    Empty when there is no compiler, or its output cannot be read.
+    """
+    compiler = shutil.which("g++") or shutil.which("c++")
+    if compiler is None:
+        return []
+    try:
+        result = subprocess.run([compiler, "-E", "-x", "c++", "-v", os.devnull],
+                                capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    # The compiler lists its search path on stderr, between these two lines.
+    lines = result.stderr.splitlines()
+    try:
+        start = lines.index("#include <...> search starts here:") + 1
+        end = lines.index("End of search list.", start)
+    except ValueError:
+        return []
+    # Only the C++ library's own directories, never e.g. `/usr/include`: the GPU compiler has its own C headers.
+    return [line.strip() for line in lines[start:end] if "/c++/" in line]
+
+_HIPRTC_OPTIONS_VARIABLE = "HIPRTC_COMPILE_OPTIONS_APPEND"
+_rocm_compiler_prepared = False
+
+def _prepare_rocm_compiler() -> None:
+    """On a ROCm build of Torch, point the GPU's run-time compiler at the C++ standard library headers.
+
+    Done once per process; a no-op on any other build.
+    """
+    # MIOpen, Torch's AMD counterpart to cuDNN, compiles some of its kernels when they are first needed, with
+    # HIP's run-time compiler (hiprtc). Those kernels include C++ standard headers such as `<type_traits>`,
+    # which the ROCm Torch wheels do not ship and the compiler does not find on its own, so every such kernel
+    # failed with `miopenStatusUnknownError` (Kokoro's instance norm, for one). hiprtc appends the options in
+    # `HIPRTC_COMPILE_OPTIONS_APPEND` to every compile, and setting it after Torch is imported, but before the
+    # first such compile, takes effect.
+    global _rocm_compiler_prepared
+    if _rocm_compiler_prepared or torch.version.hip is None:
+        return
+    _rocm_compiler_prepared = True
+
+    include_dirs = _libstdcxx_include_dirs()
+    if not include_dirs:
+        logger.error("_prepare_rocm_compiler: no C++ compiler found, so the GPU cannot compile the MIOpen "
+                     "kernels that need C++ standard headers, and some models will fail on this AMD GPU. "
+                     "Install `g++` (on Debian and Ubuntu: `sudo apt install g++`).")
+        return
+    options = " ".join(f"-I{path}" for path in include_dirs)
+    existing = os.environ.get(_HIPRTC_OPTIONS_VARIABLE, "")
+    os.environ[_HIPRTC_OPTIONS_VARIABLE] = f"{existing} {options}".strip()
+    logger.info(f"_prepare_rocm_compiler: C++ standard headers for the GPU's run-time compiler: {', '.join(include_dirs)}")
 
 def _device_label(device_string: str) -> str:
     """Return a human-readable label for a (post-resolution) device string."""
@@ -151,6 +207,9 @@ def get_device_and_dtype(record: Dict[str, Any]) -> Tuple[str, torch.dtype]:
         logger.warning("get_device_and_dtype: dtype is set to torch.float16, but device 'cpu' does not support half precision. Using torch.float32 instead.")
         dtype = torch.float32
 
+    if device_string.startswith("cuda"):
+        _prepare_rocm_compiler()
+
     return device_string, dtype
 
 def validate(device_config: Dict[str, Dict[str, Any]]) -> None:
@@ -199,7 +258,10 @@ def validate(device_config: Dict[str, Dict[str, Any]]) -> None:
             logger.info(f"Device info for CUDA GPU {device_string} ({device_name}):")
             logger.info(f"    {torch.cuda.get_device_properties(device_string)}")
             logger.info(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
-            logger.info(f"    Detected CUDA version {torch.version.cuda}")
+            if torch.version.hip is not None:
+                logger.info(f"    Detected HIP (ROCm) version {torch.version.hip}")
+            else:
+                logger.info(f"    Detected CUDA version {torch.version.cuda}")
     # TODO: per-backend info for MPS / XPU / Vulkan? Their public APIs don't seem to expose anything analogous to `torch.cuda.get_device_properties` yet.
 
 def cuda_sanity_check() -> bool:
