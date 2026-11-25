@@ -401,6 +401,10 @@ and the shares are counted from the tags.**
 
 ## Which method said what (2026-11-24)
 
+**Promoted to the direction on 2026-11-25** (the maintainer, from the first clusters of the shortlist read): both
+lists shown, the LLM's themes and the phrases' terms, since a six-term hybrid drops some of each
+(`investigations/cluster-keywords/README.md`, *The shortlist read*).
+
 **A future refinement, raised by the maintainer once `clusters_keyword_method = "hybrid"` landed: show both what
 the phrases found and the topics only the LLM added.** Phrases quote the papers and an LLM abstracts over their
 different wordings, so the two lists say different things, and a reader may want to see which is which: the

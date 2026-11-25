@@ -446,6 +446,12 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   took its LLM answers from the ledger the evidence import before it had just written (all 68 clusters on arXiv),
   so a corpus's two datasets share one LLM sample, and differ only by the hybrid combination. Shortlists:
   `out/CORPUS-shortlist.md`, 5–13 clusters per corpus.
+- **The shortlist read, 2026-11-25, opening finding: show both lists, not only a hybrid of them** (the maintainer).
+  The two methods catch different aspects, and six terms cannot hold the variety. Cluster 1: the phrases have
+  the specifics (*ImageNet, SGD, ResNet, MNIST*), the LLM the concepts (*double descent, catastrophic
+  forgetting*). Cluster 7: hybrid keeps *AI safety*, an umbrella that covers prosaic alignment too, and loses
+  *existential risk*, which both full lists have (the LLM's fifth, the phrases' seventh). The data is already
+  there: a hybrid or LLM dataset stores the LLM's whole list and the 30 phrases; the decision left is the display.
 - **Cluster 27: searching *RSI* should find it** (labelled *recursive self-improvement*, a term the corpus never
   abbreviates). Filed as keyword search with abbreviations, `TODO.md`.
 - **Cluster 49: the run with the evidence reads best**, less generic than the alternatives.
