@@ -71,23 +71,29 @@ class TestCallTool:
     def test_a_fetch_goes_to_the_librarians_webfetch(self):
         with patch.object(llmtools, "webfetch", return_value=("the page", {"grounding": True})) as webfetch:
             assert mcpserver.call_tool("webfetch", {"url": "https://example.com"}) == ["the page"]
-        webfetch.assert_called_once_with("https://example.com", format="markdown")
+        webfetch.assert_called_once_with("https://example.com", format="markdown",
+                                         offset=None, length=mcpserver.DEFAULT_MAX_CHARS)
 
     def test_a_raw_fetch_passes_the_format_on(self):
         with patch.object(llmtools, "webfetch", return_value=("<html/>", {"grounding": True})) as webfetch:
             mcpserver.call_tool("webfetch", {"url": "https://example.com", "format": "raw"})
-        webfetch.assert_called_once_with("https://example.com", format="raw")
+        assert webfetch.call_args.kwargs["format"] == "raw"
 
-    def test_a_long_page_is_cut_off_and_says_so(self):
-        with patch.object(llmtools, "webfetch", return_value=("x" * 250, {"grounding": True})):
-            [text] = mcpserver.call_tool("webfetch", {"url": "https://example.com"}, max_chars=100)
-        assert text.startswith("x" * 100)
-        assert "x" * 101 not in text
-        assert "the first 100 of 250 characters" in text
+    def test_the_cap_is_the_length_when_the_model_gives_none(self):
+        with patch.object(llmtools, "webfetch", return_value=("page", {"grounding": True})) as webfetch:
+            mcpserver.call_tool("webfetch", {"url": "https://example.com"}, max_chars=100)
+        assert webfetch.call_args.kwargs["length"] == 100
 
-    def test_a_page_within_the_cap_is_whole(self):
-        with patch.object(llmtools, "webfetch", return_value=("x" * 100, {"grounding": True})):
-            assert mcpserver.call_tool("webfetch", {"url": "https://example.com"}, max_chars=100) == ["x" * 100]
+    def test_a_longer_length_than_the_cap_is_capped(self):
+        with patch.object(llmtools, "webfetch", return_value=("page", {"grounding": True})) as webfetch:
+            mcpserver.call_tool("webfetch", {"url": "https://example.com", "length": 5000}, max_chars=100)
+        assert webfetch.call_args.kwargs["length"] == 100
+
+    def test_a_shorter_length_and_an_offset_are_passed_on(self):
+        with patch.object(llmtools, "webfetch", return_value=("page", {"grounding": True})) as webfetch:
+            mcpserver.call_tool("webfetch", {"url": "https://example.com", "offset": "300", "length": 50}, max_chars=100)
+        assert webfetch.call_args.kwargs["offset"] == 300  # a number sent as a string still counts
+        assert webfetch.call_args.kwargs["length"] == 50
 
     def test_a_lookup_reads_the_lorebook(self, lorebook_dir):
         [text] = mcpserver.call_tool(lorebookcore.TOOL_NAME, {"term": "hydra tax"})

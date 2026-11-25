@@ -374,6 +374,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 - **`raven-mcp`** offers Raven's tools to other LLM frontends over MCP, the Model Context Protocol: web search and page fetch through *Raven-server*, and the lookup in *Raven-librarian*'s lorebook. The tools are *Librarian*'s own, so they are described and behave as they do there, `webfetch_allowlist` included.
   - **For Open WebUI**, run `raven-mcp` and add `http://127.0.0.1:8130/mcp` in Open WebUI as an MCP server (Streamable HTTP). For a frontend on another machine, start it with `--listen` — which lets anyone who can reach the port search and fetch through your *Raven-server*, so on a trusted network only.
   - **For Claude Code**, which starts the server itself: `claude mcp add raven -- raven-mcp --stdio`.
+  - **`--max-chars`** limits how much of a fetched page one call returns (100 000 characters by default); the model reads a longer page in parts, each saying where the next one starts.
   - **`--no-lorebook`** leaves the lorebook out, for a frontend that has it already from [grimoire](https://github.com/Technologicat/grimoire), so that the LLM is not handed the tool twice.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 - **`raven-bench-devices`** times the speech models on the GPU and on the CPU, and prints the settings that run each on the faster one. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).

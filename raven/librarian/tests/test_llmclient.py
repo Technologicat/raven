@@ -4011,3 +4011,51 @@ class TestWebfetchFormat:
         [spec] = [t for t in llmtools.TOOLS if t["function"]["name"] == "webfetch"]
         assert spec["function"]["parameters"]["properties"]["format"]["enum"] == ["markdown", "raw"]
         assert spec["function"]["parameters"]["required"] == ["url"]
+
+
+class TestWebfetchSpan:
+    """A page read in parts: `offset` and `length` choose the span, and a part says where to read on from."""
+
+    PAGE = "".join(str(i % 10) for i in range(100))  # 100 characters, each its own index mod 10
+
+    @pytest.fixture
+    def page(self, monkeypatch):
+        outcome = {"fetched": True, "content": self.PAGE}
+
+        def _fake(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
+            return {"content": outcome["content"], "url": url, "fetched": outcome["fetched"], "spaSuspected": False, "title": None}
+
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
+        _set_allowlist(monkeypatch, None)
+        return outcome
+
+    def _body(self, text):
+        return text.split("-----\n\n", 1)[1]  # what follows the source header
+
+    def test_the_whole_page_has_no_span_notes(self, page):
+        assert self._body(llmtools.webfetch("https://example.com/")[0]) == self.PAGE
+
+    def test_a_first_part_says_where_to_read_on(self, page):
+        body = self._body(llmtools.webfetch("https://example.com/", length=30)[0])
+        assert body.startswith("[Characters 0 to 30 of 100 total.]")
+        assert self.PAGE[:30] in body and self.PAGE[:31] not in body
+        assert body.endswith("To read on, fetch again with offset 30.]")
+
+    def test_a_middle_part_is_where_the_offset_says(self, page):
+        body = self._body(llmtools.webfetch("https://example.com/", offset=30, length=30)[0])
+        assert body.startswith("[Characters 30 to 60 of 100 total.]")
+        assert body.endswith("offset 60.]")
+
+    def test_the_last_part_does_not_say_to_read_on(self, page):
+        body = self._body(llmtools.webfetch("https://example.com/", offset=90, length=30)[0])
+        assert body.startswith("[Characters 90 to 100 of 100 total.]")
+        assert "read on" not in body
+
+    def test_an_offset_past_the_end_is_clamped(self, page):
+        body = self._body(llmtools.webfetch("https://example.com/", offset=500)[0])
+        assert body.startswith("[Characters 100 to 100 of 100 total.]")
+
+    def test_a_refusal_is_not_cut(self, page):
+        page["fetched"], page["content"] = False, "The server returned HTTP 404 for https://example.com/."
+        body = self._body(llmtools.webfetch("https://example.com/", offset=10, length=5)[0])
+        assert body == "The server returned HTTP 404 for https://example.com/."

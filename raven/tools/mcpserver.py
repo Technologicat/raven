@@ -47,11 +47,12 @@ def tool_specs(*, lorebook: bool = True) -> list[dict[str, Any]]:
     return specs
 
 
-def _cap(text: str, max_chars: int) -> str:
-    """Cut `text` to `max_chars` characters, saying so at the end when it was cut."""
-    if len(text) <= max_chars:
-        return text
-    return f"{text[:max_chars]}\n\n[Cut off here: the first {max_chars} of {len(text)} characters.]"
+def _as_int(value: Any) -> int | None:
+    """`value` as an integer, or `None` if it is not one: a model may send a number as a string, or nonsense."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True,
               max_chars: int = DEFAULT_MAX_CHARS) -> list[str]:
@@ -62,9 +63,10 @@ def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True,
 
     `lorebook`: as for `tool_specs`.
 
-    `max_chars`: the longest a fetched page may be, in characters; a longer one is cut off, with a note saying
-                 so. A raw page in particular can run to hundreds of thousands. Raven-librarian has no such cap,
-                 storing a long page as an attachment instead, which an MCP client cannot do.
+    `max_chars`: the most of a fetched page one call returns, in characters: a model that asked for more, or
+                 for no limit, gets that much, ending with a note saying where to read on from. A raw page in
+                 particular can run to millions. Raven-librarian has no such cap, storing a long page as an
+                 attachment instead, which an MCP client cannot do.
 
     Blocking: it waits for Raven-server.
     """
@@ -73,8 +75,10 @@ def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True,
     if name == "websearch":
         output, _ = llmtools.websearch(str(arguments.get("query", "")))
     elif name == "webfetch":
-        output, _ = llmtools.webfetch(str(arguments.get("url", "")), format=str(arguments.get("format", "markdown")))
-        output = _cap(output, max_chars)
+        maybe_length = _as_int(arguments.get("length"))
+        length = max_chars if maybe_length is None or maybe_length <= 0 else min(maybe_length, max_chars)
+        output, _ = llmtools.webfetch(str(arguments.get("url", "")), format=str(arguments.get("format", "markdown")),
+                                      offset=_as_int(arguments.get("offset")), length=length)
     elif name == lorebookcore.TOOL_NAME and lorebook:
         output = lorebookcore.answer(_lorebook_entries(), str(arguments.get("term", "")))
     else:
@@ -125,7 +129,7 @@ def main() -> None:
     parser.add_argument("--no-lorebook", dest="lorebook", action="store_false",
                         help="Do not offer the lorebook's lookup: for a frontend that has it already, from grimoire, so that the LLM is not handed the tool twice.")
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS, metavar="N",
-                        help="The longest a fetched page may be, in characters; a longer one is cut off, with a note saying so.")
+                        help="The most of a fetched page one call returns, in characters. A model reads a longer page in parts.")
     parser.add_argument("--server-url", metavar="URL", default=None,
                         help="Raven-server to talk to, overriding the configured one.")
     parser.add_argument("--log", metavar="PATH", default=None,

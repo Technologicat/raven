@@ -110,7 +110,8 @@ TOOLS = [
                                   "Some addresses are fetched in a more readable form, and the result names the "
                                   "address actually fetched: an arXiv paper as its HTML full text, a YouTube "
                                   "video as its transcript. A feed or an API's JSON comes back as sent, in "
-                                  "either format. A very long result is cut off, with a note saying where."),
+                                  "either format. A long result can be read in parts, with offset and length; "
+                                  "a part that stops short of the end says where to read on from."),
                   "parameters": {"type": "object",
                                  "additionalProperties": False,
                                  "required": ["url"],
@@ -128,7 +129,11 @@ TOOLS = [
                                                                            "source of a web page is mostly styling and "
                                                                            "navigation, and can run to millions of "
                                                                            "characters, so for reading a page, "
-                                                                           "'markdown' is the better choice.")}}}}},
+                                                                           "'markdown' is the better choice.")},
+                                                "offset": {"type": "integer",
+                                                           "description": "Character offset to start reading from. Omit to start at the beginning."},
+                                                "length": {"type": "integer",
+                                                           "description": "How many characters to read. Omit to read to the end."}}}}},
     # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
     # synthetic call naming a function the model was never offered is a fiction the model can act on.
     # That is not a guess — it is the situation the document-matches inject was in before
@@ -422,6 +427,16 @@ def approve_host_for_session(host: str) -> None:
 # `raven.server.modules.websearch`) precisely because the two never touch: the cached function
 # (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
 # cached. Keep it that way.
+def _clamp_span(n: int, offset: int | None, length: int | None) -> tuple[int, int]:
+    """The character span `[start, end)` of a text `n` long that `offset` and `length` ask for, clamped into range.
+
+    Clamped rather than refused: an off-by-a-bit span is an ordinary mistake for a model to make. `None` for
+    `offset` starts at the beginning; `None`, zero or a negative `length` reads to the end.
+    """
+    start = min(max(offset or 0, 0), n)
+    end = min(start + length, n) if length is not None and length > 0 else n
+    return start, end
+
 def _format_webfetch_result(url: str, title: str | None, content: str) -> str:
     """Prepend a source header (URL, plus the page title if any) and a separator to a webfetch's `content`.
 
@@ -434,11 +449,16 @@ def _format_webfetch_result(url: str, title: str | None, content: str) -> str:
         header = f"{header}\n\n**{title}**"
     return f"{header}\n\n-----\n\n{content}"
 
-def webfetch(url: str, format: str = "markdown") -> tuple[str, dict]:
+def webfetch(url: str, format: str = "markdown",
+             offset: int | None = None, length: int | None = None) -> tuple[str, dict]:
     """Fetch a web page's main content, or its raw source, gated by the client-side domain allowlist.
 
     `format`: "markdown" (the default), the page's main content; or "raw", the response as the site sent it.
               The model chooses, so a value that is neither is taken as "markdown", with a log line.
+
+    `offset`, `length`: the character span of the page to return, both optional, clamped as `fetch_document`'s
+                        are. A span that is not the whole page is headed with where it lies, and one that stops
+                        short of the end says where to read on from. Each call fetches the page again.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
     the AI's *initiative*), then delegates the actual fetch to Raven-server, which enforces the
@@ -501,7 +521,14 @@ def webfetch(url: str, format: str = "markdown") -> tuple[str, dict]:
     # Grounding is declared from the server's `fetched`, the one place that knows whether `content` is the
     # page or a notice about it; every refusal here is non-empty text, which the fallback would count.
     effective_url = result.get("url") or url
-    return (_format_webfetch_result(effective_url, result.get("title"), result["content"]),
+    content = result["content"]
+    if result["fetched"] and (offset or length):  # a refusal is one sentence, never a span of anything
+        start, end = _clamp_span(len(content), offset, length)
+        if (start, end) != (0, len(content)):
+            content = f"[Characters {start} to {end} of {len(content)} total.]\n\n{content[start:end]}"
+            if end < len(result["content"]):
+                content = f"{content}\n\n[Stopped here. To read on, fetch again with offset {end}.]"
+    return (_format_webfetch_result(effective_url, result.get("title"), content),
             {"fetched_document": {"url": effective_url,
                                   "name": result.get("title") or effective_url},
              "grounding": result["fetched"]})
@@ -681,8 +708,7 @@ def fetch_document(document_id: str,
         logger.info(f"fetch_document: no document with ID '{document_id}'.")
         return (CANONICAL_NO_SUCH_DOCUMENT.format(document_id=document_id), {"grounding": False})
 
-    start = min(max(offset or 0, 0), len(text))
-    end = min(start + length, len(text)) if length is not None and length > 0 else len(text)
+    start, end = _clamp_span(len(text), offset, length)
     span = text[start:end]
 
     settings = dyn.tool_context.llm_settings
