@@ -10,6 +10,7 @@ __all__ = ["main"]
 import argparse
 import json
 import logging
+import sys
 import time
 from typing import Callable, NamedTuple
 
@@ -97,7 +98,12 @@ def main() -> None:
         print("No GPU found, so there is nothing to compare: everything runs on the CPU.")
         return
     gpu_name = torch.cuda.get_device_name(gpu) if gpu.startswith("cuda") else gpu
-    print(f"Timing on {gpu} ({gpu_name}) and on the CPU, best of {opts.repeats}. Higher is faster.\n")
+
+    # The libraries log to stderr while the models load and run, so progress goes there too, and the report is
+    # collected and printed on stdout at the end, where it is not buried in their output.
+    def progress(message: str) -> None:
+        print(f"raven-bench-devices: {message}", file=sys.stderr, flush=True)
+    report = [f"Timed on {gpu} ({gpu_name}) and on the CPU, best of {opts.repeats}. Higher is faster.", ""]
 
     def synchronize_for(device: str) -> Callable[[], None]:
         if device.startswith("cuda"):
@@ -112,6 +118,7 @@ def main() -> None:
     for bench in (b for b in _BENCHES if b.name in opts.modules):
         speeds = {}
         for device in devices:
+            progress(f"timing {bench.label} on {device}...")
             if bench.name == "tts":
                 model_name = server_config.kokoro_models
                 pipeline = tts.load_tts_pipeline(model_name, device)
@@ -127,11 +134,11 @@ def main() -> None:
         measurements[bench.name] = speeds
 
         faster = max(speeds, key=speeds.get)
-        print(f"{bench.label}, {model_name}:")
+        report.append(f"{bench.label}, {model_name}:")
         for device, speed in speeds.items():
             marker = "  <- faster" if device == faster else ""
-            print(f"    {device:8s} {speed:6.1f}x real time{marker}")
-        print()
+            report.append(f"    {device:8s} {speed:6.1f}x real time{marker}")
+        report.append("")
 
     # Suggest only what differs from the current configuration.
     overrides: dict[str, dict[str, str]] = {}
@@ -144,11 +151,15 @@ def main() -> None:
             if (_current_value(setting) == "cpu") != (wanted == "cpu"):
                 overrides.setdefault(setting.module, {})[setting.path] = wanted
     if overrides:
-        print("To run each on its faster device, put these in ~/.config/raven/overrides.json, merging them into what is")
-        print("already there (see the README, under Configuration), and restart Raven:\n")
-        print(json.dumps(overrides, indent=4))
+        report.append("To run each on its faster device, put these in ~/.config/raven/overrides.json, merging them into what")
+        report.append("is already there (see the README, under Configuration), and restart Raven:")
+        report.append("")
+        report.append(json.dumps(overrides, indent=4))
     else:
-        print("The current settings already run each of these on its faster device.")
+        report.append("The current settings already run each of these on its faster device.")
+
+    print()
+    print("\n".join(report))
 
 
 if __name__ == "__main__":
