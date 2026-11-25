@@ -14,6 +14,9 @@ def print_error(msg):
 def print_success(msg):
     print(f"\033[92m[SUCCESS] {msg}\033[0m")
 
+def print_note(msg):
+    print(f"\033[93m[NOTE] {msg}\033[0m")
+
 def is_command_available(command):
     try:
         subprocess.check_output([command, "--version"])
@@ -34,10 +37,14 @@ def main():
         print("   Install PyTorch first with: pdm update")
         return
 
+    # A ROCm build of torch presents an AMD GPU through the `torch.cuda` API, and sets `torch.version.hip`.
+    is_rocm = torch.version.hip is not None
+
     print("2. CUDA device availability check", end=" ")
     if torch.cuda.is_available():
         device = torch.cuda.get_device_name()
-        print_success(f"✅ (Using {device})")
+        backend = " via ROCm" if is_rocm else ""
+        print_success(f"✅ (Using {device}{backend})")
 
         print("3. CuPy & CuPyX (for spaCy NLP)", end=" ")
         try:
@@ -45,9 +52,12 @@ def main():
             import cupyx  # noqa: F401, only for checking.
             print_success("✅")
         except ImportError:
-            print_error("❌")
-            print("   Install CuPy first with: pdm update")
-            return
+            if is_rocm:
+                print_note("not installed")
+                print("   On an AMD GPU, spaCy runs on the CPU.")
+            else:
+                print_error("❌")
+                print("   Install CuPy with: pdm install -G cuda")
 
     else:
         print_error("❌")
@@ -92,6 +102,8 @@ def main():
     print(f"   Python version: {platform.python_version()}")
     print(f"   OS: {platform.system()} {platform.release()}")
     print(f"   PyTorch version: {torch.__version__}")
+    if is_rocm:
+        print(f"   HIP version: {torch.version.hip}")
 
 if __name__ == "__main__":
     main()
