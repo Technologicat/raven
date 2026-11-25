@@ -238,6 +238,7 @@ Repository = "https://github.com/Technologicat/raven"
 #
 # Where a real check of the GUI apps is wanted, run one under `pytest --run-gui` — and warn first; see
 # CLAUDE.md, "Live GUI testing on a shared desktop".
+raven-bench-devices = "raven.tools.bench_devices:main"
 raven-check-cuda = "raven.tools.check_cuda:main"
 raven-check-audio-devices = "raven.tools.check_audio_devices:main"
 raven-arxiv2id = "raven.papers.identifiers:main"

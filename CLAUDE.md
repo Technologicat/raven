@@ -271,6 +271,7 @@ on the Librarian backend).
 | `raven-dehyphenate` | undo line-break hyphenation in extracted text |
 | `raven-qoi2png` | image format conversion |
 | `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
+| `raven-bench-devices` | time the speech models on GPU and CPU, and print the overrides that run each on the faster one |
 
 **Two instruments are not console scripts and are easy to miss**, because they live inside the package
 tree rather than in `scripts/`: `python -m raven.common.video.tests.bench_postprocessor` costs each
