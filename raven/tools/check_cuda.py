@@ -133,7 +133,7 @@ def main():
     if is_rocm:
         maybe_rocm_version = rocm_version(torch)
         if maybe_rocm_version is not None:
-            print(f"   ROCm version: {maybe_rocm_version}")
+            print(f"   ROCm version: {maybe_rocm_version} (bundled with PyTorch, and what it uses; a system ROCm may differ)")
         print(f"   HIP version: {torch.version.hip}")
 
 if __name__ == "__main__":
