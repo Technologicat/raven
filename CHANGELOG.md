@@ -164,6 +164,11 @@
 
 #### Constellation-wide
 
+- **AMD GPUs are supported on Linux**, through PyTorch's ROCm builds. Install by pointing the PyTorch package source at the ROCm index; the README's new section *Install on Linux with an AMD GPU (ROCm)* has the steps. Every AI model runs on the GPU except spaCy, which runs on the CPU.
+  - A C++ compiler must be installed (`sudo apt install g++` on Debian and Ubuntu): PyTorch's AMD GPU libraries compile some of their code on first use, and need its standard headers. Raven finds them by itself, and reports an error at startup if there is no compiler.
+  - `raven-check-cuda` recognizes ROCm, names the GPU's architecture (`gfx…`), and says whether the installed PyTorch supports it.
+  - `env.sh` succeeds on an AMD machine, so the `bash` wrappers the README suggests work there unchanged.
+- **`raven-bench-devices` times the speech models on the GPU and on the CPU**, and prints the `overrides.json` lines that run each on the faster one. On some machines, an AMD APU for one, speech synthesis is several times faster on the CPU.
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
 - **A short network drop no longer fails what was asking Raven-server.** A request that could not reach the server is tried again: twice, a second apart, in the GUI apps and `raven-minichat`, and three times, five seconds apart, in the batch tools (`raven-importer`, `raven-indexer`, `raven-scopebib`, `raven-pdf2bib` and the rest), so an import or an indexing run rides out a Wi-Fi reconnect.
   - Only a request that never reached the server is retried. One that failed after it was sent may have been acted on, and is reported as before. Both budgets are in `raven/client/config.py`.
@@ -244,6 +249,7 @@
 
 #### Constellation-wide
 
+- **The PyTorch package source in `pyproject.toml` is named `pytorch-gpu`**, where it was `pytorch-cu128`, as it now serves AMD GPUs too. It is the same entry; instructions that name it, such as removing it on a Mac, mean this one.
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
 - **For scripts: the `raven.client.mayberemote` services take their arguments by name only**, `allow_local=True` rather than a bare `True`. A script passing them positionally needs the names added.
 
@@ -324,6 +330,7 @@
 
 #### Constellation-wide
 
+- **`raven-check-cuda` gives the right command when CuPy is missing**: `pdm install -G cuda`, where it said `pdm update`. A missing CuPy also no longer hides the system information printed at the end.
 - **Clicking elsewhere takes the keyboard off a combo.** In the apps whose combos the arrow keys browse (the Visualizer, both avatar editors, the XDot viewer and Raven-librarian's audio input panel), a combo that had the keyboard kept it, and its blue mark, after a click on an empty spot, so the arrow keys went on changing it.
   - Picking a choice from the dropdown with the mouse still leaves the keyboard on the combo.
 - **Raven-server's `--secure` mode works with Raven's own apps.**

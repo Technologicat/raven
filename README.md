@@ -41,6 +41,7 @@
             - [Install with GPU compute support](#install-with-gpu-compute-support)
                 - [CUDA version and the `torch` wheels](#cuda-version-and-the-torch-wheels)
             - [Install on an Apple Silicon Mac (M series)](#install-on-an-apple-silicon-mac-m-series)
+            - [Install on Linux with an AMD GPU (ROCm)](#install-on-linux-with-an-amd-gpu-rocm)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer-or-raven-server)
@@ -371,6 +372,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
 - **`raven-web`** runs *Raven-server*'s web search and page fetch from the command line: `raven-web search QUERY` lists the results, `raven-web fetch URL` prints a page's main content as Markdown. With `--json` it prints the server's result as it came, which makes it a web tool for any agent that can run a shell command. A server on another machine must be started with `--listen`.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
+- **`raven-bench-devices`** times the speech models on the GPU and on the CPU, and prints the settings that run each on the faster one. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).
 
 The other end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
 
@@ -415,9 +417,7 @@ It has been reported to work on Mac OS X, as well as on Windows (with [Miniconda
 Raven has the following requirements:
 
  - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
- - A GPU that PyTorch supports, for running AI models. Raven is developed on NVIDIA (CUDA), and Apple Silicon (MPS) is a supported target; AMD (ROCm) and Intel Arc (XPU) should work but are untested. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).
-
-:exclamation: **Help wanted!** If you have an AMD GPU and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1). Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. :exclamation:
+ - A GPU that PyTorch supports, for running AI models. Raven is developed on NVIDIA (CUDA); Apple Silicon (MPS) and AMD on Linux (ROCm) are supported targets; Intel Arc (XPU) should work but is untested. See [Choose which GPU to use](#choose-which-gpu-to-use-optional).
 
 ### Install PDM in your Python environment
 
@@ -461,7 +461,7 @@ Now the installation should be complete.
 
 #### Install with GPU compute support
 
-:exclamation: *Currently GPU compute support requires an NVIDIA GPU and CUDA.* :exclamation:
+:exclamation: *This section is for NVIDIA GPUs. For Apple Silicon and for AMD, see the sections that follow it.* :exclamation:
 
 :exclamation: *Using CUDA requires the proprietary NVIDIA drivers, also on Linux.* :exclamation:
 
@@ -477,22 +477,49 @@ Now the installation should be complete.
 
 ##### CUDA version and the `torch` wheels
 
-The `torch`, `torchvision` and `torchaudio` versions are pinned as a matched set, and installed as **CUDA 12.8** (`+cu128`) wheels from a dedicated PyTorch package index declared in [`pyproject.toml`](pyproject.toml) (the `pytorch-cu128` entry under `[[tool.pdm.source]]`). This is deliberate:
+The `torch`, `torchvision` and `torchaudio` versions are pinned as a matched set, and installed as **CUDA 12.8** (`+cu128`) wheels from a dedicated PyTorch package index declared in [`pyproject.toml`](pyproject.toml) (the `pytorch-gpu` entry under `[[tool.pdm.source]]`). This is deliberate:
 
 - CUDA 12.8 wheels run on **both** CUDA 12 and CUDA 13 driver stacks — an NVIDIA driver is backward-compatible, and the wheels bundle their own CUDA 12.8 runtime, so they work on any reasonably recent driver (Linux ~R570+). What `nvidia-smi` reports as *"CUDA Version"* is the maximum your **driver** supports, not an installed runtime; you don't need a matching system CUDA toolkit.
 - Pinning to the index keeps the CUDA build stable across dependency re-locks. (Without it, a re-lock could silently pull a CUDA-13 `torchaudio` wheel from PyPI while `torch` stays on 12.8, and the mismatched runtime fails to load at import.)
 
 To target a **different CUDA version**, change the `cuXYZ` in that source's URL (e.g. `cu126`, `cu129`) and re-run `pdm lock && pdm install`. Bump the three `torch*` versions in `[project] dependencies` together, deliberately, if you also want a newer PyTorch.
 
-:exclamation: *The `pytorch-cu128` index has Linux and Windows wheels only — no macOS wheels.* On **macOS** (or any platform that index doesn't cover), remove that `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) before installing, so `torch` resolves from PyPI instead. :exclamation:
+:exclamation: *The `pytorch-gpu` index has Linux and Windows wheels only — no macOS wheels.* On **macOS** (or any platform that index doesn't cover), remove that `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) before installing, so `torch` resolves from PyPI instead. :exclamation:
 
 #### Install on an Apple Silicon Mac (M series)
 
-Apple Silicon is a supported target. Install as above, with the `pytorch-cu128` source block removed as described just now.
+Apple Silicon is a supported target. Install as above, with the `pytorch-gpu` source block removed as described just now.
 
 Removing it is not a downgrade — it is how you get the right wheels. There is no CUDA on Apple Silicon; PyTorch reaches the M series' GPU through **MPS** (Metal Performance Shaders), over the same unified memory the CPU uses, and the MPS builds are the ones on PyPI.
 
 Nothing needs configuring afterwards: Raven's device settings ship set to detect, and on an M-series Mac that finds MPS on its own. See [Choose which GPU to use](#choose-which-gpu-to-use-optional), below, for what it reports and how to pin a backend instead.
+
+#### Install on Linux with an AMD GPU (ROCm)
+
+AMD GPUs are supported on Linux, through PyTorch's **ROCm** builds. Before installing, open [`pyproject.toml`](pyproject.toml), find the `pytorch-gpu` entry under `[[tool.pdm.source]]`, and change its URL to the ROCm index:
+
+```toml
+url = "https://download.pytorch.org/whl/rocm7.2"
+```
+
+Then install with the plain command, without `-G cuda` — that group holds NVIDIA's libraries, which an AMD machine has no use for:
+
+```bash
+pdm install
+```
+
+- **No system-wide ROCm install is needed.** The ROCm builds of PyTorch carry their own runtime libraries, and use those even where a system ROCm is present. What they need from the system is the `amdgpu` kernel driver, which ships with the Linux kernel.
+- **Your user must be in the `render` group**, which owns the GPU's compute device `/dev/kfd`. Check with `groups`; if it is missing, `sudo usermod -aG render $USER`, then log out and back in.
+- **A C++ compiler must be installed**, for its standard library headers: PyTorch's AMD GPU libraries compile some of their code on first use, and need those headers to do it. On Debian and Ubuntu, `sudo apt install g++`. Raven finds the headers by itself, and reports an error at startup if there is no compiler.
+- **Check that PyTorch supports your GPU.** Not every AMD GPU is in a given ROCm build. With the venv active, run `raven-check-cuda`: it reports your GPU "via ROCm", names its architecture (a code such as `gfx1100`), and says whether this PyTorch build supports it — and if not, lists the ones it does. If it does not find your GPU at all, look up your GPU's product name (e.g. *Radeon RX 7900 XTX*) in [LLVM's table of AMD GPUs](https://llvm.org/docs/AMDGPUUsage.html#processors) to find its architecture code, and compare it with the list that `python -c "import torch; print(torch.cuda.get_arch_list())"` prints.
+- **spaCy, the natural-language analyzer, runs on the CPU.** Its GPU route goes through CuPy, which Raven sets up for CUDA only. Everything else uses the GPU.
+- **On an APU, speech synthesis may be faster on the CPU.** Run `raven-bench-devices` to find out; see [Choose which GPU to use](#choose-which-gpu-to-use-optional).
+- **`env.sh` has nothing to do** on an AMD machine. It says so and succeeds, so the `bash` wrappers below work unchanged.
+- **To use a different ROCm version**, change the `rocm7.2` in the URL, and re-run `pdm lock && pdm install`. The PyTorch versions Raven pins must exist for that ROCm version.
+
+Nothing needs configuring afterwards: PyTorch presents an AMD GPU under ROCm the same way as an NVIDIA GPU under CUDA, and Raven's device detection finds it.
+
+ROCm builds of PyTorch exist for Linux only, so on Windows an AMD GPU is not supported, and Raven runs on the CPU there.
 
 :exclamation: *In general, if a package fails to install, but is not explicitly listed in the dependencies, you can try to find out which package pulls it in, by issuing the command `pdm list --tree`. This shows a tree-structured summary of the dependencies.* :exclamation:
 
@@ -559,6 +586,7 @@ raven-avatar-settings-editor      →    python -m raven.avatar.settings_editor.
 raven-avatar-pose-editor          →    python -m raven.avatar.pose_editor.app
 raven-check-cuda                  →    python -m raven.tools.check_cuda
 raven-check-audio-devices         →    python -m raven.tools.check_audio_devices
+raven-bench-devices               →    python -m raven.tools.bench_devices
 raven-minichat                    →    python -m raven.librarian.minichat
 raven-indexer                     →    python -m raven.librarian.indexer
 ```
@@ -673,9 +701,11 @@ Raven's device settings ship as `"gpu"`, which is an instruction to detect rathe
 get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
 ```
 
-Raven is developed and tested on NVIDIA GPUs. The other backends are meant to work with no configuration, but we cannot test them all here: **ROCm (AMD) and XPU (Intel Arc) have not been tried at all**. If you run Raven on either, a report is welcome whichever way it goes — and if something is broken on yours, please [open an issue](https://github.com/Technologicat/raven/issues).
+Raven is developed and tested on NVIDIA GPUs, and also tested on an AMD GPU under ROCm. The other backends are meant to work with no configuration, but we cannot test them all here: **XPU (Intel Arc) has not been tried at all**. If you run Raven on it, a report is welcome whichever way it goes — and if something is broken on yours, please [open an issue](https://github.com/Technologicat/raven/issues).
 
 With one GPU in the machine that is the whole story, and nothing below is needed. To pin a backend rather than detect it, write its device string — `"cuda:0"`, `"mps"`, `"xpu"`, `"vulkan"` — into the config modules named just below. Raven refuses to guess when two different vendors are active at once (an NVIDIA card alongside an Intel Arc, say): it stops and names the candidates, and you pick one the same way.
+
+**A model is not always faster on the GPU, though.** Speech synthesis is the case that turns up: its model is small, and on some machines — an AMD APU with a strong CPU, for one — it runs several times faster on the CPU, while on others the CPU is the slow side. To find out for your machine, run `raven-bench-devices`. It times speech synthesis and speech recognition on the GPU and on the CPU, and prints the lines to put in your `overrides.json` (see [Configuration](#configuration)) to run each on the faster device. Close other GPU work first, such as a local LLM: it slows the GPU timings.
 
 If your machine has multiple GPUs, there are two ways to tell Raven which GPU to use.
 

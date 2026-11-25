@@ -27,6 +27,27 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Autotune: pick CPU or GPU per module by timing both
+
+*Cluster: devices · Cost: M · Gate: none; reuses `raven-bench-devices` (raven/tools/bench_devices.py) for the timing · Filed: 2026-11-25 · See also: README, "Choose which GPU to use (optional)"*
+
+Which device is faster for a model is not obvious from the hardware. Measured 2026-11-25 on the local AI
+server (Strix Halo APU, Radeon 8060S under ROCm): Kokoro TTS runs at 6.1× real time on the GPU and 18.6× on
+the CPU, because MIOpen's kernels are slow for Kokoro, while classify, embeddings, translation and
+dehyphenation are 1.7–4.3× faster on the GPU, and so is Whisper STT, 3×. CPU TTS on the fleet's laptops runs
+at 5.8× (i7-13850HX) and 3.2× (i7-12700H), so on a machine without an APU the CPU may well be the slow side.
+So a fixed default is wrong somewhere. `raven-bench-devices` is the manual version of this.
+
+The idea: at startup, for a module whose device is set to a new alias, time a short representative call on
+each available device and use the faster. Points settled in discussion (2026-11-25):
+
+- **A new alias, `"auto"`, rather than changing `"gpu"`.** `"gpu"` means "a GPU if there is one" and should
+  keep meaning it.
+- **Startup cost**: a few seconds per module, or a result cached per machine, keyed by the hardware and the
+  Torch version — which then needs invalidation rules.
+- **Noise**: a busy machine skews the timing. On the local AI server, the LLM backend decoding at the same
+  time would. A cached result measured on an idle machine is one answer.
+
 ## Can the lorebook's definitions round keep the model from looking a term up?
 
 *Cluster: lorebook · Cost: M · Gate: none; gufo running on the LAN · Filed: 2026-11-24 · See also: `raven/librarian/lorebook-porting.md` ("Where the definitions go"), `investigations/context-injects/`, grimoire's `briefs/ports-brief.md` (Open WebUI, "Observed in a live test")*
@@ -3750,18 +3771,6 @@ headlessly enough to test is no longer news and is recorded in `dpg-notes.md`.
 
 Discovered during raven-cherrypick compare mode review (2026-03-30).
 
-## AMD GPU (ROCm) support audit
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-17*
-
-ROCm presents as `"cuda"` in PyTorch, so our Lanczos kernel and `deviceinfo` validation should already work on AMD GPUs. However, the rest of the codebase needs auditing:
-
-- All custom Torch code (postprocessor filters, Anime4K upscaler, avatar renderer) — likely fine, but verify.
-- Third-party ML libraries: `transformers`, `sentence-transformers`, Flair, Whisper, Kokoro TTS — check ROCm compatibility status for each.
-- THA3 (vendored) — uses standard `nn.Module`, probably fine.
-
-Discovered while implementing `raven/common/image/lanczos.py`.
-
 ## pillow-simd for faster PIL image processing
 
 *Cluster: ? · Cost: ? · Gate: — · Filed: 2026-03-17*
@@ -4030,6 +4039,8 @@ compatible GPU, and never what a machine that has one gets by default** — on C
 This is the install-side half of the root `CLAUDE.md`'s *a supported platform needs no configuration*, which
 `deviceinfo`'s `"gpu"` autodetection already keeps at run time. CUDA exists only on Linux and Windows;
 macOS gets MPS from PyPI's own wheels, and today a Mac user must remove the `pytorch-gpu` source by hand.
+An AMD user on Linux must point it at a ROCm index by hand (since 2026-11-25; README, "Install on Linux with an
+AMD GPU (ROCm)").
 Whether PDM can choose the torch index per platform is unknown and is the first thing to probe.
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
