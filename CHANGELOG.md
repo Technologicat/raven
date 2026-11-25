@@ -286,6 +286,10 @@
   - Bold and italic, from LaTeX or HTML, now arrive as Markdown (`**bold**`, `*italic*`) rather than as `*bold*` and `/italic/`, so the LLM stages read them in the notation they know. Super- and subscripts, from either, become Unicode characters when every character in them has one (H₂O, x²), and are otherwise written as `M_{age}`: Unicode's sub- and superscripts are a partial alphabet, and a half-converted `Mₐgₑ` read worse.
 - **An import no longer crashes when the file yields more or fewer records than when it was last imported**, as it does when a parser repair recovers records. The embedding and keyword caches were judged by the file's date alone, and the 2D clustering then failed with an `IndexError`. A cache that does not describe the records now is computed again.
 
+#### Raven-server
+
+- **Web search and page fetch recover when their browser stops answering.** Raven-server keeps one headless browser for each, and once its tab had crashed, every search (or every page needing the browser) failed until the server was restarted. A dead browser is now replaced, and the request tried again, once.
+
 #### Raven-avatar
 
 - **The pose editor's output index shows the poser's intermediate outputs correctly**, and walking through them no longer damages the character's face.

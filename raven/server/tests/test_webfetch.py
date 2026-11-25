@@ -204,3 +204,49 @@ class TestFetchOutcome:
         assert started == []
         webfetch.fetch("https://spa.example/p", is_cancelled=lambda: False)  # the control: not cancelled, it does
         assert started == ["https://spa.example/p"]
+
+
+class TestTier2DeadBrowser:
+    """Tier 2's browser can stop answering (a crashed tab); a fetch then starts a new one, once."""
+
+    @pytest.fixture
+    def extraction(self, monkeypatch):
+        """Extraction that returns the HTML it was given, so a test can tell which browser rendered the page."""
+        monkeypatch.setattr(webfetch, "_extract_clean_text", lambda html, url, output_format: html)
+
+    def _fetch(self):
+        return webfetch._fetch_tier2("https://example.com", output_format="markdown",
+                                     is_cancelled=lambda: False, on_progress=lambda text: None)
+
+    def test_a_dead_browser_is_replaced_and_the_page_renders(self, extraction, fake_browser, monkeypatch):
+        dead, fresh = fake_browser(answers=False), fake_browser(page="<html>from the new browser</html>")
+        monkeypatch.setattr(webfetch, "_driver", dead)
+        monkeypatch.setattr(webcommon, "get_driver", lambda page_load_timeout=None: fresh)
+        assert self._fetch() == "<html>from the new browser</html>"
+        assert dead.quit_called
+        assert webfetch._driver is fresh
+
+    def test_an_ordinary_failure_does_not_restart_the_browser(self, extraction, fake_browser, monkeypatch):
+        # The control for the one above: the navigation fails the same way, but the browser still answers.
+        failing = fake_browser(navigation_fails=True)
+        monkeypatch.setattr(webfetch, "_driver", failing)
+        monkeypatch.setattr(webcommon, "get_driver", lambda page_load_timeout=None: pytest.fail("restarted a browser that answers"))
+        assert self._fetch() == ""
+        assert webfetch._driver is failing
+        assert len(failing.visited) == 1
+
+    def test_a_browser_that_stays_dead_is_not_restarted_again(self, extraction, fake_browser, monkeypatch):
+        starts = []
+        def get_dead_driver(page_load_timeout=None):
+            starts.append(1)
+            return fake_browser(answers=False)
+        monkeypatch.setattr(webfetch, "_driver", fake_browser(answers=False))
+        monkeypatch.setattr(webcommon, "get_driver", get_dead_driver)
+        assert self._fetch() == ""
+        assert len(starts) == 1, "one restart per fetch, not a loop"
+
+    def test_a_browser_that_cannot_be_restarted_reports_no_browser(self, extraction, fake_browser, monkeypatch):
+        monkeypatch.setattr(webfetch, "_driver", fake_browser(answers=False))
+        monkeypatch.setattr(webcommon, "get_driver", lambda page_load_timeout=None: None)
+        with pytest.raises(webfetch._NoBrowser):
+            self._fetch()

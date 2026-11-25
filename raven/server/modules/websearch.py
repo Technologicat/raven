@@ -45,6 +45,7 @@ class EngineUnavailable(webcommon.WebToolException):
 # Bootup
 
 driver = None
+_page_load_timeout = None  # kept from `init_module`, for a browser that has to be restarted
 app = None
 dump_dir = None
 dump_filename = None
@@ -52,15 +53,18 @@ dump_filename = None
 def init_module(config_module_name: str):
     """Initialize the websearch module."""
     global driver
+    global _page_load_timeout
     global dump_dir
     global dump_filename
 
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
     server_config = importlib.import_module(config_module_name)  # `server_userdata_dir` for debug dumps, and the page-load timeout
-    driver = webcommon.get_driver(page_load_timeout=server_config.web_page_load_timeout)
+    _page_load_timeout = server_config.web_page_load_timeout
+    driver = webcommon.get_driver(page_load_timeout=_page_load_timeout)
     if driver is not None:
-        def quit_driver():
-            driver.quit()
+        def quit_driver():  # whichever driver is current at exit, a restarted one included
+            if driver is not None:
+                driver.quit()
         atexit.register(quit_driver)
 
         dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
@@ -389,9 +393,26 @@ def search(query: str, engine: str = "duckduckgo", max_links: int = 10,
         # Only an answer is cached. A failure is the engine's state at that moment, and caching it would
         # refuse the same query for the rest of the session — which is why this is not `unpythonic.memoize`,
         # which caches exceptions as well as results.
-        result = _engines[engine](query, max_links, is_cancelled, on_progress)
+        try:
+            result = _engines[engine](query, max_links, is_cancelled, on_progress)
+        except exceptions.WebDriverException:
+            # The one browser lives as long as the server, and once its tab has crashed every navigation fails,
+            # so without this, search stays broken until a restart. Under the lock, so nothing else is using it.
+            if webcommon.browser_answers(driver):
+                raise  # an ordinary failure, of this search
+            _restart_browser(on_progress)
+            result = _engines[engine](query, max_links, is_cancelled, on_progress)
         _results_cache[key] = result
         return result
+
+def _restart_browser(on_progress: Callable[[str], None]) -> None:
+    """Replace the browser, which has stopped answering. Call with `_search_lock` held."""
+    global driver
+    logger.warning("_restart_browser: the browser stopped answering; starting a new one.")
+    on_progress("Restarting the browser…")
+    driver = webcommon.restart_driver(driver, page_load_timeout=_page_load_timeout)
+    if driver is None:
+        raise EngineUnavailable("the browser stopped answering, and a new one could not be started")
 
 # --------------------------------------------------------------------------------
 # Example

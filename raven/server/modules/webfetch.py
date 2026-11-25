@@ -87,6 +87,12 @@ CANONICAL_NO_BROWSER = ("Too little text could be read from {url} without a web 
 _initialized = False
 _driver = None  # lazily created on first Tier 2 use
 _driver_lock = threading.Lock()  # serializes Tier 2 navigations (a single Selenium driver is not concurrency-safe)
+_quit_at_exit_registered = False
+
+def _quit_driver() -> None:
+    """Quit whichever driver is current, if any: at exit, a restarted one included."""
+    if _driver is not None:
+        _driver.quit()
 
 def init_module(config_module_name: str) -> None:
     """Initialize the webfetch module.
@@ -301,7 +307,7 @@ def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], boo
     Lazily creates a Selenium driver (`webcommon.get_driver`) on first use; serialized
     by a lock since a single driver can't navigate concurrently.
     """
-    global _driver
+    global _driver, _quit_at_exit_registered
     from .. import config as server_config
     from selenium.common import exceptions as selenium_exceptions  # noqa: PLC0415 -- deferred, as the factory's are
     if _driver_lock.locked():
@@ -310,21 +316,33 @@ def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], boo
         if _driver is None:
             on_progress("Starting the browser…")
             _driver = webcommon.get_driver(page_load_timeout=server_config.web_page_load_timeout)
-            if _driver is not None:
-                atexit.register(lambda: _driver.quit())
+            if _driver is not None and not _quit_at_exit_registered:
+                atexit.register(_quit_driver)
+                _quit_at_exit_registered = True
         if _driver is None:
             logger.info("_fetch_tier2: no browser available; cannot render JS-heavy page.")
             raise _NoBrowser
         on_progress("Rendering the page…")
-        try:
-            _driver.get(url)
-            html = _driver.page_source
-        except selenium_exceptions.TimeoutException:
-            logger.info(f"_fetch_tier2: '{url}' did not finish loading in time")
-            return None
-        except Exception as exc:
-            logger.warning(f"_fetch_tier2: browser navigation failed for '{url}', reason {type(exc)}: {exc}")
-            return ""
+        for attempt in (1, 2):
+            try:
+                _driver.get(url)
+                html = _driver.page_source
+                break
+            except selenium_exceptions.TimeoutException:
+                logger.info(f"_fetch_tier2: '{url}' did not finish loading in time")
+                return None
+            except Exception as exc:
+                # The browser lives as long as the server, and once its tab has crashed every navigation
+                # fails, so a dead one is replaced, once. Under the lock, so nothing else is using it.
+                if attempt == 1 and not webcommon.browser_answers(_driver):
+                    logger.warning("_fetch_tier2: the browser stopped answering; starting a new one.")
+                    on_progress("Restarting the browser…")
+                    _driver = webcommon.restart_driver(_driver, page_load_timeout=server_config.web_page_load_timeout)
+                    if _driver is None:
+                        raise _NoBrowser from exc
+                    continue
+                logger.warning(f"_fetch_tier2: browser navigation failed for '{url}', reason {type(exc)}: {exc}")
+                return ""
     return _extract_clean_text(html, url=url, output_format=output_format)
 
 def _make_result(content: str, *, url: str, fetched: bool = False, spa_suspected: bool = False,

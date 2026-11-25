@@ -9,7 +9,7 @@ helpers, and their tests, import without it.
 
 __all__ = ["USER_AGENT",
            "WebToolException", "Cancelled",
-           "get_driver",
+           "get_driver", "browser_answers", "restart_driver",
            "lock_unless_cancelled"]
 
 import logging
@@ -44,6 +44,27 @@ def get_driver(page_load_timeout: float | None = None):
     if maybe_driver is not None and page_load_timeout is not None:
         maybe_driver.set_page_load_timeout(page_load_timeout)
     return maybe_driver
+
+def browser_answers(driver) -> bool:
+    """Return whether `driver`'s browser still answers, by asking it something trivial.
+
+    A browser can stop answering while its driver lives on, for instance when its tab crashes; every navigation
+    then fails, whatever the page.
+    """
+    from selenium.common import exceptions  # noqa: PLC0415 -- deferred; see the module docstring
+    try:
+        driver.execute_script("return 1")
+    except exceptions.WebDriverException:
+        return False
+    return True
+
+def restart_driver(driver, page_load_timeout: float | None = None):
+    """Quit `driver`, whose browser has stopped answering, and return a new one, as `get_driver` makes. `None` if it cannot."""
+    try:
+        driver.quit()
+    except Exception as exc:  # a dead browser may fail to quit too, which is fine: it is being replaced
+        logger.info(f"restart_driver: the old driver did not quit cleanly: {type(exc)}: {exc}")
+    return get_driver(page_load_timeout=page_load_timeout)
 
 def _is_colab():
     """False. We never run inside colab. Provided for compatibility only."""
