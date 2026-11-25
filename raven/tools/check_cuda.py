@@ -24,6 +24,23 @@ def is_command_available(command):
     except Exception:
         return False
 
+def rocm_version(torch_module):
+    """Return the version of the ROCm runtime that PyTorch loads, e.g. `"7.2.0"`, or `None` if it cannot be read.
+
+    This is the runtime the ROCm build of PyTorch carries in its own `lib` directory, which is what it uses,
+    whatever ROCm the system may have installed.
+    """
+    import ctypes
+    import os
+    try:
+        lib = ctypes.CDLL(os.path.join(os.path.dirname(torch_module.__file__), "lib", "librocm-core.so"))
+        major, minor, patch = ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+        if lib.getROCmVersion(ctypes.byref(major), ctypes.byref(minor), ctypes.byref(patch)) != 0:
+            return None
+    except (OSError, AttributeError):  # no such library, or no such function in it
+        return None
+    return f"{major.value}.{minor.value}.{patch.value}"
+
 def main():
     print("Checking dependencies...")
 
@@ -114,6 +131,9 @@ def main():
     print(f"   OS: {platform.system()} {platform.release()}")
     print(f"   PyTorch version: {torch.__version__}")
     if is_rocm:
+        maybe_rocm_version = rocm_version(torch)
+        if maybe_rocm_version is not None:
+            print(f"   ROCm version: {maybe_rocm_version}")
         print(f"   HIP version: {torch.version.hip}")
 
 if __name__ == "__main__":

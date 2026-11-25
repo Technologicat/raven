@@ -166,7 +166,7 @@
 
 - **AMD GPUs are supported on Linux**, through PyTorch's ROCm builds. Install by pointing the PyTorch package source at the ROCm index; the README's new section *Install on Linux with an AMD GPU (ROCm)* has the steps. Every AI model runs on the GPU except spaCy, which runs on the CPU.
   - A C++ compiler must be installed (`sudo apt install g++` on Debian and Ubuntu): PyTorch's AMD GPU libraries compile some of their code on first use, and need its standard headers. Raven finds them by itself, and reports an error at startup if there is no compiler.
-  - `raven-check-cuda` recognizes ROCm, names the GPU's architecture (`gfx…`), and says whether the installed PyTorch supports it.
+  - `raven-check-cuda` recognizes ROCm, names the GPU's architecture (`gfx…`), says whether the installed PyTorch supports it, and reports the ROCm version PyTorch uses.
   - `env.sh` succeeds on an AMD machine, so the `bash` wrappers the README suggests work there unchanged.
 - **`raven-bench-devices` times the speech models on the GPU and on the CPU**, and prints the `overrides.json` lines that run each on the faster one. On some machines, an AMD APU for one, speech synthesis is several times faster on the CPU.
 - **The QR code that `--qr` shows can be saved to a file**, for a slide or a poster: `python -m raven.common.gui.qroverlay raven-qr.svg`. PNG, SVG or PDF, chosen by the extension. It is the same code the apps draw, from the same URL.
