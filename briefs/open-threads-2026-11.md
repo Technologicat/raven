@@ -88,9 +88,9 @@ maintainer has read the whole arXiv evidence comparison.
     trends. Both routes exist (`raven-siftbib --where 'year==2023'` per slice, or the live filter).
   - **2026-11-24: the keep sample is rated**, which unblocks rules v2; teachers as AI users are out; a table of the
     clusters is wanted for the article; and the number of clusters is open, perhaps to be swept.
-  - **Rules v2 is ready to build, ours**: rules only, no new LLM run. The two new rules hold for a person rather
-    than remove (*focus = system*; practising teachers who are not the learners), and the 713 ProQuest-only
-    records come out. `investigations/aokk-corpus-scope/README.md`, the meeting of 2026-11-24.
+  - **Done 2026-11-25: the run with the new rules** (`AOKK/scopebib-2026-11-25-rules-v3/`): of 3,765 records,
+    2,588 removed, 495 to a person, 682 kept. Next, the team's: the hand check of `03a-CHECK-BY-HAND.xlsx`, which
+    fixes the final keeps. `investigations/aokk-corpus-scope/README.md`, *The run of 2026-11-25*.
   - **Then, on the final keeps**: the cluster table export (a Visualizer feature, `TODO.md`; its hotkey needs the
     help card split) and the cluster-count sweep.
   `investigations/aokk-corpus-scope/README.md`, the meetings of 2026-11-19 and 2026-11-24, points to each.
