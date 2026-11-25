@@ -9,13 +9,14 @@ helpers, and their tests, import without it.
 
 __all__ = ["USER_AGENT",
            "WebToolException", "Cancelled",
-           "get_driver", "browser_answers", "restart_driver",
+           "get_driver", "browser_answers", "quit_driver", "restart_driver",
            "lock_unless_cancelled"]
 
 import logging
 logger = logging.getLogger(__name__)
 
 import contextlib
+import subprocess
 import threading
 from collections.abc import Callable, Iterator
 
@@ -58,12 +59,33 @@ def browser_answers(driver) -> bool:
         return False
     return True
 
-def restart_driver(driver, page_load_timeout: float | None = None):
-    """Quit `driver`, whose browser has stopped answering, and return a new one, as `get_driver` makes. `None` if it cannot."""
+def quit_driver(driver) -> None:
+    """Quit `driver` and its browser, unless its driver process (chromedriver, geckodriver) has already exited.
+
+    That process exits when the signal stopping the server reached it too, as a Ctrl+C in a terminal does.
+    Asking it to quit then gets "connection refused", which Selenium's HTTP client retries, logging a warning
+    each time. Any other failure to quit is logged, never raised: this runs at exit, and from `restart_driver`.
+    """
+    maybe_process = getattr(getattr(driver, "service", None), "process", None)
+    if maybe_process is not None:
+        # A signal sent to the whole process group reaches the server and the driver process at once, and the
+        # server's exit handlers run within milliseconds, before the driver process has finished exiting. So a
+        # moment's grace before deciding it is alive: one nobody signalled does not exit, and costs only this.
+        try:
+            maybe_process.wait(timeout=0.25)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            logger.debug("quit_driver: the driver process has exited; nothing to quit.")
+            return
     try:
         driver.quit()
-    except Exception as exc:  # a dead browser may fail to quit too, which is fine: it is being replaced
-        logger.info(f"restart_driver: the old driver did not quit cleanly: {type(exc)}: {exc}")
+    except Exception as exc:  # a dead browser may fail to quit too
+        logger.info(f"quit_driver: the driver did not quit cleanly: {type(exc)}: {exc}")
+
+def restart_driver(driver, page_load_timeout: float | None = None):
+    """Quit `driver`, whose browser has stopped answering, and return a new one, as `get_driver` makes. `None` if it cannot."""
+    quit_driver(driver)
     return get_driver(page_load_timeout=page_load_timeout)
 
 def _is_colab():

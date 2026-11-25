@@ -64,7 +64,7 @@ def init_module(config_module_name: str):
     if driver is not None:
         def quit_driver():  # whichever driver is current at exit, a restarted one included
             if driver is not None:
-                driver.quit()
+                webcommon.quit_driver(driver)
         atexit.register(quit_driver)
 
         dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"

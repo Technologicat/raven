@@ -1,5 +1,6 @@
 """Unit tests for raven.server.modules.webcommon: the lock a web job waits for, and the exceptions its jobs end with."""
 
+import subprocess
 import threading
 
 import pytest
@@ -60,3 +61,50 @@ class TestLockUnlessCancelled:
 class TestExceptions:
     def test_cancelled_is_a_web_tool_exception(self):
         assert issubclass(webcommon.Cancelled, webcommon.WebToolException)
+
+
+class TestQuitDriver:
+    """Quitting a driver whose process may already be gone, as at exit after a Ctrl+C."""
+
+    class FakeProcess:
+        def __init__(self, returncode):
+            self.returncode = returncode  # `None` while running, as `subprocess.Popen` has it
+
+        def wait(self, timeout=None):
+            if self.returncode is None:
+                raise subprocess.TimeoutExpired(cmd="chromedriver", timeout=timeout)
+            return self.returncode
+
+    class FakeDriver:
+        def __init__(self, process, quit_raises=None):
+            self.service = type("Service", (), {"process": process})()
+            self.quit_raises = quit_raises
+            self.quit_called = False
+
+        def quit(self):
+            self.quit_called = True
+            if self.quit_raises is not None:
+                raise self.quit_raises
+
+    def test_a_driver_whose_process_has_exited_is_not_asked_to_quit(self):
+        driver = self.FakeDriver(self.FakeProcess(returncode=-2))
+        webcommon.quit_driver(driver)
+        assert not driver.quit_called
+
+    def test_a_running_driver_is_quit(self):
+        # The control for the one above: only the process's state differs.
+        driver = self.FakeDriver(self.FakeProcess(returncode=None))
+        webcommon.quit_driver(driver)
+        assert driver.quit_called
+
+    def test_a_failure_to_quit_is_logged_rather_than_raised(self, caplog):
+        driver = self.FakeDriver(self.FakeProcess(returncode=None), quit_raises=ConnectionError("refused"))
+        with caplog.at_level("INFO", logger=webcommon.logger.name):
+            webcommon.quit_driver(driver)
+        assert driver.quit_called
+        assert "did not quit cleanly" in caplog.text
+
+    def test_a_driver_without_a_process_to_ask_about_is_quit(self):
+        driver = self.FakeDriver(process=None)
+        webcommon.quit_driver(driver)
+        assert driver.quit_called

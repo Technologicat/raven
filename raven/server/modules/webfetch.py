@@ -92,7 +92,7 @@ _quit_at_exit_registered = False
 def _quit_driver() -> None:
     """Quit whichever driver is current, if any: at exit, a restarted one included."""
     if _driver is not None:
-        _driver.quit()
+        webcommon.quit_driver(_driver)
 
 def init_module(config_module_name: str) -> None:
     """Initialize the webfetch module.
