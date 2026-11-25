@@ -68,18 +68,11 @@ class TestRewriteUrl:
         url, _ = webfetch._rewrite_url("https://arxiv.org/pdf/2301.00001.pdf")
         assert url == "https://arxiv.org/html/2301.00001"
 
-    def test_reddit_to_old_reddit(self):
+    def test_reddit_is_not_rewritten(self):
+        # `old.reddit.com` sends a logged-out visitor to a login page now, so redirecting there gains nothing.
         url, extractor = webfetch._rewrite_url("https://www.reddit.com/r/x/comments/abc/title/")
-        assert url == "https://old.reddit.com/r/x/comments/abc/title/"
+        assert url == "https://www.reddit.com/r/x/comments/abc/title/"
         assert extractor is None
-
-    def test_reddit_bare_host(self):
-        url, _ = webfetch._rewrite_url("https://reddit.com/r/x/")
-        assert url == "https://old.reddit.com/r/x/"
-
-    def test_old_reddit_not_rewritten(self):
-        url, _ = webfetch._rewrite_url("https://old.reddit.com/r/x/")
-        assert url == "https://old.reddit.com/r/x/"
 
     def test_youtube_watch_gets_transcript_extractor(self):
         url, extractor = webfetch._rewrite_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")

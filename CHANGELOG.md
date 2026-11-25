@@ -256,6 +256,7 @@
 
 #### Constellation-wide
 
+- **A Reddit address is fetched as given**, no longer redirected to `old.reddit.com`, which now sends a visitor who is not logged in to a login page. Reddit cannot currently be read without logging in, by either route, so a fetch of it fails as before, now naming the address that was asked for.
 - **A fetched web page keeps its links**, with their targets, in Raven-librarian's `webfetch` and in `raven-web fetch`. A page whose content is mostly where it links to, a list of sources or a disambiguation page, was useless without them. A page comes out somewhat longer for it.
 - **The PyTorch package source in `pyproject.toml` is named `pytorch-gpu`**, where it was `pytorch-cu128`, as it now serves AMD GPUs too. It is the same entry; instructions that name it, such as removing it on a Mac, mean this one.
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.

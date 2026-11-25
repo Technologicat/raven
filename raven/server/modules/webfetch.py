@@ -157,12 +157,6 @@ def _rewrite_url(url: str) -> Tuple[str, Optional[Callable[[str], str]]]:
             arxiv_id = m.group("arxiv_id")
             return f"https://arxiv.org/html/{arxiv_id}", _extract_arxiv
 
-    # Reddit: the new design is JS-heavy; `old.reddit.com` is plain HTML that extracts cleanly via Tier 1.
-    if host == "reddit.com" or host.endswith(".reddit.com"):
-        if host != "old.reddit.com":
-            rewritten = parts._replace(netloc="old.reddit.com").geturl()
-            return rewritten, None
-
     # YouTube: the page is almost pure player chrome; fetch the transcript instead.
     if host.endswith("youtube.com") or host == "youtu.be" or host.endswith(".youtu.be"):
         if (m := _YOUTUBE_WATCH_RE.search(url)) is not None:
@@ -493,7 +487,7 @@ def fetch(url: str, output_format: str = "markdown",
 
     effective_url, special_extractor = _rewrite_url(url)
 
-    # SSRF / scheme gate on the *effective* URL (a rewrite can change the host, e.g. reddit -> old.reddit.com).
+    # SSRF / scheme gate on the *effective* URL (a rewrite could change the host).
     refusal = _classify_url_network_safety(effective_url, allow_private=server_config.webfetch_allow_private_networks)
     if refusal is not None:
         return _make_result(refusal, url=effective_url)
