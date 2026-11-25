@@ -559,6 +559,11 @@ Two things this target needs that Hindsight does not (maintainer, 2026-10-01):
   `chatutil.create_chat_message` builds single-text tool messages and says multi-part content arrives "where
   a real caller needs it"; this is that caller. The output image presumably goes to a sidecar through the
   existing attachment mechanism (`imagestore` over `sidecarstore`), as an uploaded image does.
+  - **`webfetch` is a second consumer** (2026-11-25). Its extraction drops a page's images, keeping only their
+    captions, so a figure's "(pictured)" arrives with no source. trafilatura's `include_images` would give each
+    image as a Markdown reference, `![alt](url)`: its URL and alt text, but nothing a model could look at. Left
+    off until tool results can carry image parts, when the page's images could arrive as images (maintainer,
+    2026-11-25).
 - **A tool can be sent an image** — img2img and edit mode take images as input. Wanted as a general
   mechanism: a tool argument naming **an attachment in the current chat, or an item in the document DB**.
   - The DB half is the same missing piece as `TODO_DEFERRED.md`'s "`fetch_document` inlines up to eleven
