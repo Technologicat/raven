@@ -46,6 +46,9 @@ maintainer has read the whole arXiv evidence comparison.
   and tested on the local AI server. `TODO_DEFERRED.md`, the stock-take item.
 - **Release 0.2.11 before the health-education paper comes out**, so that its methods can cite a released
   version (2026-11-19). No date yet; it follows the paper's schedule. The `release` skill has the process.
+  - **What remains important for it** (the maintainer, 2026-11-25): **all-fields search**, with the full author
+    list shown and searchable (`TODO.md`, *Author search* and *Fragment search across multiple fields*), and
+    **colouring the map by year**. Also the README screenshots, retaken.
 - **All-fields search with one-line snippets** around each match and a toggle to the full abstract, designed
   2026-11-25: `TODO.md`, *Fragment search across multiple fields*. M.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
