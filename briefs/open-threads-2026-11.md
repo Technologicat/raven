@@ -81,7 +81,6 @@ maintainer has read the whole arXiv evidence comparison.
   - **The clusters wait twice**: on the team's keep-sample ratings, which fix the final keeps, and on our design
     discussion of LLM grouping at about 2,000 records (`investigations/llm-thematic-grouping/README.md`, *Next*:
     the map's clusters as bins, a revision step over cluster summaries, batched allocation with reasons).
-  - **Also from the team**: confirming that the full-text fetch may send DOIs to an outside service.
   - **With the final keeps**: comparing year-specific maps against the whole map filtered by year, for the
     trends. Both routes exist (`raven-siftbib --where 'year==2023'` per slice, or the live filter).
   - **2026-11-24: the keep sample is rated**, which unblocks rules v2; teachers as AI users are out; a table of the

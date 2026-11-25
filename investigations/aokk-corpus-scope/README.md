@@ -1078,7 +1078,8 @@ the topics have changed over the years possible, giving an overview of how AI ag
 **Full texts** (decided earlier; see the 11.11 section): retrieved for the final keeps, the records that go on
 to the detailed analysis. That is likely a substantial subset of the kept and the held together. That the fetcher
 sends the corpus's DOIs to an outside service is fine by the maintainer, to be confirmed with the team at the next
-meeting.
+meeting. **Settled 2026-11-25** (the maintainer): it is fine, the team having fetched full texts by hand
+already, which sends each DOI to the service provider just the same.
 
 **For the methods section: the process differs substantially from PRISMA** (the team's discussion):
 
