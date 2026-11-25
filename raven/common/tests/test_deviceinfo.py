@@ -308,6 +308,19 @@ class TestLibstdcxxIncludeDirs:
                                                             "/usr/include/x86_64-linux-gnu/c++/13",
                                                             "/usr/include/c++/13/backward"]
 
+    def test_finds_headers_kept_directly_in_a_cxx_directory(self):
+        # MinGW's layout: the headers are in `.../include/c++` itself, with the version higher up the path.
+        stderr = ("#include <...> search starts here:\n"
+                  " C:/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/c++\n"
+                  " C:/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/c++/x86_64-w64-mingw32\n"
+                  " C:/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include\n"
+                  "End of search list.\n")
+        which, run = _compiler_reports(stderr)
+        with which, run:
+            assert deviceinfo._libstdcxx_include_dirs() == [
+                "C:/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/c++",
+                "C:/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/c++/x86_64-w64-mingw32"]
+
     def test_no_compiler_gives_nothing(self):
         with patch.object(deviceinfo.shutil, "which", return_value=None):
             assert deviceinfo._libstdcxx_include_dirs() == []

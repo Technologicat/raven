@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 import contextlib
 import os
+import pathlib
 import shutil
 import subprocess
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
@@ -101,7 +102,10 @@ def _libstdcxx_include_dirs() -> List[str]:
     except ValueError:
         return []
     # Only the C++ library's own directories, never e.g. `/usr/include`: the GPU compiler has its own C headers.
-    return [line.strip() for line in lines[start:end] if "/c++/" in line]
+    # Matched as a path component, since some toolchains (MinGW, for one) put the headers in `.../include/c++`
+    # itself, with the version elsewhere in the path.
+    paths = [line.strip() for line in lines[start:end]]
+    return [path for path in paths if "c++" in pathlib.PurePath(path).parts]
 
 _HIPRTC_OPTIONS_VARIABLE = "HIPRTC_COMPILE_OPTIONS_APPEND"
 _rocm_compiler_prepared = False
