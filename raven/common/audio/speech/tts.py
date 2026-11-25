@@ -45,6 +45,7 @@ from dataclasses import dataclass, replace
 from typing import Iterator, Optional
 
 import numpy as np
+import torch
 
 import kokoro
 
@@ -111,6 +112,23 @@ class TTSPipeline:
     sample_rate: int
 
 
+def _zero_inert_rnn_dropout(model: torch.nn.Module) -> None:
+    """Set `dropout` to zero on every single-layer RNN in `model`, where it has no effect anyway.
+
+    Torch applies an RNN's dropout between its layers only, so on a single-layer RNN the setting changes
+    no output, and setting it to zero is an exact no-op.
+    """
+    # Kokoro builds its LSTMs with `num_layers=1, dropout=0.1`. Under ROCm, a nonzero dropout still makes
+    # MIOpen set up dropout state, which compiles a HIP kernel at run time; that kernel includes rocRAND's
+    # headers, which neither the ROCm Torch wheels nor a minimal system ROCm install provide, so every
+    # synthesis failed with `miopenStatusUnknownError`.
+    #
+    # TODO: if we vendor Kokoro, fix this at the source, in its model definition, and drop this function.
+    for module in model.modules():
+        if isinstance(module, torch.nn.RNNBase) and module.num_layers == 1 and module.dropout > 0:
+            module.dropout = 0.0
+
+
 # Cache, keyed by (model_name, device_string, lang_code). Same pattern as `nlptools._spacy_pipelines`.
 _tts_pipelines: dict[tuple[str, str, str], TTSPipeline] = {}
 
@@ -161,6 +179,7 @@ def load_tts_pipeline(model_name: str,
 
     logger.info(f"load_tts_pipeline: loading on '{device_string}', lang_code='{lang_code}'.")
     kpipeline = kokoro.KPipeline(lang_code=lang_code, device=device_string, repo_id=model_name)  # Kokoro's parameter is still `repo_id`
+    _zero_inert_rnn_dropout(kpipeline.model)
 
     pipeline = TTSPipeline(model_name=model_name,
                            kpipeline=kpipeline,
