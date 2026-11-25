@@ -21,7 +21,7 @@ plotter.py        (~490)  — the scatter plot: dataset loading, plotter-space q
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~280)  — selection state, its combine modes and undo history, and the display filters applied to it
 word_cloud.py     (~360)  — word cloud rendering, from phrases or from words
-entry_renderer.py (~230)  — per-entry rendering shared by panel and tooltip, the cluster purity readouts, and
+entry_renderer.py (~250)  — per-entry rendering shared by panel and tooltip, the cluster purity readouts, and
                             the themes and terms lines
 search.py         (~190)  — the title scan and the cluster-number search, and the three GUI elements
                             reporting the result

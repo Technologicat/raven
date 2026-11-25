@@ -1377,9 +1377,7 @@ def _update_info_panel(*, task_env=None, env=None):
         # one entry per cluster, so the cluster count matches the whole selection. The item count
         # gets its final value when the update completes.
         if len(selection_data_idxs):
-            item_plural_s = "s" if len(selection_data_idxs) != 1 else ""
-            cluster_plural_s = "s" if len(cluster_ids_in_selection_new) != 1 else ""
-            top_heading_text = f"[{len(selection_data_idxs)} item{item_plural_s} total in {len(cluster_ids_in_selection_new)} cluster{cluster_plural_s}]"
+            top_heading_text = entry_renderer.format_selection_heading(len(selection_data_idxs), cluster_ids_in_selection_new)
         else:
             top_heading_text = "[nothing selected]"  # TODO: DRY duplicate definitions for labels
             dpg.add_text("[Select item(s) to view information]", color=(140, 140, 140, 255), parent=info_panel_content_target)  # TODO: DRY duplicate definitions for labels

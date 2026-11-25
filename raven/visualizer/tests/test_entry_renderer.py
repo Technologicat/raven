@@ -178,6 +178,21 @@ class TestClusterAnnotations:
         assert cluster_keywords == []
 
 
+class TestSelectionHeading:
+    def test_misc_is_named_rather_than_counted(self):
+        assert entry_renderer.format_selection_heading(1274, list(range(68)) + [-1]) == "[1274 items total in 68 clusters + Misc]"
+
+    def test_without_misc_only_clusters_are_counted(self):
+        """Control: with no Misc in the selection, the count is the whole story."""
+        assert entry_renderer.format_selection_heading(5, [3, 4]) == "[5 items total in 2 clusters]"
+
+    def test_misc_alone(self):
+        assert entry_renderer.format_selection_heading(1, [-1]) == "[1 item total in Misc]"
+
+    def test_one_cluster_and_misc(self):
+        assert entry_renderer.format_selection_heading(3, [7, -1]) == "[3 items total in 1 cluster + Misc]"
+
+
 class TestThemesAndTerms:
     """Where a dataset has both the LLM's keywords and the phrases, a cluster shows both, on two lines."""
 

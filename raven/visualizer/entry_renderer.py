@@ -34,7 +34,7 @@ Cross-module state read via `app_state`:
 """
 
 __all__ = ["reference_order", "get_entries_for_selection",
-           "order_cluster_ids",
+           "format_selection_heading", "order_cluster_ids",
            "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity",
            "format_cluster_keywords", "format_keyword_lines"]
 
@@ -135,6 +135,24 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
         return cluster_title, cluster_keywords, cluster_content, more
 
     return entries_by_cluster, format_cluster_annotation
+
+
+def format_selection_heading(n_items: int, cluster_ids) -> str:
+    """The info panel's heading for a selection: `"[1274 items total in 68 clusters + Misc]"`.
+
+    `n_items`: how many items are selected.
+    `cluster_ids`: the clusters they are in; `-1` is Misc, which is named rather than counted as a cluster, since
+                   the clusters are numbered and Misc is not one of the numbers.
+    """
+    cluster_ids = set(cluster_ids)
+    has_misc = -1 in cluster_ids
+    n_clusters = len(cluster_ids - {-1})
+    parts = []
+    if n_clusters:
+        parts.append(f"{n_clusters} cluster{'s' if n_clusters != 1 else ''}")
+    if has_misc:
+        parts.append("Misc")
+    return f"[{n_items} item{'s' if n_items != 1 else ''} total in {' + '.join(parts)}]"
 
 
 def order_cluster_ids(cluster_ids):
