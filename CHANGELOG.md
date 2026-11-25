@@ -213,6 +213,7 @@
 - **LLM cluster keywords are given the cluster's phrases as evidence**, with their shares, beside the papers the prompt holds, which for a large cluster are a sample.
   - The keywords stay the LLM's own, and are better grounded in what the whole cluster says.
   - `clusters_llm_keyword_evidence`, on by default, in [`raven.visualizer.config`](raven/visualizer/config.py).
+- **The LLM is asked for up to fifteen keywords per cluster.** The label shows six; the dataset keeps them all.
 
 #### Raven-deduplicate
 

@@ -922,6 +922,13 @@ class TestLLMAnswersAreKept:
         assert calls == []
         assert second == first == [["neural networks", "deep learning"]]
 
+    def test_the_label_shows_six_and_the_dataset_keeps_them_all(self, monkeypatch, tmp_path):
+        reply = ", ".join(f"topic {i}" for i in range(9))
+        keywords, _calls = self._run(monkeypatch, tmp_path, [reply])
+        assert keywords == [[f"topic {i}" for i in range(6)]]
+        saved = importer._AnswerCache(tmp_path / "llm", "cluster keywords")
+        assert len(next(iter(saved._answers.values()))["reply"].split(",")) == 9
+
     def test_a_changed_prompt_is_asked_again(self, monkeypatch, tmp_path):
         """Control for the test above: other records make another prompt."""
         self._run(monkeypatch, tmp_path, ["neural networks"])

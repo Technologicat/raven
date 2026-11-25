@@ -138,6 +138,9 @@ clusters_keyword_umbrella_fraction = 0.1
 # becomes "fast weight programmer").
 clusters_keyword_short_form_share = 0.5
 
+# For "llm" and "hybrid": the prompt asking the LLM for a cluster's keywords. It asks for up to fifteen: the label
+# shows six, the dataset keeps them all, and a model asked for more does not pad but adds its most specific ones,
+# general terms coming first (`briefs/visualizer-keyword-pools-brief.md`, measured on five corpora).
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     **Instructions**
 
@@ -147,7 +150,7 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     clustering algorithm. Although the algorithm occasionally makes a mistake, at least almost all
     of the items should share a common theme, or possibly several common themes.
 
-    Please identify the common theme(s), and suggest up to six keywords accordingly.
+    Please identify the common theme(s), and suggest up to fifteen keywords accordingly.
 
     The keywords can be any nouns, noun phrases, or proper names that you think describe this set of items.
     The keywords will be shown in a visualizer app, to show the cluster topics to the user.

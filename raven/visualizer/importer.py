@@ -1781,6 +1781,9 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
         for cluster_id, llm_keywords in zip(llm_cluster_ids, vis_keywords_by_cluster):
             maybe_llm_keywords_by_cluster[cluster_id] = list(llm_keywords)
 
+        if keyword_method == "llm":  # the label shows the first few; the dataset keeps them all, above
+            vis_keywords_by_cluster = [keywords[:max_vis_kw] for keywords in vis_keywords_by_cluster]
+
         if keyword_method == "hybrid":
             # The LLM's terms for most clusters ("large language models", in a corpus about them) say what the
             # corpus is about rather than the cluster, and would take a leading place from one that does.
