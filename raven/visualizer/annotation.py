@@ -303,6 +303,10 @@ def _render_worker(*, task_env, env=None):
             # Actual content
             entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip, dataset=ds)
             clusters_at_mouse = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
+            # Two keyword lines per cluster push the titles off a tooltip holding many clusters, so past a couple
+            # only the themes are shown; the info panel has the terms.
+            keyword_themes_only = len([cluster_id for cluster_id in clusters_at_mouse if cluster_id != -1]) > 2
+            bold_font = guiutils.load_extra_font(app_state.themes_and_fonts, gui_config.font_size, "OpenSans", "Bold")[1]
 
             have_jumpable_item = False  # for whether we should show the help for that
 
@@ -311,13 +315,19 @@ def _render_worker(*, task_env, env=None):
                     if task_env is not None and task_env.cancelled:
                         break
 
-                    cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id)
+                    cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id, themes_only=keyword_themes_only)
                     cluster_title_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_title_group_build{env.internal_build_number}", parent=annotation_target_group)
                     dpg.add_text(cluster_title, color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_title_text_build{env.internal_build_number}", parent=cluster_title_group)  # "#42"
                     maybe_purity_text = entry_renderer.format_cluster_purity(ds.file_content, cluster_id)
                     if maybe_purity_text is not None:
                         dpg.add_text(f"[{maybe_purity_text}]", color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_purity_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[purity 62%]"
-                    dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_keywords_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[keyword0, ...]"
+                    keywords_group = dpg.add_group(tag=f"cluster_{cluster_id}_annotation_keywords_group_build{env.internal_build_number}", parent=cluster_title_group)
+                    for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Terms: ...", or "[keyword0, ...]"
+                        line_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_keywords_line{k}_build{env.internal_build_number}", parent=keywords_group)
+                        if caption is not None:
+                            caption_widget = dpg.add_text(f"{caption}:", color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_keywords_caption{k}_build{env.internal_build_number}", parent=line_group)
+                            dpg.bind_item_font(caption_widget, bold_font)
+                        dpg.add_text(text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_keywords_text{k}_build{env.internal_build_number}", parent=line_group)
                     for data_idx, entry in cluster_content:  # `data_idx`: item index into `sorted_xxx`
                         if task_env is not None and task_env.cancelled:
                             break

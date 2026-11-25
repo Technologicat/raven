@@ -1467,11 +1467,17 @@ def _update_info_panel(*, task_env=None, env=None):
             purity_part = f", {maybe_purity_text}" if maybe_purity_text is not None else ""
             entries_text = f"[{len(entries_by_cluster[cluster_id])} item{plural_s}{purity_part}]"
             dpg.add_text(entries_text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_count_build{env.internal_build_number}", parent=cluster_header_group)
-            dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)
+            keywords_group = dpg.add_group(tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)
+            bold_font = guiutils.load_extra_font(app_state.themes_and_fonts, gui_config.font_size, "OpenSans", "Bold")[1]
+            for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Terms: ...", or "[keyword0, ...]"
+                line_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_keywords_line{k}_build{env.internal_build_number}", parent=keywords_group)
+                if caption is not None:
+                    caption_widget = dpg.add_text(f"{caption}:", color=(180, 180, 180), tag=f"cluster_{cluster_id}_keywords_caption{k}_build{env.internal_build_number}", parent=line_group)
+                    dpg.bind_item_font(caption_widget, bold_font)
+                dpg.add_text(text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_keywords_text{k}_build{env.internal_build_number}", parent=line_group)
 
             # Report: cluster heading
-            keywords_on_one_line = "; ".join(line for line in cluster_keywords.splitlines() if line)  # themes; terms
-            report_cluster_heading_text = f"{cluster_title} {entries_text} {keywords_on_one_line}".strip()
+            report_cluster_heading_text = f"{cluster_title} {entries_text} {entry_renderer.format_keyword_lines(cluster_keywords)}".strip()
             report_text.write(report_cluster_heading_text + "\n")
             report_text.write("-" * len(report_cluster_heading_text) + "\n\n")
             report_md.write(f"## {report_cluster_heading_text}\n\n")

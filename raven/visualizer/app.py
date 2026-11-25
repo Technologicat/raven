@@ -257,6 +257,9 @@ with timer() as tim:
     dpg.create_context()
 
     app_state.themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
+    # The bold face of the keyword captions ("Themes:", "Terms:"), loaded here so that the render workers building
+    # the tooltip and the info panel only ever find it in the cache.
+    guiutils.load_extra_font(app_state.themes_and_fonts, gui_config.font_size, "OpenSans", "Bold")
 
     # https://dearpygui.readthedocs.io/en/latest/documentation/themes.html#plot-colors
     with dpg.theme(tag="my_plotter_theme"):
@@ -931,7 +934,7 @@ with timer() as tim:
 
                     dpg.add_input_text(tag="search_field",
                                        default_value="",
-                                       hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
+                                       hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive; '#7' = cluster 7]",
                                        width=-1,
                                        callback=search.search_field_callback)
 
@@ -1318,6 +1321,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - A **lowercase** fragment matches **{self.c_hig}case-insensitively{self.c_end}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.
                 - A fragment with **at least one uppercase** letter matches **{self.c_hig}case-sensitively{self.c_end}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.
                 - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
+                - **#** and a cluster's number finds that cluster's papers. E.g. *"#7"*.
             """).strip()),
          helpcard.section(
             "**Editing the search term**",

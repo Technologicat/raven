@@ -16,7 +16,8 @@ Public API:
     by cluster, sorted within each cluster (`reference_order` by default). Returns
     `(entries_by_cluster, format_cluster_annotation)` where the formatter is a
     closure that yields `(cluster_title, cluster_keywords, cluster_content,
-    more)` for a given cluster ID.
+    more)` for a given cluster ID, `cluster_keywords` as `format_cluster_keywords`'s
+    lines (`[]` where there are none); `themes_only=True` passes through to it.
   - `reference_order(entry)` — the sort key of a reference list: authors (or
     the title, when there are none), then year, then title.
   - `order_cluster_ids(cluster_ids)` — sort ascending with the misc group
@@ -24,7 +25,8 @@ Public API:
   - `format_dataset_purity(file_content)`, `format_cluster_purity(file_content,
     cluster_id)` — the importer's cluster purity, in words.
   - `format_cluster_keywords(file_content, cluster_id)` — a cluster's keywords as
-    shown: its themes and terms on two lines where the dataset has both, else its label.
+    shown, as `(caption, text)` lines: its themes and terms where the dataset has both,
+    else its label; `format_keyword_lines` puts them on one line of text.
 
 Cross-module state read via `app_state`:
   `dataset` (for `sorted_entries`, `file_content.keywords_available`, and
@@ -34,13 +36,15 @@ Cross-module state read via `app_state`:
 __all__ = ["reference_order", "get_entries_for_selection",
            "order_cluster_ids",
            "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity",
-           "format_cluster_keywords"]
+           "format_cluster_keywords", "format_keyword_lines"]
 
 import collections
 import math
 
 from ..common import keyphrases
 from ..common import utils as common_utils
+
+from . import config as visualizer_config
 
 from .app_state import app_state
 
@@ -101,18 +105,18 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
         else:
             max_n = None
 
-    def format_cluster_annotation(cluster_id):
+    def format_cluster_annotation(cluster_id, *, themes_only=False):
         # The metadata for the cluster.
         if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
             if dataset.file_content.keywords_available:
                 cluster_title = f"#{cluster_id}"
-                cluster_keywords = format_cluster_keywords(dataset.file_content, cluster_id)
+                cluster_keywords = format_cluster_keywords(dataset.file_content, cluster_id, themes_only=themes_only)
             else:
                 cluster_title = f"#{cluster_id}"
-                cluster_keywords = ""
+                cluster_keywords = []
         else:
             cluster_title = "Misc"
-            cluster_keywords = ""
+            cluster_keywords = []
 
         # The entries themselves. Leave only the first few if there are too many to display.
         entries = entries_by_cluster[cluster_id]
@@ -178,25 +182,50 @@ def format_cluster_purity(file_content, cluster_id: int) -> str | None:
     return f"purity {purities[cluster_id]:.0%}"
 
 
-def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6) -> str:
-    """Cluster `cluster_id`'s keywords as the panel and the tooltip show them, ending in a newline.
+def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
+                            themes_only: bool = False) -> list[tuple[str | None, str]]:
+    """Cluster `cluster_id`'s keywords as the panel and the tooltip show them, as lines of `(caption, text)`.
 
     `file_content`: a loaded dataset file (`dataset.file_content`).
     `n`: how many keywords a line shows.
+    `themes_only`: show the themes line alone, where there is one; for a tooltip crowded with clusters.
 
     Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on),
-    two lines: `"Themes: ..."`, the LLM's, which name what the cluster's papers share, and `"Terms: ..."`, the
-    phrases', which quote what they say, leaving out a phrase that repeats a theme. Otherwise the cluster's label
-    in brackets, `"[keyword0, ...]"`, as every dataset has one.
+    `[("Themes", ...), ("Terms", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
+    those it gave too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and the
+    phrases, which quote what the papers say, without a phrase that repeats a theme. Otherwise
+    `[(None, "[keyword0, ...]")]`, the cluster's label, which every dataset has.
     """
     def at(maybe_lists):
         return list(maybe_lists[cluster_id]) if maybe_lists is not None and cluster_id < len(maybe_lists) else []
 
-    themes = at(getattr(file_content, "cluster_llm_keywords", None))
+    themes = at(_distinctive_llm_keywords(file_content))
     phrases = at(getattr(file_content, "cluster_keyword_lists", None))
     if themes and themes != ["<unknown topic>"] and phrases:
         themes = themes[:n]
+        if themes_only:
+            return [("Themes", ", ".join(themes))]
         display = getattr(file_content, "keyphrase_display", None) or {}
         terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
-        return f"Themes: {', '.join(themes)}\nTerms: {', '.join(terms)}\n"
-    return f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]\n"
+        return [("Themes", ", ".join(themes)), ("Terms", ", ".join(terms))]
+    return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
+
+
+def format_keyword_lines(lines: list[tuple[str | None, str]]) -> str:
+    """`format_cluster_keywords`'s lines as one line of text, as a copied report shows them: "Themes: ...; Terms: ..."."""
+    return "; ".join(f"{caption}: {text}" if caption else text for caption, text in lines)
+
+
+# One dataset's LLM keywords without the corpus-wide ones, kept for the dataset loaded last: every tooltip and panel
+# build asks, and the answer needs every cluster's list. Keyed by identity, so a newly loaded dataset is computed
+# afresh; holding the object keeps its identity from being reused.
+_distinctive_cache: list = [None, None]  # [file_content, its lists]
+
+def _distinctive_llm_keywords(file_content):
+    """The dataset's `cluster_llm_keywords` without the terms it gave too many clusters, or `None`."""
+    if _distinctive_cache[0] is not file_content:
+        lists = getattr(file_content, "cluster_llm_keywords", None)
+        _distinctive_cache[1] = (keyphrases.without_umbrella_terms(lists, threshold_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
+                                 if lists is not None else None)
+        _distinctive_cache[0] = file_content
+    return _distinctive_cache[1]

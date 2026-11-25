@@ -156,7 +156,7 @@ class TestClusterAnnotations:
         _, formatter = entry_renderer.get_entries_for_selection([0, 1], max_n=10, dataset=two_clusters)
         cluster_title, cluster_keywords, _, _ = formatter(0)
         assert cluster_title == "#0"
-        assert cluster_keywords == "[animals, fauna]\n"
+        assert cluster_keywords == [(None, "[animals, fauna]")]
 
     def test_the_misc_group_is_named_rather_than_numbered(self):
         # Cluster -1 collects the outliers, which have no keywords in common by construction. The dataset
@@ -167,7 +167,7 @@ class TestClusterAnnotations:
         _, formatter = entry_renderer.get_entries_for_selection([0], max_n=10, dataset=dataset)
         cluster_title, cluster_keywords, _, _ = formatter(-1)
         assert cluster_title == "Misc"
-        assert cluster_keywords == ""
+        assert cluster_keywords == []
 
     def test_a_dataset_imported_without_keyword_extraction_still_annotates_its_clusters(self):
         # Keyword extraction is a config switch at import time, so a dataset can legitimately have none.
@@ -175,7 +175,7 @@ class TestClusterAnnotations:
         _, formatter = entry_renderer.get_entries_for_selection([0], max_n=10, dataset=dataset)
         cluster_title, cluster_keywords, _, _ = formatter(0)
         assert cluster_title == "#0"
-        assert cluster_keywords == ""
+        assert cluster_keywords == []
 
 
 class TestThemesAndTerms:
@@ -183,37 +183,50 @@ class TestThemesAndTerms:
 
     @staticmethod
     def content(**fields):
-        return env(vis_keywords_by_cluster=[["label term"]], **fields)
+        return env(vis_keywords_by_cluster=[["label term"]] * 8, **fields)
 
     def test_both_lists_give_two_lines(self):
         fc = self.content(cluster_llm_keywords=[["existential risk", "AI safety"]],
                           cluster_keyword_lists=[[("intelligence", 0.5), ("consciousness", 0.3)]])
-        assert entry_renderer.format_cluster_keywords(fc, 0) == \
-            "Themes: existential risk, AI safety\nTerms: intelligence, consciousness\n"
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "existential risk, AI safety"),
+                                                                 ("Terms", "intelligence, consciousness")]
 
     def test_a_term_repeating_a_theme_is_left_out_but_a_longer_one_containing_it_is_not(self):
         fc = self.content(cluster_llm_keywords=[["intelligence"]],
                           cluster_keyword_lists=[[("Intelligence", 0.6), ("artificial general intelligence", 0.4)]])
-        assert entry_renderer.format_cluster_keywords(fc, 0) == \
-            "Themes: intelligence\nTerms: artificial general intelligence\n"
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "intelligence"),
+                                                                 ("Terms", "artificial general intelligence")]
 
     def test_a_line_shows_at_most_n(self):
         fc = self.content(cluster_llm_keywords=[[f"theme {i}" for i in range(15)]],
                           cluster_keyword_lists=[[(f"term {i}", 0.1) for i in range(30)]])
-        themes, terms = entry_renderer.format_cluster_keywords(fc, 0).splitlines()
+        (_, themes), (_, terms) = entry_renderer.format_cluster_keywords(fc, 0)
         assert len(themes.split(", ")) == 6 and len(terms.split(", ")) == 6
+
+    def test_a_theme_most_clusters_share_is_left_out(self):
+        llm = [["large language models", f"topic {i}"] for i in range(8)]
+        fc = self.content(cluster_llm_keywords=llm, cluster_keyword_lists=[[("phrase", 0.5)]] * 8)
+        assert entry_renderer.format_cluster_keywords(fc, 3)[0] == ("Themes", "topic 3")
+
+    def test_themes_only_gives_the_one_line(self):
+        fc = self.content(cluster_llm_keywords=[["existential risk"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0, themes_only=True) == [("Themes", "existential risk")]
 
     def test_without_the_phrases_the_label_shows_as_before(self):
         """Control: a dataset with the LLM's keywords alone, as `"llm"` without the evidence writes."""
         fc = self.content(cluster_llm_keywords=[["existential risk"]], cluster_keyword_lists=None)
-        assert entry_renderer.format_cluster_keywords(fc, 0) == "[label term]\n"
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [(None, "[label term]")]
 
     def test_an_older_dataset_shows_its_label(self):
-        assert entry_renderer.format_cluster_keywords(self.content(), 0) == "[label term]\n"
+        assert entry_renderer.format_cluster_keywords(self.content(), 0) == [(None, "[label term]")]
 
     def test_a_cluster_the_llm_found_no_theme_in_shows_its_label(self):
         fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
-        assert entry_renderer.format_cluster_keywords(fc, 0) == "[label term]\n"
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [(None, "[label term]")]
+
+    def test_a_report_puts_the_lines_on_one(self):
+        assert entry_renderer.format_keyword_lines([("Themes", "a, b"), ("Terms", "c")]) == "Themes: a, b; Terms: c"
+        assert entry_renderer.format_keyword_lines([(None, "[a, b]")]) == "[a, b]"
 
 
 # --------------------------------------------------------------------------------

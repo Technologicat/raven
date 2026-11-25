@@ -33,6 +33,8 @@ __all__ = ["search_string_box",
 import logging
 logger = logging.getLogger(__name__)
 
+import re
+
 import numpy as np
 
 import dearpygui.dearpygui as dpg
@@ -69,7 +71,9 @@ def find_matches(dataset, search_string):
                      "no search is running" and "every item matched" look the same in a result set, and
                      the GUI needs to tell them apart to know whether to dim anything.
 
-    Incremental fragment search over item titles: every whitespace-separated fragment must appear
+    A query of `#` and a number, as `"#7"`, matches that cluster's entries.
+
+    Otherwise, incremental fragment search over item titles: every whitespace-separated fragment must appear
     somewhere in the title, in any order, and a fragment carrying an uppercase letter matches
     case-sensitively. So "cat photo" finds "photocatalytic". See `common_utils.make_search_matcher`.
 
@@ -83,6 +87,14 @@ def find_matches(dataset, search_string):
     # why the pointer is here rather than only in the help card.
     if not search_string:
         return common_utils.make_blank_index_array()
+
+    # "#7" names cluster 7, as its header does: its papers, by the importer's cluster, so that a cluster the purity
+    # cutoff shows as Misc is still found by its number.
+    maybe_cluster = re.fullmatch(r"\s*#(\d+)\s*", search_string)
+    if maybe_cluster is not None:
+        cluster_id = int(maybe_cluster.group(1))
+        return np.array([data_idx for data_idx, entry in enumerate(dataset.sorted_entries) if entry.cluster_id == cluster_id],
+                        dtype=np.int64)
 
     # A plain O(n) scan. No stopwording, lemmatization or anything fancy.
     # TODO: Search also in document authors (full author list). For this, need to update the GUI wherever we show author names - e.g. searching for "Virtanen" in a paper "Aaltonen et al." that has 200 authors.

@@ -149,6 +149,24 @@ def run_search(gui, query):
     search.update()
 
 
+class TestFindingAClusterByNumber:
+    @pytest.fixture
+    def clustered(self):
+        entries = [make_entry(title) for title in ("Cluster seven paper", "Another #7 paper", "Cluster two paper")]
+        for entry, cluster_id in zip(entries, (7, 7, 2)):
+            entry.cluster_id = cluster_id
+        entries[1].cluster_id = 3  # a title containing "#7" is in cluster 3, so a title match would mislead
+        return env(sorted_entries=entries)
+
+    def test_hash_and_a_number_finds_that_cluster(self, clustered):
+        assert titles_matching(clustered, "#7") == ["Cluster seven paper"]
+        assert titles_matching(clustered, " #2 ") == ["Cluster two paper"]
+
+    def test_a_number_alone_is_an_ordinary_fragment(self, clustered):
+        """Control: without the hash, "7" is searched for in the titles, and finds the title holding it."""
+        assert titles_matching(clustered, "7") == ["Another #7 paper"]
+
+
 class TestReportingTheAnswer:
     def test_running_a_search_publishes_the_query_and_its_results(self, gui):
         # The tooltip and the info panel read these boxes rather than re-running the search.
