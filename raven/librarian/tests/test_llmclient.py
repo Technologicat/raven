@@ -3978,3 +3978,36 @@ class TestWaitingForTheTokenizer:
         threading.Thread(target=load).start()
         # The control is the first test: there, nothing is loading and the answer is False at once.
         assert llmclient.wait_for_tokenizer(settings, timeout=5.0) is True
+
+
+class TestWebfetchFormat:
+    """The model chooses the format; the tool passes it to the server, and takes anything unknown as markdown."""
+
+    @pytest.fixture
+    def formats(self, monkeypatch):
+        seen = []
+
+        def _fake(url, output_format="markdown", timeout=None, maybe_abort=None, on_progress=None):
+            seen.append(output_format)
+            return {"content": "BODY", "url": url, "fetched": True, "spaSuspected": False, "title": None}
+
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
+        _set_allowlist(monkeypatch, None)
+        return seen
+
+    def test_the_default_is_markdown(self, formats):
+        llmtools.webfetch("https://example.com/")
+        assert formats == ["markdown"]
+
+    def test_raw_is_passed_to_the_server(self, formats):
+        llmtools.webfetch("https://example.com/api.json", format="raw")
+        assert formats == ["raw"]
+
+    def test_an_unknown_format_is_taken_as_markdown(self, formats):
+        llmtools.webfetch("https://example.com/", format="pdf")
+        assert formats == ["markdown"]
+
+    def test_the_schema_offers_the_two_formats(self):
+        [spec] = [t for t in llmtools.TOOLS if t["function"]["name"] == "webfetch"]
+        assert spec["function"]["parameters"]["properties"]["format"]["enum"] == ["markdown", "raw"]
+        assert spec["function"]["parameters"]["required"] == ["url"]

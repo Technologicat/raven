@@ -370,7 +370,7 @@ Each of these is documented in the [paper tools manual](raven/papers/README.md);
 ### Datasets and odds and ends
 
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
-- **`raven-web`** runs *Raven-server*'s web search and page fetch from the command line: `raven-web search QUERY` lists the results, `raven-web fetch URL` prints a page's main content as Markdown. With `--json` it prints the server's result as it came, which makes it a web tool for any agent that can run a shell command. A server on another machine must be started with `--listen`.
+- **`raven-web`** runs *Raven-server*'s web search and page fetch from the command line: `raven-web search QUERY` lists the results, `raven-web fetch URL` prints a page's main content as Markdown, or with `--format raw`, its source as the site sent it. With `--json` it prints the server's result as it came, which makes it a web tool for any agent that can run a shell command. A server on another machine must be started with `--listen`.
 - **`raven-mcp`** offers Raven's tools to other LLM frontends over MCP, the Model Context Protocol: web search and page fetch through *Raven-server*, and the lookup in *Raven-librarian*'s lorebook. The tools are *Librarian*'s own, so they are described and behave as they do there, `webfetch_allowlist` included.
   - **For Open WebUI**, run `raven-mcp` and add `http://127.0.0.1:8130/mcp` in Open WebUI as an MCP server (Streamable HTTP). For a frontend on another machine, start it with `--listen` — which lets anyone who can reach the port search and fetch through your *Raven-server*, so on a trusted network only.
   - **For Claude Code**, which starts the server itself: `claude mcp add raven -- raven-mcp --stdio`.

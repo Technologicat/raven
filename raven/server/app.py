@@ -1817,7 +1817,8 @@ def api_webfetch():
 
     In the input:
       - "url" is required.
-      - "format" is optional: "markdown" (default) or "text".
+      - "format" is optional: "markdown" (default), "text", or "raw" (the response body as sent; see
+        `raven.server.modules.webfetch.fetch`).
 
     The result is JSON::
 
@@ -1845,8 +1846,8 @@ def api_webfetch():
         abort(400, '"url" is required')
     url = data["url"]
     output_format = data.get("format", "markdown")
-    if output_format not in ("markdown", "text"):
-        abort(400, '"format", if provided, must be one of "markdown", "text"')
+    if output_format not in ("markdown", "text", "raw"):
+        abort(400, '"format", if provided, must be one of "markdown", "text", "raw"')
     # The URL is logged in full, which is the deliberate exception to logging shape only: it is the
     # request's identity rather than its content, it is already visible to DNS and to the site being
     # fetched, and a failure here cannot be diagnosed without knowing what was asked for. The page that

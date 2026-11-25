@@ -77,6 +77,13 @@ webfetch_min_content_chars = 300
 #
 webfetch_request_timeout = 10.0
 
+# The most a raw fetch (`"format": "raw"`) reads of a response body, in bytes; anything past it is cut off, with
+# a note saying so. Raw bodies are not extracted, so a page can be large: the HTML of one encyclopedia article
+# runs to a few hundred kilobytes. A guard on the server's memory rather than a budget for an LLM's context, which
+# each client applies on top of this.
+#
+webfetch_raw_max_bytes = 10_000_000
+
 # How long (seconds) the headless browser may take to load a page: a search engine's results page for
 # `websearch`, or a page `webfetch` renders in its Tier 2. A page that takes longer is reported as the site not
 # answering. Raven-librarian waits `web_tool_timeout` for the whole tool call, which must exceed this.

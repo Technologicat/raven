@@ -106,12 +106,22 @@ TOOLS = [
                                                           "description": "The search query."}}}}},
     {"type": "function",
      "function": {"name": "webfetch",
-                  "description": "Retrieve a web page's main content as clean text.",
+                  "description": "Retrieve a web page: its main content as clean Markdown, or its raw source.",
                   "parameters": {"type": "object",
                                  "additionalProperties": False,
                                  "required": ["url"],
                                  "properties": {"url": {"type": "string",
-                                                        "description": "The URL to fetch."}}}}},
+                                                        "description": "The URL to fetch."},
+                                                "format": {"type": "string",
+                                                           "enum": ["markdown", "raw"],
+                                                           "description": ("'markdown' (the default): the page's main "
+                                                                           "content, without navigation and other page "
+                                                                           "furniture, with its links. 'raw': the "
+                                                                           "response exactly as the site sent it, such "
+                                                                           "as HTML, JSON or wiki markup; use it for "
+                                                                           "an API or a data file, or where the page's "
+                                                                           "markup itself is what you need. A raw page "
+                                                                           "can be very long.")}}}}},
     # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
     # synthetic call naming a function the model was never offered is a fiction the model can act on.
     # That is not a guess — it is the situation the document-matches inject was in before
@@ -417,8 +427,11 @@ def _format_webfetch_result(url: str, title: str | None, content: str) -> str:
         header = f"{header}\n\n**{title}**"
     return f"{header}\n\n-----\n\n{content}"
 
-def webfetch(url: str) -> tuple[str, dict]:
-    """Fetch a web page's main content, gated by the client-side domain allowlist.
+def webfetch(url: str, format: str = "markdown") -> tuple[str, dict]:
+    """Fetch a web page's main content, or its raw source, gated by the client-side domain allowlist.
+
+    `format`: "markdown" (the default), the page's main content; or "raw", the response as the site sent it.
+              The model chooses, so a value that is neither is taken as "markdown", with a log line.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
     the AI's *initiative*), then delegates the actual fetch to Raven-server, which enforces the
@@ -452,9 +465,13 @@ def webfetch(url: str) -> tuple[str, dict]:
             return (_format_webfetch_result(url, None, CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))),
                     {"webfetch_denied_host": host, "grounding": False})
 
+    if format not in ("markdown", "raw"):
+        logger.info(f"webfetch: unknown format {format!r}; fetching as markdown.")
+        format = "markdown"
+
     api = _client_api()
     try:
-        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "fetched", "spaSuspected", "title"}
+        result = api.webfetch_fetch(url, output_format=format, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "fetched", "spaSuspected", "title"}
                                     maybe_abort=getattr(dyn.tool_context, "maybe_abort", None),
                                     on_progress=getattr(dyn.tool_context, "report_progress", None))
     except requests.Timeout:

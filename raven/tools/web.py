@@ -97,8 +97,8 @@ def main() -> None:
     fetch_parser = subparsers.add_parser("fetch", help="fetch a web page's main content",
                                          description="Fetch a web page's main content. Prints its title and effective URL, then the content under a rule.")
     fetch_parser.add_argument(dest="url", type=str, metavar="URL", help="the page to fetch.")
-    fetch_parser.add_argument('--format', dest="output_format", choices=["markdown", "text"], default="markdown",
-                              help='output format (default: markdown)')
+    fetch_parser.add_argument('--format', dest="output_format", choices=["markdown", "text", "raw"], default="markdown",
+                              help='output format (default: markdown). "raw" is the response as the site sent it, such as HTML or JSON, with nothing extracted.')
 
     opts = parser.parse_args()
     if opts.verb == "search" and not opts.query.strip():

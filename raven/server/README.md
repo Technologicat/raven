@@ -1709,14 +1709,21 @@ and its corresponding link.
 
 ### POST "/api/webfetch"
 
-Retrieve a web page's main content as clean text or Markdown.
+Retrieve a web page's main content as clean text or Markdown, or its raw source.
 
 Input is JSON:
 
     {"url": "https://example.com/article",
      "format": "markdown"}
 
-`"url"` is required. `"format"` is optional: `"markdown"` (default) or `"text"`.
+`"url"` is required. `"format"` is optional: `"markdown"` (default), `"text"` or `"raw"`.
+
+  - `"markdown"` keeps the page's headings, lists and links, with the links' targets.
+  - `"raw"` is the response as the site sent it, for any text type: HTML, JSON, XML, wiki markup and the like.
+    The URL is not rewritten and nothing is extracted, so it suits an API endpoint or a data file. A type that is
+    not text is refused. A site that refuses the plain request is tried in the headless browser, whose page
+    source is the page as its scripts left it. At most `webfetch_raw_max_bytes` of the body are read (server
+    config), with a note at the end where it was cut off.
 
 Answered as a [streamed job](#streamed-responses). The result, in its `"result"` record, is:
 
@@ -1728,9 +1735,10 @@ Answered as a [streamed job](#streamed-responses). The result, in its `"result"`
 
   - `"content"`: the extracted text or Markdown, or a message for the user where the fetch was refused or
     hit a limit.
-  - `"url"`: the effective URL, after rewriting (e.g. an arXiv abstract page to its HTML form).
+  - `"url"`: the effective URL, after rewriting (e.g. an arXiv abstract page to its HTML form), or for a raw
+    fetch, after any redirects.
   - `"fetched"`: `true` if `"content"` is the page's own content; `false` for a refusal or a limit.
   - `"spaSuspected"`: `true` if neither fetch tier could extract usable content, as from a single-page app.
-  - `"title"`: the page title on a successful fetch; `null` for a refusal or a page without one.
+  - `"title"`: the page title on a successful fetch; `null` for a refusal, a page without one, or a raw fetch.
 
 Private-network addresses and non-HTTP(S) schemes are refused here, server-side.

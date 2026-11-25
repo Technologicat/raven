@@ -277,3 +277,120 @@ class TestExtractionKeepsLinks:
         extracted = webfetch._extract_clean_text(page, url="https://example.org/", output_format="txt")
         assert "](https://" not in extracted
         assert "the related page number 0" in extracted
+
+
+class TestIsTextType:
+    @pytest.mark.parametrize("content_type", ["text/html; charset=utf-8", "text/x-wiki", "TEXT/PLAIN",
+                                              "application/json", "application/ld+json", "application/xml",
+                                              "application/atom+xml", "application/javascript", "text/csv"])
+    def test_text_and_structured_data_are_text(self, content_type):
+        assert webfetch._is_text_type(content_type)
+
+    @pytest.mark.parametrize("content_type", ["image/png", "application/pdf", "application/octet-stream",
+                                              "video/mp4", "", "nonsense"])
+    def test_anything_else_is_not(self, content_type):
+        assert not webfetch._is_text_type(content_type)
+
+
+class TestRawFetch:
+    """`fetch(..., output_format="raw")`: the body as the site sent it, with the network layer scripted."""
+
+    URL = "https://example.org/w/index.php?title=Foo&action=raw"
+
+    @pytest.fixture
+    def network(self, monkeypatch):
+        """Pass the safety gate, forbid URL rewriting, and script the plain GET and the browser; returns the script."""
+        script = {"get": (None, None, "", self.URL), "browser": ""}
+        monkeypatch.setattr(webfetch, "_classify_url_network_safety", lambda url, allow_private: None)
+        monkeypatch.setattr(webfetch, "_rewrite_url", lambda url: pytest.fail("a raw fetch rewrote the URL"))
+        monkeypatch.setattr(webfetch, "_http_get_raw", lambda url: script["get"])
+
+        def browser(url, *, output_format, is_cancelled, on_progress):
+            assert output_format == "raw"
+            if script["browser"] == "no browser":
+                raise webfetch._NoBrowser
+            return script["browser"]
+        monkeypatch.setattr(webfetch, "_fetch_tier2", browser)
+        return script
+
+    def test_a_text_body_comes_back_as_sent_less_invisible_characters(self, network):
+        body = "== Heading ==\n'''Foo''' is a​ thing.\n\t{{Infobox}}"  # ​: zero-width space
+        network["get"] = (body, 200, "text/x-wiki; charset=UTF-8", self.URL)
+        result = webfetch.fetch(self.URL, output_format="raw")
+        assert result["fetched"]
+        assert result["content"] == body.replace("​", "")
+
+    def test_the_url_reported_is_where_redirects_ended(self, network):
+        network["get"] = ("{}", 200, "application/json", "https://example.org/final")
+        assert webfetch.fetch(self.URL, output_format="raw")["url"] == "https://example.org/final"
+
+    def test_a_type_that_is_not_text_is_refused(self, network):
+        network["get"] = (None, 200, "image/png", self.URL)
+        result = webfetch.fetch(self.URL, output_format="raw")
+        assert not result["fetched"]
+        assert "image/png" in result["content"] and "not text" in result["content"]
+
+    def test_a_refused_request_is_tried_in_the_browser(self, network):
+        network["get"] = ("Forbidden", 403, "text/html", self.URL)
+        network["browser"] = "<html>rendered</html>"
+        result = webfetch.fetch(self.URL, output_format="raw")
+        assert result["fetched"] and result["content"] == "<html>rendered</html>"
+
+    def test_a_refusal_the_browser_cannot_get_past_reports_the_status(self, network):
+        network["get"] = ("Forbidden", 403, "text/html", self.URL)
+        result = webfetch.fetch(self.URL, output_format="raw")
+        assert not result["fetched"] and "HTTP 403" in result["content"]
+
+    def test_an_unreachable_site_whose_page_never_loads_times_out(self, network):
+        network["browser"] = None
+        assert "did not finish loading" in webfetch.fetch(self.URL, output_format="raw")["content"]
+
+    def test_an_unreachable_site_with_no_browser_says_so(self, network):
+        network["browser"] = "no browser"
+        assert "none installed" in webfetch.fetch(self.URL, output_format="raw")["content"]
+
+    def test_an_unreachable_site_the_browser_cannot_load_is_unreachable(self, network):
+        assert webfetch.fetch(self.URL, output_format="raw")["content"].startswith("Could not reach")
+
+
+class TestRawBodyLimit:
+    """`_http_get_raw` reads at most `webfetch_raw_max_bytes`, and says so when it cut a body off."""
+
+    class FakeResponse:
+        def __init__(self, body: bytes, content_type: str):
+            self.body, self.headers = body, {"Content-Type": content_type}
+            self.status_code, self.url, self.encoding, self.apparent_encoding = 200, "https://example.org/", "utf-8", "utf-8"
+
+        def iter_content(self, chunk_size):
+            for start in range(0, len(self.body), chunk_size):
+                yield self.body[start:start + chunk_size]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    @pytest.fixture
+    def serve(self, monkeypatch):
+        from raven.server import config as server_config
+        monkeypatch.setattr(server_config, "webfetch_raw_max_bytes", 100)
+        def serve(body, content_type="text/plain"):
+            monkeypatch.setattr(webfetch.requests, "get", lambda *args, **kwargs: self.FakeResponse(body, content_type))
+        return serve
+
+    def test_a_body_over_the_limit_is_cut_off_and_says_so(self, serve):
+        serve(b"x" * 250)
+        body, status, _, _ = webfetch._http_get_raw("https://example.org/")
+        assert status == 200
+        assert body.startswith("x" * 100) and "x" * 101 not in body
+        assert "longer than the 100 bytes" in body
+
+    def test_a_body_within_the_limit_is_whole(self, serve):
+        serve(b"x" * 100)
+        assert webfetch._http_get_raw("https://example.org/")[0] == "x" * 100
+
+    def test_a_type_that_is_not_text_is_not_read(self, serve):
+        serve(b"\x89PNG", content_type="image/png")
+        body, status, content_type, _ = webfetch._http_get_raw("https://example.org/")
+        assert body is None and status == 200 and content_type == "image/png"

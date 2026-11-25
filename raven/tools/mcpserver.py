@@ -19,6 +19,7 @@ from .. import __version__
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8130
+DEFAULT_MAX_CHARS = 100_000
 
 
 def _lorebook_entries() -> dict:
@@ -46,13 +47,24 @@ def tool_specs(*, lorebook: bool = True) -> list[dict[str, Any]]:
     return specs
 
 
-def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True) -> list[str]:
+def _cap(text: str, max_chars: int) -> str:
+    """Cut `text` to `max_chars` characters, saying so at the end when it was cut."""
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars]}\n\n[Cut off here: the first {max_chars} of {len(text)} characters.]"
+
+def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True,
+              max_chars: int = DEFAULT_MAX_CHARS) -> list[str]:
     """Run the tool `name` with `arguments`, and return its answer as a list of texts.
 
     The answer is what Raven-librarian's LLM would read, failures included: a search that found nothing, or
     a host the allowlist refuses, answers with a sentence saying so. Raises `ValueError` for a tool not offered.
 
     `lorebook`: as for `tool_specs`.
+
+    `max_chars`: the longest a fetched page may be, in characters; a longer one is cut off, with a note saying
+                 so. A raw page in particular can run to hundreds of thousands. Raven-librarian has no such cap,
+                 storing a long page as an attachment instead, which an MCP client cannot do.
 
     Blocking: it waits for Raven-server.
     """
@@ -61,7 +73,8 @@ def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True) ->
     if name == "websearch":
         output, _ = llmtools.websearch(str(arguments.get("query", "")))
     elif name == "webfetch":
-        output, _ = llmtools.webfetch(str(arguments.get("url", "")))
+        output, _ = llmtools.webfetch(str(arguments.get("url", "")), format=str(arguments.get("format", "markdown")))
+        output = _cap(output, max_chars)
     elif name == lorebookcore.TOOL_NAME and lorebook:
         output = lorebookcore.answer(_lorebook_entries(), str(arguments.get("term", "")))
     else:
@@ -71,8 +84,8 @@ def call_tool(name: str, arguments: dict[str, Any], *, lorebook: bool = True) ->
     return [part["text"] for part in output]  # a search answers with one text part per result
 
 
-def _make_server(*, lorebook: bool):
-    """Return the MCP server, its handlers calling `tool_specs` and `call_tool`, with `lorebook` passed to both."""
+def _make_server(*, lorebook: bool, max_chars: int = DEFAULT_MAX_CHARS):
+    """Return the MCP server, its handlers calling `tool_specs` and `call_tool`, with `lorebook` and `max_chars` passed on."""
     import anyio
     from mcp import types
     from mcp.server.lowlevel import Server
@@ -87,7 +100,8 @@ def _make_server(*, lorebook: bool):
     async def on_call_tool(context, params: types.CallToolRequestParams) -> types.CallToolResult:
         logger.info(f"on_call_tool: {params.name}({params.arguments})")
         try:
-            texts = await anyio.to_thread.run_sync(lambda: call_tool(params.name, params.arguments or {}, lorebook=lorebook))
+            texts = await anyio.to_thread.run_sync(lambda: call_tool(params.name, params.arguments or {},
+                                                                     lorebook=lorebook, max_chars=max_chars))
         except Exception as exc:
             logger.error(f"on_call_tool: {params.name} failed: {type(exc)}: {exc}")
             return types.CallToolResult(content=[types.TextContent(type="text", text=f"The tool failed: {exc}")],
@@ -110,6 +124,8 @@ def main() -> None:
                         help="Serve HTTP on all interfaces, not just this machine. Anyone who can reach the port can then search and fetch through Raven-server, so use this on a trusted network only.")
     parser.add_argument("--no-lorebook", dest="lorebook", action="store_false",
                         help="Do not offer the lorebook's lookup: for a frontend that has it already, from grimoire, so that the LLM is not handed the tool twice.")
+    parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS, metavar="N",
+                        help="The longest a fetched page may be, in characters; a longer one is cut off, with a note saying so.")
     parser.add_argument("--server-url", metavar="URL", default=None,
                         help="Raven-server to talk to, overriding the configured one.")
     parser.add_argument("--log", metavar="PATH", default=None,
@@ -134,7 +150,7 @@ def main() -> None:
                    maybe_network_retry=client_config.network_retry_interactive,
                    raven_api_key_file=client_config.raven_api_key_file)
 
-    server = _make_server(lorebook=opts.lorebook)
+    server = _make_server(lorebook=opts.lorebook, max_chars=opts.max_chars)
     if opts.stdio:
         import anyio
         from mcp.server.stdio import stdio_server

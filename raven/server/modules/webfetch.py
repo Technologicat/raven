@@ -67,7 +67,7 @@ from . import webcommon
 #
 # Pre-templated so the model copies them verbatim instead of fabricating variations.
 # `{host}`, `{scheme}`, `{url}`, `{status}` are filled per case. The allowlist-refusal
-# string lives client-side (`raven.librarian.llmclient`), since the allowlist is enforced there.
+# string lives client-side (`raven.librarian.llmtools`), since the allowlist is enforced there.
 
 CANONICAL_PRIVATE_NETWORK = ("This URL points to a private-network address ({host}). Fetching it would risk "
                              "accessing local services unintentionally. Blocked for safety.")
@@ -80,6 +80,13 @@ CANONICAL_PAGE_TIMEOUT = ("The page at {url} did not finish loading in time. The
                           "trying again later may work.")
 CANONICAL_NO_BROWSER = ("Too little text could be read from {url} without a web browser, and the server has "
                         "none installed to render it with.")
+CANONICAL_UNREACHABLE = "Could not reach {url}. The site may be down, or the URL may be wrong."
+CANONICAL_NOT_TEXT = ("{url} serves {content_type}, which is not text, so it cannot be fetched raw. Without "
+                      "\"raw\", the page's readable content is extracted instead, where there is any.")
+CANONICAL_RAW_TRUNCATED = "\n\n[Cut off here: the response is longer than the {limit} bytes a raw fetch reads.]"
+
+# Content types read as text by a raw fetch, besides any `text/*`: structured data a model can read.
+_TEXT_SUBTYPES = ("json", "xml", "javascript", "ecmascript", "x-yaml", "yaml", "csv", "x-www-form-urlencoded")
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -265,6 +272,86 @@ def _http_get(url: str) -> Tuple[Optional[str], Optional[int]]:
         return None, None
     return response.text, response.status_code
 
+def _is_text_type(content_type: str) -> bool:
+    """Return whether a `Content-Type` header names text: `text/*`, or structured data such as JSON and XML.
+
+    Parameters such as `; charset=utf-8` are ignored, and so is case. An empty header is not text.
+    """
+    media_type = content_type.split(";")[0].strip().lower()
+    if not media_type or "/" not in media_type:
+        return False
+    main_type, subtype = media_type.split("/", 1)
+    if main_type == "text":
+        return True
+    return subtype in _TEXT_SUBTYPES or subtype.endswith(("+json", "+xml"))
+
+def _http_get_raw(url: str) -> tuple[Optional[str], Optional[int], str, str]:
+    """A plain GET for a raw fetch. Returns `(body_or_None, status_or_None, content_type, final_url)`.
+
+    The body is decoded only for a text type (`_is_text_type`), and read up to `webfetch_raw_max_bytes`, with
+    `CANONICAL_RAW_TRUNCATED` appended when it was cut off; for any other type it is `None`. On a network-level
+    failure, returns `(None, None, "", url)`.
+    """
+    from .. import config as server_config
+    try:
+        with requests.get(url,
+                          headers={"User-Agent": webcommon.USER_AGENT},
+                          timeout=server_config.webfetch_request_timeout,
+                          allow_redirects=True,
+                          stream=True) as response:
+            content_type = response.headers.get("Content-Type", "")
+            if not _is_text_type(content_type):
+                return None, response.status_code, content_type, response.url
+            limit = server_config.webfetch_raw_max_bytes
+            data = b""
+            for chunk in response.iter_content(chunk_size=65536):
+                data += chunk
+                if len(data) > limit:
+                    break
+            truncated = len(data) > limit
+            body = data[:limit].decode(response.encoding or response.apparent_encoding or "utf-8", errors="replace")
+            if truncated:
+                body += CANONICAL_RAW_TRUNCATED.format(limit=limit)
+            return body, response.status_code, content_type, response.url
+    except requests.RequestException as exc:
+        logger.info(f"_http_get_raw: GET failed for '{url}', reason {type(exc)}: {exc}")
+        return None, None, "", url
+
+def _fetch_raw(url: str, *, is_cancelled: Callable[[], bool], on_progress: Callable[[str], None]) -> Dict:
+    """`fetch` with `output_format="raw"`: the response body as the site sent it. See `fetch`."""
+    from .. import config as server_config
+    # No URL rewriting: a raw fetch is of exactly the address asked for, an API endpoint as often as a page.
+    refusal = _classify_url_network_safety(url, allow_private=server_config.webfetch_allow_private_networks)
+    if refusal is not None:
+        return _make_result(refusal, url=url)
+
+    on_progress("Loading the page…")
+    body, status, content_type, final_url = _http_get_raw(url)
+    if status is not None and status < 400:
+        if body is None:
+            return _make_result(CANONICAL_NOT_TEXT.format(url=final_url, content_type=content_type.split(";")[0].strip() or "no content type"),
+                                url=final_url)
+        return _make_result(common_text.normalize(body), url=final_url, fetched=True)
+
+    # Refused or unreachable. A site that walls off scripts often lets a browser through; what the browser has
+    # is the page as its scripts left it, which is HTML however the site would have answered a plain request.
+    if is_cancelled():
+        raise webcommon.Cancelled
+    no_browser = False
+    try:
+        html = _fetch_tier2(url, output_format="raw", is_cancelled=is_cancelled, on_progress=on_progress)
+    except _NoBrowser:
+        html, no_browser = "", True
+    if html:
+        return _make_result(common_text.normalize(html), url=url, fetched=True)
+    if status is not None:
+        return _make_result(CANONICAL_HTTP_ERROR.format(status=status, url=final_url), url=final_url)
+    if html is None:
+        return _make_result(CANONICAL_PAGE_TIMEOUT.format(url=url), url=url)
+    if no_browser:
+        return _make_result(CANONICAL_NO_BROWSER.format(url=url), url=url)
+    return _make_result(CANONICAL_UNREACHABLE.format(url=url), url=url)
+
 def _extract_clean_text(html: Optional[str], *, url: str, output_format: str = "markdown") -> str:
     """Run `trafilatura` readability extraction over `html`. Returns "" if nothing extractable.
 
@@ -303,7 +390,7 @@ class _NoBrowser(webcommon.WebToolException):
 
 def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], bool],
                  on_progress: Callable[[str], None]) -> str | None:
-    """Tier 2: render `url` in a real headless browser, then extract.
+    """Tier 2: render `url` in a real headless browser, then extract; for `output_format="raw"`, return the page source.
 
     Returns "" if the browser could not navigate, and `None` if the page did not finish loading within
     `server_config.web_page_load_timeout`. Raises `webcommon.Cancelled` if `is_cancelled()` says to stop
@@ -348,6 +435,8 @@ def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], boo
                     continue
                 logger.warning(f"_fetch_tier2: browser navigation failed for '{url}', reason {type(exc)}: {exc}")
                 return ""
+    if output_format == "raw":
+        return html
     return _extract_clean_text(html, url=url, output_format=output_format)
 
 def _make_result(content: str, *, url: str, fetched: bool = False, spa_suspected: bool = False,
@@ -372,7 +461,10 @@ def fetch(url: str, output_format: str = "markdown",
     when neither fetch tier could extract usable content (heavy SPA, login wall, captcha). `title` is
     the page title on success, else `None`.
 
-    `output_format` is "markdown" (default, preserves headings/lists/links) or "text".
+    `output_format` is "markdown" (default, preserves headings/lists/links), "text", or "raw". Raw is the response
+    body as the site sent it, for any text type (HTML, JSON, XML, wiki markup and the like), with no URL rewriting
+    and no extraction, read up to `server_config.webfetch_raw_max_bytes`. A site that refuses the plain request is
+    tried in the browser, whose page source is the page as its scripts left it. A type that is not text is refused.
 
     `is_cancelled`: If given, asked before the headless browser is started, and while waiting for it; once
                     it answers `True`, the fetch stops and raises `webcommon.Cancelled`.
@@ -388,6 +480,8 @@ def fetch(url: str, output_format: str = "markdown",
         is_cancelled = lambda: False  # noqa: E731 -- a constant predicate; a `def` would add a name for nothing
     if on_progress is None:
         on_progress = lambda text: None  # noqa: E731 -- as above
+    if output_format == "raw":
+        return _fetch_raw(url, is_cancelled=is_cancelled, on_progress=on_progress)
     trafilatura_format = "markdown" if output_format == "markdown" else "txt"
 
     effective_url, special_extractor = _rewrite_url(url)
