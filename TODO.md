@@ -139,8 +139,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Semantic orienteering: embed user-typed text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter. Later: support user-given BibTeX entry or PDF file as input.
 
-- **[Medium]** Select cluster by number: useful complement to the wand button for datasets with few clusters.
-
 - **[Medium]** Add GUI filter/search in the help window hotkeys list: incremental fragment search by key or action.
 
 - **[Low]** Word boundary mark (`\b`) for search. UX: what character should the user type as a word boundary?
