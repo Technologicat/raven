@@ -172,6 +172,11 @@ class TestFindingAClusterByNumber:
         clustered.sorted_entries[2].cluster_id = -1
         assert titles_matching(clustered, "#-3") == ["Another #7 paper"]
 
+    def test_misc_is_found_by_its_name(self, clustered):
+        clustered.sorted_entries[2].cluster_id = -1
+        assert titles_matching(clustered, "#misc") == ["Cluster two paper"]
+        assert titles_matching(clustered, "cluster: Misc") == ["Cluster two paper"]
+
     def test_a_number_alone_is_an_ordinary_fragment(self, clustered):
         """Control: without the hash, "7" is searched for in the titles, and finds the title holding it."""
         assert titles_matching(clustered, "7") == ["Another #7 paper"]

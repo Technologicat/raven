@@ -1361,7 +1361,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - A **lowercase** fragment matches **{self.c_hig}case-insensitively{self.c_end}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.
                 - A fragment with **at least one uppercase** letter matches **{self.c_hig}case-sensitively{self.c_end}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.
                 - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
-                - **#** and a cluster's number finds that cluster's papers; so does **cluster:** and a number. E.g. *"#7"*, *"#7-9"*.
+                - **#** and a cluster's number finds that cluster's papers; so does **cluster:** and a number. E.g. *"#7"*, *"#7-9"*, *"#misc"*.
                 - **~** and a year finds that year's papers; so does **year:** and a year. E.g. *"~2022"*, *"~2019-2022"*, *"~2019-"*.
             """).strip()),
          helpcard.section(

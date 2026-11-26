@@ -68,7 +68,7 @@ both find cluster 7's studies. To find the studies of a year, search for `~` and
 *~2022* and *year:2022* both find 2022's.
 
 Either takes a range, with a dash, and an open end leaves out its number: *#7-9*, *~2019-2022*, *~2019-*, *~-2015*.
-*Misc* has no number, so no cluster search finds it.
+*Misc* has no number, so no range finds it; *#misc* and *cluster:misc* do.
 
 **Raven is NOT a search engine.** Rather, for its input, it uses research literature metadata (title, authors, year, abstract) for thousands of papers, as returned by a search engine, and plots that data in an interactive semantic visualization.
 
