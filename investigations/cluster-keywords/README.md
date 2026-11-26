@@ -470,6 +470,11 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
     0 and 6, which the LLM's own lists tell apart: general sustainability education (*experiential learning*,
     *sustainability competencies*) against the UN SDGs (*SDG integration*, *bibliometrics*, *UN*). Check on all
     six corpora. Weak Quoted lines in small corpora (*insight*, *publication*): no action, nothing reasonable to do.
+    A second test case, geography clusters 1 and 2: sustainability education across subjects against
+    sustainability taught through geography (*geographical thinking*, *human geography*, fourth and fifth now).
+  - **How the two lines get read** (the maintainer, the same day): the Themes carefully, the Quoted for
+    specifics, such as an arXiv cluster's GPT mentions. So a weak Themes line costs a cluster's gist, a weak
+    Quoted line a few search hooks.
   - Also from the read: *x-risk* for *existential risk*, a case for the LLM-alias pass (`TODO.md`, keyword search);
     the phrases' line renamed *Quoted* (was *Terms*); an empty Quoted line left out.
 - **The shortlist read, 2026-11-25, opening finding: show both lists, not only a hybrid of them** (the maintainer).
