@@ -451,6 +451,20 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   (*test-time* compounds kept whole) and the LLM asked for up to fifteen keywords (14–15 per cluster on arXiv).
   The previous night's datasets are kept as `CORPUS-{evidence,hybrid}-2026-11-24.pickle`, and the shortlists
   were made again from the new ones, against the imports of 2026-11-23.
+- **The shortlist read of 2026-11-26 found four extraction faults, to fix as one bundle before the next re-import**
+  (decided by the maintainer the same day; the read continues first):
+  1. **Abbreviations match case-insensitively**, so element symbols merge into what the corpus defines: in hydrogen,
+     *Co* (cobalt) into *CO*, carbon monoxide (20 papers define it), *Fe* into faradaic efficiency, *Mo* into methyl
+     orange, and within one paper *Pt* into its *PT*, Pt-TiO2. The display shows the spelling the papers wrote, which
+     hides it. Fix: keep each definition's short form and each phrase as written, and expand only an exact match.
+  2. **The *-ics* fold fires on one noun tag**: *hydrogen-release kinetics* became *kinetic*. Needs more evidence;
+     measure on all six corpora.
+  3. **A possessive that is part of a name is dropped**: *prisoner dilemma*. Fix: keep the *'s*, and fold *X's Y*
+     onto *X Y* only where the corpus also writes *X Y*.
+  4. **Casing votes count sentence-cased titles**, which turn every proper name lowercase: *solomonoff induction*
+     (a 1–1 tie). Fix: count votes from abstracts only.
+  - Also from the read: *x-risk* for *existential risk*, a case for the LLM-alias pass (`TODO.md`, keyword search);
+    the phrases' line renamed *Quoted* (was *Terms*); an empty Quoted line left out.
 - **The shortlist read, 2026-11-25, opening finding: show both lists, not only a hybrid of them** (the maintainer).
   The two methods catch different aspects, and six terms cannot hold the variety. Cluster 1: the phrases have
   the specifics (*ImageNet, SGD, ResNet, MNIST*), the LLM the concepts (*double descent, catastrophic
