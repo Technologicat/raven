@@ -19,12 +19,22 @@ See *Waiting on others* for what it still needs.
 The three infographics are in `img/` and embedded in the README and the apps' manuals (papers, Librarian,
 Visualizer); the light-background plot on its own is `img/visualizer-plot-light.png`, Misc grayed, with a 2% margin.
 
-## Next, 2026-11-26
+## Done 2026-11-26: colouring the map by year, v0, and the keyword shortlist read
 
-The maintainer reads the keyword shortlists (`investigations/cluster-keywords/out/CORPUS-shortlist.md`); Claude
-starts building colouring the map by year, v0 (`briefs/visualizer-filter-by-date-and-recolour-brief.md`,
-*Decided: colouring by year*). The re-import ran on the evening of 2026-11-25, and the shortlists are made
-again from it.
+- **Colour by** cluster or year (F2, Ctrl+B), with the tooltip and the info panel grouping the same way, and the
+  year before each tooltip title.
+- **The colour bar**, now a sparkline of what is shown, its heights compressed data-adaptively (Ward Larson,
+  Rushmeier and Piatko), naming the column under the mouse and selecting it on a click (`raven.visualizer.colorscale`).
+- **Search by field**, a sigil to type and a prefix to read: `#7`/`cluster:7`, `~2022`/`year:2022`, ranges, `#misc`,
+  `~none`. Author search will be `@smith`/`author:smith` (`TODO.md`).
+- **The shortlist read** found eight keyword faults, fixed as one bundle with Themes putting shared terms last
+  (`investigations/cluster-keywords/README.md`).
+
+## Next, after 2026-11-26
+
+- **The re-import, on the maintainer's ping**: move `data/*-evidence.pickle` and `*-hybrid.pickle` (and logs) aside
+  as `*-2026-11-25.*`, then `bash investigations/cluster-keywords/run_new_imports.sh` in the background.
+- **Then colouring by year's v1**: keywords per year at import (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
 
 ## In progress: cluster keywords (2026-11-24)
 
@@ -43,8 +53,8 @@ maintainer has read the whole arXiv evidence comparison.
   and 7 read.
 - **Done, evening of 2026-11-25: the re-import**, with the hyphen fix and the fifteen-keyword lists; the shortlists
   are made again from it.
-- **Next, after the shortlist read of 2026-11-26**: the extraction bundle (four faults) and Themes preferring the
-  distinctive, then a re-import; `investigations/cluster-keywords/README.md` has both.
+- **Built 2026-11-26**: the extraction bundle (eight faults) and Themes putting shared terms last; the re-import
+  waits on the maintainer's ping.
 - **Then a document of the final keyword rules** (the maintainer, 2026-11-26: a lot of latent knowledge goes into
   them): each rule with the failure it prevents, from extraction to display. A reference document beside the code,
   `raven/common/keyphrases.md`, linked from the module and from the Visualizer README.
@@ -66,9 +76,8 @@ maintainer has read the whole arXiv evidence comparison.
 - **The colormap's dark end against the dark plot background**: a range setting and one line in
   `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
   display section. Cost S.
-- **Colouring the Visualizer's map by year: next after the keyword work, building v0** (designed and ordered
-  2026-11-20). Then v1 with per-year keywords, before 0.2.11 is released.
-  `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Decided: colouring by year*.
+- **Colouring the Visualizer's map by year: v0 done 2026-11-26.** Then v1 with per-year keywords, before 0.2.11
+  is released. `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Decided: colouring by year*.
 - **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as
   DPG has none. Same brief.
 - **A light theme across the constellation**, with a roomier layout as an option, starting with a UI design
