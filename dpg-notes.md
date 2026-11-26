@@ -894,6 +894,14 @@ which is what makes the preloading workaround below work.
 the way `guiutils.split_frame` reports its own impossible wait, and logs it with
 the stack that reached it.
 
+**DPG's own `dpg.get_text_size` has no such guard.** Called from
+`raven.visualizer.plotter.load_dataset` at startup, before the first frame, it
+hung the Visualizer (2026-11-26): the log stopped inside the function, and the
+call was the only change. No stack was taken, so where exactly it waits is not
+known. Where a width is wanted before the first frame, compute it instead — the
+Visualizer's colour bar uses OpenSans's digit advance, 1171/2048 em for every
+digit.
+
 Measured 2026-09-14 on DPG 2.3.1 (`investigations/dpg-markdown-decorations/`):
 two *unwrapped* calls before the first frame both succeed, and a single
 *wrapped* one fails — so this is about `wrap`, not about how many calls have

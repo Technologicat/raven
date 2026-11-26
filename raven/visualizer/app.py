@@ -350,6 +350,7 @@ def reset_app_state(_update_gui=True):
 
 
 app_state.grayed_selectable = False
+app_state.grouping = displaystate.CLUSTER  # what the map is coloured by; `set_grouping`
 
 
 def set_grayed_selectable(selectable: bool) -> None:
@@ -460,8 +461,28 @@ def cycle_year_mode(direction: int = 1) -> None:
     apply_display_filters()
 
 
+def set_grouping(grouping: str) -> None:
+    """Colour the map by `grouping`, one of `displaystate.GROUPINGS`, and redraw what shows the records."""
+    ds = app_state.dataset
+    if ds is None or grouping == app_state.grouping:
+        return
+    app_state.grouping = grouping
+    dpg.set_value("color_by_combo", grouping)  # tag
+    plotter.refresh_series(ds)
+    plotter.draw_color_bar(ds)
+
+
+def cycle_grouping(direction: int = 1) -> None:
+    """Colour the map by the next grouping along `displaystate.GROUPINGS` (`direction` 1), or the previous one (-1).
+    Hotkey handler."""
+    if app_state.dataset is None or app_state.dataset.year_bounds is None:
+        return
+    groupings = displaystate.GROUPINGS
+    set_grouping(groupings[(groupings.index(app_state.grouping) + direction) % len(groupings)])
+
+
 #: The display filters' selectors, which browse with the keyboard alike and show the keyboard mark.
-_FILTER_COMBOS = ("year_mode_combo", "misc_mode_combo")  # tag
+_FILTER_COMBOS = ("year_mode_combo", "misc_mode_combo", "color_by_combo")  # tag
 
 
 def reset_years() -> None:
@@ -1021,6 +1042,14 @@ with timer() as tim:
                                               tag="year_mode_combo",
                                               width=80,
                                               callback=lambda: apply_display_filters())
+                                dpg.add_spacer(width=8)
+                                dpg.add_text("Colour by", color=(140, 140, 140), tag="color_by_label_text")
+                                dpg.add_combo(items=list(displaystate.GROUPINGS),
+                                              default_value=displaystate.CLUSTER,
+                                              tag="color_by_combo",
+                                              width=80,
+                                              callback=lambda: set_grouping(dpg.get_value("color_by_combo")))  # tag
+                                dpg.add_drawlist(*plotter.COLOR_BAR_SIZE, tag=plotter.COLOR_BAR)
                 for year_input in ("year_from_input", "year_to_input"):  # tag
                     with dpg.tooltip(year_input, tag=f"{year_input}_tooltip"):
                         dpg.add_text("The years to show in full colour, inclusive. A record with no year counts as "
@@ -1038,6 +1067,12 @@ with timer() as tim:
                                  "[Ctrl+E] to focus; then Up, Down, Home, End to choose, Esc to leave\n"
                                  "While focused: Left, Right to move the years; with Shift the first year only, with Ctrl the last",
                                  tag="year_mode_tooltip_text")
+                with dpg.tooltip("color_by_combo", tag="color_by_tooltip"):  # tag
+                    dpg.add_text("What the map is coloured by: the cluster, or the year. A record with no year takes the "
+                                 "Misc colour.\n\n"
+                                 "[F2] next, [Shift+F2] previous\n"
+                                 "[Ctrl+B] to focus; then Up, Down, Home, End to choose, Esc to leave",
+                                 tag="color_by_tooltip_text")
                 with dpg.tooltip("grayed_selectable_checkbox", tag="grayed_selectable_tooltip"):  # tag
                     dpg.add_text("Let the grayed records be hovered and selected, like those in colour.\n"
                                  "Available while some records are grayed out.",
@@ -1676,6 +1711,8 @@ def hotkeys_callback(sender, app_data):
     # Escape does not commit, so `escape_clears_all` is what makes the key mean anything at all there.)
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
         help_window.show()
+    elif key == dpg.mvKey_F2:  # the colouring, beside the filters' F4 and F5
+        cycle_grouping(-1 if shift_pressed else 1)
     elif key == dpg.mvKey_F3:  # some old MS-DOS software in the 1990s used F3 for next/prev search match, I think?
         if (dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)):
             if dpg.is_item_enabled("prev_search_match_button"):  # tag
@@ -1733,6 +1770,8 @@ def hotkeys_callback(sender, app_data):
             gui_animation.give_focus("misc_mode_combo")  # tag
         elif key == dpg.mvKey_E and dpg.is_item_shown("year_filter_controls"):  # tag  # E for era; hidden where no record has a year
             gui_animation.give_focus("year_mode_combo")  # tag
+        elif key == dpg.mvKey_B and dpg.is_item_shown("year_filter_controls"):  # tag  # B for by, as in colour by
+            gui_animation.give_focus("color_by_combo")  # tag
         elif key == dpg.mvKey_Home:
             plotter.reset_zoom()
         elif key == dpg.mvKey_N:

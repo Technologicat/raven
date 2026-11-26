@@ -350,7 +350,7 @@ def _render_worker(*, task_env, env=None):
 
                         maybe_year_text = entry_renderer.format_year_prefix(entry)
                         if maybe_year_text is not None:
-                            dpg.add_text(maybe_year_text, color=title_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_year_build{env.internal_build_number}", parent=item_group)  # "(2022)"
+                            dpg.add_text(maybe_year_text, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_year_build{env.internal_build_number}", parent=item_group)  # "(2022)"
 
                         # Per-fragment search highlighting in the title (when matched), the same as in the info panel.
                         if common_utils.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):

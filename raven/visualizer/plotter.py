@@ -25,7 +25,7 @@ __all__ = ["GRAYED_SERIES", "GRAYED_COLOR",
            "draw_select_radius_indicator",
            "reset_zoom",
            "parse_dataset_file",
-           "colormap_position",
+           "year_color_position", "colormap_position", "COLOR_BAR", "COLOR_BAR_SIZE", "draw_color_bar",
            "load_dataset",
            "refresh_series",
            "create_highlight_series",
@@ -351,6 +351,33 @@ def parse_dataset_file(filename):
     return ds
 
 
+def _series_color(position: float) -> list[int]:
+    """The colour of a scatter series at `position` on the configured colormap, as translucent RGBA."""
+    color = [int(255 * component) for component in dpg.sample_colormap(gui_config.plotter_colormap, t=position)]
+    color[-1] = int(0.5 * color[-1])
+    return color
+
+
+def _add_series(series_tag: str, theme_tag: str, color, xs=(), ys=()) -> None:
+    """A scatter series under the plot's axis, beneath the highlights, with a theme of its own in `color`."""
+    # Placed before the first highlight series so that all highlights render on top. See:
+    #     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
+    #     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
+    dpg.add_scatter_series(list(xs), list(ys), tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")
+    with dpg.theme(tag=theme_tag) as theme:
+        with dpg.theme_component(dpg.mvScatterSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
+    dpg.bind_item_theme(series_tag, theme_tag)
+    _cluster_color_themes.append(theme)
+
+
+def year_color_position(year: int, bounds: tuple[int, int]) -> float:
+    """Where on the colormap `year` takes its colour when colouring by year, in (0, 1], given the dataset's year
+    `bounds`. The years are spread as the clusters are (`colormap_position`), above Misc, which keeps 0."""
+    first, last = bounds
+    return colormap_position(year - first, last - first)
+
+
 def colormap_position(label: int, max_label: int) -> float:
     """Where on the colormap cluster `label` takes its colour, in [0, 1], given the largest label `max_label`.
 
@@ -361,6 +388,49 @@ def colormap_position(label: int, max_label: int) -> float:
     # and ImPlot then indexes its colour table with the NaN and crashes the process.
     n_slots = max_label + 1
     return float((label + 1) / n_slots) if n_slots > 0 else 0.0
+
+
+#: The colour bar beside the *Colour by* selector: "2012 ▬▬▬ 2026", or the first and last cluster, drawn into a drawlist
+#: as tall as the combo beside it, so that its contents centre on the row.
+COLOR_BAR = "color_bar_drawlist"  # tag
+COLOR_BAR_SIZE = (200, 26)
+_DIGIT_WIDTH_EM = 1171 / 2048  # the advance of every digit in OpenSans Regular
+
+
+def draw_color_bar(ds) -> None:
+    """Draw the colour bar of `ds` for `app_state.grouping`: a rectangle per year, or per cluster, between the first and
+    the last. Misc is not on it: in neither grouping does it sit on the scale."""
+    dpg.delete_item(COLOR_BAR, children_only=True)
+    if ds is None:
+        return
+    if app_state.grouping == displaystate.YEAR:
+        if ds.year_bounds is None:
+            return
+        first, last = ds.year_bounds
+        positions = [year_color_position(year, ds.year_bounds) for year in range(first, last + 1)]
+    else:
+        first, last = 0, int(ds.sorted_labels[-1])
+        if last < first:  # Misc alone
+            return
+        positions = [colormap_position(label, last) for label in range(first, last + 1)]
+    w, h = COLOR_BAR_SIZE
+    text_size = 16
+    label_w = 40  # a four-digit year, at that size
+    text_color = (140, 140, 140)
+    text_y = (h - text_size) / 2
+    # A drawlist has no text alignment, so the first label is right-aligned against the bar by computing its width.
+    # Not by `dpg.get_text_size`: this also runs at startup, before the first frame, and there the call hung the app.
+    # The labels are digits, all 1171/2048 em wide in OpenSans, the UI font.
+    first_w = len(str(first)) * _DIGIT_WIDTH_EM * text_size
+    dpg.draw_text((label_w - 4 - first_w, text_y), str(first), size=text_size, color=text_color, parent=COLOR_BAR)
+    dpg.draw_text((w - label_w + 4, text_y), str(last), size=text_size, color=text_color, parent=COLOR_BAR)
+    x0, x1 = label_w, w - label_w
+    bar_h = 12
+    top = (h - bar_h) / 2
+    for k, position in enumerate(positions):  # the series' colours, without their translucency
+        color = _series_color(position)[:3] + [255]
+        left, right = x0 + (x1 - x0) * k / len(positions), x0 + (x1 - x0) * (k + 1) / len(positions)
+        dpg.draw_rectangle((left, top), (right, top + bar_h), color=color, fill=color, parent=COLOR_BAR)
 
 
 def load_dataset(ds):
@@ -399,25 +469,17 @@ def load_dataset(ds):
 
         max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
-            series_tag = f"my_scatter_series_{label}"  # tag
-            series_theme = f"my_plot_theme_{label}"  # tag
-            colormap = gui_config.plotter_colormap
+            _add_series(f"my_scatter_series_{label}", f"my_plot_theme_{label}",  # tag
+                        _series_color(colormap_position(label, max_label)), xs, ys)
 
-            # Render this data series, placing it before the first highlight series so that all highlights render on top.
-            dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
-
-            # Compute the color for this series, and create a theme for it.
-            # See:
-            #     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
-            #     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
-            color = dpg.sample_colormap(colormap, t=colormap_position(label, max_label))
-            color = [int(255 * component) for component in color]  # RGBA
-            color[-1] = int(0.5 * color[-1])  # A; make translucent
-            with dpg.theme(tag=series_theme) as this_scatterplot_theme:
-                with dpg.theme_component(dpg.mvScatterSeries):
-                    dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
-            dpg.bind_item_theme(series_tag, series_theme)
-            _cluster_color_themes.append(this_scatterplot_theme)
+        # For colouring by year, a series per year that has records, empty until the grouping asks for them. A record
+        # with no year goes to the Misc series above.
+        ds.year_bounds = displaystate.year_bounds(ds.sorted_entries)
+        ds.series_years = sorted({year for entry in ds.sorted_entries
+                                  if (year := displaystate.year_of(entry)) is not None})
+        for year in ds.series_years:
+            _add_series(f"my_year_series_{year}", f"my_year_theme_{year}",  # tag
+                        _series_color(year_color_position(year, ds.year_bounds)))
 
         ds.plot_label = f"Semantic map [{os.path.basename(ds.absolute_filename)}]"
         dpg.set_item_label("plot", ds.plot_label)  # tag
@@ -428,13 +490,15 @@ def load_dataset(ds):
         dpg.set_value("misc_mode_combo", displaystate.SHOWN)  # tag
         # The year filter starts at the dataset's whole span, which is what switching it off means. A dataset with no
         # years at all has nothing to filter by, so its controls are not shown.
-        ds.year_bounds = displaystate.year_bounds(ds.sorted_entries)
         if ds.year_bounds is not None:
             first, last = ds.year_bounds
             for item, value in (("year_from_input", first), ("year_to_input", last)):  # tag
                 dpg.configure_item(item, min_value=first, max_value=last, min_clamped=True, max_clamped=True)
                 dpg.set_value(item, value)
         dpg.set_value("year_mode_combo", displaystate.GRAYED)  # tag
+        app_state.grouping = displaystate.CLUSTER
+        dpg.set_value("color_by_combo", displaystate.CLUSTER)  # tag
+        draw_color_bar(ds)
         (dpg.show_item if ds.year_bounds is not None else dpg.hide_item)("year_filter_controls")  # tag
         dpg.disable_item("reset_years_button")  # tag
         dpg.disable_item("reset_misc_cutoff_button")  # tag
@@ -459,18 +523,24 @@ def refresh_series(ds) -> None:
     """Refill the scatter series of `ds` from each record's `current_label_id` and `visibility` (see
     `raven.visualizer.displaystate`), and put what is not in full colour into the plot's title.
 
-    The series are the ones `load_dataset` made: one per label the importer found, plus Misc, plus one gray series for
-    the grayed records. A series whose label no shown record currently has is emptied, and hidden records are in none.
-    The records' order, and so every `data_idx`, is untouched.
+    The series are the ones `load_dataset` made: one per label the importer found, plus Misc, one per year, plus one
+    gray series for the grayed records. Which of them are filled is decided by `app_state.grouping`
+    (`displaystate.group_of`); Misc serves both groupings. A series whose group no shown record currently has is
+    emptied, and hidden records are in none. The records' order, and so every `data_idx`, is untouched.
     """
     def points(idxs):
         if not idxs:
             return [[], []]
         return [list(ds.sorted_lowdim_data[idxs, 0]), list(ds.sorted_lowdim_data[idxs, 1])]
 
-    groups = displaystate.points_by_label(ds.sorted_entries)
+    grouping = app_state.grouping
+    groups = displaystate.points_by_label(ds.sorted_entries, grouping=grouping)
     for label in ds.series_labels:
-        dpg.set_value(f"my_scatter_series_{label}", points(groups.get(label, [])))  # tag
+        in_use = grouping == displaystate.CLUSTER or label == -1
+        dpg.set_value(f"my_scatter_series_{label}", points(groups.get(label, []) if in_use else []))  # tag
+    for year in ds.series_years:
+        in_use = grouping == displaystate.YEAR
+        dpg.set_value(f"my_year_series_{year}", points(groups.get(year, []) if in_use else []))  # tag
     dpg.set_value(GRAYED_SERIES, points(displaystate.points_with_visibility(ds.sorted_entries, displaystate.GRAYED)))
     maybe_summary = displaystate.summary(ds.sorted_entries)
     dpg.set_item_label("plot", ds.plot_label + (f" [{maybe_summary}]" if maybe_summary else ""))  # tag
