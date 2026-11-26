@@ -27,6 +27,19 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## The lorebook does not fire a term in running Japanese or Chinese text
+
+*Cluster: lorebook · Cost: M · Gate: none · Filed: 2026-11-26 · See also: `raven/librarian/lorebook-porting.md` ("What a word is")*
+
+The matcher takes a word to be a run of word characters, so a script written without spaces between words is one long word to it. `積ん読` fires in `「積ん読」`, between spaces, or by a romanized alias, but not in `私の積ん読が増えた`, which is how it is written. Chinese is the same, and so would any language written that way be.
+
+Two directions, neither decided:
+
+- **Match terms in those scripts as substrings**, where a run of CJK characters is concerned. Cheap, and the cost is false positives, a short term inside a longer word that means something else; how often that happens wants measuring on real text.
+- **Segment the text into words first**, as a Japanese tokenizer does. Accurate, but there is nothing for it in the standard library, which the core is held to, so a host would have to supply the segmenter.
+
+Either changes the core, so the conformance cases and every port follow. Found while adding Unicode cases for grimoire's TypeScript port (2026-11-26).
+
 ## How do other web-fetch tools handle Reddit, now that it needs a login?
 
 *Cluster: ? · Cost: ? · Gate: none; low priority (maintainer, 2026-11-25) · Filed: 2026-11-25*
