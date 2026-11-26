@@ -57,7 +57,8 @@ be reachable from outside Raven's own apps, and work that does that ranks above 
 
 **Near term, as listed 2026-11-26 (maintainer)**, not yet ordered among themselves: the document database behind
 Raven-server; the official JavaScript avatar client; tool results that carry images; and what is open for 0.2.11
-(the Visualizer's colouring by year, and the extended search).
+(the Visualizer's colouring by year, and the extended search). **Then, early in 2027, the database unification**
+(the drydock, below).
 
 **The rest of 2026, as decided 2026-10-19 (maintainer):** the *per-document pass → corpus filter* chain
 first, being what blocks the AOKK researchers (the pass landed 2026-10-21, as `raven.librarian.sweep`); then the MCP client with agent skills, which the lab's
