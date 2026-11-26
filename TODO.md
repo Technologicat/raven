@@ -102,6 +102,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[High]** Author search: show full author list, in the info panel too, where it is already loaded but not displayed. GUI must be search-aware — when search is active, highlight where the match appears in a long author list (e.g. a 200-name list starting with "Aaltonen" and ending with "Virtanen"; user searching for "Smith" needs to see where it is, not just that it matched).
   - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Wanted for about a year.
+  - **Its search syntax is decided** (maintainer, 2026-11-26): `@smith`, and `author:smith` for the same. The scheme
+    is a short sigil to type and a field prefix to read, both meaning one thing: `#7` is cluster 7, and `~2022` and
+    `year:2022` are the year, built the same day. A field the all-fields search adds (`title:`, `abstract:`) takes a
+    prefix in the same shape.
 
 - **[High]** DOI: record DOI in BibTeX importer; show DOI per item in info panel; per-item button to open official webpage (`https://dx.doi.org/...`); export list of DOIs/URLs for fulltext automation.
   - **Scheduled: the Visualizer block, after 0.2.11 and before the drydock** (maintainer, 2026-10-09; `briefs/roadmap.md`). Also wanted soon.
