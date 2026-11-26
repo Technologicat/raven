@@ -30,11 +30,16 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The shortlist read** found eight keyword faults, fixed as one bundle with Themes putting shared terms last
   (`investigations/cluster-keywords/README.md`).
 
-## Next, after 2026-11-26
+## Next, 2026-11-27
 
-- **The re-import, on the maintainer's ping**: move `data/*-evidence.pickle` and `*-hybrid.pickle` (and logs) aside
-  as `*-2026-11-25.*`, then `bash investigations/cluster-keywords/run_new_imports.sh` in the background.
+- **First thing: the maintainer reads the keyword rules draft**, `raven/common/keyphrases.md`, the *Considered and
+  rejected* section especially.
+- **The re-import started at 16:10 on 2026-11-26** with all of the day's fixes; the previous datasets are kept as
+  `investigations/cluster-keywords/data/*-2026-11-25.*`. Check it finished (`*.log` there), then make the shortlists
+  again (`shortlist_clusters.py CORPUS --previous 2026-11-25`) for a quick read of what the bundle changed, and settle
+  the rules draft against it.
 - **Then colouring by year's v1**: keywords per year at import (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
+- **Filed 2026-11-26**: `FileDialog` changes the process's working directory (`TODO_DEFERRED.md`).
 
 ## In progress: cluster keywords (2026-11-24)
 
@@ -73,9 +78,6 @@ maintainer has read the whole arXiv evidence comparison.
     **colouring the map by year**. Also the README screenshots, retaken.
 - **All-fields search with one-line snippets** around each match and a toggle to the full abstract, designed
   2026-11-25: `TODO.md`, *Fragment search across multiple fields*. M.
-- **The colormap's dark end against the dark plot background**: a range setting and one line in
-  `plotter.colormap_position`, the bound chosen from screenshots side by side. `TODO.md`, the Visualizer's
-  display section. Cost S.
 - **Colouring the Visualizer's map by year: v0 done 2026-11-26.** Then v1 with per-year keywords, before 0.2.11
   is released. `briefs/visualizer-filter-by-date-and-recolour-brief.md`, *Decided: colouring by year*.
 - **The year filter's two-handle range slider**, to replace the two fields later: a drawlist and custom code, as

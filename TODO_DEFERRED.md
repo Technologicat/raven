@@ -27,6 +27,30 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## FileDialog navigates by changing the process's working directory
+
+*Cluster: file-dialog · Cost: M · Gate: none · Filed: 2026-11-26 · See also: `raven/vendor/file_dialog/fdialog.py`*
+
+`FileDialog.chdir` calls `os.chdir`, its one navigation point, so building or browsing any file dialog moves the
+**whole process** into that directory. Every app has dialogs, so every app's working directory is wherever a dialog
+last was: the Visualizer sits in its dataset's folder from startup on.
+
+Nothing a user does today goes wrong, as the dialog hands over absolute paths. Anything that resolves a *relative* path
+afterwards does, and silently: `open_file` given a relative path from the `--repl` session resolved it against the
+dataset's folder, raised `FileNotFoundError`, and left the app reset and empty, which looked like a hang. The same goes
+for any relative path read later from a config, a relative `--log` reopened, or a worker thread that assumes the
+directory it started in.
+
+- **The fix**: the dialog keeps its directory as its own state and lists with absolute paths, leaving the process's
+  working directory alone. Contained, `chdir` being the one place it navigates, but a pass through the listing code
+  and the dialog's tests.
+- **Then audit Raven for code that relied on the side effect**: anything opening a bare filename after a dialog was
+  used, which today works only because the dialog moved the process.
+- **And a failed `open_file` leaves the app reset and empty without a word** beyond the log. Unreachable from the GUI
+  today, since the dialog offers only files that exist, but it wants an error shown and the previous dataset kept.
+
+Discovered while chasing what looked like a hang in a REPL-driven `open_file` (2026-11-26).
+
 ## The lorebook does not fire a term in running Japanese or Chinese text
 
 *Cluster: lorebook · Cost: M · Gate: none · Filed: 2026-11-26 · See also: `raven/librarian/lorebook-porting.md` ("What a word is")*
