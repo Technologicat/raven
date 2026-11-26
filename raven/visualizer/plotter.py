@@ -25,7 +25,6 @@ __all__ = ["GRAYED_SERIES", "GRAYED_COLOR",
            "draw_select_radius_indicator",
            "reset_zoom",
            "parse_dataset_file",
-           "year_color_position", "colormap_position", "COLOR_BAR", "COLOR_BAR_SIZE", "draw_color_bar",
            "load_dataset",
            "refresh_series",
            "create_highlight_series",
@@ -50,6 +49,7 @@ from ..common import numutils
 from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
+from . import colorscale
 from . import config as visualizer_config
 from . import displaystate
 from . import entry_renderer
@@ -351,13 +351,6 @@ def parse_dataset_file(filename):
     return ds
 
 
-def _series_color(position: float) -> list[int]:
-    """The colour of a scatter series at `position` on the configured colormap, as translucent RGBA."""
-    color = [int(255 * component) for component in dpg.sample_colormap(gui_config.plotter_colormap, t=position)]
-    color[-1] = int(0.5 * color[-1])
-    return color
-
-
 def _add_series(series_tag: str, theme_tag: str, color, xs=(), ys=()) -> None:
     """A scatter series under the plot's axis, beneath the highlights, with a theme of its own in `color`."""
     # Placed before the first highlight series so that all highlights render on top. See:
@@ -369,78 +362,6 @@ def _add_series(series_tag: str, theme_tag: str, color, xs=(), ys=()) -> None:
             dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
     dpg.bind_item_theme(series_tag, theme_tag)
     _cluster_color_themes.append(theme)
-
-
-def year_color_position(year: int, bounds: tuple[int, int]) -> float:
-    """Where on the colormap `year` takes its colour when colouring by year, in (0, 1], given the dataset's year
-    `bounds`. The years are spread as the clusters are (`colormap_position`), above Misc, which keeps 0."""
-    first, last = bounds
-    return colormap_position(year - first, last - first)
-
-
-def colormap_position(label: int, max_label: int) -> float:
-    """Where on the colormap cluster `label` takes its colour, in [0, 1], given the largest label `max_label`.
-
-    The outliers (label -1) sit at 0, and the clusters are spread evenly above them. A dataset of outliers
-    alone (`max_label` -1) puts everything at 0.
-    """
-    # Without the guard that last case is 0 / 0, which numpy integers answer with NaN rather than an error,
-    # and ImPlot then indexes its colour table with the NaN and crashes the process.
-    n_slots = max_label + 1
-    return float((label + 1) / n_slots) if n_slots > 0 else 0.0
-
-
-#: The colour bar beside the *Colour by* selector: "2012 ▬▬▬ 2026", or the first and last cluster, drawn into a drawlist
-#: as tall as the combo beside it, so that its contents centre on the row. Each value's column grows with the number of
-#: records shown in its colour, so the bar is a sparkline of where the data is: linearly where the counts fit the
-#: column's pixels, and compressed data-adaptively where they span more (`numutils.histogram_adjusted_heights`).
-COLOR_BAR = "color_bar_drawlist"  # tag
-COLOR_BAR_SIZE = (200, 26)
-_DIGIT_WIDTH_EM = 1171 / 2048  # the advance of every digit in OpenSans Regular
-
-
-def draw_color_bar(ds) -> None:
-    """Draw the colour bar of `ds` for `app_state.grouping`: a column per year, or per cluster, between the first and the
-    last, as tall as the number of records shown in full colour there. Misc is not on it: in neither grouping does it
-    sit on the scale."""
-    dpg.delete_item(COLOR_BAR, children_only=True)
-    if ds is None:
-        return
-    grouping = app_state.grouping
-    if grouping == displaystate.YEAR:
-        if ds.year_bounds is None:
-            return
-        first, last = ds.year_bounds
-        positions = [year_color_position(year, ds.year_bounds) for year in range(first, last + 1)]
-    else:
-        first, last = 0, int(ds.sorted_labels[-1])
-        if last < first:  # Misc alone
-            return
-        positions = [colormap_position(label, last) for label in range(first, last + 1)]
-    groups = displaystate.points_by_label(ds.sorted_entries, grouping=grouping)
-    counts = [len(groups.get(first + k, ())) for k in range(len(positions))]
-    w, h = COLOR_BAR_SIZE
-    text_size = 16
-    label_w = 40  # a four-digit year, at that size
-    text_color = (140, 140, 140)
-    text_y = (h - text_size) / 2
-    # A drawlist has no text alignment, so the first label is right-aligned against the bar by computing its width.
-    # Not by `dpg.get_text_size`: this also runs at startup, before the first frame, and there the call hung the app.
-    # The labels are digits, all 1171/2048 em wide in OpenSans, the UI font, an advance that includes some blank
-    # space after the glyph, which is why the gap to the bar is smaller than the last label's.
-    first_w = len(str(first)) * _DIGIT_WIDTH_EM * text_size
-    dpg.draw_text((label_w - 1 - first_w, text_y), str(first), size=text_size, color=text_color, parent=COLOR_BAR)
-    dpg.draw_text((w - label_w + 4, text_y), str(last), size=text_size, color=text_color, parent=COLOR_BAR)
-    x0, x1 = label_w, w - label_w
-    bottom, top = h - 2, 2  # the columns' baseline, and how high the tallest reaches
-    # A 1 px strip at the base for every value, so the scale reads where nothing is shown, and the column on it, at
-    # least a pixel tall for one record.
-    heights = numutils.histogram_adjusted_heights(counts, low=1, high=bottom - 1 - top)
-    for k, (position, height) in enumerate(zip(positions, heights)):  # the series' colours, without their translucency
-        color = _series_color(position)[:3] + [255]
-        left, right = x0 + (x1 - x0) * k / len(positions), x0 + (x1 - x0) * (k + 1) / len(positions)
-        column_top = bottom - 1 - height
-        dpg.draw_rectangle((left, column_top), (right, bottom), color=color, fill=color, parent=COLOR_BAR)
 
 
 def load_dataset(ds):
@@ -480,7 +401,7 @@ def load_dataset(ds):
         max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
             _add_series(f"my_scatter_series_{label}", f"my_plot_theme_{label}",  # tag
-                        _series_color(colormap_position(label, max_label)), xs, ys)
+                        colorscale.series_color(colorscale.colormap_position(label, max_label)), xs, ys)
 
         # For colouring by year, a series per year that has records, empty until the grouping asks for them. A record
         # with no year goes to the Misc series above.
@@ -489,7 +410,7 @@ def load_dataset(ds):
                                   if (year := displaystate.year_of(entry)) is not None})
         for year in ds.series_years:
             _add_series(f"my_year_series_{year}", f"my_year_theme_{year}",  # tag
-                        _series_color(year_color_position(year, ds.year_bounds)))
+                        colorscale.series_color(colorscale.year_color_position(year, ds.year_bounds)))
 
         ds.plot_label = f"Semantic map [{os.path.basename(ds.absolute_filename)}]"
         dpg.set_item_label("plot", ds.plot_label)  # tag
@@ -508,7 +429,7 @@ def load_dataset(ds):
         dpg.set_value("year_mode_combo", displaystate.GRAYED)  # tag
         app_state.grouping = displaystate.CLUSTER
         dpg.set_value("color_by_combo", displaystate.CLUSTER)  # tag
-        draw_color_bar(ds)
+        colorscale.draw(ds)
         (dpg.show_item if ds.year_bounds is not None else dpg.hide_item)("year_filter_controls")  # tag
         dpg.disable_item("reset_years_button")  # tag
         dpg.disable_item("reset_misc_cutoff_button")  # tag
@@ -554,7 +475,7 @@ def refresh_series(ds) -> None:
     dpg.set_value(GRAYED_SERIES, points(displaystate.points_with_visibility(ds.sorted_entries, displaystate.GRAYED)))
     maybe_summary = displaystate.summary(ds.sorted_entries)
     dpg.set_item_label("plot", ds.plot_label + (f" [{maybe_summary}]" if maybe_summary else ""))  # tag
-    draw_color_bar(ds)  # its columns count what is shown
+    colorscale.draw(ds)  # its columns count what is shown
 
 
 # --------------------------------------------------------------------------------

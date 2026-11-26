@@ -122,6 +122,7 @@ with timer() as tim:
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import annotation
+    from . import colorscale
     from . import config as visualizer_config
     from . import displaystate
     from . import entry_renderer
@@ -471,6 +472,18 @@ def set_grouping(grouping: str) -> None:
     plotter.refresh_series(ds)  # redraws the colour bar too
     app_state.update_mouse_hover(force=True, wait=False)  # the tooltip and the info panel group as the map is coloured
     app_state.update_info_panel(wait=False)
+
+
+def select_group(grouping: str, group: int) -> None:
+    """Select the records of cluster or year `group` (`displaystate.group_of` under `grouping`) that can be interacted
+    with, in the combine mode the keyboard says (`selection.keyboard_state_to_mode`)."""
+    ds = app_state.dataset
+    if ds is None:
+        return
+    data_idxs = [data_idx for data_idx, entry in enumerate(ds.sorted_entries)
+                 if displaystate.group_of(entry, grouping) == group]
+    selection.update(displaystate.interactable(ds.sorted_entries, data_idxs, grayed_selectable=app_state.grayed_selectable),
+                     selection.keyboard_state_to_mode(), wait=False)
 
 
 def cycle_grouping(direction: int = 1) -> None:
@@ -1053,7 +1066,7 @@ with timer() as tim:
                                 # The spacer keeps the drawlist from directly following the combo: there, DPG reports the
                                 # combo's focus as the bar's rectangles', and the combo never answers as focused.
                                 dpg.add_spacer(width=1)
-                                dpg.add_drawlist(*plotter.COLOR_BAR_SIZE, tag=plotter.COLOR_BAR)
+                                colorscale.add_bar()
                 for year_input in ("year_from_input", "year_to_input"):  # tag
                     with dpg.tooltip(year_input, tag=f"{year_input}_tooltip"):
                         dpg.add_text("The years to show in full colour, inclusive. A record with no year counts as "
@@ -1191,6 +1204,7 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Annotation tooltip subsystem wire-up
 annotation.build_window()
+colorscale.build_tooltip_window()
 app_state.update_mouse_hover = annotation.update  # Published here (not inside the module) so cross-module callers can reach it via `app_state`.
 
 # --------------------------------------------------------------------------------
@@ -1558,6 +1572,7 @@ def mouse_move_callback():
     """
     _on_any_input()
     plotter.clear_select_radius_indicator()
+    colorscale.update_hover()
 
     if not mouse_inside_plot_widget():
         annotation.clear_mouse_hover()
@@ -1581,7 +1596,14 @@ def mouse_release_callback(sender, app_data):
     """Finalize a mouse-click select or mouse-draw select."""
     _on_any_input()
     global lmb_pressed_inside_plot
+    drag_was_in_plot = lmb_pressed_inside_plot
     lmb_pressed_inside_plot = False  # finalize the drag
+
+    # A click on the colour bar selects the cluster or the year under it, unless it ends a drag begun in the plot.
+    maybe_hovered = colorscale.hovered()
+    if app_data == dpg.mvMouseButton_Left and maybe_hovered is not None and not drag_was_in_plot:
+        select_group(*maybe_hovered)
+        return
 
     if not mouse_inside_plot_widget():
         return
