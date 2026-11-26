@@ -825,6 +825,25 @@ class TestKeywordRepliesThatAreNotKeywordLists:
             "forty keywords is not an answer to a request for six"
         assert importer._parse_keyword_list("") is None
 
+    def test_a_bulleted_keyword_list_is_read(self):
+        # ECCOMAS's cluster 52 answered three times like this, and every answer was rejected.
+        reply = ("**Recommended cluster keywords:**\n\n- **patient-specific modelling**\n- in silico simulation  \n"
+                 "- clinical outcome prediction\n")
+        assert importer._parse_keyword_list(reply) is None, "not the comma-separated format, so the fallback is needed"
+        assert importer._parse_bulleted_keyword_list(reply) == ["patient-specific modelling", "in silico simulation",
+                                                                 "clinical outcome prediction"]
+
+    def test_a_bulleted_summary_is_still_rejected(self):
+        """Control for the test above: sentences under a header are prose, whatever their bullets."""
+        assert importer._parse_bulleted_keyword_list(PROSE_REPLY) is None
+        summary = "Summary:\n- Investigated physiological signal-based prediction.\n- Applied explainability.\n"
+        assert importer._parse_bulleted_keyword_list(summary) is None
+
+    def test_the_answer_format_ends_the_prompt(self):
+        prompt = visualizer_config.clusters_llm_keyword_extraction_prompt
+        assert "comma-separated" not in prompt, "the format rules come after the items and the evidence"
+        assert "comma-separated" in visualizer_config.clusters_llm_keyword_format_prompt
+
     def test_keyword_extraction_retries_a_malformed_reply(self, monkeypatch, caplog):
         # The failure is occasional rather than systematic -- one cluster in 338 across five corpora -- so a
         # second ask is worth one request against a run that takes minutes either way.

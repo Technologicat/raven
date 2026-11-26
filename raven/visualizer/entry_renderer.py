@@ -246,10 +246,12 @@ def format_keyword_lines(lines: list[tuple[str | None, str]]) -> str:
 _distinctive_cache: list = [None, None]  # [file_content, its lists]
 
 def _distinctive_llm_keywords(file_content):
-    """The dataset's `cluster_llm_keywords` without the terms it gave too many clusters, or `None`."""
+    """The dataset's `cluster_llm_keywords` without the terms it gave too many clusters, the terms other clusters
+    share too moved after the cluster's own but for the first (`keyphrases.shared_last`), or `None`."""
     if _distinctive_cache[0] is not file_content:
         lists = getattr(file_content, "cluster_llm_keywords", None)
-        _distinctive_cache[1] = (keyphrases.without_umbrella_terms(lists, threshold_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
+        _distinctive_cache[1] = (keyphrases.shared_last(keyphrases.without_umbrella_terms(
+                                     lists, threshold_fraction=visualizer_config.clusters_keyword_umbrella_fraction))
                                  if lists is not None else None)
         _distinctive_cache[0] = file_content
     return _distinctive_cache[1]

@@ -30,10 +30,11 @@ __all__ = ["EXTRACTION_VERSION",
            "rank_terms", "umbrella_terms", "fuse",
            "label_groups",
            "top_terms",
-           "without_umbrella_terms", "lead_with"]
+           "without_umbrella_terms", "shared_last", "lead_with"]
 
 import collections
 import math
+import re
 import unicodedata
 from typing import Callable, Container, Hashable, Sequence
 
@@ -42,7 +43,7 @@ import numpy as np
 from .text import stopwords as raven_stopwords
 
 # A cache of `extract`'s output is valid only for the version that wrote it. Bump this when extraction changes.
-EXTRACTION_VERSION = 3
+EXTRACTION_VERSION = 4
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
@@ -91,23 +92,36 @@ def _head_form(token) -> str:
     return token.lemma_.lower()
 
 
-def _phrase_words(tokens) -> list[str]:
-    """The words of a phrase, lowercased, with the head lemmatized and hyphenated compounds kept whole."""
+# Punctuation that ends the word before it rather than starting one: "verification, validation".
+_GLUED_PUNCT = frozenset({",", ".", ";", ":", "!", "?", ")", "]"})
+
+
+def _phrase_words(tokens, *, cased: bool = False) -> list[str]:
+    """The words of a phrase, lowercased, with the head lemmatized and hyphenated compounds kept whole.
+
+    `cased`: give the words as written instead, neither lowercased nor lemmatized; word for word the same split.
+
+    A possessive stays on its word ("prisoner's"), and punctuation such as a comma on the word before it.
+    """
     # Only the head is lemmatized: a modifier's lemma is often another word ("moving plate" would become
     # "move plate", "cracked beam" "crack beam").
     words: list[str] = []
     for k, token in enumerate(tokens):
-        form = _head_form(token) if k == len(tokens) - 1 else token.text.lower()
-        if words and (token.text == "-" or words[-1].endswith("-")):
+        if cased:
+            form = token.text
+        else:
+            form = _head_form(token) if k == len(tokens) - 1 else token.text.lower()
+        if words and (token.text == "-" or words[-1].endswith("-") or token.tag_ == "POS" or
+                      (token.is_punct and token.text in _GLUED_PUNCT)):
             words[-1] += form
         else:
             words.append(form)
     return words
 
 
-def _phrases(doc, stopwords: Container[str]) -> set[str]:
-    """The noun phrases of a parsed document, with each one's head-final sub-phrases."""
-    out = set()
+def _phrases(doc, stopwords: Container[str]) -> dict[str, str]:
+    """The noun phrases of a parsed document, with each one's head-final sub-phrases, as `{term: as written}`."""
+    out = {}
     for chunk in doc.noun_chunks:
         tokens = list(chunk)
         # A token joined to the next by a hyphen is the first half of a word ("test-time compute"), not a word
@@ -122,7 +136,6 @@ def _phrases(doc, stopwords: Container[str]) -> set[str]:
                           (tokens[-1].lemma_.lower() in stopwords and
                            (len(tokens) < 2 or tokens[-2].pos_ not in _NOUN_POS))):
             tokens.pop()
-        tokens = [t for t in tokens if t.tag_ != "POS"]  # the possessive: "GPT-4's performance"
         # Punctuation inside a chunk, other than a hyphen, separates two phrases: "large language models (LLMs"
         # is "large language models" and "LLMs". The head's side is kept.
         cut = max((k for k, t in enumerate(tokens) if t.is_punct and t.text != "-"), default=-1)
@@ -133,6 +146,7 @@ def _phrases(doc, stopwords: Container[str]) -> set[str]:
         # own right; the long form rarely repeats across records where the shorter ones do, and which of them
         # is worth showing is left to the ranking.
         words = _phrase_words(tokens)
+        written = _phrase_words(tokens, cased=True)
         for start in range(max(0, len(words) - _MAX_PHRASE_WORDS), len(words)):
             if words[start] in stopwords:  # "dark- and photo-fermentation" yields "and photo-fermentation"
                 continue
@@ -140,12 +154,13 @@ def _phrases(doc, stopwords: Container[str]) -> set[str]:
                 continue
             phrase = " ".join(words[start:])
             if len(phrase) >= _MIN_CHARS and phrase not in stopwords:
-                out.add(phrase)
+                out.setdefault(phrase, " ".join(written[start:]))
     return out
 
 
-def _abbreviations(doc) -> list[tuple[str, str]]:
-    """Abbreviations a parsed document defines, as `(short, long)` terms.
+def _abbreviations(doc) -> list[tuple[str, str, str]]:
+    """Abbreviations a parsed document defines, as `(short, long, short as written)`: "SRL" gives `("srl",
+    "self-regulated learning", "SRL")`.
 
     The algorithm of Schwartz and Hearst (2003, *A simple algorithm for identifying abbreviation definitions in
     biomedical text*, https://psb.stanford.edu/psb-online/proceedings/psb03/schwartz.pdf): in "long form (SF)",
@@ -166,8 +181,10 @@ def _abbreviations(doc) -> list[tuple[str, str]]:
         if sum(1 for ch in short if ch.isupper()) < 2 and not any(ch.isdigit() for ch in short):
             continue
         letters = [ch.lower() for ch in short if ch.isalnum()]
+        written = short
         if short.endswith("s") and len(letters) > 2 and short[:-1].isupper():  # "LLMs" defines "LLM"
             letters = letters[:-1]
+            written = short[:-1]
         window = min(len(letters) + 5, 2 * len(letters))
         before = list(doc[max(0, k - window):k])
         for start in range(len(before) - 1, -1, -1):  # the shortest suffix of the window that fits
@@ -185,7 +202,7 @@ def _abbreviations(doc) -> list[tuple[str, str]]:
                 pos += 1
             else:
                 if (span[-1].pos_ in _NOUN_POS and len(span) >= 2) or "-" in text:
-                    found.append(("".join(letters), " ".join(_phrase_words(span))))
+                    found.append(("".join(letters), " ".join(_phrase_words(span)), written))
                 break
     return found
 
@@ -199,32 +216,71 @@ def extract(doc, *, stopwords: Container[str]) -> dict:
     `stopwords`: words that are not a term on their own; typically `nlptools.default_stopwords` together with
                  `raven.common.text.stopwords.academic_stopwords`.
 
-    Returns a picklable `dict`: `"phrases"`, a sorted list of the document's phrase terms; `"definitions"`,
-    a list of the abbreviations it defines, as `(short, long)`; `"nouns"`, a sorted list of the nouns it
-    uses, as written; and `"casing"`, how it capitalizes its nouns and adjectives where a sentence does not
-    start, as `{lowercased word: the form most of its occurrences take}`, for `casing_table`.
+    Returns a picklable `dict`: `"phrases"`, a sorted list of the document's phrase terms; `"cased"`, how it writes
+    those whose spelling differs from the term, `{term: as written}`; `"definitions"`, the abbreviations it
+    defines, as `(short, long, short as written)`; `"nouns"`, a sorted list of the nouns it uses, as written; and
+    `"casing"`, how it capitalizes its nouns and adjectives where a sentence does not start, as
+    `{lowercased word: the form most of its occurrences take}`, for `casing_table`.
 
     The text a document was parsed from is best prepared with `sentence_case` on its title, and Unicode NFKC
     normalization, so that "TiO₂" and "TiO2" are one term.
     """
-    return {"phrases": sorted(_phrases(doc, stopwords)),
+    phrases = _phrases(doc, stopwords)
+    return {"phrases": sorted(phrases),
+            "cased": {term: written for term, written in phrases.items() if written != term},
             "definitions": _abbreviations(doc),
             "nouns": sorted({t.text.lower() for t in doc if t.pos_ in _NOUN_POS}),
             "casing": _casing(doc)}
 
 
 def _casing(doc) -> dict[str, str]:
-    """`{lowercased word: its usual form}` for the nouns and adjectives of `doc` not starting a sentence."""
-    # A sentence's first word is capitalized whatever it is, so it says nothing about the word.
+    """`{lowercased word: its usual form}` for the nouns and adjectives of `doc` not starting a sentence, counted in
+    its abstract: after the first blank line, where there is one."""
+    # A sentence's first word is capitalized whatever it is, so it says nothing about the word. A title is left
+    # out, being sentence-cased before extraction, which lowercases every proper name in a Title Case title.
+    #
+    # Every occurrence of a noun or adjective counts, whatever its part of speech there: a capitalized part of a
+    # compound ("AI-Based") is tagged a proper noun, while "based" in "based on" is a verb, so counting nouns and
+    # adjectives alone hands every vote to the capitalized form.
+    tokens = list(doc)
+    breaks = [k for k, t in enumerate(tokens) if t.is_space and "\n\n" in t.text]
+    region = tokens[breaks[0] + 1:] if breaks else tokens
+    nominal = {t.text.lower() for t in region if t.pos_ in _CASED_POS}
     forms: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
-    for t in doc:
-        if t.pos_ in _CASED_POS and not t.is_sent_start and any(ch.isalpha() for ch in t.text):
-            forms[t.text.lower()][t.text] += 1
+    for t in region:
+        word = t.text.lower()
+        if word in nominal and not t.is_sent_start and any(ch.isalpha() for ch in t.text):
+            forms[word][t.text] += 1
     return {word: max(c.items(), key=lambda kv: (kv[1], kv[0] == word))[0] for word, c in forms.items()}
 
 
 # --------------------------------------------------------------------------------
 # Normalization, over the corpus
+
+# Fields of study in "-ics", a singular mass noun however often the "-ic" form heads a phrase: "first-order kinetic"
+# is written, and still "kinetics" is no plural.
+_ICS_MASS_NOUNS = ("acoustics", "analytics", "dynamics", "economics", "electronics", "ethics", "genetics", "informatics",
+                   "kinematics", "kinetics", "linguistics", "logistics", "mathematics", "mechanics", "omics", "optics",
+                   "physics", "politics", "robotics", "semantics", "statics", "statistics")
+
+# British spellings and their American counterparts, word-final unless anchored otherwise, for the spelling classes.
+_BRITISH = ((re.compile(r"isation"), "ization"), (re.compile(r"is(e|ed|es|er|ers|ing)$"), r"iz\1"),
+            (re.compile(r"ys(e|ed|es|ing)$"), r"yz\1"), (re.compile(r"ell(ing|ed|er|ers)$"), r"el\1"),
+            (re.compile(r"our(s|ed|ing)?$"), r"or\1"), (re.compile(r"(?<=[^aeiou])re(s|d)?$"), r"er\1"))
+
+
+def _spelling_class(term: str) -> str:
+    """A key shared by the spellings of one term: hyphens, spaces and a possessive dropped, British spellings
+    made American. "prisoner's dilemma", "fibre-reinforced polymer" and "fiber reinforced polymer" share theirs
+    with "prisonerdilemma" and so on."""
+    words = []
+    for word in term.split():
+        word = word.removesuffix("'s")
+        for pattern, replacement in _BRITISH:
+            word = pattern.sub(replacement, word)
+        words.append(word)
+    return "".join(words).replace("-", "")
+
 
 def _plural_map(vocabulary: set[str]) -> dict[str, str]:
     """`{plural: singular}` for the terms ending in "s" whose singular is also in `vocabulary`."""
@@ -254,22 +310,24 @@ def recase(term: str, casing: dict[str, str]) -> str:
     """`term` capitalized as the corpus capitalizes its words (`casing_table`).
 
     A word the table knows takes the corpus's form. Another keeps its own, unless the term is in title case
-    throughout ("Foundation Models"), as an LLM writes at random; then a word capitalized only by that is
-    lowercased. A word with capitals past its first letter ("LLMs", "iOS") always keeps them.
+    throughout ("Foundation Models") or capitalized as a sentence starts ("A posteriori error estimation"), as an
+    LLM writes; then a word capitalized only by that is lowercased. A word with capitals past its first letter
+    ("LLMs", "iOS") always keeps them.
     """
     words = term.split()
     title_cased = len(words) > 0 and all(w[:1].isupper() for w in words)
 
-    def one(part: str) -> str:
+    def one(part: str, first: bool) -> str:
         if not part:
             return part
         if part.lower() in casing:
             return casing[part.lower()]
         if any(ch.isupper() for ch in part[1:]):
             return part
-        return part.lower() if title_cased else part
+        return part.lower() if title_cased or first else part
 
-    return " ".join("-".join(one(p) for p in w.split("-")) for w in words)
+    return " ".join("-".join(one(p, k == 0 and j == 0) for j, p in enumerate(w.split("-")))
+                    for k, w in enumerate(words))
 
 
 def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tuple[list[set[str]], dict[str, str]]:
@@ -284,54 +342,67 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
 
     What is folded together:
 
-      - **A final word in "-ics"** onto "-ic", where the corpus uses the "-ic" form as a noun: "a key
-        characteristic" occurs, so "characteristics" is a plural, while nobody writes "a physic".
+      - **A final word in "-ics"** onto "-ic", where the "-ic" form ends a phrase of the corpus, the head of a
+        noun phrase: "a key characteristic" occurs, so "characteristics" is a plural, while nobody writes "a
+        physic". A field of study is never folded ("kinetics", "dynamics"), though "first-order kinetic" occurs.
       - **A plural** onto its singular, where the corpus contains the singular. This catches what lemmatizing
         misses, a capitalized word read as a proper noun ("Large Language Models") or an acronym's plural.
-      - **An abbreviation** with its long form, word by word, so "srl" and "self-regulated learning" are one
-        term, and "generative ai" and "generative artificial intelligence" another. A definition made by two
-        or more records applies corpus-wide; one made by a single record applies to that record only.
-      - **A hyphen, a space, or nothing between two words**, so "retrieval-augmented generation" and "retrieval
-        augmented generation" are one term, and "bit-width" and "bitwidth" another, spelled as most of the
-        corpus's records spell it. This also joins "re-cover" and "recover", a price paid knowingly, being rare.
+      - **An abbreviation** with its long form, word by word, where the word is written as the abbreviation is,
+        so "SRL" and "self-regulated learning" are one term, and "generative AI" and "generative artificial
+        intelligence" another, while "Co" stays cobalt where "CO" is defined as carbon monoxide. A definition
+        made by two or more records applies corpus-wide; one made by a single record applies to that record only.
+      - **Spellings of one term**, where the corpus has more than one, onto the one most of its records use:
+        a hyphen, a space or nothing between two words ("retrieval-augmented generation", "retrieval augmented
+        generation"; "bit-width", "bitwidth"), a possessive ("prisoner's dilemma", "prisoner dilemma"), and a
+        British and an American spelling ("modelling", "modeling"). This also joins "re-cover" and "recover",
+        and "metre" and "meter", a price paid knowingly, being rare.
 
     The display form is capitalized as the corpus capitalizes its words (`casing_table`, `recase`).
     """
     # Why a single record's definition stays local: a paper calling its system CARE must not take over the
     # word "care" everywhere else.
-    nouns_seen = set().union(*(set(item["nouns"]) for item in extracted)) if extracted else set()
+    heads_seen = {t.split()[-1] for item in extracted for t in item["phrases"]}
 
     def fold_ics(term: str) -> str:
         words = term.split()
-        if words[-1].endswith("ics") and words[-1][:-1] in nouns_seen:
+        if (words[-1].endswith("ics") and words[-1][:-1] in heads_seen and
+                not words[-1].endswith(_ICS_MASS_NOUNS)):
             words[-1] = words[-1][:-1]
         return " ".join(words)
 
-    candidates = [{fold_ics(t) for t in item["phrases"]} for item in extracted]
-    folds = _plural_map(set().union(*candidates) if candidates else set())
-    candidates = [{folds.get(t, t) for t in terms} for terms in candidates]
+    raw = [{t: fold_ics(t) for t in item["phrases"]} for item in extracted]
+    folds = _plural_map({c for record in raw for c in record.values()})
 
+    # A definition, `(short, long, short as written)`, applies to a word written as its short form is.
     definitions = [list(item["definitions"]) for item in extracted]
     counts = collections.defaultdict(collections.Counter)
-    for pairs in definitions:
-        for short, long in set(pairs):
-            counts[short][long] += 1
-    corpus_map = {short: longs.most_common(1)[0][0] for short, longs in counts.items() if sum(longs.values()) >= 2}
+    for triples in definitions:
+        for short, long, written in set(triples):
+            counts[(short, written)][long] += 1
+    corpus_map = {key: longs.most_common(1)[0][0] for key, longs in counts.items() if sum(longs.values()) >= 2}
 
-    def expand(term: str, mapping: dict[str, str]) -> str:
-        words = []
-        for word in term.split():
-            replacement = mapping.get(word, word)
-            if replacement != word:  # one level of nesting: "genai" -> "generative ai" -> "... artificial intelligence"
-                replacement = " ".join(mapping.get(w, w) if w != word else w for w in replacement.split())
-            words.append(replacement)
-        return " ".join(words)
+    def expand(term: str, written: str, mapping: dict[tuple[str, str], str]) -> str:
+        words, as_written = term.split(), written.split()
+        if len(as_written) != len(words):  # cannot happen by construction; then match on the term alone
+            as_written = words
+        # A long form is stored lowercased, so a short form nested in one ("generative ai") matches on its letters.
+        nested = {short: long for (short, _written), long in mapping.items()}
+        out = []
+        for word, form in zip(words, as_written):
+            if len(form) > 2 and form.endswith("s") and form[:-1].isupper():  # "LLMs"
+                form = form[:-1]
+            replacement = mapping.get((word, form), word)
+            if replacement != word:  # one level of nesting: "GenAI" -> "generative ai" -> "... artificial intelligence"
+                replacement = " ".join(nested.get(w, w) if w != word else w for w in replacement.split())
+            out.append(replacement)
+        return " ".join(out)
 
     expanded = []
-    for terms, pairs in zip(candidates, definitions):
+    for item, record, triples in zip(extracted, raw, definitions):
         mapping = dict(corpus_map)
-        mapping.update(dict(pairs))
-        expanded.append({term: expand(term, mapping) for term in terms})
+        mapping.update({(short, written): long for short, long, written in triples})
+        cased = item.get("cased", {})
+        expanded.append({term: expand(folds.get(c, c), cased.get(term, term), mapping) for term, c in record.items()})
     # Fold plurals again: a long form arrives as written, and "Large Language Models (LLMs)" is plural.
     folds = _plural_map({c for record in expanded for c in record.values()})
 
@@ -341,22 +412,23 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
     record_counts = collections.Counter(c for record in expanded for c in {folds.get(c, c) for c in record.values()})
     by_spelling = collections.defaultdict(list)
     for c in record_counts:
-        by_spelling[c.replace("-", "").replace(" ", "")].append(c)
+        by_spelling[_spelling_class(c)].append(c)
     hyphen_folds = {c: max(members, key=lambda m: (record_counts[m], m))
                     for members in by_spelling.values() if len(members) > 1 for c in members}
 
     surface: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     short_use: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])  # [records defining it, records not]
     terms_out = []
-    for record, pairs in zip(expanded, definitions):
-        defined_here = {short for short, _ in pairs}
+    corpus_shorts = {short for short, _written in corpus_map}
+    for record, triples in zip(expanded, definitions):
+        defined_here = {short for short, _long, _written in triples}
         canonical = set()
         for term, c in record.items():
             c = folds.get(c, c)
             c = hyphen_folds.get(c, c)
             surface[c][term] += 1
             canonical.add(c)
-            if term in corpus_map or term in defined_here:  # the bare short form of an abbreviation
+            if term in corpus_shorts or term in defined_here:  # the bare short form of an abbreviation
                 short_use[c][0 if term in defined_here else 1] += 1
         terms_out.append(canonical)
 
@@ -611,6 +683,29 @@ def without_umbrella_terms(lists: Sequence[Sequence[str]], *, threshold_fraction
     umbrella = umbrella_terms([{_comparable(t) for t in terms} for terms in lists], groups,
                               min_support=1, threshold_fraction=threshold_fraction)
     return [[t for t in terms if _comparable(t) not in umbrella] for terms in lists]
+
+
+def shared_last(lists: Sequence[Sequence[str]], *, keep: int = 1) -> list[list[str]]:
+    """Each of `lists` with the terms other lists share too moved to its end, except the first `keep` of them.
+
+    Terms are compared as `without_umbrella_terms` compares them, and order is kept otherwise. So where an LLM
+    gives *Education for Sustainable Development* and *curriculum* to several clusters, a cluster keeps the
+    first as its lead and shows its own *SDG integration* before the second, and a label cut short shows what
+    tells the clusters apart.
+    """
+    support = collections.Counter(c for terms in lists for c in {_comparable(t) for t in terms})
+    out = []
+    for terms in lists:
+        own, kept, moved = [], 0, []
+        for t in terms:
+            if support[_comparable(t)] > 1:
+                if kept >= keep:
+                    moved.append(t)
+                    continue
+                kept += 1
+            own.append(t)
+        out.append(own + moved)
+    return out
 
 
 def lead_with(leading: Sequence[str], ranked: Sequence[tuple[str, float]], top: int, *,

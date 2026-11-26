@@ -155,19 +155,24 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     The keywords can be any nouns, noun phrases, or proper names that you think describe this set of items.
     The keywords will be shown in a visualizer app, to show the cluster topics to the user.
 
-    As your response, after you are done thinking, write only a comma-separated list of keywords.
+    The set of items to be analyzed is below, and the format of your answer is described after them.
+""").strip()
+
+# For "llm" and "hybrid": the format of the answer, which ends the prompt, after the items and the evidence.
+clusters_llm_keyword_format_prompt = textwrap.dedent("""
+    **Format of your answer**
+
+    As your response, after you are done thinking, write only a comma-separated list of keywords, on one line.
 
     IMPORTANT: The result will be read by a computer program, so it needs to be in a standard format.
 
-    Use only commas as separators (do NOT use the word "and").
+    Use only commas as separators (do NOT use the word "and"), and no bullets, headings or other formatting.
 
     If you find just one common theme, that is fine. In that case, write just that one keyword (no commas).
 
     If you cannot discern a common theme, that is also fine. In that case, as your response,
     after you are done thinking, write ONLY the exact string "keyword extraction failed"
     (without the quotes), so that the program can detect this case.
-
-    The set of items to be analyzed is below.
 """).strip()
 
 # For "llm" and "hybrid": after a cluster's items, also give the model the phrases the "phrases" method finds over

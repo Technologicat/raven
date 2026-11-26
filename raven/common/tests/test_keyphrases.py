@@ -10,10 +10,16 @@ import pytest
 from raven.common import keyphrases
 
 
-def _extracted(phrases, definitions=(), nouns=(), casing=None):
-    """One record as `extract` returns it."""
-    return {"phrases": sorted(phrases), "definitions": list(definitions), "nouns": sorted(nouns),
-            "casing": dict(casing or {})}
+def _extracted(phrases, definitions=(), nouns=(), casing=None, *, upper=()):
+    """One record as `extract` returns it.
+
+    `definitions`: `(short, long)`, the short form written in capitals, or `(short, long, as written)`.
+    `upper`: words the record writes in capitals, as an abbreviation is.
+    """
+    triples = [d if len(d) == 3 else (d[0], d[1], d[0].upper()) for d in definitions]
+    cased = {t: " ".join(w.upper() if w in upper else w for w in t.split()) for t in phrases}
+    return {"phrases": sorted(phrases), "cased": {t: w for t, w in cased.items() if w != t},
+            "definitions": triples, "nouns": sorted(nouns), "casing": dict(casing or {})}
 
 
 class TestSentenceCase:
@@ -45,15 +51,51 @@ class TestNormalize:
         terms, _ = keyphrases.normalize([_extracted({"process"}), _extracted({"proces"})])
         assert terms[0] == {"process"}  # "ss" is never a plural ending
 
-    def test_ics_folds_only_where_the_corpus_uses_the_ic_noun(self):
-        records = [_extracted({"key characteristics", "physics"}, nouns={"characteristic", "physics"})]
+    def test_ics_folds_where_the_ic_form_heads_a_phrase(self):
+        records = [_extracted({"key characteristics", "physics"}), _extracted({"main characteristic"})]
         terms, _ = keyphrases.normalize(records)
         assert terms[0] == {"key characteristic", "physics"}
 
-    def test_ics_is_kept_without_the_ic_noun(self):
-        """Negative control for the fold above: the same term, with no "characteristic" in the corpus."""
-        terms, _ = keyphrases.normalize([_extracted({"key characteristics"}, nouns={"characteristics"})])
+    def test_ics_is_kept_where_the_ic_form_heads_no_phrase(self):
+        """Negative control for the fold above: "characteristic" only as a noun inside a phrase, as a stray tag."""
+        records = [_extracted({"key characteristics"}), _extracted({"characteristic curve"}, nouns={"characteristic"})]
+        terms, _ = keyphrases.normalize(records)
         assert terms[0] == {"key characteristics"}
+
+    def test_a_field_of_study_in_ics_is_never_folded(self):
+        records = [_extracted({"reaction kinetics", "chemical kinetics"}), _extracted({"first-order kinetic"})]
+        terms, _ = keyphrases.normalize(records)
+        assert terms[0] == {"reaction kinetics", "chemical kinetics"}
+
+    def test_a_possessive_is_one_term_with_the_bare_spelling(self):
+        records = [_extracted({"prisoner's dilemma"}), _extracted({"prisoner's dilemma"}),
+                   _extracted({"prisoner dilemma"})]
+        terms, display = keyphrases.normalize(records)
+        assert all(t == {"prisoner's dilemma"} for t in terms)
+        assert display["prisoner's dilemma"] == "prisoner's dilemma"
+
+    def test_a_possessive_alone_is_kept(self):
+        """Control for the fold above: without the bare spelling, nothing to fold onto."""
+        terms, _ = keyphrases.normalize([_extracted({"prisoner's dilemma"})])
+        assert terms == [{"prisoner's dilemma"}]
+
+    def test_british_and_american_spellings_are_one_term(self):
+        records = [_extracted({"finite element modelling", "fibre"}), _extracted({"finite element modeling", "fibre"}),
+                   _extracted({"finite element modelling", "fiber"})]
+        terms, _ = keyphrases.normalize(records)
+        assert all(t == {"finite element modelling", "fibre"} for t in terms)
+
+    @pytest.mark.parametrize("british, american", [("organisation", "organization"), ("optimise", "optimize"),
+                                                   ("analysed", "analyzed"), ("labelling", "labeling"),
+                                                   ("behaviour", "behavior"), ("centre", "center")])
+    def test_each_spelling_rule(self, british, american):
+        terms, _ = keyphrases.normalize([_extracted({british}), _extracted({american}), _extracted({american})])
+        assert all(t == {american} for t in terms)
+
+    def test_a_vowel_before_re_is_no_british_spelling(self):
+        """Control for the "-re" rule: "core" is not a spelling of "cor"."""
+        terms, _ = keyphrases.normalize([_extracted({"core"}), _extracted({"cor"})])
+        assert terms == [{"core"}, {"cor"}]
 
     def test_a_hyphen_and_a_space_are_one_term_spelled_as_most_records_spell_it(self):
         records = [_extracted({"retrieval-augmented generation"}), _extracted({"retrieval-augmented generation"}),
@@ -88,42 +130,73 @@ class TestNormalize:
 
     def test_an_abbreviation_defined_by_two_records_applies_everywhere(self):
         definition = ("srl", "self-regulated learning")
-        records = [_extracted({"srl"}, [definition]), _extracted({"srl"}, [definition]), _extracted({"srl"})]
+        records = [_extracted({"srl"}, [definition], upper={"srl"}), _extracted({"srl"}, [definition], upper={"srl"}),
+                   _extracted({"srl"}, upper={"srl"})]
         terms, _ = keyphrases.normalize(records)
         assert all(t == {"self-regulated learning"} for t in terms)
 
+    def test_an_abbreviation_matches_only_as_written(self):
+        """Control for the test above: "Co" is cobalt, whatever "CO" is defined as."""
+        definition = ("co", "carbon monoxide")
+        records = [_extracted({"co"}, [definition], upper={"co"}), _extracted({"co"}, [definition], upper={"co"}),
+                   _extracted({"co catalyst"})]
+        records[2]["cased"] = {"co catalyst": "Co catalyst"}
+        terms, _ = keyphrases.normalize(records)
+        assert terms[0] == {"carbon monoxide"}
+        assert terms[2] == {"co catalyst"}
+
     def test_an_abbreviation_defined_by_one_record_stays_in_it(self):
-        records = [_extracted({"care"}, [("care", "collaborative assistant for personalized exploration")]),
+        records = [_extracted({"care"}, [("care", "collaborative assistant for personalized exploration")],
+                              upper={"care"}),
                    _extracted({"care"})]
         terms, _ = keyphrases.normalize(records)
         assert terms[0] == {"collaborative assistant for personalized exploration"}
         assert terms[1] == {"care"}
 
     def test_abbreviations_expand_inside_a_phrase(self):
-        definitions = [("genai", "generative ai"), ("ai", "artificial intelligence")]
-        records = [_extracted({"genai", "generative ai"}, definitions)] * 2
+        definitions = [("genai", "generative ai", "GenAI"), ("ai", "artificial intelligence")]
+        records = [_extracted({"genai", "generative ai"}, definitions, upper={"ai"})] * 2
+        for r in records[:1]:
+            r["cased"]["genai"] = "GenAI"
         terms, _ = keyphrases.normalize(records)
         assert terms[0] == {"generative artificial intelligence"}
 
     def test_a_known_abbreviation_displays_as_the_short_form(self):
         """Mostly used without a definition: the corpus's readers know it."""
         definition = ("chatgpt", "chat generative pre-trained transformer")
-        records = [_extracted({"chatgpt"}, [definition])] * 2 + [_extracted({"chatgpt"})] * 3
+        records = ([_extracted({"chatgpt"}, [definition], upper={"chatgpt"})] * 2 +
+                   [_extracted({"chatgpt"}, upper={"chatgpt"})] * 3)
         terms, display = keyphrases.normalize(records)
         assert display[next(iter(terms[0]))] == "chatgpt"
 
     def test_an_unfamiliar_abbreviation_displays_spelled_out(self):
         """Defined wherever it is used: the reader would not know it."""
         definition = ("fwp", "fast weight programmer")
-        records = [_extracted({"fwp"}, [definition])] * 2 + [_extracted({"fwp"})]
+        records = [_extracted({"fwp"}, [definition], upper={"fwp"})] * 2 + [_extracted({"fwp"}, upper={"fwp"})]
         terms, display = keyphrases.normalize(records)
         assert display[next(iter(terms[0]))] == "fast weight programmer"
 
     def test_the_short_form_share_moves_the_line(self):
         definition = ("fwp", "fast weight programmer")
-        records = [_extracted({"fwp"}, [definition])] * 2 + [_extracted({"fwp"})]  # one record in three undefined
+        records = [_extracted({"fwp"}, [definition], upper={"fwp"})] * 2 + [_extracted({"fwp"}, upper={"fwp"})]  # one record in three undefined
         terms, display = keyphrases.normalize(records, short_form_share=0.3)
         assert display[next(iter(terms[0]))] == "fwp"
+
+
+class TestSharedLast:
+    def test_a_shared_term_after_the_first_moves_to_the_end(self):
+        lists = [["ESD", "curriculum", "transformative learning"], ["ESD", "curriculum", "SDG integration"]]
+        assert keyphrases.shared_last(lists) == [["ESD", "transformative learning", "curriculum"],
+                                                  ["ESD", "SDG integration", "curriculum"]]
+
+    def test_unshared_terms_keep_their_order(self):
+        """Control for the test above: with nothing shared, nothing moves."""
+        lists = [["b", "a", "c"], ["e", "d"]]
+        assert keyphrases.shared_last(lists) == lists
+
+    def test_terms_are_compared_without_case_or_plural(self):
+        lists = [["lead", "Language Models", "own"], ["language model"]]
+        assert keyphrases.shared_last(lists, keep=0)[0] == ["lead", "own", "Language Models"]
 
 
 class TestCasing:
@@ -147,7 +220,15 @@ class TestCasing:
 
     def test_a_partly_capitalized_term_keeps_its_unknown_capitals(self):
         """Control for the title-case rule: not every word capitalized, so the capitals are taken as meant."""
-        assert keyphrases.recase("Bayes-optimal agents", {}) == "Bayes-optimal agents"
+        assert keyphrases.recase("optimal Bayes agents", {}) == "optimal Bayes agents"
+
+    def test_a_capital_starting_the_term_alone_is_undone(self):
+        """As at the start of a sentence, which an LLM writes."""
+        assert keyphrases.recase("A posteriori error estimation", {}) == "a posteriori error estimation"
+
+    def test_a_starting_capital_the_corpus_knows_is_kept(self):
+        """Control for the rule above."""
+        assert keyphrases.recase("Bayes-optimal agents", {"bayes": "Bayes"}) == "Bayes-optimal agents"
 
     def test_capitals_past_the_first_letter_are_kept(self):
         assert keyphrases.recase("Large LLMs", {}) == "large LLMs"
@@ -399,10 +480,9 @@ class TestExtract:
         phrases = keyphrases.extract(nlp("Models show a remarkable ability."), stopwords=stopwords)["phrases"]
         assert not any(p.endswith("ability") for p in phrases)
 
-    def test_the_possessive_is_dropped(self, nlp, stopwords):
-        phrases = keyphrases.extract(nlp("We report GPT-4's performance."), stopwords=stopwords)["phrases"]
-        assert any("performance" in p for p in phrases)
-        assert not any("'s" in p for p in phrases)
+    def test_the_possessive_stays_on_its_word(self, nlp, stopwords):
+        phrases = keyphrases.extract(nlp("We study the prisoner's dilemma."), stopwords=stopwords)["phrases"]
+        assert "prisoner's dilemma" in phrases
 
     def test_a_subphrase_starting_with_a_number_is_skipped(self, nlp, stopwords):
         phrases = keyphrases.extract(nlp("It is released under the Apache 2.0 license."),
@@ -429,7 +509,24 @@ class TestExtract:
 
     def test_an_abbreviation_definition_is_found(self, nlp, stopwords):
         doc = nlp("We use self-regulated learning (SRL) in class.")
-        assert ("srl", "self-regulated learning") in keyphrases.extract(doc, stopwords=stopwords)["definitions"]
+        assert ("srl", "self-regulated learning", "SRL") in keyphrases.extract(doc, stopwords=stopwords)["definitions"]
+
+    def test_a_long_form_keeps_its_commas_on_their_words(self, nlp, stopwords):
+        doc = nlp("We follow verification, validation, and uncertainty quantification (VVUQ) practice.")
+        definitions = keyphrases.extract(doc, stopwords=stopwords)["definitions"]
+        assert ("vvuq", "verification, validation, and uncertainty quantification", "VVUQ") in definitions
+
+    def test_a_phrase_s_written_form_is_kept(self, nlp, stopwords):
+        item = keyphrases.extract(nlp("We deposit Co nanoparticles on carbon."), stopwords=stopwords)
+        assert item["cased"]["co nanoparticle"] == "Co nanoparticles"
+
+    def test_casing_is_counted_in_the_abstract_alone(self, nlp, stopwords):
+        doc = nlp("Programs for solomonoff induction\n\nWe study Solomonoff induction here.")
+        assert keyphrases.extract(doc, stopwords=stopwords)["casing"].get("solomonoff") == "Solomonoff"
+
+    def test_a_capitalized_compound_part_does_not_outvote_the_verb(self, nlp, stopwords):
+        doc = nlp("Title\n\nWe build AI-Based tools. It is based on data. Results are based on tests.")
+        assert keyphrases.extract(doc, stopwords=stopwords)["casing"].get("based", "based") == "based"
 
     def test_a_lowercase_word_in_parentheses_is_not_an_abbreviation(self, nlp, stopwords):
         doc = nlp("The gas evolved at the anode (oxygen) was measured.")

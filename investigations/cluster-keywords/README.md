@@ -451,14 +451,18 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
   (*test-time* compounds kept whole) and the LLM asked for up to fifteen keywords (14–15 per cluster on arXiv).
   The previous night's datasets are kept as `CORPUS-{evidence,hybrid}-2026-11-24.pickle`, and the shortlists
   were made again from the new ones, against the imports of 2026-11-23.
-- **The shortlist read of 2026-11-26 found four extraction faults, to fix as one bundle before the next re-import**
-  (decided by the maintainer the same day; the read continues first):
+- **The shortlist read of 2026-11-26 found eight faults, fixed as one bundle before the next re-import** (decided by
+  the maintainer the same day; built the same day, `keyphrases.EXTRACTION_VERSION` 4):
   1. **Abbreviations match case-insensitively**, so element symbols merge into what the corpus defines: in hydrogen,
      *Co* (cobalt) into *CO*, carbon monoxide (20 papers define it), *Fe* into faradaic efficiency, *Mo* into methyl
      orange, and within one paper *Pt* into its *PT*, Pt-TiO2. The display shows the spelling the papers wrote, which
      hides it. Fix: keep each definition's short form and each phrase as written, and expand only an exact match.
-  2. **The *-ics* fold fires on one noun tag**: *hydrogen-release kinetics* became *kinetic*. Needs more evidence;
-     measure on all six corpora.
+  2. **The *-ics* fold fires on one noun tag**: *hydrogen-release kinetics* became *kinetic*. Measured on all six
+     corpora, as records using the *-ics* word against records using the *-ic* form: as any noun, stray tags count
+     (*mechanics* 175/2, *robotics* 21/1 in ECCOMAS); as a phrase's head, those go, but no count separates a plural
+     from a field of study: *characteristics* 553/33 against *kinetics* 342/16 in hydrogen, where *first-order
+     kinetic* is really written. Built: the *-ic* form must head a phrase, and a list of fields of study (*kinetics*,
+     *dynamics*, *mechanics*, *economics*, ...) is never folded.
   3. **A possessive that is part of a name is dropped**: *prisoner dilemma*. Fix: keep the *'s*, and fold *X's Y*
      onto *X Y* only where the corpus also writes *X Y*.
   4. **Casing votes count sentence-cased titles**, which turn every proper name lowercase: *solomonoff induction*
@@ -483,9 +487,14 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
      technique). The display now shows such a cluster's Quoted line instead of the label.
   - **VVUQ in Themes** is the LLM's spelling, while the corpus defines it (two papers). Showing a theme's expansion
     is a GUI change (a tooltip per keyword) or the LLM-alias pass; not in this bundle.
-  - **And a display change, no re-import needed (decided the same day): Themes prefer the distinctive.** Order
-    each cluster's LLM keywords by how few clusters share them, the LLM's order kept among ties, and show the
-    first six. The corpus-wide filter's floor of five makes it drop only terms in half of a ten-cluster corpus,
+  - **And a display change, no re-import needed (decided the same day): Themes prefer the distinctive.** Planned as
+    ordering each cluster's LLM keywords by how few clusters share them; built as `keyphrases.shared_last`, since
+    the pure ordering dropped each cluster's core theme (biology 0 lost *Education for Sustainable Development*, 1
+    lost *biology education*): the first shared term stays where the LLM put it, the others move after the
+    cluster's own. Theme slots holding a theme another cluster also shows, before and after: biology 40% to 12%,
+    geography 50% to 15%, arXiv 24% to 4%, hydrogen 34% to 10%, AOKK 38% to 19%, ECCOMAS 26% to 7%; every
+    cluster keeps the LLM's lead. The cost: geography 2's *geographical thinking*, shared with one other cluster,
+    falls out of its six. The corpus-wide filter's floor of five makes it drop only terms in half of a ten-cluster corpus,
     so in biology *Education for Sustainable Development* (4 of 10) and *curriculum* (3) fill slots in clusters
     0 and 6, which the LLM's own lists tell apart: general sustainability education (*experiential learning*,
     *sustainability competencies*) against the UN SDGs (*SDG integration*, *bibliometrics*, *UN*). Check on all

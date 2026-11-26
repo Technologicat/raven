@@ -12,7 +12,7 @@ info_panel.py     (~1.7k) — the info panel: its header and navigation bar, con
                             navigation, anchors
 app.py            (~1.9k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
-config.py         (~360)  — Configuration-as-code (import settings, models, GUI settings). The
+config.py         (~380)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services

@@ -31,6 +31,7 @@ import math
 import os
 import pathlib
 import pickle
+import re
 import threading
 from typing import NamedTuple, Optional
 
@@ -1431,6 +1432,45 @@ def _parse_keyword_list(reply):
     return keywords
 
 
+_BULLET = re.compile(r"^\s*(?:[-*\u2022]|\d+[.)])\s+(.*)$")  # "- ", "* ", "\u2022 " (BULLET), "1. ", "1) "
+
+
+def _parse_bulleted_keyword_list(reply):
+    """Parse an LLM keyword reply written as a Markdown list, under an optional header line ending in a colon.
+
+    Returns the keywords as a `list` of `str`, or `None` when the reply is not such a list, an item ending in a
+    full stop or running past eight words counting as a sentence. Bold markers are dropped; the limits of
+    `_parse_keyword_list` apply.
+    """
+    lines = [line.rstrip() for line in reply.strip().splitlines() if line.strip()]
+    if lines and not _BULLET.match(lines[0]) and lines[0].replace("*", "").strip().endswith(":"):
+        lines = lines[1:]
+    keywords = []
+    for line in lines:
+        match = _BULLET.match(line)
+        if not match:
+            return None
+        keyword = match.group(1).replace("**", "").strip().rstrip(",;")
+        # A sentence is no keyword: a bulleted summary is the reply this must keep rejecting.
+        if not keyword or len(keyword) > _MAX_KEYWORD_LENGTH or keyword.endswith(".") or len(keyword.split()) > 8:
+            return None
+        keywords.append(keyword)
+    if not keywords or len(keywords) > _MAX_KEYWORDS_PER_CLUSTER:
+        return None
+    return keywords
+
+
+def _parse_keyword_reply(reply, cluster_id):
+    """`_parse_keyword_list`, falling back to `_parse_bulleted_keyword_list`, which it logs."""
+    parsed = _parse_keyword_list(reply)
+    if parsed is None:
+        parsed = _parse_bulleted_keyword_list(reply)
+        if parsed is not None:
+            logger.warning(f"_parse_keyword_reply: the LLM's reply for cluster #{cluster_id} is a bulleted list, "
+                           f"not the comma-separated one asked for; read it as a list.")
+    return parsed
+
+
 def _parse_canonicalization_mapping(text, known_keywords):
     """Parse the LLM's `original -> replacement` lines into a mapping, discarding what cannot be trusted.
 
@@ -1714,6 +1754,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                                      for phrase, share in maybe_keyword_lists_by_cluster[cluster_id])
                 evidence_intro = visualizer_config.clusters_llm_keyword_evidence_prompt.format(n=len(indexed_entries))
                 prompt = f"{prompt}\n\n-----\n\n{evidence_intro}\n\n{evidence}"
+            prompt = f"{prompt}\n\n-----\n\n{visualizer_config.clusters_llm_keyword_format_prompt}"
 
             logger.info(f"        LLM prompt for cluster #{cluster_id}:\n{prompt}")
 
@@ -1731,7 +1772,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
             cluster_keywords = None
             maybe_saved = answer_cache.get(prompt)
             if maybe_saved is not None:  # only answers that parsed are saved, so this one does
-                parsed = _parse_keyword_list(maybe_saved["reply"])
+                parsed = _parse_keyword_reply(maybe_saved["reply"], cluster_id)
                 cluster_keywords = ["<unknown topic>"] if parsed == [] else parsed
                 logger.info(f"        Keywords for cluster #{cluster_id}, saved by an earlier run: {maybe_saved['reply']}")
             for attempt in (range(1, max_keyword_attempts + 1) if cluster_keywords is None else ()):
@@ -1746,7 +1787,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                     logger.info(f"        LLM thoughts for cluster #{cluster_id}:\n{reasoning}")
                 logger.info(f"        LLM output (final answer) for cluster #{cluster_id}:\n{scrubbed_output_text}")
 
-                parsed = _parse_keyword_list(scrubbed_output_text)
+                parsed = _parse_keyword_reply(scrubbed_output_text, cluster_id)
                 if parsed == []:
                     logger.warning(f"        The LLM could not identify a common theme for cluster #{cluster_id}.")
                     cluster_keywords = ["<unknown topic>"]
