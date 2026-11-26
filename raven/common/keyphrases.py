@@ -259,9 +259,10 @@ def _casing(doc) -> dict[str, str]:
 
 # Fields of study in "-ics", a singular mass noun however often the "-ic" form heads a phrase: "first-order kinetic"
 # is written, and still "kinetics" is no plural.
-_ICS_MASS_NOUNS = ("acoustics", "analytics", "dynamics", "economics", "electronics", "ethics", "genetics", "informatics",
-                   "kinematics", "kinetics", "linguistics", "logistics", "mathematics", "mechanics", "omics", "optics",
-                   "physics", "politics", "robotics", "semantics", "statics", "statistics")
+_ICS_MASS_NOUNS = ("acoustics", "analytics", "bibliometrics", "dynamics", "economics", "electronics", "ethics", "genetics",
+                   "graphics", "hydraulics", "informatics", "kinematics", "kinetics", "linguistics", "logistics",
+                   "mathematics", "mechanics", "omics", "optics", "physics", "politics", "robotics", "semantics",
+                   "statics", "statistics", "stochastics")
 
 # British spellings and their American counterparts, word-final unless anchored otherwise, for the spelling classes.
 _BRITISH = ((re.compile(r"isation"), "ization"), (re.compile(r"is(e|ed|es|er|ers|ing)$"), r"iz\1"),

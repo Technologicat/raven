@@ -1439,8 +1439,7 @@ def _parse_bulleted_keyword_list(reply):
     """Parse an LLM keyword reply written as a Markdown list, under an optional header line ending in a colon.
 
     Returns the keywords as a `list` of `str`, or `None` when the reply is not such a list, an item ending in a
-    full stop or running past eight words counting as a sentence. Bold markers are dropped; the limits of
-    `_parse_keyword_list` apply.
+    full stop counting as a sentence. Bold markers are dropped; the limits of `_parse_keyword_list` apply.
     """
     lines = [line.rstrip() for line in reply.strip().splitlines() if line.strip()]
     if lines and not _BULLET.match(lines[0]) and lines[0].replace("*", "").strip().endswith(":"):
@@ -1452,7 +1451,7 @@ def _parse_bulleted_keyword_list(reply):
             return None
         keyword = match.group(1).replace("**", "").strip().rstrip(",;")
         # A sentence is no keyword: a bulleted summary is the reply this must keep rejecting.
-        if not keyword or len(keyword) > _MAX_KEYWORD_LENGTH or keyword.endswith(".") or len(keyword.split()) > 8:
+        if not keyword or len(keyword) > _MAX_KEYWORD_LENGTH or keyword.endswith("."):
             return None
         keywords.append(keyword)
     if not keywords or len(keywords) > _MAX_KEYWORDS_PER_CLUSTER:
