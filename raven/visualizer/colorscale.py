@@ -25,8 +25,13 @@ gui_config = visualizer_config.gui_config
 
 
 def series_color(position: float) -> list[int]:
-    """The colour of a scatter series at `position` on the configured colormap, as translucent RGBA."""
-    color = [int(255 * component) for component in dpg.sample_colormap(gui_config.plotter_colormap, t=position)]
+    """The colour of a scatter series at `position` in [0, 1] on the configured colormap, as translucent RGBA.
+
+    The position is taken within `gui_config.plotter_colormap_range`, the part of the colormap in use.
+    """
+    first, last = gui_config.plotter_colormap_range
+    color = [int(255 * component)
+             for component in dpg.sample_colormap(gui_config.plotter_colormap, t=first + (last - first) * position)]
     color[-1] = int(0.5 * color[-1])
     return color
 

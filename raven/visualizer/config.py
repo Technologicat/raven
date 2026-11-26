@@ -355,6 +355,9 @@ gui_config = env(  # ----------------------------------------
                  # plotter_grid_color=(255, 128, 64),
                  #
                  plotter_colormap=dpg.mvPlotColormap_Viridis,  # DPG colormap (one of the `dpg.mvPlotColormap_*` constants)
+                 # The part of the colormap the colours are taken from, as `(first, last)` in [0, 1]: an end too close to
+                 # the plot's background is lost against it, Viridis's dark purple on the dark background.
+                 plotter_colormap_range=(0.2, 1.0),
                  plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
                  plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
                  # ----------------------------------------

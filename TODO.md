@@ -236,9 +236,12 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. **The hard part is done**: `raven.common.gui.filedrop` shipped 2026-08-10 and is wired into all six GUI apps, so the paths arrive; what is left for Visualizer is deciding what a dropped file *means* here (open a dataset? add to the current one?) and handling the unsupported-file case. The mechanism and its one real constraint — the callback runs on the render thread, so no `split_frame` and therefore no modal messagebox inside it — are in `dpg-notes.md`; the probes are in `investigations/dpg-dnd/`.
 
 - **[Medium]** The colormap's dark end is lost against the dark plot background (a coworker's observation, 2026-11-16).
+  - **Done for the dark theme, 2026-11-26**: `plotter_colormap_range = (0.2, 1.0)` in the GUI config, chosen from
+    0.0, 0.15, 0.25 and 0.35 side by side, applied in `raven.visualizer.colorscale.series_color`. The light theme's
+    range waits for the light theme.
   Keep Viridis, or another perceptually uniform map: its lightness rises steadily, which is what fixes `jet`
   (maintainer). What is wrong is only that one end of it is close to the background: dark purple on the dark plot,
-  and the yellow end will be on a light one. `plotter.colormap_position` puts Misc (label -1) at 0 and spreads the
+  and the yellow end will be on a light one. `colorscale.colormap_position` puts Misc (label -1) at 0 and spreads the
   clusters above it, so Misc and the lowest-numbered clusters take the darkest colours.
   - Cost S: a range setting (say `plotter_colormap_range=(0.2, 1.0)` on dark, about `(0.0, 0.85)` on light) and
     one line in `colormap_position`; choosing the bound wants screenshots side by side.
