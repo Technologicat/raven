@@ -117,7 +117,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
      they are not designed against.
   3. **LLM aliases, whenever the import calls an LLM anyway**: one pass over the keyword vocabulary asking for each
      term's established abbreviations and other names. This catches what no rule derives: the irregular ones, as
-     *i18n* or *T2I*, and project acronyms chosen to spell something rather than to abbreviate. Unlike
+     *i18n* or *T2I*; the community's own names, as *x-risk* for *existential risk* and *tool calling* for what
+     papers call *tool use* (both from the keyword review of 2026-11-26); and project acronyms chosen to spell something rather than to abbreviate. Unlike
      canonicalization's mapping, the aliases cannot be checked against the corpus, which by definition does not
      use them.
   - Cost: 1 and 2 are S on top of the search itself; 3 is M (a prompt, a stored field, imports with an LLM only).
