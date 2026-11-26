@@ -33,6 +33,31 @@ What it offers, all of it stateless:
 
 Each function's docstring is the reference for its arguments.
 
+### What a word is
+
+**A term matches as words, and a word is letters of any script, digits, and the math symbols beyond ASCII**,
+joined by internal hyphens or apostrophes. A translation takes these from Python rather than from its own
+language, and the conformance cases hold it to them.
+
+- **Python's `\w` is Unicode**: JavaScript's is ASCII even under the `u` flag, so a port there writes
+  `[\p{L}\p{N}_]`.
+- **The math symbols are the core's table, `_MATH_SYMBOLS`**: Unicode category Sm beyond ASCII, written out, so
+  that every port agrees on the set whatever Unicode its language knows. `∇-descent` matches as written, and not on
+  every "descent".
+- **Strings sort by code point**, as Python sorts them; a language sorting by UTF-16 unit orders the files of a
+  folder differently once a name holds a character past U+FFFF.
+- **Files are read as UTF-8, with a byte order mark allowed**, which some editors write.
+
+What this leaves out:
+
+- **Other symbols** — emoji, currency, the ASCII math symbols `+ = < > | ~` — still separate words. A term holding
+  one matches on its other words, and a term made only of them never fires. The ASCII ones stay out because they
+  would join ordinary words: `x=1`, a table's `|cell|`.
+- **A script written without spaces between words**, Japanese or Chinese, is one long word to the matcher, so a term
+  in running text does not fire: `積ん読` fires in `「積ん読」` and between spaces, but not in `私の積ん読が増えた`.
+- **Two titles differing only in such a symbol share an id**, since an entry's id is its title's anchor as GitHub
+  makes it, and GitHub drops symbols: `∇-descent` and `∀-descent` are both `-descent`, and `load` keeps the first.
+
 ## The conformance cases
 
 **`tests/lorebook_conformance.json` is the spec that cannot drift from the code**: Raven's own tests run it

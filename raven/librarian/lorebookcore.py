@@ -173,7 +173,7 @@ def load(directory: str | pathlib.Path,
         if path.name == README_FILENAME or not path.is_file():
             continue
         try:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8-sig")  # a byte order mark, as some editors write, would hide the first header
         except (OSError, UnicodeDecodeError) as exc:
             problems[path.name] = f"cannot be read: {type(exc)}: {exc}"
             continue
@@ -189,10 +189,27 @@ def load(directory: str | pathlib.Path,
 # ----------------------------------------
 # Matching
 
-# A word: letters and digits, joined by internal hyphens or apostrophes (`co-pter`, `Chekhov's`), and keeping a
-# trailing hyphen that nothing word-like follows — a suspended hyphen, as in "co- and re-", which is what lets
-# the key `co-` match the prefix written on its own and not "co-pter" or "CO".
-_WORD = re.compile(r"\w+(?:['-]\w+)*(?:-(?!\w))?")
+# The math symbols beyond ASCII, Unicode category Sm as of Unicode 16.0.0: `∇`, `∀`, `≈`, `→`. They count as
+# word characters, so that a term such as `∇-descent` matches as written, and not on every "descent". Those in
+# ASCII, `+ = < > | ~`, do not, since they would join ordinary words: `x=1`, a table's `|cell|`. Nor do other
+# symbols, emoji and currency among them: a term holding one matches on its other words, and a term made only of
+# them never fires. As a table rather than looked up, so that every port and every Python agree on the set.
+_MATH_SYMBOLS = (
+    "\u00ac\u00b1\u00d7\u00f7\u03f6\u0606-\u0608\u2044\u2052\u207a-\u207c\u208a-\u208c\u2118\u2140-\u2144"
+    "\u214b\u2190-\u2194\u219a-\u219b\u21a0\u21a3\u21a6\u21ae\u21ce-\u21cf\u21d2\u21d4\u21f4-\u22ff"
+    "\u2320-\u2321\u237c\u239b-\u23b3\u23dc-\u23e1\u25b7\u25c1\u25f8-\u25ff\u266f\u27c0-\u27c4"
+    "\u27c7-\u27e5\u27f0-\u27ff\u2900-\u2982\u2999-\u29d7\u29dc-\u29fb\u29fe-\u2aff\u2b30-\u2b44"
+    "\u2b47-\u2b4c\ufb29\ufe62\ufe64-\ufe66\uff0b\uff1c-\uff1e\uff5c\uff5e\uffe2\uffe9-\uffec"
+    "\U00010d8e-\U00010d8f\U0001d6c1\U0001d6db\U0001d6fb\U0001d715\U0001d735\U0001d74f\U0001d76f"
+    "\U0001d789\U0001d7a9\U0001d7c3\U0001eef0-\U0001eef1")
+_WORD_CHAR = rf"[\w{_MATH_SYMBOLS}]"
+
+# A word: letters, digits and math symbols, joined by internal hyphens or apostrophes (`co-pter`, `Chekhov's`),
+# and keeping a trailing hyphen that nothing word-like follows — a suspended hyphen, as in "co- and re-", which is
+# what lets the key `co-` match the prefix written on its own and not "co-pter" or "CO".
+_WORD = re.compile(rf"{_WORD_CHAR}+(?:['-]{_WORD_CHAR}+)*(?:-(?!{_WORD_CHAR}))?")
+_WHOLE_WORD = re.compile(rf"{_WORD_CHAR}+(?:['-]{_WORD_CHAR}+)*")
+_WORD_PART = re.compile(rf"{_WORD_CHAR}+")
 
 def _normalize(text: str) -> str:
     return text.replace("’", "'").replace("‘", "'")  # curly apostrophes, as typed by many editors
@@ -270,7 +287,7 @@ def clean_expansion(word: str, forms: Collection[str], stems: Collection[str]) -
         out = []
         for candidate in candidates:
             candidate = candidate.strip() if exact else candidate.strip().lower()
-            if candidate and re.fullmatch(r"\w+(?:['-]\w+)*", candidate) and candidate not in out:
+            if candidate and _WHOLE_WORD.fullmatch(candidate) and candidate not in out:
                 out.append(candidate)
         return out
     needed = max(_MIN_STEM, len(word) - _STEM_SLACK)
@@ -368,7 +385,7 @@ def find_matches(entries: Mapping[str, Entry], text: str, *,
 def _parts(unit: tuple[str, int, int]) -> list[tuple[str, int, int]]:
     """A word as its parts, where a hyphen or an apostrophe joins them; the word itself, when it has one part."""
     word, start, _ = unit
-    parts = [(match.group(), start + match.start(), start + match.end()) for match in re.finditer(r"\w+", word)]
+    parts = [(match.group(), start + match.start(), start + match.end()) for match in _WORD_PART.finditer(word)]
     return parts if len(parts) > 1 else [unit]
 
 def _last_match(key: tuple[str, ...], units: list[tuple[str, int, int]], accepted: Mapping[str, set[str]],

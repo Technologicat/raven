@@ -28,6 +28,7 @@
 - **A lorebook**: definitions of your terms, given to the AI when a term comes up in the conversation, so it reads the word the way you mean it.
   - Markdown files under `lorebook/` in the user folder, a section per term; a glossary is one file, and can be a link to one kept elsewhere. Changes are picked up while the app runs.
   - A term is matched as words, in any order, also when joined by a hyphen or an apostrophe ("hydra-tax"), and an entry's links bring the entries they point to. Each definition goes into the chat once per branch, within caps set in `raven.librarian.config`.
+  - A word is letters of any script, digits and math symbols such as `∇`. Japanese and Chinese, written without spaces between words, are the exception: a term fires there only where something sets it apart, such as brackets or spaces.
   - A term fires however it is inflected: the AI is asked, in the background, for each term's other forms, in the languages set in `lorebook_languages` (English by default; Finnish adds stems). The answers are kept per model, so switching models asks again.
   - The AI can also look a term up itself. Asking for one that is not there, it gets the entry spelled nearly like it, or the entries whose definitions mention it.
   - The **Lorebook** toggle (`Alt+L`) and `!lorebook` in `raven-minichat` switch it on and off; from a script, `agent.turn(..., lorebook_enabled=True)`.

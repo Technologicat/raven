@@ -10,8 +10,10 @@ A Python port copies this file unchanged, with the cases beside it, into a `test
 import ast
 import json
 import pathlib
+import re
 import subprocess
 import sys
+import unicodedata
 
 import pytest
 
@@ -115,6 +117,19 @@ class TestConformance:
             assert answer.startswith(case["answer_starts_with"]), answer
         for part in case.get("answer_contains", ()):
             assert part in answer, answer
+
+
+class TestMathSymbols:
+    def test_the_table_is_unicodes_math_symbols_beyond_ascii(self):
+        # Every code point past ASCII whose category is Sm is in the table, and anything else in it is a code point
+        # this Python's Unicode does not assign yet, the table being of a later Unicode than an older Python's.
+        in_table = re.compile(f"[{lorebookcore._MATH_SYMBOLS}]")
+        listed = {chr(c) for c in range(0x80, 0x110000) if in_table.fullmatch(chr(c))}
+        math = {chr(c) for c in range(0x80, 0x110000) if unicodedata.category(chr(c)) == "Sm"}
+        assert "∇" in listed and "+" not in listed, "the table did not parse as meant, so this test reads nothing"
+        assert math <= listed, f"missing from the table: {sorted(math - listed)}"
+        assert all(unicodedata.category(c) == "Cn" for c in listed - math), \
+            f"in the table but not math symbols: {sorted(c for c in listed - math if unicodedata.category(c) != 'Cn')}"
 
 
 class TestStandalone:

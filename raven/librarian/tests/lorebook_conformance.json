@@ -155,6 +155,25 @@
    "A link between two minds, seen in a mirror.",
    "## Endognosis",
    "What a system knows about itself from inside; introspection names the act, this the result."
+  ],
+  "unicode": [
+   "## 積ん読 (tsundoku)",
+   "Books bought and left to pile up unread; for a researcher, papers. Grows faster than it is read, as an *[ℵ₀ backlog](#ℵ₀-backlog)* does.",
+   "",
+   "## ℵ₀ backlog",
+   "A backlog that is countably infinite: every item can be numbered, and none of them will be reached. The limit of the hydra tax.",
+   "",
+   "## 𝔹𝔹ℚ",
+   "The field of barbecues. Dense, as the rationals are: between any two barbecues there is another. Every grilling has an inverse, which is the washing-up.",
+   "",
+   "## 𝔼-step",
+   "Of a plan: the half that works out what to expect, before the half that does anything about it. See also the M-step, which is never scheduled.",
+   "",
+   "## ∇-descent",
+   "Going downhill by the steepest way available, one step at a time.",
+   "",
+   "## λ-lifting",
+   "Moving a definition outward until it can be shared."
   ]
  },
  "parse": [
@@ -352,6 +371,31 @@
    "titles": [
     "Jazz"
    ]
+  },
+  {
+   "name": "titles and aliases beyond ASCII",
+   "glossary": "unicode",
+   "file_name": "glossary",
+   "entry_level": null,
+   "first_order": 0,
+   "titles": [
+    "積ん読",
+    "ℵ₀ backlog",
+    "𝔹𝔹ℚ",
+    "𝔼-step",
+    "∇-descent",
+    "λ-lifting"
+   ],
+   "entries": {
+    "積ん読": {
+     "aliases": [
+      "tsundoku"
+     ],
+     "crossrefs": [
+      "ℵ₀-backlog"
+     ]
+    }
+   }
   }
  ],
  "slugify": [
@@ -374,6 +418,26 @@
   [
    "EQ curve",
    "eq-curve"
+  ],
+  [
+   "積ん読 (tsundoku)",
+   "積ん読-tsundoku"
+  ],
+  [
+   "ℵ₀ backlog",
+   "ℵ₀-backlog"
+  ],
+  [
+   "𝔹𝔹ℚ",
+   "𝔹𝔹ℚ"
+  ],
+  [
+   "Λ-Lifting",
+   "λ-lifting"
+  ],
+  [
+   "∇-descent",
+   "-descent"
   ]
  ],
  "load": [
@@ -460,6 +524,41 @@
    },
    "ids": [
     "fron"
+   ],
+   "problem_files": []
+  },
+  {
+   "name": "a byte order mark does not hide the first header",
+   "files": {
+    "bom.md": [
+     "\ufeff# Fron",
+     "A front.",
+     "",
+     "# Fup",
+     "Not a typo."
+    ]
+   },
+   "ids": [
+    "fron",
+    "fup"
+   ],
+   "problem_files": []
+  },
+  {
+   "name": "files in order of their names' code points",
+   "files": {
+    "ｚｚ.md": [
+     "## Zz",
+     "Fullwidth."
+    ],
+    "𝔹𝔹ℚ.md": [
+     "## Bbq",
+     "Beyond the plane."
+    ]
+   },
+   "ids": [
+    "zz",
+    "bbq"
    ],
    "problem_files": []
   }
@@ -1166,6 +1265,132 @@
    "ids": [
     "prose-basilisks"
    ]
+  },
+  {
+   "name": "a Japanese term between brackets",
+   "glossary": "unicode",
+   "text": "それは「積ん読」だ。",
+   "expansions": null,
+   "ids": [
+    "積ん読"
+   ],
+   "wording": {
+    "積ん読": "積ん読"
+   }
+  },
+  {
+   "name": "a Japanese term by its romanized alias",
+   "glossary": "unicode",
+   "text": "My tsundoku grows.",
+   "expansions": null,
+   "ids": [
+    "積ん読"
+   ],
+   "wording": {
+    "積ん読": "tsundoku"
+   }
+  },
+  {
+   "name": "letters past the Basic Multilingual Plane",
+   "glossary": "unicode",
+   "text": "Lunch at the 𝔹𝔹ℚ.",
+   "expansions": null,
+   "ids": [
+    "𝔹𝔹ℚ"
+   ],
+   "wording": {
+    "𝔹𝔹ℚ": "𝔹𝔹ℚ"
+   }
+  },
+  {
+   "name": "a title beginning past the Basic Multilingual Plane",
+   "glossary": "unicode",
+   "text": "Then the 𝔼-step.",
+   "expansions": null,
+   "ids": [
+    "𝔼-step"
+   ],
+   "wording": {
+    "𝔼-step": "𝔼-step"
+   }
+  },
+  {
+   "name": "a math letter and a subscript digit",
+   "glossary": "unicode",
+   "text": "An ℵ₀ backlog of reviews.",
+   "expansions": null,
+   "ids": [
+    "ℵ₀-backlog"
+   ],
+   "wording": {
+    "ℵ₀-backlog": "ℵ₀ backlog"
+   }
+  },
+  {
+   "name": "a math symbol is part of its word",
+   "glossary": "unicode",
+   "text": "∇-descent converges.",
+   "expansions": null,
+   "ids": [
+    "-descent"
+   ],
+   "wording": {
+    "-descent": "∇-descent"
+   }
+  },
+  {
+   "name": "the word without its math symbol does not fire the term",
+   "glossary": "unicode",
+   "text": "A steady descent.",
+   "expansions": null,
+   "ids": [],
+   "wording": {}
+  },
+  {
+   "name": "letters beyond Latin match in any case",
+   "glossary": "unicode",
+   "text": "Λ-lifting it is.",
+   "expansions": null,
+   "ids": [
+    "λ-lifting"
+   ],
+   "wording": {
+    "λ-lifting": "Λ-lifting"
+   }
+  },
+  {
+   "name": "a non-breaking space between a term's words",
+   "glossary": "field-guide",
+   "text": "Paying the hydra\u00a0tax again.",
+   "expansions": null,
+   "ids": [
+    "hydra-tax"
+   ],
+   "wording": {
+    "hydra-tax": "hydra\u00a0tax"
+   }
+  },
+  {
+   "name": "an inflected form with letters beyond ASCII",
+   "glossary": [
+    "## Hääpäivä",
+    "Wedding day."
+   ],
+   "text": "Hääpäivän kakku.",
+   "expansions": {
+    "hääpäivä": {
+     "forms": [
+      "hääpäivän"
+     ],
+     "stems": []
+    }
+   },
+   "ids": [
+    "hääpäivä"
+   ],
+   "wording": {
+    "hääpäivä": "Hääpäivän"
+   }
   }
  ],
  "clean_expansion": [
@@ -1268,6 +1493,42 @@
    "expect": {
     "forms": [
      "EQs"
+    ],
+    "stems": []
+   }
+  },
+  {
+   "name": "forms and stems with letters beyond ASCII",
+   "word": "hääpäivä",
+   "forms": [
+    "hääpäivän",
+    "hääpäivää",
+    "hääpäivä"
+   ],
+   "stems": [
+    "hääpäiv",
+    "hää"
+   ],
+   "expect": {
+    "forms": [
+     "hääpäivän",
+     "hääpäivää"
+    ],
+    "stems": [
+     "hääpäiv"
+    ]
+   }
+  },
+  {
+   "name": "a form holding a math symbol",
+   "word": "∇-descent",
+   "forms": [
+    "∇-descents"
+   ],
+   "stems": [],
+   "expect": {
+    "forms": [
+     "∇-descents"
     ],
     "stems": []
    }
@@ -1518,6 +1779,29 @@
    "already_fired": [],
    "expansions": null,
    "firings": []
+  },
+  {
+   "name": "a link to an anchor beyond ASCII",
+   "glossary": "unicode",
+   "text": "My tsundoku grows.",
+   "budget": 10000,
+   "max_depth": 1,
+   "already_fired": [],
+   "expansions": null,
+   "firings": [
+    {
+     "id": "積ん読",
+     "depth": 0,
+     "wording": "tsundoku",
+     "via": null
+    },
+    {
+     "id": "ℵ₀-backlog",
+     "depth": 1,
+     "wording": null,
+     "via": "積ん読"
+    }
+   ]
   }
  ],
  "lookup": [
@@ -1727,6 +2011,37 @@
    "exact": false,
    "candidates": [],
    "mentioned_in": []
+  },
+  {
+   "name": "a term beyond ASCII, exactly",
+   "glossary": "unicode",
+   "term": "ℵ₀ backlog",
+   "expansions": null,
+   "entry": "ℵ₀-backlog",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "a Japanese term by its romanized alias, in another case",
+   "glossary": "unicode",
+   "term": "TSUNDOKU",
+   "expansions": null,
+   "entry": "積ん読",
+   "exact": true,
+   "candidates": [],
+   "mentioned_in": []
+  },
+  {
+   "name": "the word without its math symbol is a near miss",
+   "glossary": "unicode",
+   "term": "descent",
+   "expansions": null,
+   "entry": "-descent",
+   "exact": false,
+   "candidates": [],
+   "mentioned_in": [],
+   "answer_starts_with": "There is no entry for 'descent'. The closest is '∇-descent':"
   }
  ]
 }
