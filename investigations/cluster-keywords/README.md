@@ -463,6 +463,13 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
      onto *X Y* only where the corpus also writes *X Y*.
   4. **Casing votes count sentence-cased titles**, which turn every proper name lowercase: *solomonoff induction*
      (a 1–1 tie). Fix: count votes from abstracts only.
+  - **And a display change, no re-import needed (decided the same day): Themes prefer the distinctive.** Order
+    each cluster's LLM keywords by how few clusters share them, the LLM's order kept among ties, and show the
+    first six. The corpus-wide filter's floor of five makes it drop only terms in half of a ten-cluster corpus,
+    so in biology *Education for Sustainable Development* (4 of 10) and *curriculum* (3) fill slots in clusters
+    0 and 6, which the LLM's own lists tell apart: general sustainability education (*experiential learning*,
+    *sustainability competencies*) against the UN SDGs (*SDG integration*, *bibliometrics*, *UN*). Check on all
+    six corpora. Weak Quoted lines in small corpora (*insight*, *publication*): no action, nothing reasonable to do.
   - Also from the read: *x-risk* for *existential risk*, a case for the LLM-alias pass (`TODO.md`, keyword search);
     the phrases' line renamed *Quoted* (was *Terms*); an empty Quoted line left out.
 - **The shortlist read, 2026-11-25, opening finding: show both lists, not only a hybrid of them** (the maintainer).
