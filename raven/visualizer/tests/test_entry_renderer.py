@@ -193,7 +193,7 @@ class TestSelectionHeading:
         assert entry_renderer.format_selection_heading(3, [7, -1]) == "[3 items total in 1 cluster + Misc]"
 
 
-class TestThemesAndTerms:
+class TestThemesAndQuoted:
     """Where a dataset has both the LLM's keywords and the phrases, a cluster shows both, on two lines."""
 
     @staticmethod
@@ -204,13 +204,13 @@ class TestThemesAndTerms:
         fc = self.content(cluster_llm_keywords=[["existential risk", "AI safety"]],
                           cluster_keyword_lists=[[("intelligence", 0.5), ("consciousness", 0.3)]])
         assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "existential risk, AI safety"),
-                                                                 ("Terms", "intelligence, consciousness")]
+                                                                 ("Quoted", "intelligence, consciousness")]
 
     def test_a_term_repeating_a_theme_is_left_out_but_a_longer_one_containing_it_is_not(self):
         fc = self.content(cluster_llm_keywords=[["intelligence"]],
                           cluster_keyword_lists=[[("Intelligence", 0.6), ("artificial general intelligence", 0.4)]])
         assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "intelligence"),
-                                                                 ("Terms", "artificial general intelligence")]
+                                                                 ("Quoted", "artificial general intelligence")]
 
     def test_a_line_shows_at_most_n(self):
         fc = self.content(cluster_llm_keywords=[[f"theme {i}" for i in range(15)]],
@@ -245,7 +245,7 @@ class TestThemesAndTerms:
         assert entry_renderer.format_cluster_keywords(fc, 0) == [(None, "[label term]")]
 
     def test_a_report_puts_the_lines_on_one(self):
-        assert entry_renderer.format_keyword_lines([("Themes", "a, b"), ("Terms", "c")]) == "Themes: a, b; Terms: c"
+        assert entry_renderer.format_keyword_lines([("Themes", "a, b"), ("Quoted", "c")]) == "Themes: a, b; Quoted: c"
         assert entry_renderer.format_keyword_lines([(None, "[a, b]")]) == "[a, b]"
 
 

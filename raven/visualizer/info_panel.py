@@ -1467,7 +1467,7 @@ def _update_info_panel(*, task_env=None, env=None):
             dpg.add_text(entries_text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_count_build{env.internal_build_number}", parent=cluster_header_group)
             keywords_group = dpg.add_group(tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)
             bold_font = guiutils.load_extra_font(app_state.themes_and_fonts, gui_config.font_size, "OpenSans", "Bold")[1]
-            for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Terms: ...", or "[keyword0, ...]"
+            for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Quoted: ...", or "[keyword0, ...]"
                 line_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_keywords_line{k}_build{env.internal_build_number}", parent=keywords_group)
                 if caption is not None:
                     caption_widget = dpg.add_text(f"{caption}:", color=(180, 180, 180), tag=f"cluster_{cluster_id}_keywords_caption{k}_build{env.internal_build_number}", parent=line_group)

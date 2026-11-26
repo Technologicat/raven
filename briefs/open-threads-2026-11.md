@@ -35,7 +35,7 @@ maintainer has read the whole arXiv evidence comparison.
 
 - **The new imports are done** (evening of 2026-11-24, all six corpora, LLM with evidence and hybrid).
 - **Decided the same day**: the evidence is on by default; embedding terms by their sentences is rejected.
-- **Built 2026-11-25**: a cluster shows **Themes** (the LLM's) and **Terms** (the phrases) on two lines, in the
+- **Built 2026-11-25**: a cluster shows **Themes** (the LLM's) and **Quoted** (the phrases; first called *Terms*) on two lines, in the
   info panel and the tooltip (the shortlist read's first finding: six terms cannot hold both); the LLM is asked for
   up to fifteen keywords; *test-time* compounds kept whole; `#7` in the search field finds cluster 7; the selection
   heading reads *68 clusters + Misc*.

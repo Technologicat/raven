@@ -322,7 +322,7 @@ def _render_worker(*, task_env, env=None):
                     if maybe_purity_text is not None:
                         dpg.add_text(f"[{maybe_purity_text}]", color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_purity_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[purity 62%]"
                     keywords_group = dpg.add_group(tag=f"cluster_{cluster_id}_annotation_keywords_group_build{env.internal_build_number}", parent=cluster_title_group)
-                    for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Terms: ...", or "[keyword0, ...]"
+                    for k, (caption, text) in enumerate(cluster_keywords):  # "Themes: ...", "Quoted: ...", or "[keyword0, ...]"
                         line_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_keywords_line{k}_build{env.internal_build_number}", parent=keywords_group)
                         if caption is not None:
                             caption_widget = dpg.add_text(f"{caption}:", color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_keywords_caption{k}_build{env.internal_build_number}", parent=line_group)

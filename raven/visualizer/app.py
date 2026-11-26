@@ -257,7 +257,7 @@ with timer() as tim:
     dpg.create_context()
 
     app_state.themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
-    # The bold face of the keyword captions ("Themes:", "Terms:"), loaded here so that the render workers building
+    # The bold face of the keyword captions ("Themes:", "Quoted:"), loaded here so that the render workers building
     # the tooltip and the info panel only ever find it in the cache.
     guiutils.load_extra_font(app_state.themes_and_fonts, gui_config.font_size, "OpenSans", "Bold")
 

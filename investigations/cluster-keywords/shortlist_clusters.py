@@ -1,6 +1,6 @@
 """Which clusters of a corpus are worth a person's reading after a new import? A short list, picked by script.
 
-Each cluster shows its keywords as the Visualizer shows them, **Themes** (the LLM's) and **Terms** (the phrases),
+Each cluster shows its keywords as the Visualizer shows them, **Themes** (the LLM's) and **Quoted** (the phrases),
 through the app's own formatter (`raven.visualizer.entry_renderer.format_cluster_keywords`), beside the same from
 the previous import.
 

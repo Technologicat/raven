@@ -209,7 +209,7 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
     `themes_only`: show the themes line alone, where there is one; for a tooltip crowded with clusters.
 
     Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on),
-    `[("Themes", ...), ("Terms", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
+    `[("Themes", ...), ("Quoted", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
     those it gave too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and the
     phrases, which quote what the papers say, without a phrase that repeats a theme, and left out where none is left.
     Otherwise `[(None, "[keyword0, ...]")]`, the cluster's label, which every dataset has.
@@ -226,12 +226,12 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
         display = getattr(file_content, "keyphrase_display", None) or {}
         terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
         # A small cluster may have no phrase left that a theme does not already say.
-        return [("Themes", ", ".join(themes))] + ([("Terms", ", ".join(terms))] if terms else [])
+        return [("Themes", ", ".join(themes))] + ([("Quoted", ", ".join(terms))] if terms else [])
     return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
 
 
 def format_keyword_lines(lines: list[tuple[str | None, str]]) -> str:
-    """`format_cluster_keywords`'s lines as one line of text, as a copied report shows them: "Themes: ...; Terms: ..."."""
+    """`format_cluster_keywords`'s lines as one line of text, as a copied report shows them: "Themes: ...; Quoted: ..."."""
     return "; ".join(f"{caption}: {text}" if caption else text for caption, text in lines)
 
 

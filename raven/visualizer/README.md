@@ -302,11 +302,11 @@ and *effluent*.
 
 **A cluster shows its themes and its terms**, where the LLM keyworded the dataset along with the phrases
 (`"hybrid"`, or `"llm"` with the evidence on). Its header in the info panel and in the plot tooltip has two lines:
-**Themes**, the LLM's keywords, which name what the cluster's studies share, and **Terms**, the phrases, which
-quote what they say. The two catch different things, the themes the ideas the studies word differently, the terms
-the names they use: *double descent* is a theme, *ImageNet* a term.
+**Themes**, the LLM's keywords, which name what the cluster's studies share, and **Quoted**, the phrases, which
+quote what they say. The two catch different things, the themes the ideas the studies word differently, the quoted
+phrases the names they use: *double descent* is a theme, *ImageNet* a quoted phrase.
 
-- **A theme the LLM gave most clusters is left out**, as is a term repeating a theme.
+- **A theme the LLM gave most clusters is left out**, as is a quoted phrase repeating a theme.
 - **A tooltip over more than two clusters shows the themes alone**, to leave room for the titles.
 
 **LLM cluster keywords are made comparable across clusters**, if you have set `clusters_keyword_method =

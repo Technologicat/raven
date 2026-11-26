@@ -81,8 +81,8 @@
   - With the keyboard on the year selector (**Ctrl+E**), **Left** and **Right** slide the range a year at a time, keeping its width; with **Shift** they move the first year only, and with **Ctrl** the last. **F5** switches between grayed and hidden.
   - The year filter and the Misc selector apply together: a record is in colour only if both show it.
   - Each filter has a reset of its own, beside the one that shows everything, so one can be undone while the other is kept.
-- **A cluster shows its themes and its terms.** Where the LLM keyworded a dataset along with the phrases, a cluster's header in the info panel and in the plot tooltip has two lines: **Themes**, the LLM's, which name what the cluster's studies share, and **Terms**, the phrases, which quote what they say.
-  - A theme the LLM gave most clusters is left out, and so is a term repeating a theme.
+- **A cluster shows its themes, and phrases quoted from its studies.** Where the LLM keyworded a dataset along with the phrases, a cluster's header in the info panel and in the plot tooltip has two lines: **Themes**, the LLM's, which name what the cluster's studies share, and **Quoted**, the phrases, which quote what they say.
+  - A theme the LLM gave most clusters is left out, and so is a quoted phrase repeating a theme.
   - A tooltip over more than two clusters shows the themes alone, to leave room for the titles.
   - Other datasets show their keywords on one line, as before.
 - **Search for `#` and a number to find that cluster**: *#7* finds cluster 7's studies.
