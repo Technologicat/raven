@@ -63,10 +63,12 @@
 
 *Fragment search* means that e.g. *"cat photo"* matches *"photocatalytic"*. This is the same kind of search provided by the Firefox address bar, or by the `helm-swoop` function in Emacs. Currently the search looks only in the title field of the data; this may change in the future.
 
-To find a cluster by its number, search for `#` and the number: *#7* finds cluster 7's studies.
+To find a cluster by its number, search for `#` and the number, or `cluster:` and the number: *#7* and *cluster:7*
+both find cluster 7's studies. To find the studies of a year, search for `~` and the year, or `year:` and the year:
+*~2022* and *year:2022* both find 2022's.
 
-To find the studies of a year, search for `~` and the year, or `year:` and the year: *~2022* and *year:2022* both
-find 2022's. A range takes a dash, and an open end leaves out its year: *~2019-2022*, *~2019-*, *~-2015*.
+Either takes a range, with a dash, and an open end leaves out its number: *#7-9*, *~2019-2022*, *~2019-*, *~-2015*.
+*Misc* has no number, so no cluster search finds it.
 
 **Raven is NOT a search engine.** Rather, for its input, it uses research literature metadata (title, authors, year, abstract) for thousands of papers, as returned by a search engine, and plots that data in an interactive semantic visualization.
 

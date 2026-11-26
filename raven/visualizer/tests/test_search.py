@@ -162,6 +162,16 @@ class TestFindingAClusterByNumber:
         assert titles_matching(clustered, "#7") == ["Cluster seven paper"]
         assert titles_matching(clustered, " #2 ") == ["Cluster two paper"]
 
+    def test_cluster_colon_and_a_range(self, clustered):
+        assert titles_matching(clustered, "cluster:7") == ["Cluster seven paper"]
+        assert titles_matching(clustered, "#2-3") == ["Another #7 paper", "Cluster two paper"]
+        assert titles_matching(clustered, "cluster:3-") == ["Cluster seven paper", "Another #7 paper"]
+
+    def test_misc_is_not_in_an_open_range(self, clustered):
+        """Misc's -1 is no cluster number, so an open range does not reach it."""
+        clustered.sorted_entries[2].cluster_id = -1
+        assert titles_matching(clustered, "#-3") == ["Another #7 paper"]
+
     def test_a_number_alone_is_an_ordinary_fragment(self, clustered):
         """Control: without the hash, "7" is searched for in the titles, and finds the title holding it."""
         assert titles_matching(clustered, "7") == ["Another #7 paper"]
