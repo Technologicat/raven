@@ -470,7 +470,8 @@ def set_grouping(grouping: str) -> None:
     dpg.set_value("color_by_combo", grouping)  # tag
     plotter.refresh_series(ds)
     plotter.draw_color_bar(ds)
-    app_state.update_mouse_hover(force=True, wait=False)  # the tooltip groups as the map is coloured
+    app_state.update_mouse_hover(force=True, wait=False)  # the tooltip and the info panel group as the map is coloured
+    app_state.update_info_panel(wait=False)
 
 
 def cycle_grouping(direction: int = 1) -> None:
@@ -1050,6 +1051,9 @@ with timer() as tim:
                                               tag="color_by_combo",
                                               width=80,
                                               callback=lambda: set_grouping(dpg.get_value("color_by_combo")))  # tag
+                                # The spacer keeps the drawlist from directly following the combo: there, DPG reports the
+                                # combo's focus as the bar's rectangles', and the combo never answers as focused.
+                                dpg.add_spacer(width=1)
                                 dpg.add_drawlist(*plotter.COLOR_BAR_SIZE, tag=plotter.COLOR_BAR)
                 for year_input in ("year_from_input", "year_to_input"):  # tag
                     with dpg.tooltip(year_input, tag=f"{year_input}_tooltip"):
@@ -1220,9 +1224,9 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F3", action_indent=0, action="Scroll to the next search match", notes="When matches shown in info panel"),
                env(key_indent=1, key="Shift+F3", action_indent=1, action="Same, but the previous one", notes="When matches shown in info panel"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to the cluster's start", notes='"up"'),
-               env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to the next cluster", notes=""),
-               env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to the previous cluster", notes=""),
+               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to the cluster's or year's start", notes='"up"'),
+               env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to the next cluster or year", notes=""),
+               env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to the previous cluster or year", notes=""),
                env(key_indent=0, key="Home", action_indent=0, action="Scroll to the top", notes="Not while typing"),
                env(key_indent=1, key="End", action_indent=0, action="Scroll to the bottom", notes="Not while typing"),
                env(key_indent=1, key="Page Up", action_indent=0, action="Scroll up", notes="Also while typing"),
@@ -1247,7 +1251,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch the current item", notes="Searching highlights it in the plotter"),
                env(key_indent=1, key="Shift+F6", action_indent=0, action="Set the selection to this item only", notes=""),
                env(key_indent=1, key="Ctrl+F6", action_indent=0, action="Remove this item from the selection", notes=""),
-               env(key_indent=0, key="F7", action_indent=0, action="Select the current cluster", notes=""),
+               env(key_indent=0, key="F7", action_indent=0, action="Select the current cluster or year", notes=""),
                env(key_indent=1, key="Shift+F7", action_indent=1, action="Same, but add to the selection", notes=""),
                env(key_indent=1, key="Ctrl+F7", action_indent=1, action="Same, but subtract from it", notes=""),
                env(key_indent=1, key="Ctrl+Shift+F7", action_indent=1, action="Same, but intersect with it", notes=""),
@@ -1262,6 +1266,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # The plotter itself: what it shows, and stepping back through what was selected in it.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
+               env(key_indent=0, key="F2 / Shift+F2", action_indent=0, action="Colour the map by cluster or year", notes="The info panel groups the same way"),
+               env(key_indent=1, key="Ctrl+B", action_indent=0, action="Focus the colour selector", notes='"by"; then Up, Down, Home, End'),
                env(key_indent=0, key="F4 / Shift+F4", action_indent=0, action="Show Misc the next or previous way", notes="Shown, grayed, hidden"),
                env(key_indent=1, key="Ctrl+M", action_indent=0, action="Focus the Misc selector", notes="Then Up, Down, Home, End"),
                env(key_indent=0, key="F5", action_indent=0, action="Show the other years the next way", notes="Grayed, hidden"),
@@ -1269,13 +1275,11 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=2, key="Left / Right", action_indent=0, action="Move the years back or forward", notes="While the year mode selector has focus"),
                env(key_indent=2, key="Shift+Left / Right", action_indent=1, action="Same, but the first year only", notes=""),
                env(key_indent=2, key="Ctrl+Left / Right", action_indent=1, action="Same, but the last year only", notes=""),
-               env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
-               env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
-               # The window's layout.
+               env(key_indent=0, key="Ctrl+Shift+Z / Y", action_indent=0, action="Undo or redo the last selection change", notes=""),
+               # The window's layout, and the meta keys last, where Raven's cards put them: about the app rather than
+               # about anything in it. One group, as the card has no row to spare for a second.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Shift+P", action_indent=0, action="Move the info panel to the other side", notes='"panel"'),
-               # The meta keys last, where Raven's cards put them: about the app rather than about anything in it.
-               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )

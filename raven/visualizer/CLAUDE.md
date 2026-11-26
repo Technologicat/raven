@@ -8,9 +8,9 @@ checks this table against the package, including whether every module is in it.
 
 ```
 importer.py       (~2.3k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
-info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
+info_panel.py     (~1.8k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
-app.py            (~1.9k) — GUI app: window layout, event wiring, the main render loop
+app.py            (~2.0k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~380)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.

@@ -170,6 +170,9 @@ search_result_widget_to_display_idx = {}  # reverse lookup: DPG ID -> index in `
 
 cluster_ids_in_selection = []  # cluster IDs of the clusters currently shown in the info panel. Info panel always shows at least one item per cluster, so this matches the whole selection.
 cluster_id_to_display_idx = {}  # reverse lookup: cluster ID -> index in `cluster_ids_in_selection`
+# What the shown content is grouped by, one of `displaystate.GROUPINGS`: a cluster ID above is a year when it is
+# `YEAR`. The grouping the content was *built* with, which a switch leads until the rebuild lands.
+_built_grouping = box(displaystate.CLUSTER)
 
 report_plaintext = box("")  # Full info panel content in plain text (.txt) format
 report_markdown = box("")  # Full info panel content in Markdown (.md) format
@@ -931,7 +934,7 @@ def _get_cluster_of_current_item():
         if current_item is not None:
             data_idx = widget_to_data_idx[current_item]
             entry = app_state.dataset.sorted_entries[data_idx]
-            return entry.current_label_id
+            return displaystate.group_of(entry, unbox(_built_grouping))
         logger.debug("_get_cluster_of_current_item: No current item (info panel empty?)")
         return None
 
@@ -995,7 +998,8 @@ def scroll_to_top_of_current_cluster():
 
 
 def select_cluster_by_id(cluster_id, mode):
-    """Select all data in cluster `cluster_id` that can be interacted with (`displaystate.interactable`).
+    """Select all data in cluster `cluster_id`, or in that year when the info panel is grouped by year, that can be
+    interacted with (`displaystate.interactable`).
 
     `mode`: the combine mode, one of those `selection.update` accepts. Handlers get it from
             `selection.keyboard_state_to_mode`, which is where Shift/Ctrl/Ctrl+Shift are read.
@@ -1007,7 +1011,8 @@ def select_cluster_by_id(cluster_id, mode):
     it is called, including from anywhere that does not run in the event dispatch.
     """
     entries = app_state.dataset.sorted_entries
-    data_idxs = [data_idx for data_idx, entry in enumerate(entries) if entry.current_label_id == cluster_id]
+    grouping = unbox(_built_grouping)
+    data_idxs = [data_idx for data_idx, entry in enumerate(entries) if displaystate.group_of(entry, grouping) == cluster_id]
     selection.update(displaystate.interactable(entries, data_idxs, grayed_selectable=app_state.grayed_selectable),
                      mode, wait=False)
 
@@ -1022,7 +1027,7 @@ def select_current_cluster():
             return
         data_idx = widget_to_data_idx[item]
     entry = app_state.dataset.sorted_entries[data_idx]
-    select_cluster_by_id(entry.current_label_id, mode)
+    select_cluster_by_id(displaystate.group_of(entry, unbox(_built_grouping)), mode)
 
 
 # --------------------------------------------------------------------------------
@@ -1364,7 +1369,9 @@ def _update_info_panel(*, task_env=None, env=None):
         cluster_ids_in_selection_new = []
         cluster_id_to_display_idx_new = {}
 
-        entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel, dataset=ds)
+        grouping = app_state.grouping
+        group_noun = "year" if grouping == displaystate.YEAR else "cluster"
+        entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel, dataset=ds, grouping=grouping)
 
         cluster_ids_in_selection_new.clear()
         cluster_id_to_display_idx_new.clear()
@@ -1377,7 +1384,7 @@ def _update_info_panel(*, task_env=None, env=None):
         # one entry per cluster, so the cluster count matches the whole selection. The item count
         # gets its final value when the update completes.
         if len(selection_data_idxs):
-            top_heading_text = entry_renderer.format_selection_heading(len(selection_data_idxs), cluster_ids_in_selection_new)
+            top_heading_text = entry_renderer.format_selection_heading(len(selection_data_idxs), cluster_ids_in_selection_new, grouping=grouping)
         else:
             top_heading_text = "[nothing selected]"  # TODO: DRY duplicate definitions for labels
             dpg.add_text("[Select item(s) to view information]", color=(140, 140, 140, 255), parent=info_panel_content_target)  # TODO: DRY duplicate definitions for labels
@@ -1443,7 +1450,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                        callback=(make_scroll_to_cluster(display_idx - 1) if up_enabled else lambda: None),
                                        parent=cluster_header_group)
             up_tooltip = dpg.add_tooltip(up_button)
-            dpg.add_text("Previous cluster [Ctrl+P]", parent=up_tooltip)
+            dpg.add_text(f"Previous {group_noun} [Ctrl+P]", parent=up_tooltip)
             dpg.bind_item_theme(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
 
             down_enabled = (not last_cluster)
@@ -1454,14 +1461,15 @@ def _update_info_panel(*, task_env=None, env=None):
                                          callback=(make_scroll_to_cluster(display_idx + 1) if down_enabled else lambda: None),
                                          parent=cluster_header_group)
             down_tooltip = dpg.add_tooltip(down_button)
-            dpg.add_text("Next cluster [Ctrl+N]", parent=down_tooltip)
+            dpg.add_text(f"Next {group_noun} [Ctrl+N]", parent=down_tooltip)
             dpg.bind_item_theme(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
 
             # Cluster title and keywords
             cluster_title_widget = dpg.add_text(cluster_title, tag=f"cluster_{cluster_id}_title_build{env.internal_build_number}", color=(180, 180, 180), parent=cluster_header_group)
             dpg.set_item_user_data(cluster_title_widget, ("cluster_title", cluster_id))  # for `_is_cluster_title`
             plural_s = "s" if len(entries_by_cluster[cluster_id]) != 1 else ""
-            maybe_purity_text = entry_renderer.format_cluster_purity(ds.file_content, cluster_id)
+            maybe_purity_text = (entry_renderer.format_cluster_purity(ds.file_content, cluster_id)  # a year has no purity
+                                 if grouping == displaystate.CLUSTER else None)
             purity_part = f", {maybe_purity_text}" if maybe_purity_text is not None else ""
             entries_text = f"[{len(entries_by_cluster[cluster_id])} item{plural_s}{purity_part}]"
             dpg.add_text(entries_text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_count_build{env.internal_build_number}", parent=cluster_header_group)
@@ -1555,8 +1563,8 @@ def _update_info_panel(*, task_env=None, env=None):
                                    parent=entry_buttons_column_2_group)
                 dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
-                cluster_name_str = f"#{cluster_id}" if cluster_id != -1 else "Misc"
-                dpg.add_text(f"Select all items in the same cluster ({cluster_name_str}) as this item [F7]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
+                cluster_name_str = entry_renderer.format_group_title(cluster_id, grouping)
+                dpg.add_text(f"Select all items in the same {group_noun} ({cluster_name_str}) as this item [F7]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
                              parent=b_tooltip)
                 dpg.set_item_callback(b, make_select_cluster(cluster_id))
 
@@ -1690,6 +1698,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 logger.debug(f"_update_info_panel: {task_env.task_name}: Swapping in new navigation metadata.")
                 cluster_ids_in_selection.clear()
                 cluster_ids_in_selection.extend(cluster_ids_in_selection_new)
+                _built_grouping << grouping
                 cluster_id_to_display_idx.clear()
                 cluster_id_to_display_idx.update(cluster_id_to_display_idx_new)
                 entry_title_widgets.clear()

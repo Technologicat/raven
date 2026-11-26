@@ -198,6 +198,10 @@ class TestSelectionHeading:
     def test_misc_alone(self):
         assert entry_renderer.format_selection_heading(1, [-1]) == "[1 item total in Misc]"
 
+    def test_by_year_the_groups_are_years(self):
+        assert (entry_renderer.format_selection_heading(40, [2021, 2022, -1], grouping="year") ==
+                "[40 items total in 2 years + No year]")
+
     def test_one_cluster_and_misc(self):
         assert entry_renderer.format_selection_heading(3, [7, -1]) == "[3 items total in 1 cluster + Misc]"
 

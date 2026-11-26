@@ -491,6 +491,17 @@ class TestSelectingAWholeCluster:
         data_idxs, _, _ = gui.selections[0]
         assert list(data_idxs) == [2]
 
+    def test_grouped_by_year_a_year_is_selected(self, gui, monkeypatch):
+        # Years cutting across the clusters, so the two groupings select different records.
+        for entry, year in zip(app_state.dataset.sorted_entries, ("2021", "2022", "2021")):
+            entry.year = year
+        monkeypatch.setattr(info_panel, "_built_grouping", box("year"))
+        info_panel.select_cluster_by_id(2021, "replace")
+        assert sorted(gui.selections[0][0]) == [0, 2], "the 2021 records, from both clusters"
+        be_current(monkeypatch, 11)  # the 2022 entry, in cluster 0
+        info_panel.select_current_cluster()
+        assert list(gui.selections[1][0]) == [1], "its year, not its cluster"
+
     def test_selecting_the_current_cluster_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
         be_current(monkeypatch, None)
         info_panel.select_current_cluster()

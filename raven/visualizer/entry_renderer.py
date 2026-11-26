@@ -151,21 +151,23 @@ def format_group_title(group: int, grouping: str) -> str:
     return f"#{group}" if group != -1 else "Misc"
 
 
-def format_selection_heading(n_items: int, cluster_ids) -> str:
-    """The info panel's heading for a selection: `"[1274 items total in 68 clusters + Misc]"`.
+def format_selection_heading(n_items: int, cluster_ids, *, grouping: str = displaystate.CLUSTER) -> str:
+    """The info panel's heading for a selection: `"[1274 items total in 68 clusters + Misc]"`, or by year,
+    `"[1274 items total in 12 years + No year]"`.
 
     `n_items`: how many items are selected.
-    `cluster_ids`: the clusters they are in; `-1` is Misc, which is named rather than counted as a cluster, since
-                   the clusters are numbered and Misc is not one of the numbers.
+    `cluster_ids`: the groups they are in (`displaystate.group_of` under `grouping`); `-1` is Misc, or no year, which
+                   is named rather than counted, not being one of the numbers.
     """
     cluster_ids = set(cluster_ids)
     has_misc = -1 in cluster_ids
     n_clusters = len(cluster_ids - {-1})
+    noun = "year" if grouping == displaystate.YEAR else "cluster"
     parts = []
     if n_clusters:
-        parts.append(f"{n_clusters} cluster{'s' if n_clusters != 1 else ''}")
+        parts.append(f"{n_clusters} {noun}{'s' if n_clusters != 1 else ''}")
     if has_misc:
-        parts.append("Misc")
+        parts.append(format_group_title(-1, grouping))
     return f"[{n_items} item{'s' if n_items != 1 else ''} total in {' + '.join(parts)}]"
 
 

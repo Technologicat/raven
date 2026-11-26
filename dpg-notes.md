@@ -1946,6 +1946,17 @@ gesture into a meaningful one. Raven's panel currently accepts the snap-back.
 
 # Drawlists
 
+## A drawlist right after a focusable widget steals its answer to `get_focused_item`
+
+Seen 2026-11-26 in the Visualizer, with a combo directly followed by a drawlist on one row: focusing the combo
+left `dpg.is_item_focused(combo)` True, while `dpg.get_focused_item()` answered with a `mvDrawRect` inside the
+drawlist. So anything asking "is this the focused item" by comparing against `get_focused_item` — which is
+what `guiutils.has_focus` does — never sees the combo as focused, and a hotkey that focuses it appears dead.
+
+A combo two items before the same drawlist was unaffected, and a 1 px `add_spacer` between the combo and the
+drawlist fixed it. That fits the draw items taking their state from ImGui's last-submitted item, which right
+after the combo is the combo; this is inferred from those two observations, not read from DPG's source.
+
 ## A drawlist's children are in slot 2, and slot 1 answers "nothing was drawn"
 
 Measured 2026-08-25, checking whether `XDotWidget.set_graph` renders a hand-built graph.

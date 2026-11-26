@@ -41,6 +41,7 @@
     - [How tight the clusters are, and showing loose ones as Misc](#how-tight-the-clusters-are-and-showing-loose-ones-as-misc)
     - [Gray out or hide Misc](#gray-out-or-hide-misc)
     - [Show only some years](#show-only-some-years)
+    - [Colour the map by year](#colour-the-map-by-year)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
 - [Limitations](#limitations)
@@ -546,6 +547,22 @@ The selector beside them chooses how the records outside the range are shown: **
 A dataset whose records carry no year has nothing to filter by, so the year fields do not appear.
 
 
+## Colour the map by year
+
+The **Colour by** selector, at the end of the years row, colours the map by **cluster** or by **year**. By year,
+each year takes a colour from the plot's colour scale, earliest to latest, and a record with no year takes the
+*Misc* colour. The bar beside the selector shows the scale, with its first and last year, or its first and last
+cluster when colouring by cluster.
+
+**The tooltip and the info panel group the same way**: by year, each year is a heading, earliest first, with
+*No year* last. **Ctrl+U**, **Ctrl+N**, **Ctrl+P** and **F7** then go by year, as they go by cluster otherwise.
+A year has no purity and, for now, no keywords.
+
+**F2** switches the colouring, and **Shift+F2** back; or **Ctrl+B** (for *by*) puts the keyboard on the
+selector. Like the filters, the colouring starts at *cluster* whenever a dataset is loaded, and a dataset whose
+records carry no year does not offer it.
+
+
 ## Create a word cloud
 
 Raven can make a word cloud of the studies in the current selection, in one of two modes:
@@ -608,6 +625,8 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 
 | Key | Action |
 |---|---|
+| `F2` / `Shift+F2` | Colour the map by cluster or by year; the tooltip and the info panel group the same way |
+| `Ctrl+B` | Put the keyboard on the *Colour by* selector: then `Up`, `Down`, `Home` and `End` choose, and `Esc` leaves it |
 | `F4` / `Shift+F4` | Show *Misc* the next / previous way: shown, grayed out, hidden |
 | `Ctrl+M` | Put the keyboard on the *Misc* selector: then `Up`, `Down`, `Home` and `End` choose, and `Esc` leaves it |
 | `F5` / `Shift+F5` | Show the records outside the years the other way: grayed out, hidden |
@@ -641,8 +660,8 @@ can be read down without leaving the field.
 | `Home` / `End` | Top / bottom |
 | `Page Up` / `Page Down` | Page up / down |
 | `Up arrow` / `Down arrow` | Scroll a little |
-| `Ctrl+U` | To the start of the current cluster ("up") |
-| `Ctrl+N` / `Ctrl+P` | To the next / previous cluster |
+| `Ctrl+U` | To the start of the current cluster, or year ("up") |
+| `Ctrl+N` / `Ctrl+P` | To the next / previous cluster, or year |
 | `Ctrl+Home` | Reset the plotter's zoom |
 
 ### The current item, and the selection
@@ -650,7 +669,7 @@ can be read down without leaving the field.
 | Key | Action |
 |---|---|
 | `F6` | Search for the current item, which highlights it in the plotter — `Shift+F6` selects only it, `Ctrl+F6` removes it from the selection |
-| `F7` | Select the current cluster |
+| `F7` | Select the current cluster, or year |
 | `Shift+F7` / `Ctrl+F7` / `Ctrl+Shift+F7` | ...adding to / subtracting from / intersecting with the selection |
 | `F9` | Select everything currently visible in the plotter |
 | `Shift+F9` / `Ctrl+F9` / `Ctrl+Shift+F9` | ...adding to / subtracting from / intersecting with the selection |
