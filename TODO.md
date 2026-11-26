@@ -137,6 +137,9 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
       widgets side by side. Highlighting inside a wrapped paragraph needs line breaking of our own, which the
       Markdown renderer does and which is likely part of why it is slow; the snippets avoid needing it.
     - Cost: the field toggles and the scan S; the snippets and the toggle S–M, mostly in the info panel's build.
+    - **A search matches British and American spellings both** (maintainer, 2026-11-26): *modeling* finds
+      *modelling*, by generating the other form and searching for either. English-specific, which is fine for
+      now; a general mechanism is wanted later, and it overlaps heavily with the lorebook's term matcher.
 
 - **[Medium]** Semantic orienteering: embed user-typed text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter. Later: support user-given BibTeX entry or PDF file as input.
 
