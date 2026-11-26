@@ -189,7 +189,7 @@ def load(directory: str | pathlib.Path,
 # ----------------------------------------
 # Matching
 
-# The math symbols beyond ASCII, Unicode category Sm as of Unicode 16.0.0: `∇`, `∀`, `≈`, `→`. They count as
+# The math symbols beyond ASCII, Unicode category Sm as of Unicode 17.0.0: `∇`, `∀`, `≈`, `→`. They count as
 # word characters, so that a term such as `∇-descent` matches as written, and not on every "descent". Those in
 # ASCII, `+ = < > | ~`, do not, since they would join ordinary words: `x=1`, a table's `|cell|`. Nor do other
 # symbols, emoji and currency among them: a term holding one matches on its other words, and a term made only of
@@ -200,8 +200,8 @@ _MATH_SYMBOLS = (
     "\u2320-\u2321\u237c\u239b-\u23b3\u23dc-\u23e1\u25b7\u25c1\u25f8-\u25ff\u266f\u27c0-\u27c4"
     "\u27c7-\u27e5\u27f0-\u27ff\u2900-\u2982\u2999-\u29d7\u29dc-\u29fb\u29fe-\u2aff\u2b30-\u2b44"
     "\u2b47-\u2b4c\ufb29\ufe62\ufe64-\ufe66\uff0b\uff1c-\uff1e\uff5c\uff5e\uffe2\uffe9-\uffec"
-    "\U00010d8e-\U00010d8f\U0001d6c1\U0001d6db\U0001d6fb\U0001d715\U0001d735\U0001d74f\U0001d76f"
-    "\U0001d789\U0001d7a9\U0001d7c3\U0001eef0-\U0001eef1")
+    "\U00010d8e-\U00010d8f\U0001cef0\U0001d6c1\U0001d6db\U0001d6fb\U0001d715\U0001d735\U0001d74f"
+    "\U0001d76f\U0001d789\U0001d7a9\U0001d7c3\U0001eef0-\U0001eef1\U0001f8d0-\U0001f8d8")
 _WORD_CHAR = rf"[\w{_MATH_SYMBOLS}]"
 
 # A word: letters, digits and math symbols, joined by internal hyphens or apostrophes (`co-pter`, `Chekhov's`),

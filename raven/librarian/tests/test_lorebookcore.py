@@ -122,7 +122,8 @@ class TestConformance:
 class TestMathSymbols:
     def test_the_table_is_unicodes_math_symbols_beyond_ascii(self):
         # Every code point past ASCII whose category is Sm is in the table, and anything else in it is a code point
-        # this Python's Unicode does not assign yet, the table being of a later Unicode than an older Python's.
+        # this Python's Unicode does not assign yet, the table being of a later Unicode than an older Python's. A
+        # Python with a later Unicode than the table's fails here: regenerate the table from it.
         in_table = re.compile(f"[{lorebookcore._MATH_SYMBOLS}]")
         listed = {chr(c) for c in range(0x80, 0x110000) if in_table.fullmatch(chr(c))}
         math = {chr(c) for c in range(0x80, 0x110000) if unicodedata.category(chr(c)) == "Sm"}
