@@ -52,7 +52,9 @@ flowchart TD
 **The weighting, from 2026-11-26 (maintainer): high-quality engine components take priority over the GUI apps.**
 Raven's strength is extensible infrastructure and engines. Of its apps, Librarian lags the open-source frontier by
 months, LLM frontends being a field everyone is building in; the Visualizer is different, having no open-source
-counterpart the maintainer knows of. Others are building their own frontends on Raven's engines (a coworker's
+counterpart the maintainer knows of. Nor has Cherrypick, for its feature set; and xdot viewers exist, but the
+maintainer knows of none besides Raven's and their own earlier XDottir with an animated GUI made for pair work.
+Others are building their own frontends on Raven's engines (a coworker's
 JavaScript client to Raven-avatar, running on the real Raven-server, among them). So an engine worth having, such
 as `HybridIR`, is to be reachable from outside Librarian, and work that does that ranks above polishing an LLM
 frontend.
