@@ -157,3 +157,8 @@ class TestHistogramAdjustedHeights:
     def test_zero_maps_to_zero(self):
         assert list(numutils.histogram_adjusted_heights([0, 0], low=1, high=10)) == [0.0, 0.0]
         assert numutils.histogram_adjusted_heights([0, 4, 2], low=1, high=10)[0] == 0.0
+
+    def test_the_test_is_the_ratio_not_the_size(self):
+        # Large counts that crowd nowhere fit a linear scale: the largest is five times the smallest.
+        assert not numutils.needs_histogram_adjustment([0, 1000, 2000, 3000, 4000, 5000], low=1, high=6)
+        assert numutils.needs_histogram_adjustment([1, 5000], low=1, high=21), "the 1 would vanish linearly"

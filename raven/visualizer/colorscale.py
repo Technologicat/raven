@@ -122,14 +122,14 @@ def draw(ds) -> None:
     # A 1 px strip at the base for every value, so the scale reads where nothing is shown, and the column on it, at
     # least a pixel tall for one record.
     heights = numutils.histogram_adjusted_heights(counts, low=1, high=bottom - 1 - top)
+    compressed = numutils.needs_histogram_adjustment(counts, low=1, high=bottom - 1 - top)
     for k, (position, height) in enumerate(zip(positions, heights)):  # the series' colours, without their translucency
         color = series_color(position)[:3] + [255]
         left, right = x0 + (x1 - x0) * k / len(positions), x0 + (x1 - x0) * (k + 1) / len(positions)
         column_top = bottom - 1 - height
         dpg.draw_rectangle((left, column_top), (right, bottom), color=color, fill=color, parent=COLOR_BAR)
-    compressed = max(counts) > (bottom - 1 - top) * min((c for c in counts if c), default=1)
-    _layout = env(grouping=grouping, first=first, counts=counts, x0=x0, x1=x1, top=top, bottom=bottom,
-                  compressed=compressed)
+    _layout = env(grouping=grouping, first=first, counts=counts, heights=heights, x0=x0, x1=x1, top=top,
+                  bottom=bottom, compressed=compressed)
 
 
 def _column_at_mouse() -> int | None:
@@ -171,7 +171,9 @@ def update_hover() -> bool:
     n = len(_layout.counts)
     left = _layout.x0 + (_layout.x1 - _layout.x0) * column / n
     right = _layout.x0 + (_layout.x1 - _layout.x0) * (column + 1) / n
-    _highlight = dpg.draw_rectangle((left - 1, _layout.top - 1), (right + 1, _layout.bottom + 1),
+    # As tall as the column, from the top of its 1 px base strip up, so that a spike reads apart from its neighbour.
+    column_top = _layout.bottom - 1 - _layout.heights[column]
+    _highlight = dpg.draw_rectangle((left - 1, column_top - 1), (right + 1, _layout.bottom + 1),
                                     color=(255, 255, 255), thickness=1, parent=COLOR_BAR)
 
     value = _layout.first + column

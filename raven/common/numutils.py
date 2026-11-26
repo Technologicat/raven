@@ -5,7 +5,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "maximin_latin_square",
-           "histogram_adjusted_heights"]
+           "needs_histogram_adjustment", "histogram_adjusted_heights"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -113,6 +113,17 @@ def maximin_latin_square(n: int, step_x: float = 1.0, step_y: float = 1.0) -> tu
     return max(itertools.permutations(range(n)), key=spread)
 
 
+def needs_histogram_adjustment(values, *, low: float, high: float) -> bool:
+    """Whether `histogram_adjusted_heights` compresses `values` rather than scaling them linearly.
+
+    It does when the largest value is more than `high / low` times the smallest positive one: linearly, that one
+    would come out shorter than `low`, the shortest height there is to show it with.
+    """
+    positive = np.asarray(values, dtype=float)
+    positive = positive[positive > 0]
+    return bool(positive.size) and positive.max() / positive.min() > high / low
+
+
 def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 20) -> np.ndarray:
     """Map positive `values` to display heights in `[low, high]`, compressing a wide range data-adaptively.
 
@@ -133,12 +144,12 @@ def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 
     positive = values > 0
     if not positive.any():
         return heights
+    if not needs_histogram_adjustment(values, low=low, high=high):  # fits as it is
+        heights[positive] = values[positive] / values[positive].max() * high
+        return heights
     logs = np.log(values[positive])
     data_range = logs.max() - logs.min()
     display_range = math.log(high / low)
-    if data_range <= display_range:  # fits as it is
-        heights[positive] = values[positive] / values[positive].max() * high
-        return heights
 
     counts, edges = np.histogram(logs, bins=nbins)
     pdf = counts.astype(float)
