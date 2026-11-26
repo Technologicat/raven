@@ -50,10 +50,12 @@ flowchart TD
 `HS`, `USE`, `SUB`, `JSAV` and `IMGTOOL` have no edges yet: their place is open.
 
 **The weighting, from 2026-11-26 (maintainer): high-quality engine components take priority over the GUI apps.**
-Raven's strength is extensible infrastructure and engines, and the GUI frontends lag the open-source frontier by
-months; others are building their own frontends on Raven's engines (a coworker's JavaScript client to
-Raven-avatar, running on the real Raven-server, among them). So an engine worth having, such as `HybridIR`, is to
-be reachable from outside Raven's own apps, and work that does that ranks above polishing a frontend.
+Raven's strength is extensible infrastructure and engines. Of its apps, Librarian lags the open-source frontier by
+months, LLM frontends being a field everyone is building in; the Visualizer is different, having no open-source
+counterpart the maintainer knows of. Others are building their own frontends on Raven's engines (a coworker's
+JavaScript client to Raven-avatar, running on the real Raven-server, among them). So an engine worth having, such
+as `HybridIR`, is to be reachable from outside Librarian, and work that does that ranks above polishing an LLM
+frontend.
 
 **Near term, as listed 2026-11-26 (maintainer)**, not yet ordered among themselves: the document database behind
 Raven-server; the official JavaScript avatar client; tool results that carry images; and what is open for 0.2.11
