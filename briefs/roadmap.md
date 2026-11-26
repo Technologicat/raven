@@ -28,6 +28,8 @@ flowchart TD
     MCPS["MCP server side in Librarian"]
     LIBF["Librarian features deferred from 0.2.11"]
     JSAV["JavaScript avatar client"]
+    DBSRV["Document database behind Raven-server"]
+    IMGTOOL["Tool results that carry images"]
 
     CF -.-> MCP
     CF -.-> SKL
@@ -42,9 +44,20 @@ flowchart TD
     DD --> INTEG
     MCP --> MCPS
     MCP -.-> LIBF
+    DBSRV --> MCPS
 ```
 
-`HS`, `USE`, `SUB` and `JSAV` have no edges yet: their place is open.
+`HS`, `USE`, `SUB`, `JSAV` and `IMGTOOL` have no edges yet: their place is open.
+
+**The weighting, from 2026-11-26 (maintainer): high-quality engine components take priority over the GUI apps.**
+Raven's strength is extensible infrastructure and engines, and the GUI frontends lag the open-source frontier by
+months; others are building their own frontends on Raven's engines (a coworker's JavaScript client to
+Raven-avatar, running on the real Raven-server, among them). So an engine worth having, such as `HybridIR`, is to
+be reachable from outside Raven's own apps, and work that does that ranks above polishing a frontend.
+
+**Near term, as listed 2026-11-26 (maintainer)**, not yet ordered among themselves: the document database behind
+Raven-server; the official JavaScript avatar client; tool results that carry images; and what is open for 0.2.11
+(the Visualizer's colouring by year, and the extended search).
 
 **The rest of 2026, as decided 2026-10-19 (maintainer):** the *per-document pass → corpus filter* chain
 first, being what blocks the AOKK researchers (the pass landed 2026-10-21, as `raven.librarian.sweep`); then the MCP client with agent skills, which the lab's
@@ -140,6 +153,14 @@ accepted.
     from being handed it twice. Whether grimoire should keep a tool of its own, for users without Raven, is
     open; the maintainer leans yes (2026-11-25). Where Raven is installed, the preference is the other way
     round: offer `raven-mcp`'s tool, which is easier to keep current, and uninstall grimoire's from the frontend.
+- **Document database behind Raven-server** (brief 13, *Where the database lives*). Raised to the near term on
+  2026-11-26 (maintainer). It unlocks the database for clients other than Librarian: `raven-mcp` then offers
+  document search the way it offers the web tools, the lab deployment is expected to reach the database over MCP,
+  and several client apps can run at once, where today the index is opened by one process.
+- **Tool results that carry images** (raised 2026-11-26, maintainer). A missing general capability that will
+  likely matter more in the mid term, so worth building before it is needed constantly and the schedule is full:
+  Qwen asked for it for web fetch, ComfyUI integration would use it, and the lab probably will (a "probably" the
+  maintainer flags as YAGNI-shaped). Not specced.
 - **JavaScript avatar client.** Raven-avatar in browser-based tools, including the JAMK team's: the video
   stream, lipsync, and the rest of the client side, as a library others drop in. Wanted "soon-ish"
   (maintainer, 2026-11-13), as a colleague's browser-based conversational tools with an avatar are about to be
@@ -147,3 +168,7 @@ accepted.
   to reimplement it ad hoc each time, which saves compute globally, is kinder to the AIs doing the coding, and
   leaves fewer bugs. The first piece is done: `raven/avatar/README.md` → *Lipsync: how the mouth follows the
   speech* (2026-11-13) documents the protocol a port follows. Not specced.
+  - **On 2026-11-26 a coworker's JavaScript client to Raven-avatar existed** (built with an AI coding agent, a
+    single-character advisor on the real Raven-server), so the protocol is proven portable. What the official
+    client adds is the part too much to ask of every implementer, AI or not: **lipsync**, as a driver others
+    drop in.
