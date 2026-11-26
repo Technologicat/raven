@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 
+from raven.common import numutils
 from raven.common.numutils import clamp, nonanalytic_smooth_transition, psi
 
 
@@ -138,3 +139,21 @@ class TestMaximinLatinSquare:
         from raven.common.numutils import maximin_latin_square
         for n in range(3, 12):
             assert maximin_latin_square(n) != tuple(range(n))
+
+
+class TestHistogramAdjustedHeights:
+    def test_a_range_that_fits_is_linear(self):
+        assert list(numutils.histogram_adjusted_heights([1, 2, 5], low=1, high=20)) == [4.0, 8.0, 20.0]
+
+    def test_a_wide_range_is_compressed_in_order(self):
+        values = [3000, 2500, 400, 300, 200, 100, 50, 20, 10, 5, 1]
+        heights = numutils.histogram_adjusted_heights(values, low=1, high=21)
+        assert heights[0] == pytest.approx(21) and heights[-1] == pytest.approx(1)
+        assert all(a >= b for a, b in zip(heights, heights[1:])), "a larger value is never shorter"
+        linear = [v / 3000 * 21 for v in values]
+        assert sum(h >= 3 for h in heights) > sum(h >= 3 for h in linear), \
+            "more of the values clear 3 px than linearly, which is what the compression is for"
+
+    def test_zero_maps_to_zero(self):
+        assert list(numutils.histogram_adjusted_heights([0, 0], low=1, high=10)) == [0.0, 0.0]
+        assert numutils.histogram_adjusted_heights([0, 4, 2], low=1, high=10)[0] == 0.0

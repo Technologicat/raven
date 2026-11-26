@@ -4,7 +4,8 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 """
 
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
-           "maximin_latin_square"]
+           "maximin_latin_square",
+           "histogram_adjusted_heights"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -110,3 +111,57 @@ def maximin_latin_square(n: int, step_x: float = 1.0, step_y: float = 1.0) -> tu
         return sorted(math.dist(a, b) for a, b in itertools.combinations(points, 2))
 
     return max(itertools.permutations(range(n)), key=spread)
+
+
+def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 20) -> np.ndarray:
+    """Map positive `values` to display heights in `[low, high]`, compressing a wide range data-adaptively.
+
+    The histogram adjustment of Ward Larson, Rushmeier and Piatko (1997, *A Visibility Matching Tone Reproduction
+    Operator for High Dynamic Range Scenes*, https://doi.org/10.1109/2945.646233), for a list of numbers rather than
+    an image's luminances: where the values span more than `high / low`, each is placed by where it falls in the
+    distribution of their logarithms, so that crowded parts of the range get the contrast, while no stretch of it is
+    steepened past a linear mapping. Where they span no more than that, the heights are linear, `value / max * high`.
+
+    `values`: numbers, one per height. A value of zero or less maps to zero.
+    `low`, `high`: the smallest and largest display height, `0 < low < high`; their ratio is the display range.
+    `nbins`: the bins of the histogram of logarithms.
+
+    Returns a float array shaped as `values`. The order of the values is kept: a larger value is never shorter.
+    """
+    values = np.asarray(values, dtype=float)
+    heights = np.zeros_like(values)
+    positive = values > 0
+    if not positive.any():
+        return heights
+    logs = np.log(values[positive])
+    data_range = logs.max() - logs.min()
+    display_range = math.log(high / low)
+    if data_range <= display_range:  # fits as it is
+        heights[positive] = values[positive] / values[positive].max() * high
+        return heights
+
+    counts, edges = np.histogram(logs, bins=nbins)
+    pdf = counts.astype(float)
+    # Trim each bin to the ceiling, in rounds, since trimming lowers the total and with it the ceiling. The ceiling is
+    # the bin's share of the total at which equalizing would map it more steeply than a linear mapping does: a bin
+    # holding more than that would have its contrast exaggerated. The tolerance is the paper's 0.025 of the total,
+    # tightened to 0.005 of the largest bin, as the image version in `raven.common.video.postprocessor` has it.
+    tol = 0.005 * pdf.max()
+    delta_b = data_range / nbins
+    while True:
+        total = pdf.sum()
+        if total < tol:  # trimmed away entirely: equalize the measured histogram instead
+            pdf = counts.astype(float)
+            break
+        ceiling = total * delta_b / display_range
+        trimmings = np.clip(pdf - ceiling, 0.0, None).sum()
+        pdf = np.minimum(pdf, ceiling)
+        if trimmings <= tol:
+            break
+    cdf = np.concatenate([[0.0], np.cumsum(pdf)])
+    cdf /= cdf[-1]
+    # Each value's position in the cumulative distribution, interpolated within its bin, sets its height on a
+    # logarithmic display scale from `low` to `high`.
+    position = np.interp(logs, edges, cdf)
+    heights[positive] = low * np.exp(display_range * position)
+    return heights
