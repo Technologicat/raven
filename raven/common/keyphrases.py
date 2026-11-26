@@ -18,7 +18,8 @@ The method, from first to last:
      (after KeyBERT, Grootendorst 2020), and the two orders combined by reciprocal rank fusion (Cormack,
      Clarke and Buettcher 2009). Terms present in too many groups are left out of the tail.
 
-The measurements that chose each step are in the repository's `investigations/cluster-keywords/`.
+`keyphrases.md`, beside this module, gives every rule with the failure it prevents, and how the Visualizer shows the
+result. The measurements that chose each step are in the repository's `investigations/cluster-keywords/`.
 
 Nothing here loads a model: the caller passes parsed documents, record vectors, and a function that embeds
 terms. So the module itself needs only NumPy.

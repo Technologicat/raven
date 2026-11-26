@@ -303,6 +303,7 @@ and *effluent*.
 - **The LLM is shown the cluster's phrases as evidence**, with the share of the cluster's papers using each,
   beside the papers its prompt holds. For a large cluster those are a sample, where the phrases count every
   paper. Its keywords stay its own. `clusters_llm_keyword_evidence`, on by default.
+- **Every rule, with the failure it prevents**, is in [How Raven names a cluster](../common/keyphrases.md).
 - The settings are the `clusters_keyword_*` ones in [`raven.visualizer.config`](config.py). The method needs
   no LLM, and is what `"llm"` and `"hybrid"` fall back to when no backend answers. It replaces `"frequencies"`; a
   configuration still naming that is refused, with a message saying what to write instead.
