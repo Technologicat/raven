@@ -223,6 +223,11 @@ class TestThemesAndTerms:
         fc = self.content(cluster_llm_keywords=llm, cluster_keyword_lists=[[("phrase", 0.5)]] * 8)
         assert entry_renderer.format_cluster_keywords(fc, 3)[0] == ("Themes", "topic 3")
 
+    def test_no_terms_line_when_every_phrase_repeats_a_theme(self):
+        fc = self.content(cluster_llm_keywords=[["titanium", "thin films"]],
+                          cluster_keyword_lists=[[("titanium", 0.5), ("thin film", 0.4)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "titanium, thin films")]
+
     def test_themes_only_gives_the_one_line(self):
         fc = self.content(cluster_llm_keywords=[["existential risk"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
         assert entry_renderer.format_cluster_keywords(fc, 0, themes_only=True) == [("Themes", "existential risk")]

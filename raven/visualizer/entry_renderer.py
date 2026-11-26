@@ -211,8 +211,8 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
     Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on),
     `[("Themes", ...), ("Terms", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
     those it gave too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and the
-    phrases, which quote what the papers say, without a phrase that repeats a theme. Otherwise
-    `[(None, "[keyword0, ...]")]`, the cluster's label, which every dataset has.
+    phrases, which quote what the papers say, without a phrase that repeats a theme, and left out where none is left.
+    Otherwise `[(None, "[keyword0, ...]")]`, the cluster's label, which every dataset has.
     """
     def at(maybe_lists):
         return list(maybe_lists[cluster_id]) if maybe_lists is not None and cluster_id < len(maybe_lists) else []
@@ -225,7 +225,8 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
             return [("Themes", ", ".join(themes))]
         display = getattr(file_content, "keyphrase_display", None) or {}
         terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
-        return [("Themes", ", ".join(themes)), ("Terms", ", ".join(terms))]
+        # A small cluster may have no phrase left that a theme does not already say.
+        return [("Themes", ", ".join(themes))] + ([("Terms", ", ".join(terms))] if terms else [])
     return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
 
 
