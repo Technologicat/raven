@@ -53,6 +53,15 @@ def two_clusters():
 # Grouping and ordering
 
 class TestGroupingAndOrdering:
+    def test_entries_are_grouped_by_year_when_asked(self):
+        dataset = make_dataset([make_entry("b", 0, year="2021"), make_entry("a", 0, year="2022"),
+                                make_entry("c", 1, year="2021"), make_entry("d", 1, year="[Year not specified]")])
+        entries_by_group, formatter = entry_renderer.get_entries_for_selection([0, 1, 2, 3], dataset=dataset,
+                                                                               grouping="year")
+        assert {g: {i for i, _ in es} for g, es in entries_by_group.items()} == {2021: {0, 2}, 2022: {1}, -1: {3}}
+        title, keywords, _content, _more = formatter(-1)
+        assert (title, keywords) == ("No year", [])
+
     def test_entries_are_grouped_by_cluster(self, two_clusters):
         entries_by_cluster, _ = entry_renderer.get_entries_for_selection([0, 1, 2, 3, 4, 5], dataset=two_clusters)
         assert set(entries_by_cluster.keys()) == {0, 1}
@@ -370,3 +379,13 @@ class TestYearPrefix:
         """Control for the test above: the importer's placeholder is no year."""
         assert entry_renderer.format_year_prefix(env(year="[Year not specified]")) is None
         assert entry_renderer.format_year_prefix(env()) is None
+
+
+class TestGroupTitle:
+    def test_a_cluster_is_numbered_and_misc_named(self):
+        assert entry_renderer.format_group_title(42, "cluster") == "#42"
+        assert entry_renderer.format_group_title(-1, "cluster") == "Misc"
+
+    def test_a_year_is_its_number_and_no_year_named(self):
+        assert entry_renderer.format_group_title(2022, "year") == "2022"
+        assert entry_renderer.format_group_title(-1, "year") == "No year"

@@ -34,7 +34,7 @@ Cross-module state read via `app_state`:
 """
 
 __all__ = ["reference_order", "format_year_prefix", "get_entries_for_selection",
-           "format_selection_heading", "order_cluster_ids",
+           "format_group_title", "format_selection_heading", "order_cluster_ids",
            "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity",
            "format_cluster_keywords", "format_keyword_lines"]
 
@@ -79,15 +79,19 @@ def format_year_prefix(entry) -> str | None:
     return f"({maybe_year})" if maybe_year is not None else None
 
 
-def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None, dataset=None):
-    """Gather item data for visualization, sorting by cluster.
+def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None, dataset=None,
+                              grouping=displaystate.CLUSTER):
+    """Gather item data for visualization, grouped by cluster or by year.
 
     `data_idxs`: `list`, the selection of items to include in the report. Item indices into `sorted_xxx`.
-    `sort_key`: the order within each cluster, as a key function on an entry of `sorted_entries`.
+    `sort_key`: the order within each group, as a key function on an entry of `sorted_entries`.
     `max_n`: `int`, how many entries can be displayed reasonably. Default `None` means no limit.
     `dataset`: the dataset to read entries from. Defaults to the live `app_state.dataset`. Background workers pass an
                explicitly captured snapshot, so that a concurrent `open_file` swap can't make `data_idxs` (computed
                against one dataset) index into a different dataset's `sorted_entries`.
+
+    `grouping`: what to group by, one of `displaystate.GROUPINGS` (`displaystate.group_of`). A year group is titled
+                with its year, and carries no keywords.
 
     Return value is... complicated, see `annotation._render_worker` and `info_panel._update_info_panel` for usage examples.
     """
@@ -97,7 +101,7 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
     entries_by_cluster = collections.defaultdict(lambda: list())
     for data_idx in data_idxs:  # item indices into `sorted_xxx`
         entry = dataset.sorted_entries[data_idx]
-        entries_by_cluster[entry.current_label_id].append((data_idx, entry))
+        entries_by_cluster[displaystate.group_of(entry, grouping)].append((data_idx, entry))
 
     # Order within each cluster: by default, as a reference list is ordered.
     for entries_in_this_cluster in entries_by_cluster.values():
@@ -113,16 +117,11 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
             max_n = None
 
     def format_cluster_annotation(cluster_id, *, themes_only=False):
-        # The metadata for the cluster.
-        if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
-            if dataset.file_content.keywords_available:
-                cluster_title = f"#{cluster_id}"
-                cluster_keywords = format_cluster_keywords(dataset.file_content, cluster_id, themes_only=themes_only)
-            else:
-                cluster_title = f"#{cluster_id}"
-                cluster_keywords = []
+        # The metadata for the group. Only a cluster has keywords, and Misc has none computed.
+        cluster_title = format_group_title(cluster_id, grouping)
+        if grouping == displaystate.CLUSTER and cluster_id != -1 and dataset.file_content.keywords_available:
+            cluster_keywords = format_cluster_keywords(dataset.file_content, cluster_id, themes_only=themes_only)
         else:
-            cluster_title = "Misc"
             cluster_keywords = []
 
         # The entries themselves. Leave only the first few if there are too many to display.
@@ -142,6 +141,14 @@ def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None
         return cluster_title, cluster_keywords, cluster_content, more
 
     return entries_by_cluster, format_cluster_annotation
+
+
+def format_group_title(group: int, grouping: str) -> str:
+    """A group's heading as the tooltip and the info panel show it: `"#42"` or `"Misc"` for a cluster, `"2022"` or
+    `"No year"` for a year (`displaystate.group_of`)."""
+    if grouping == displaystate.YEAR:
+        return str(group) if group != -1 else "No year"
+    return f"#{group}" if group != -1 else "Misc"
 
 
 def format_selection_heading(n_items: int, cluster_ids) -> str:

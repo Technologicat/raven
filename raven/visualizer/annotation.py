@@ -56,6 +56,7 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor import DearPyGui_Markdown as dpg_markdown
 
 from . import config as visualizer_config
+from . import displaystate
 from . import entry_renderer
 from . import info_panel
 from . import plotter
@@ -301,7 +302,8 @@ def _render_worker(*, task_env, env=None):
             maybe_regex_case_sensitive, maybe_regex_case_insensitive = common_utils.compile_search_highlight_regexes(search_string)
 
             # Actual content
-            entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip, dataset=ds)
+            grouping = app_state.grouping
+            entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip, dataset=ds, grouping=grouping)
             clusters_at_mouse = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
             # Two keyword lines per cluster push the titles off a tooltip holding many clusters, so past a couple
             # only the themes are shown; the info panel has the terms.
@@ -318,7 +320,8 @@ def _render_worker(*, task_env, env=None):
                     cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id, themes_only=keyword_themes_only)
                     cluster_title_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_title_group_build{env.internal_build_number}", parent=annotation_target_group)
                     dpg.add_text(cluster_title, color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_title_text_build{env.internal_build_number}", parent=cluster_title_group)  # "#42"
-                    maybe_purity_text = entry_renderer.format_cluster_purity(ds.file_content, cluster_id)
+                    maybe_purity_text = (entry_renderer.format_cluster_purity(ds.file_content, cluster_id)  # a year has no purity
+                                         if grouping == displaystate.CLUSTER else None)
                     if maybe_purity_text is not None:
                         dpg.add_text(f"[{maybe_purity_text}]", color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_purity_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[purity 62%]"
                     keywords_group = dpg.add_group(tag=f"cluster_{cluster_id}_annotation_keywords_group_build{env.internal_build_number}", parent=cluster_title_group)

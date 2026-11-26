@@ -470,6 +470,7 @@ def set_grouping(grouping: str) -> None:
     dpg.set_value("color_by_combo", grouping)  # tag
     plotter.refresh_series(ds)
     plotter.draw_color_bar(ds)
+    app_state.update_mouse_hover(force=True, wait=False)  # the tooltip groups as the map is coloured
 
 
 def cycle_grouping(direction: int = 1) -> None:
