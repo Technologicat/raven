@@ -957,7 +957,7 @@ with timer() as tim:
 
                     dpg.add_input_text(tag="search_field",
                                        default_value="",
-                                       hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive; '#7' = cluster 7]",
+                                       hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive; '#7' = cluster 7; '~2022' = year 2022]",
                                        width=-1,
                                        callback=search.search_field_callback)
 
@@ -1328,7 +1328,7 @@ def render_help_extras(self: helpcard.HelpWindow,
             "**Terminology**",
             textwrap.dedent(f"""
                 - **Current item**: the topmost item **fully** visible in the info panel. A pulsating blue dot marks it.
-                - **Current cluster**: the cluster the current item belongs to. Clusters are detected automatically, from the text itself rather than from any label in the data.
+                - **Current cluster**: the cluster the current item belongs to, or its year while the map is coloured by year. Clusters are detected automatically, from the text itself rather than from any label in the data.
                 - **Selection set**: the selected items, {c_selection}**glowing**{self.c_end} in the plotter. As many are loaded into the info panel as reasonably fit.
                 - **Search result set**: the items matching the current search, {c_search}**glowing**{self.c_end} in the plotter.
             """).strip()),
@@ -1362,6 +1362,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - A fragment with **at least one uppercase** letter matches **{self.c_hig}case-sensitively{self.c_end}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.
                 - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
                 - **#** and a cluster's number finds that cluster's papers. E.g. *"#7"*.
+                - **~** and a year finds that year's papers; so does **year:** and a year. E.g. *"~2022"*, *"~2019-2022"*, *"~2019-"*.
             """).strip()),
          helpcard.section(
             "**Editing the search term**",

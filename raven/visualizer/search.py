@@ -31,6 +31,7 @@ __all__ = ["search_string_box",
            "update_field_color"]
 
 import logging
+import math
 logger = logging.getLogger(__name__)
 
 import re
@@ -71,7 +72,9 @@ def find_matches(dataset, search_string):
                      "no search is running" and "every item matched" look the same in a result set, and
                      the GUI needs to tell them apart to know whether to dim anything.
 
-    A query of `#` and a number, as `"#7"`, matches that cluster's entries.
+    A query of `#` and a number, as `"#7"`, matches that cluster's entries. A query of `~` and a year, or `year:` and
+    one, matches the entries of that year: `"~2022"`, `"year:2022"`. A range takes a dash, and an open end leaves out
+    its year: `"~2019-2022"`, `"~2019-"`, `"~-2015"`.
 
     Otherwise, incremental fragment search over item titles: every whitespace-separated fragment must appear
     somewhere in the title, in any order, and a fragment carrying an uppercase letter matches
@@ -95,6 +98,17 @@ def find_matches(dataset, search_string):
         cluster_id = int(maybe_cluster.group(1))
         return np.array([data_idx for data_idx, entry in enumerate(dataset.sorted_entries) if entry.cluster_id == cluster_id],
                         dtype=np.int64)
+
+    # "~2022" and "year:2022" name a year, or a range of them: the short form to type, and the long one to read.
+    maybe_years = re.fullmatch(r"\s*(?:~|year:)\s*(\d+)?\s*(-)?\s*(\d+)?\s*", search_string, flags=re.IGNORECASE)
+    if maybe_years is not None:
+        first, dash, last = maybe_years.groups()
+        if first is not None or last is not None:
+            low = int(first) if first is not None else -math.inf
+            high = int(last) if last is not None else (math.inf if dash else low)
+            return np.array([data_idx for data_idx, entry in enumerate(dataset.sorted_entries)
+                             if (year := displaystate.year_of(entry)) is not None and low <= year <= high],
+                            dtype=np.int64)
 
     # A plain O(n) scan. No stopwording, lemmatization or anything fancy.
     # TODO: Search also in document authors (full author list). For this, need to update the GUI wherever we show author names - e.g. searching for "Virtanen" in a paper "Aaltonen et al." that has 200 authors.

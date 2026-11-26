@@ -23,7 +23,7 @@ selection.py      (~280)  — selection state, its combine modes and undo histor
 word_cloud.py     (~360)  — word cloud rendering, from phrases or from words
 entry_renderer.py (~260)  — per-entry rendering shared by panel and tooltip, the cluster purity readouts, and
                             the themes and terms lines
-search.py         (~190)  — the title scan and the cluster-number search, and the three GUI elements
+search.py         (~200)  — the title scan and the cluster-number search, and the three GUI elements
                             reporting the result
 importer_cli.py   (~140)  — `raven-importer` entry point
 llmclustering.py  (~240)  — `clustering_method = "llm"`: one LLM call groups a small corpus into named themes, laid

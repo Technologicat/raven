@@ -65,6 +65,9 @@
 
 To find a cluster by its number, search for `#` and the number: *#7* finds cluster 7's studies.
 
+To find the studies of a year, search for `~` and the year, or `year:` and the year: *~2022* and *year:2022* both
+find 2022's. A range takes a dash, and an open end leaves out its year: *~2019-2022*, *~2019-*, *~-2015*.
+
 **Raven is NOT a search engine.** Rather, for its input, it uses research literature metadata (title, authors, year, abstract) for thousands of papers, as returned by a search engine, and plots that data in an interactive semantic visualization.
 
 *Raven-visualizer* is fully operational, and under active development.

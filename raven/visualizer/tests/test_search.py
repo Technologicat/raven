@@ -167,6 +167,32 @@ class TestFindingAClusterByNumber:
         assert titles_matching(clustered, "7") == ["Another #7 paper"]
 
 
+class TestFindingByYear:
+    @pytest.fixture
+    def dated(self):
+        entries = [make_entry(title) for title in ("Old paper", "Paper of 2020", "New paper", "Undated paper")]
+        for entry, year in zip(entries, ("2015", "2019", "2022", "[Year not specified]")):
+            entry.year = year
+        return env(sorted_entries=entries)
+
+    def test_a_tilde_and_a_year_finds_that_year(self, dated):
+        assert titles_matching(dated, "~2022") == ["New paper"]
+
+    def test_year_colon_is_the_same(self, dated):
+        assert titles_matching(dated, "year:2022") == ["New paper"]
+        assert titles_matching(dated, " Year: 2015 ") == ["Old paper"]
+
+    @pytest.mark.parametrize("query, titles", [("~2015-2019", ["Old paper", "Paper of 2020"]),
+                                               ("~2019-", ["Paper of 2020", "New paper"]),
+                                               ("~-2019", ["Old paper", "Paper of 2020"])])
+    def test_a_range_and_its_open_ends(self, dated, query, titles):
+        assert titles_matching(dated, query) == titles
+
+    def test_a_year_alone_is_an_ordinary_fragment(self, dated):
+        """Control: without the tilde, "2020" is searched for in the titles, and finds the title holding it."""
+        assert titles_matching(dated, "2020") == ["Paper of 2020"]
+
+
 class TestReportingTheAnswer:
     def test_running_a_search_publishes_the_query_and_its_results(self, gui):
         # The tooltip and the info panel read these boxes rather than re-running the search.
