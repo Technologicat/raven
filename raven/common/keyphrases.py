@@ -60,7 +60,10 @@ _MIN_CHARS = 3
 def sentence_case(title: str) -> str:
     """Lowercase a title written in Title Case or ALL CAPS, and return any other title as it is.
 
-    A title of fewer than four words is returned as it is, there being too little to tell its case from.
+    In a Title Case title, a word with a capital past its first letter keeps its capitals ("CO2", "TiO2", "LoRA");
+    in a hyphenated word, each part counts on its own ("AI-Based" becomes "AI-based"). An ALL CAPS title is
+    lowercased throughout, there being no telling its acronyms from its other words. A title of fewer than four
+    words is returned as it is, there being too little to tell its case from.
     """
     # A tagger reads a capitalized word as a proper noun, and does not lemmatize one: "Rectangular Plates"
     # stays plural, and is counted as another term than the same phrase in an abstract. Lowercasing loses the
@@ -68,9 +71,15 @@ def sentence_case(title: str) -> str:
     words = [w for w in title.split() if w[:1].isalpha()]
     if len(words) < 4:
         return title
-    if sum(1 for w in words if w[0].isupper()) / len(words) > 0.6:
+    if sum(1 for w in words if w[0].isupper()) / len(words) <= 0.6:
+        return title
+    if sum(1 for w in words if w.isupper()) / len(words) > 0.6:  # ALL CAPS
         return title.lower()
-    return title
+
+    def lower_part(part: str) -> str:
+        return part if any(ch.isupper() for ch in part[1:]) else part.lower()
+
+    return re.sub(r"\S+", lambda m: "-".join(lower_part(part) for part in m.group(0).split("-")), title)
 
 
 def nfkc(text: str) -> str:
@@ -147,6 +156,9 @@ def _phrases(doc, stopwords: Container[str]) -> dict[str, str]:
         # is worth showing is left to the ranking.
         words = _phrase_words(tokens)
         written = _phrase_words(tokens, cased=True)
+        # A capital that only starts a sentence says nothing about the word.
+        if tokens[0].is_sent_start and written and not any(ch.isupper() for ch in written[0][1:]):
+            written[0] = written[0][:1].lower() + written[0][1:]
         for start in range(max(0, len(words) - _MAX_PHRASE_WORDS), len(words)):
             if words[start] in stopwords:  # "dark- and photo-fermentation" yields "and photo-fermentation"
                 continue
@@ -270,12 +282,22 @@ _BRITISH = ((re.compile(r"isation"), "ization"), (re.compile(r"is(e|ed|es|er|ers
             (re.compile(r"our(s|ed|ing)?$"), r"or\1"), (re.compile(r"(?<=[^aeiou])re(s|d)?$"), r"er\1"))
 
 
-def _spelling_class(term: str) -> str:
+def _spelling_class(term: str, written: str | None = None) -> str:
     """A key shared by the spellings of one term: hyphens, spaces and a possessive dropped, British spellings
     made American. "prisoner's dilemma", "fibre-reinforced polymer" and "fiber reinforced polymer" share theirs
-    with "prisonerdilemma" and so on."""
+    with "prisonerdilemma" and so on.
+
+    `written`: how the corpus mostly writes the term, word for word. A word written with a capital stays as
+    written in the key, so "Co catalyst" (cobalt) keeps apart from "cocatalyst".
+    """
+    as_written = written.split() if written is not None else []
+    if len(as_written) != len(term.split()):
+        as_written = term.split()
     words = []
-    for word in term.split():
+    for word, form in zip(term.split(), as_written):
+        if form != form.lower():
+            words.append(form.removesuffix("'s"))
+            continue
         word = word.removesuffix("'s")
         for pattern, replacement in _BRITISH:
             word = pattern.sub(replacement, word)
@@ -411,9 +433,18 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
     # that it sees the plural and abbreviation folds' output, where variants that differed in more than that
     # have already met.
     record_counts = collections.Counter(c for record in expanded for c in {folds.get(c, c) for c in record.values()})
+    # How each term is mostly written, where the abbreviations left it word for word as written.
+    written_counts: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    for item, record in zip(extracted, expanded):
+        cased = item.get("cased", {})
+        for term, c in record.items():
+            written = cased.get(term, term)
+            if len(written.split()) == len(c.split()) == len(term.split()):
+                written_counts[folds.get(c, c)][written] += 1
     by_spelling = collections.defaultdict(list)
     for c in record_counts:
-        by_spelling[_spelling_class(c)].append(c)
+        maybe_written = written_counts[c].most_common(1)[0][0] if written_counts.get(c) else None
+        by_spelling[_spelling_class(c, maybe_written)].append(c)
     hyphen_folds = {c: max(members, key=lambda m: (record_counts[m], m))
                     for members in by_spelling.values() if len(members) > 1 for c in members}
 

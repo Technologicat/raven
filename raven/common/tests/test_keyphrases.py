@@ -33,6 +33,17 @@ class TestSentenceCase:
         title = "Stability of axially moving plates in Kelvin-Voigt materials"
         assert keyphrases.sentence_case(title) == title
 
+    def test_title_case_keeps_capitals_past_a_word_s_first_letter(self):
+        assert (keyphrases.sentence_case("Photocatalytic CO2 Reduction Over TiO2 With LoRA") ==
+                "photocatalytic CO2 reduction over TiO2 with LoRA")
+
+    def test_each_part_of_a_hyphenated_word_counts_on_its_own(self):
+        assert keyphrases.sentence_case("AI-Based Self-Regulated Learning In Schools") == "AI-based self-regulated learning in schools"
+
+    def test_all_caps_loses_its_acronyms_too(self):
+        """Control for the two above: in ALL CAPS every word has capitals past its first letter."""
+        assert keyphrases.sentence_case("PHOTOCATALYTIC CO2 REDUCTION OVER TIO2") == "photocatalytic co2 reduction over tio2"
+
     def test_a_short_title_is_left_alone(self):
         assert keyphrases.sentence_case("Mistral 7B") == "Mistral 7B"
 
@@ -73,6 +84,20 @@ class TestNormalize:
         terms, display = keyphrases.normalize(records)
         assert all(t == {"prisoner's dilemma"} for t in terms)
         assert display["prisoner's dilemma"] == "prisoner's dilemma"
+
+    def test_a_capitalized_word_keeps_its_spelling_apart(self):
+        records = [_extracted({"cocatalyst"}), _extracted({"cocatalyst"}), _extracted({"co catalyst"}),
+                   _extracted({"co catalyst"})]
+        for r in records[2:]:
+            r["cased"] = {"co catalyst": "Co catalyst"}
+        terms, _ = keyphrases.normalize(records)
+        assert terms == [{"cocatalyst"}, {"cocatalyst"}, {"co catalyst"}, {"co catalyst"}]
+
+    def test_a_lowercase_spelling_still_folds(self):
+        """Control for the test above: written in lowercase, the space is only a spelling."""
+        records = [_extracted({"cocatalyst"}), _extracted({"cocatalyst"}), _extracted({"co catalyst"})]
+        terms, _ = keyphrases.normalize(records)
+        assert all(t == {"cocatalyst"} for t in terms)
 
     def test_a_possessive_alone_is_kept(self):
         """Control for the fold above: without the bare spelling, nothing to fold onto."""
@@ -518,6 +543,11 @@ class TestExtract:
 
     def test_a_phrase_s_written_form_is_kept(self, nlp, stopwords):
         item = keyphrases.extract(nlp("We deposit Co nanoparticles on carbon."), stopwords=stopwords)
+        assert item["cased"]["co nanoparticle"] == "Co nanoparticles"
+
+    def test_a_capital_starting_a_sentence_is_not_kept_as_written(self, nlp, stopwords):
+        item = keyphrases.extract(nlp("Cocatalyst loading matters. We also use Co nanoparticles."), stopwords=stopwords)
+        assert "cocatalyst loading" not in item["cased"], "only the sentence made it a capital"
         assert item["cased"]["co nanoparticle"] == "Co nanoparticles"
 
     def test_casing_is_counted_in_the_abstract_alone(self, nlp, stopwords):
