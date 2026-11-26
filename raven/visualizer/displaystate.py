@@ -16,6 +16,10 @@ Each filter that sets visibility gives its own verdict per record (`misc_verdict
 `apply_filters` combines them: a record is shown only if every filter shows it, hidden if any hides it, and grayed
 otherwise (`combine`).
 
+What the records are grouped by — coloured by on the map, and listed under in the info panel and the tooltip — is
+the *grouping*: `CLUSTER`, the label, or `YEAR`, the record's year (`group_of`). A record with no year is in Misc
+(-1) when grouping by year, as a record with no cluster is when grouping by cluster.
+
 Only records in full colour can be interacted with — hovered, selected, listed in the info panel — plus the grayed
 ones when the user asks for them (`interactable`). Hidden records are not on screen at all (`on_screen`).
 
@@ -23,8 +27,9 @@ No DPG here: `raven.visualizer.plotter.refresh_series` is what puts the groups o
 """
 
 __all__ = ["SHOWN", "GRAYED", "HIDDEN", "MISC_MODES", "YEAR_MODES",
+           "CLUSTER", "YEAR", "GROUPINGS",
            "init", "relabel_by_purity",
-           "misc_verdict", "year_of", "year_bounds", "YEAR_RANGE_ENDS", "step_year_range", "year_verdict",
+           "misc_verdict", "year_of", "group_of", "year_bounds", "YEAR_RANGE_ENDS", "step_year_range", "year_verdict",
            "combine", "apply_filters",
            "points_by_label", "points_with_visibility", "visibility_counts", "summary",
            "interactable", "on_screen"]
@@ -41,6 +46,10 @@ MISC_MODES = (SHOWN, GRAYED, HIDDEN)
 #: The ways the year filter can show the records outside its range. Shown is not one: covering every year is what
 #: switches the filter off.
 YEAR_MODES = (GRAYED, HIDDEN)
+CLUSTER = "cluster"
+YEAR = "year"
+#: What the records can be grouped by, in the order a control cycles through them.
+GROUPINGS = (CLUSTER, YEAR)
 #: How restrictive each visibility is, for `combine`.
 _RESTRICTIVENESS = {SHOWN: 0, GRAYED: 1, HIDDEN: 2}
 
@@ -95,6 +104,19 @@ def year_of(entry) -> int | None:
         return int(str(getattr(entry, "year", "")).strip())
     except ValueError:
         return None
+
+
+def group_of(entry, grouping: str) -> int:
+    """The group `entry` is shown in under `grouping`, one of `GROUPINGS`: its `current_label_id`, or its year.
+
+    A record with no year is in Misc (-1) when grouping by year.
+    """
+    if grouping == CLUSTER:
+        return entry.current_label_id
+    if grouping == YEAR:
+        maybe_year = year_of(entry)
+        return maybe_year if maybe_year is not None else -1
+    raise ValueError(f"group_of: unknown grouping {grouping!r}; known: {GROUPINGS}")
 
 
 def year_bounds(entries) -> tuple[int, int] | None:
@@ -173,8 +195,8 @@ def apply_filters(entries, *, misc_mode: str = SHOWN,
     return changed
 
 
-def points_by_label(entries) -> dict[int, list[int]]:
-    """The `data_idx` of each `SHOWN` entry, grouped by its `current_label_id`, in index order within each group.
+def points_by_label(entries, *, grouping: str = CLUSTER) -> dict[int, list[int]]:
+    """The `data_idx` of each `SHOWN` entry, grouped by `group_of` under `grouping`, in index order within each group.
 
     `entries`: `dataset.sorted_entries`, whose positions are the `data_idx` values. Grayed and hidden entries are left
     out; `points_with_visibility` finds the grayed ones.
@@ -182,7 +204,7 @@ def points_by_label(entries) -> dict[int, list[int]]:
     groups: dict[int, list[int]] = collections.defaultdict(list)
     for data_idx, entry in enumerate(entries):
         if entry.visibility == SHOWN:
-            groups[entry.current_label_id].append(data_idx)
+            groups[group_of(entry, grouping)].append(data_idx)
     return dict(groups)
 
 

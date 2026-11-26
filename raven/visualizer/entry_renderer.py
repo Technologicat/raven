@@ -33,7 +33,7 @@ Cross-module state read via `app_state`:
   `file_content.vis_keywords_by_cluster`).
 """
 
-__all__ = ["reference_order", "get_entries_for_selection",
+__all__ = ["reference_order", "format_year_prefix", "get_entries_for_selection",
            "format_selection_heading", "order_cluster_ids",
            "PURITY_EXPLANATION", "format_dataset_purity", "format_cluster_purity",
            "format_cluster_keywords", "format_keyword_lines"]
@@ -45,6 +45,7 @@ from ..common import keyphrases
 from ..common import utils as common_utils
 
 from . import config as visualizer_config
+from . import displaystate
 
 from .app_state import app_state
 
@@ -70,6 +71,12 @@ def reference_order(entry) -> tuple:
     sort_as = author or title or abstract
     return (blank_last(sort_as), blank_last(year), blank_last(title), blank_last(abstract),
             getattr(entry, "data_idx", 0))
+
+
+def format_year_prefix(entry) -> str | None:
+    """`entry`'s year as a title shows it in front, `"(2022)"`, or `None` for a record with no year."""
+    maybe_year = displaystate.year_of(entry)
+    return f"({maybe_year})" if maybe_year is not None else None
 
 
 def get_entries_for_selection(data_idxs, *, sort_key=reference_order, max_n=None, dataset=None):

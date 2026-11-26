@@ -196,6 +196,28 @@ class TestPointsByLabel:
         assert displaystate.points_with_visibility(entries, displaystate.GRAYED) == [1, 3]
 
 
+class TestGrouping:
+    def years(self):
+        entries = entries_of(0, 1, 0, -1)
+        for entry, year in zip(entries, ("2021", "2022", "[Year not specified]", "2021")):
+            entry.year = year
+        return entries
+
+    def test_grouping_by_cluster_is_the_label(self):
+        entries = self.years()
+        assert [displaystate.group_of(e, displaystate.CLUSTER) for e in entries] == [0, 1, 0, -1]
+
+    def test_grouping_by_year_puts_a_record_with_no_year_in_misc(self):
+        entries = self.years()
+        assert [displaystate.group_of(e, displaystate.YEAR) for e in entries] == [2021, 2022, -1, 2021]
+
+    def test_the_points_follow_the_grouping(self):
+        entries = self.years()
+        assert displaystate.points_by_label(entries, grouping=displaystate.YEAR) == {2021: [0, 3], 2022: [1], -1: [2]}
+        assert displaystate.points_by_label(entries) == {0: [0, 2], 1: [1], -1: [3]}, \
+            "the cluster grouping, for contrast: the same records, other groups"
+
+
 class TestWhatCanBeInteractedWith:
     def mixed(self):
         entries = entries_of(0, 0, -1, 1)

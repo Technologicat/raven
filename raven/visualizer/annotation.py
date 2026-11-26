@@ -348,6 +348,10 @@ def _render_worker(*, task_env, env=None):
                             mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=marks.search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
                             dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
 
+                        maybe_year_text = entry_renderer.format_year_prefix(entry)
+                        if maybe_year_text is not None:
+                            dpg.add_text(maybe_year_text, color=title_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_year_build{env.internal_build_number}", parent=item_group)  # "(2022)"
+
                         # Per-fragment search highlighting in the title (when matched), the same as in the info panel.
                         if common_utils.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
                             dpg_markdown.add_text(entry.title, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", color=title_color,  # MD renderer renders into its own group

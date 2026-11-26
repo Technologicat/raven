@@ -360,3 +360,13 @@ class TestPurityReadouts:
         assert entry_renderer.format_cluster_purity(file_content, -1) is None
         assert entry_renderer.format_cluster_purity(file_content, 1) is None
         assert entry_renderer.format_cluster_purity(env(labels=[]), 0) is None
+
+
+class TestYearPrefix:
+    def test_a_year_shows_in_parentheses(self):
+        assert entry_renderer.format_year_prefix(env(year="2022")) == "(2022)"
+
+    def test_no_year_shows_nothing(self):
+        """Control for the test above: the importer's placeholder is no year."""
+        assert entry_renderer.format_year_prefix(env(year="[Year not specified]")) is None
+        assert entry_renderer.format_year_prefix(env()) is None
