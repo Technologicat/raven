@@ -176,14 +176,23 @@ def key_alternatives(cell: str) -> List[str]:
     slash alone yields `Right (A` and `D)`, which are not keys and which no README could name, so a cell
     written this way would be permanently unmatchable rather than merely unchecked.
 
-    Note the outside of the parenthesis is taken as written, so `"Page Up / Down (Q / E)"` offers `Down`
-    rather than `Page Down` — the card's own shorthand, which nothing here can expand.
+    A key with no modifiers of its own after one with modifiers shares them, the card's shorthand for a pair:
+    `"Shift+Left / Right"` names `Shift+Left` and `Shift+Right`, and `"Ctrl+Shift+Z / Y"` names `Ctrl+Shift+Y`.
+
+    Note the outside of the parenthesis is otherwise taken as written, so `"Page Up / Down (Q / E)"` offers
+    `Down` rather than `Page Down` — the card's own shorthand, which nothing here can expand.
     """
+    def expand(alternatives: List[str]) -> List[str]:
+        first = alternatives[0]
+        # "Ctrl+Shift+" of "Ctrl+Shift+Z", or nothing; "Numpad +" is a key, not a modifier waiting for one.
+        shared = first[:first.rfind("+") + 1] if not first.endswith("+") else ""
+        return [first] + [key if "+" in key else shared + key for key in alternatives[1:]]
+
     match = re.fullmatch(r"(.*?)\s*\(([^()]*)\)\s*", cell)
     if match:
         outside, inside = match.groups()
-        return outside.split(" / ") + inside.split(" / ")
-    return cell.split(" / ")
+        return expand(outside.split(" / ")) + expand(inside.split(" / "))
+    return expand(cell.split(" / "))
 
 
 def read_option_names(path: pathlib.Path, name: str, shape: str) -> Tuple[List[str], List[str]]:
