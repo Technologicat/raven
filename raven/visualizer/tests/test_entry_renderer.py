@@ -240,8 +240,13 @@ class TestThemesAndQuoted:
     def test_an_older_dataset_shows_its_label(self):
         assert entry_renderer.format_cluster_keywords(self.content(), 0) == [(None, "[label term]")]
 
-    def test_a_cluster_the_llm_found_no_theme_in_shows_its_label(self):
+    def test_a_cluster_the_llm_found_no_theme_in_shows_its_phrases(self):
         fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [("Quoted", "intelligence")]
+
+    def test_no_theme_and_no_phrases_shows_the_label(self):
+        """Control for the test above: without phrases there is nothing better than the label."""
+        fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[]])
         assert entry_renderer.format_cluster_keywords(fc, 0) == [(None, "[label term]")]
 
     def test_a_report_puts_the_lines_on_one(self):

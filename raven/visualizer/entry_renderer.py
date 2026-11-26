@@ -212,7 +212,8 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
     `[("Themes", ...), ("Quoted", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
     those it gave too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and the
     phrases, which quote what the papers say, without a phrase that repeats a theme, and left out where none is left.
-    Otherwise `[(None, "[keyword0, ...]")]`, the cluster's label, which every dataset has.
+    Where the LLM found no theme in the cluster, `[("Quoted", ...)]` alone. Otherwise `[(None, "[keyword0, ...]")]`,
+    the cluster's label, which every dataset has.
     """
     def at(maybe_lists):
         return list(maybe_lists[cluster_id]) if maybe_lists is not None and cluster_id < len(maybe_lists) else []
@@ -227,6 +228,10 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
         terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
         # A small cluster may have no phrase left that a theme does not already say.
         return [("Themes", ", ".join(themes))] + ([("Quoted", ", ".join(terms))] if terms else [])
+    # The LLM found no theme; the phrases still say something. Read off the LLM's own list, as the corpus-wide filter
+    # would remove the marker from a corpus where many clusters have it.
+    if at(getattr(file_content, "cluster_llm_keywords", None)) == ["<unknown topic>"] and phrases:
+        return [("Quoted", ", ".join(term for term, _share in phrases[:n]))]
     return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
 
 
