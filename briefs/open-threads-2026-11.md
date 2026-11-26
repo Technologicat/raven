@@ -38,6 +38,11 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   `investigations/cluster-keywords/data/*-2026-11-25.*`. Check it finished (`*.log` there), then make the shortlists
   again (`shortlist_clusters.py CORPUS --previous 2026-11-25`) for a quick read of what the bundle changed, and settle
   the rules draft against it.
+- **The re-import finished at 23:23**, all twelve datasets (geography's LLM import retried after one failed name
+  lookup of the server). One regression, on arXiv alone: cluster 4 gave up in both runs, with 4 and 3 malformed
+  replies in all. The reply is a *Common theme:* paragraph, then *Suggested keywords:* and a bulleted list, which the
+  list parser rejects, as it allows a header line but no prose before it. Next: read the bulleted block under a
+  heading that names keywords; how much prose to tolerate is the design call.
 - **Then colouring by year's v1**: keywords per year at import (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
 - **Filed 2026-11-26**: `FileDialog` changes the process's working directory (`TODO_DEFERRED.md`).
 
