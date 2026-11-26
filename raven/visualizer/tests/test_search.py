@@ -203,6 +203,10 @@ class TestFindingByYear:
     def test_a_range_and_its_open_ends(self, dated, query, titles):
         assert titles_matching(dated, query) == titles
 
+    def test_none_finds_the_records_with_no_year(self, dated):
+        assert titles_matching(dated, "~none") == ["Undated paper"]
+        assert titles_matching(dated, "Year: None") == ["Undated paper"]
+
     def test_a_year_alone_is_an_ordinary_fragment(self, dated):
         """Control: without the tilde, "2020" is searched for in the titles, and finds the title holding it."""
         assert titles_matching(dated, "2020") == ["Paper of 2020"]

@@ -75,7 +75,8 @@ def find_matches(dataset, search_string):
     A query of `#` and a number, or `cluster:` and one, matches that cluster's entries: `"#7"`, `"cluster:7"`. A query
     of `~` and a year, or `year:` and one, matches the entries of that year: `"~2022"`, `"year:2022"`. Either takes a
     range, with a dash, and an open end leaves out its number: `"#7-9"`, `"~2019-2022"`, `"~2019-"`, `"~-2015"`.
-    `"#misc"` and `"cluster:misc"` match Misc, which has no number.
+    `"#misc"` and `"cluster:misc"` match Misc, which has no number, and `"~none"` and `"year:none"` the entries with
+    no year.
 
     Otherwise, incremental fragment search over item titles: every whitespace-separated fragment must appear
     somewhere in the title, in any order, and a fragment carrying an uppercase letter matches
@@ -112,6 +113,10 @@ def find_matches(dataset, search_string):
     # Misc (-1) is not one of the clusters' numbers, so no number or range finds it; its name does.
     if re.fullmatch(r"\s*(?:#|cluster:)\s*misc\s*", search_string, flags=re.IGNORECASE):
         return np.array([data_idx for data_idx, entry in enumerate(dataset.sorted_entries) if entry.cluster_id == -1],
+                        dtype=np.int64)
+    if re.fullmatch(r"\s*(?:~|year:)\s*none\s*", search_string, flags=re.IGNORECASE):
+        return np.array([data_idx for data_idx, entry in enumerate(dataset.sorted_entries)
+                         if displaystate.year_of(entry) is None],
                         dtype=np.int64)
     for lead, value_of in ((r"#|cluster:", lambda entry: entry.cluster_id if entry.cluster_id >= 0 else None),
                            (r"~|year:", displaystate.year_of)):
