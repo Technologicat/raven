@@ -391,19 +391,22 @@ def colormap_position(label: int, max_label: int) -> float:
 
 
 #: The colour bar beside the *Colour by* selector: "2012 ▬▬▬ 2026", or the first and last cluster, drawn into a drawlist
-#: as tall as the combo beside it, so that its contents centre on the row.
+#: as tall as the combo beside it, so that its contents centre on the row. Each value's column is as tall as the number of
+#: records shown in its colour, so the bar is a sparkline of where the data is.
 COLOR_BAR = "color_bar_drawlist"  # tag
 COLOR_BAR_SIZE = (200, 26)
 _DIGIT_WIDTH_EM = 1171 / 2048  # the advance of every digit in OpenSans Regular
 
 
 def draw_color_bar(ds) -> None:
-    """Draw the colour bar of `ds` for `app_state.grouping`: a rectangle per year, or per cluster, between the first and
-    the last. Misc is not on it: in neither grouping does it sit on the scale."""
+    """Draw the colour bar of `ds` for `app_state.grouping`: a column per year, or per cluster, between the first and the
+    last, as tall as the number of records shown in full colour there. Misc is not on it: in neither grouping does it
+    sit on the scale."""
     dpg.delete_item(COLOR_BAR, children_only=True)
     if ds is None:
         return
-    if app_state.grouping == displaystate.YEAR:
+    grouping = app_state.grouping
+    if grouping == displaystate.YEAR:
         if ds.year_bounds is None:
             return
         first, last = ds.year_bounds
@@ -413,6 +416,9 @@ def draw_color_bar(ds) -> None:
         if last < first:  # Misc alone
             return
         positions = [colormap_position(label, last) for label in range(first, last + 1)]
+    groups = displaystate.points_by_label(ds.sorted_entries, grouping=grouping)
+    counts = [len(groups.get(first + k, ())) for k in range(len(positions))]
+    max_count = max(counts) or 1
     w, h = COLOR_BAR_SIZE
     text_size = 16
     label_w = 40  # a four-digit year, at that size
@@ -426,12 +432,13 @@ def draw_color_bar(ds) -> None:
     dpg.draw_text((label_w - 1 - first_w, text_y), str(first), size=text_size, color=text_color, parent=COLOR_BAR)
     dpg.draw_text((w - label_w + 4, text_y), str(last), size=text_size, color=text_color, parent=COLOR_BAR)
     x0, x1 = label_w, w - label_w
-    bar_h = 12
-    top = (h - bar_h) / 2
-    for k, position in enumerate(positions):  # the series' colours, without their translucency
+    bottom, top = h - 2, 2  # the columns' baseline, and how high the tallest reaches
+    for k, (position, count) in enumerate(zip(positions, counts)):  # the series' colours, without their translucency
         color = _series_color(position)[:3] + [255]
         left, right = x0 + (x1 - x0) * k / len(positions), x0 + (x1 - x0) * (k + 1) / len(positions)
-        dpg.draw_rectangle((left, top), (right, top + bar_h), color=color, fill=color, parent=COLOR_BAR)
+        # A 1 px strip at the base for every value, so the scale reads where nothing is shown, and the column on it.
+        column_top = bottom - 1 - (bottom - 1 - top) * count / max_count
+        dpg.draw_rectangle((left, column_top), (right, bottom), color=color, fill=color, parent=COLOR_BAR)
 
 
 def load_dataset(ds):
@@ -545,6 +552,7 @@ def refresh_series(ds) -> None:
     dpg.set_value(GRAYED_SERIES, points(displaystate.points_with_visibility(ds.sorted_entries, displaystate.GRAYED)))
     maybe_summary = displaystate.summary(ds.sorted_entries)
     dpg.set_item_label("plot", ds.plot_label + (f" [{maybe_summary}]" if maybe_summary else ""))  # tag
+    draw_color_bar(ds)  # its columns count what is shown
 
 
 # --------------------------------------------------------------------------------

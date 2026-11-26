@@ -468,8 +468,7 @@ def set_grouping(grouping: str) -> None:
         return
     app_state.grouping = grouping
     dpg.set_value("color_by_combo", grouping)  # tag
-    plotter.refresh_series(ds)
-    plotter.draw_color_bar(ds)
+    plotter.refresh_series(ds)  # redraws the colour bar too
     app_state.update_mouse_hover(force=True, wait=False)  # the tooltip and the info panel group as the map is coloured
     app_state.update_info_panel(wait=False)
 
@@ -1362,7 +1361,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - A fragment with **at least one uppercase** letter matches **{self.c_hig}case-sensitively{self.c_end}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.
                 - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
                 - **#** and a cluster's number finds that cluster's papers; so does **cluster:** and a number. E.g. *"#7"*, *"#7-9"*, *"#misc"*.
-                - **~** and a year finds that year's papers; so does **year:** and a year. E.g. *"~2022"*, *"~2019-2022"*, *"~2019-"*.
+                - **~** and a year finds that year's papers; so does **year:** and a year. E.g. *"~2022"*, *"~2019-2022"*, *"~2019-"*, *"~none"*.
             """).strip()),
          helpcard.section(
             "**Editing the search term**",
