@@ -343,6 +343,11 @@ lost, since such a group is better kept as one cluster a reviewer can select and
 *flag* it needs no knob: the importer computes it per cluster and records it in the dataset, and the GUI
 shows *"[offtopic?]"* beside the cluster's label.
 
+**A second source: the LLM that keywords the cluster** (maintainer, 2026-11-26). It reads every cluster
+already, so the same call could say whether the cluster fits the corpus. The example: ECCOMAS's cluster 52,
+six medical papers (anaesthesia, pulmonary fibrosis, cataract surgery) in an engineering conference's corpus.
+This changes the keyword prompt and the stored dataset, so it is a design step of its own.
+
 - **Check it across all corpora before relying on it.** Only two flagged clusters have been read. On the
   crowded corpora (AOKK, the education pair) the background sits close to the cohesion floor and flags more,
   so it may need a margin there.

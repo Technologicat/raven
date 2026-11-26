@@ -467,6 +467,22 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
        (*AI-Based*) votes while the lowercase ones, tagged verbs (*based on*), do not: in AOKK *Based* won 21–0,
        *Directed* 4–0, and the LLM's *simulation-based training* came out *simulation-Based*. Fix: count a word's
        spellings in every part of speech, once it appears as a noun or adjective.
+  5. **British and American spellings are not folded**: *modelling*/*modeling*, *fibre*/*fiber* (ECCOMAS). Fix:
+     fold a regular counterpart (*-elling*/*-eling*, *-our*/*-or*, *-ise*/*-ize*, *-yse*/*-yze*, *-re*/*-er*) where
+     the corpus has both, onto the commoner; *metre*/*meter* is a case this cannot tell apart.
+  6. **The LLM capitalizes a keyword's first word, as at the start of a sentence**: *A posteriori error
+     estimation*. Fix, in recasing: a keyword capitalized only on its first letter loses that capital unless the
+     casing table knows the word as capitalized (*Bayesian optimization* keeps it).
+  7. **An abbreviation's long form is rebuilt from tokens**, so it reads *verification , validation , and
+     uncertainty quantification*. Fix: take it from the text span.
+  8. **A reply that is a Markdown list is rejected**: ECCOMAS's cluster 52 got three good answers (*patient-specific
+     modelling*, *in silico simulation*), each a bulleted list under a header, all rejected by the parser, and
+     stored *<unknown topic>* (the one malformed cluster of 330 that night; not a refusal). Fixes: the parser reads
+     a bulleted list, logging that it did; and the format rules move to the end of the prompt, after the papers
+     and the evidence, where a reader expects them (the maintainer: repeating an instruction is a 2024
+     technique). The display now shows such a cluster's Quoted line instead of the label.
+  - **VVUQ in Themes** is the LLM's spelling, while the corpus defines it (two papers). Showing a theme's expansion
+    is a GUI change (a tooltip per keyword) or the LLM-alias pass; not in this bundle.
   - **And a display change, no re-import needed (decided the same day): Themes prefer the distinctive.** Order
     each cluster's LLM keywords by how few clusters share them, the LLM's order kept among ties, and show the
     first six. The corpus-wide filter's floor of five makes it drop only terms in half of a ten-cluster corpus,
