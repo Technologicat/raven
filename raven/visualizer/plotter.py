@@ -420,9 +420,10 @@ def draw_color_bar(ds) -> None:
     text_y = (h - text_size) / 2
     # A drawlist has no text alignment, so the first label is right-aligned against the bar by computing its width.
     # Not by `dpg.get_text_size`: this also runs at startup, before the first frame, and there the call hung the app.
-    # The labels are digits, all 1171/2048 em wide in OpenSans, the UI font.
+    # The labels are digits, all 1171/2048 em wide in OpenSans, the UI font, an advance that includes some blank
+    # space after the glyph, which is why the gap to the bar is smaller than the last label's.
     first_w = len(str(first)) * _DIGIT_WIDTH_EM * text_size
-    dpg.draw_text((label_w - 4 - first_w, text_y), str(first), size=text_size, color=text_color, parent=COLOR_BAR)
+    dpg.draw_text((label_w - 1 - first_w, text_y), str(first), size=text_size, color=text_color, parent=COLOR_BAR)
     dpg.draw_text((w - label_w + 4, text_y), str(last), size=text_size, color=text_color, parent=COLOR_BAR)
     x0, x1 = label_w, w - label_w
     bar_h = 12
