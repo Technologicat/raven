@@ -46,7 +46,8 @@ maintainer has read the whole arXiv evidence comparison.
 - **Next, after the shortlist read of 2026-11-26**: the extraction bundle (four faults) and Themes preferring the
   distinctive, then a re-import; `investigations/cluster-keywords/README.md` has both.
 - **Then a document of the final keyword rules** (the maintainer, 2026-11-26: a lot of latent knowledge goes into
-  them): each rule with the failure it prevents, from extraction to display. Where it lives is to be decided.
+  them): each rule with the failure it prevents, from extraction to display. A reference document beside the code,
+  `raven/common/keyphrases.md`, linked from the module and from the Visualizer README.
 - **Still open**: the hybrid's ordering prompt (option 3), to be measured against tonight's import.
 
 ## Ready to pick up, no deadline
