@@ -463,6 +463,10 @@ abstract well and sometimes seem to wander, without anchoring them onto the phra
      onto *X Y* only where the corpus also writes *X Y*.
   4. **Casing votes count sentence-cased titles**, which turn every proper name lowercase: *solomonoff induction*
      (a 1–1 tie). Fix: count votes from abstracts only.
+     - **And the votes count only nouns and adjectives**, so a capitalized compound part tagged a proper noun
+       (*AI-Based*) votes while the lowercase ones, tagged verbs (*based on*), do not: in AOKK *Based* won 21–0,
+       *Directed* 4–0, and the LLM's *simulation-based training* came out *simulation-Based*. Fix: count a word's
+       spellings in every part of speech, once it appears as a noun or adjective.
   - **And a display change, no re-import needed (decided the same day): Themes prefer the distinctive.** Order
     each cluster's LLM keywords by how few clusters share them, the LLM's order kept among ties, and show the
     first six. The corpus-wide filter's floor of five makes it drop only terms in half of a ten-cluster corpus,
