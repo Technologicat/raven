@@ -1,6 +1,7 @@
 """Unit tests for raven.visualizer.colorscale: where a cluster and a year take their colours."""
 
 import numpy as np
+import pytest
 
 from raven.visualizer import colorscale
 
@@ -21,3 +22,15 @@ class TestTheClusterColourPosition:
 class TestTheYearColourPosition:
     def test_the_years_spread_above_misc_as_the_clusters_do(self):
         assert [colorscale.year_color_position(year, (2020, 2023)) for year in (2020, 2021, 2023)] == [0.25, 0.5, 1.0]
+
+
+class TestFigureColours:
+    @pytest.mark.parametrize("background, foreground", [("black", "white"), ("#202020", "white"),
+                                                         ("white", "black"), ("#e8e0d0", "black")])
+    def test_the_foreground_is_whichever_of_black_and_white_stands_out(self, background, foreground):
+        assert colorscale.foreground_for(background) == foreground
+
+    def test_a_figure_takes_the_range_for_its_background(self, monkeypatch):
+        monkeypatch.setattr(colorscale.gui_config, "figure_colormap_ranges", {"dark": (0.2, 1.0), "light": (0.0, 0.85)})
+        assert colorscale.figure_colormap_range("black") == (0.2, 1.0)
+        assert colorscale.figure_colormap_range("white") == (0.0, 0.85)

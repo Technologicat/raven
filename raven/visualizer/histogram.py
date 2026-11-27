@@ -26,7 +26,6 @@ import numpy as np
 
 import dearpygui.dearpygui as dpg
 
-import matplotlib.colors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.scale import FuncScale
@@ -35,7 +34,6 @@ from matplotlib.ticker import FixedLocator, MaxNLocator, NullFormatter
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
-from ..common import color
 from ..common import numutils
 from ..common.gui import animation as gui_animation
 
@@ -91,7 +89,7 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
     data_values = sorted({float(v) for v in counts if v > 0})
     tallest_values = data_values[-tallest:] if tallest > 0 else []
 
-    foreground = _foreground_for(background)
+    foreground = colorscale.foreground_for(background)
     fig = Figure(figsize=figsize, dpi=dpi, facecolor=background)
     FigureCanvasAgg(fig)
     ax = fig.add_subplot(1, 1, 1, facecolor=background)
@@ -165,12 +163,6 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
         label_axis(ax.get_position().height * figsize[1] * 72.0)
         fig.tight_layout()
     return fig
-
-
-def _foreground_for(background) -> str:
-    """Black or white, whichever has the higher contrast against `background`, a colour as matplotlib takes one."""
-    rgb = matplotlib.colors.to_rgb(background)
-    return "black" if color.contrast_ratio(rgb, (0, 0, 0)) >= color.contrast_ratio(rgb, (1, 1, 1)) else "white"
 
 
 def _draw_tick_labels(ax, ticks, position, spacing, axes_height_pt, *, marked) -> bool:
@@ -313,7 +305,10 @@ def _figure_for(ds, *, dpi: float):
     maybe_values = colorscale.bar_values(ds, grouping)
     if maybe_values is None or not any(maybe_values.counts):
         return None
-    colors = [[c / 255 for c in colorscale.series_color(p)[:3]] for p in maybe_values.positions]
+    # The figure's own part of the colormap, for its background, which for a figure to print is likely light.
+    colormap_range = colorscale.figure_colormap_range(gui_config.figure_background_color)
+    colors = [[c / 255 for c in colorscale.series_color(p, colormap_range=colormap_range)[:3]]
+              for p in maybe_values.positions]
     captions = None
     if _themes and grouping == displaystate.CLUSTER:
         captions = [f"{maybe_values.first + k} {_cluster_caption(ds.file_content, maybe_values.first + k)}".strip()

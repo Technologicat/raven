@@ -37,6 +37,9 @@ import dearpygui.dearpygui as dpg
 from unpythonic import box, unbox
 from unpythonic.env import env as envcls
 
+import matplotlib
+import matplotlib.colors
+
 from wordcloud import WordCloud
 
 from ..common import bgtask
@@ -46,6 +49,7 @@ from ..common.gui import tooltip as gui_tooltip
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
+from . import colorscale
 from . import config as visualizer_config
 from .app_state import app_state
 
@@ -325,7 +329,7 @@ def _render_worker(*, task_env):
                     wc = WordCloud(width=gui_config.word_cloud_w,
                                    height=gui_config.word_cloud_h,
                                    background_color=gui_config.figure_background_color,
-                                   colormap=gui_config.word_cloud_colormap,
+                                   colormap=_colormap_for_background(),
                                    max_words=1000)
                     wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]
                     _data_box << wc
@@ -348,6 +352,13 @@ def _render_worker(*, task_env):
         dpg.set_item_label("word_cloud_window", "Word cloud")  # TODO: DRY duplicate definitions for labels
         dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD)
         app_state.word_cloud_tooltip.text = "Toggle word cloud window [F10]"  # TODO: DRY duplicate definitions for labels
+
+
+def _colormap_for_background():
+    """`gui_config.word_cloud_colormap`, cut to the part that shows against `gui_config.figure_background_color`."""
+    first, last = colorscale.figure_colormap_range(gui_config.figure_background_color)
+    full = matplotlib.colormaps[gui_config.word_cloud_colormap]
+    return matplotlib.colors.ListedColormap(full(np.linspace(first, last, 256)), name=f"{full.name}_cut")
 
 
 def toggle_window():

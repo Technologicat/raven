@@ -5,14 +5,17 @@ The bar names the value under the mouse in a tooltip and outlines its column (`u
 is the app's (`hovered`).
 """
 
-__all__ = ["series_color", "year_color_position", "colormap_position",
+__all__ = ["series_color", "foreground_for", "figure_colormap_range", "year_color_position", "colormap_position",
            "COLOR_BAR", "COLOR_BAR_SIZE", "add_bar", "build_tooltip_window", "bar_values", "draw",
            "hovered", "update_hover"]
 
 import dearpygui.dearpygui as dpg
 
+import matplotlib.colors
+
 from unpythonic.env import env
 
+from ..common import color
 from ..common import numutils
 from ..common.gui import layout_math
 from ..common.gui import utils as guiutils
@@ -24,16 +27,29 @@ from .app_state import app_state
 gui_config = visualizer_config.gui_config
 
 
-def series_color(position: float) -> list[int]:
+def series_color(position: float, *, colormap_range: tuple[float, float] | None = None) -> list[int]:
     """The colour of a scatter series at `position` in [0, 1] on the configured colormap, as translucent RGBA.
 
-    The position is taken within `gui_config.plotter_colormap_range`, the part of the colormap in use.
+    The position is taken within `colormap_range`, the part of the colormap in use: by default
+    `gui_config.plotter_colormap_range`, the plot's.
     """
-    first, last = gui_config.plotter_colormap_range
+    first, last = colormap_range if colormap_range is not None else gui_config.plotter_colormap_range
     color = [int(255 * component)
              for component in dpg.sample_colormap(gui_config.plotter_colormap, t=first + (last - first) * position)]
     color[-1] = int(0.5 * color[-1])
     return color
+
+
+def foreground_for(background) -> str:
+    """Black or white, whichever has the higher contrast against `background`, a colour as Matplotlib takes one."""
+    rgb = matplotlib.colors.to_rgb(background)
+    return "black" if color.contrast_ratio(rgb, (0, 0, 0)) >= color.contrast_ratio(rgb, (1, 1, 1)) else "white"
+
+
+def figure_colormap_range(background) -> tuple[float, float]:
+    """The part of the colormap a figure on `background` uses, from `gui_config.figure_colormap_ranges`: its range for a
+    dark background or for a light one."""
+    return tuple(gui_config.figure_colormap_ranges["dark" if foreground_for(background) == "white" else "light"])
 
 
 def year_color_position(year: int, bounds: tuple[int, int]) -> float:
