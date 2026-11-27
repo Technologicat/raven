@@ -452,6 +452,7 @@ AI-animated anime avatar for your LLM.
 - `avatar_reload`: Reload a character into the specified avatar session; useful e.g. if the image file has changed on disk, or if you want to switch to another character.
   - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
 - `avatar_unload`: End an avatar session.
+- `avatar_restore`: Load a session again as a new one, in the state this client last asked it to be in: same image, emotion templates, animator settings, overrides, emotion, data eyes and running state. For after the server has lost it, as on a restart. Every call that changes a session updates the client's copy of that state, whether or not it reaches the server.
 - `avatar_heartbeat`: Tell the server this client still holds the given sessions. Returns those of them the server does not have.
 - `avatar_is_held`: Whether this client holds the given session: loaded, not unloaded, and not reported lost by the server.
 - `avatar_add_heartbeat_listener`: Have a callback told, after every heartbeat that reaches the server, which held sessions it still has and which it has lost. This is how a client tells a stream lost to the network, which can be opened again, from a session the server has forgotten.

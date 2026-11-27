@@ -45,7 +45,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "tts_server_available",
            "modules",
            "avatar_info",
-           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat", "avatar_is_held", "avatar_add_heartbeat_listener",
+           "avatar_load", "avatar_reload", "avatar_unload", "avatar_restore", "avatar_heartbeat", "avatar_is_held", "avatar_add_heartbeat_listener",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
            "avatar_start", "avatar_stop",
@@ -89,6 +89,8 @@ import qoi
 import numpy as np
 
 from mcpyrate import colorizer
+
+from unpythonic.env import env
 
 import torch  # noqa: F401 -- import torch before spaCy, so that spaCy finds the GPU
 
@@ -228,12 +230,16 @@ def avatar_load(filename: pathlib.Path | str) -> str:
 
     output = response.json()
     instance_id = output["instance_id"]
+    with _avatar_states_lock:
+        _avatar_states[instance_id] = env(image=filename, emotion_templates=None, animator_settings=None,
+                                          started=False, talking=False, emotion=None, overrides={}, data_eyes=False)
     _hold(instance_id)
     return instance_id
 
 def avatar_reload(instance_id: str, filename: pathlib.Path | str) -> None:
     """Send a new character image to an existing avatar instance."""
     util.require()
+    _update_avatar_state(instance_id, image=filename)
 
     # Web API call parameters and the base image file.
     # We must jump through some hoops to send parameters in the same request. A convenient way is to put the parameters into another (virtual) file.
@@ -258,11 +264,45 @@ def avatar_unload(instance_id: str) -> None:
     """
     util.require()
     _held_instances.discard(instance_id)  # first: an unload that fails still means this client is done with it
+    with _avatar_states_lock:
+        _avatar_states.pop(instance_id, None)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
     response = util.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
+
+def avatar_restore(instance_id: str) -> str:
+    """Load avatar instance `instance_id` again as a new instance, in the state this client last asked it to be in, and
+    return the new instance's ID. For after the server has lost the instance, as on a restart.
+
+    Replays, onto a new instance of the same character image: the emotion templates, the animator settings, the morph
+    overrides, the emotion, the data eyes, the generic talking animation, and last whether the animator runs. What the
+    client last asked for is what comes back, including requests the server never received. A one-off animefx is not
+    replayed. The old instance's record is dropped.
+
+    Raises `KeyError` for an instance this client did not load or has unloaded.
+    """
+    with _avatar_states_lock:
+        state = copy.deepcopy(_avatar_states[instance_id])
+    new_instance_id = avatar_load(state.image)
+    if state.emotion_templates is not None:
+        avatar_load_emotion_templates(new_instance_id, state.emotion_templates)
+    if state.animator_settings is not None:
+        avatar_load_animator_settings(new_instance_id, state.animator_settings)
+    if state.overrides:
+        avatar_set_overrides(new_instance_id, state.overrides)
+    if state.emotion is not None:
+        avatar_set_emotion(new_instance_id, state.emotion)
+    if state.data_eyes:
+        avatar_start_data_eyes(new_instance_id)
+    if state.talking:
+        avatar_start_talking(new_instance_id)
+    if state.started:
+        avatar_start(new_instance_id)
+    with _avatar_states_lock:
+        _avatar_states.pop(instance_id, None)
+    return new_instance_id
 
 def avatar_heartbeat(instance_ids: list[str]) -> list[str]:
     """Tell the server this client still holds `instance_ids`. Return those of them the server does not have.
@@ -287,6 +327,27 @@ def avatar_heartbeat(instance_ids: list[str]) -> list[str]:
 HEARTBEAT_INTERVAL = 10.0  # seconds; the server's `avatar_session_timeout` should be several of these
 
 _held_instances: set[str] = set()  # loaded through `avatar_load`, not yet unloaded
+
+# What each avatar instance this client loaded should look like: updated by every call that changes it, before the call
+# is sent and whether or not it reaches the server, so that it holds what the client last asked for. `avatar_restore`
+# replays it onto a new instance after the server has lost the old one, as on a restart. A speech that ended while the
+# server was down thereby comes back without its mouth overrides, as the speech-end handler asked, though that request
+# never arrived.
+_avatar_states: dict[str, env] = {}
+_avatar_states_lock = threading.Lock()
+
+
+def _avatar_state(instance_id: str):
+    """The record of `instance_id`, or `None` for an instance this client did not load. Call with the lock held."""
+    return _avatar_states.get(instance_id)
+
+
+def _update_avatar_state(instance_id: str, **fields) -> None:
+    with _avatar_states_lock:
+        maybe_state = _avatar_state(instance_id)
+        if maybe_state is not None:
+            for name, value in fields.items():
+                setattr(maybe_state, name, value)
 _heartbeat_lock = threading.Lock()
 _heartbeat_thread: threading.Thread | None = None
 _heartbeat_listeners: list[Callable[[list[str], list[str]], None]] = []  # `avatar_add_heartbeat_listener`
@@ -353,6 +414,7 @@ def _heartbeat_once(failing: bool) -> bool:
 
 def avatar_load_emotion_templates(instance_id: str, emotions: dict) -> None:
     util.require()
+    _update_avatar_state(instance_id, emotion_templates=copy.deepcopy(emotions))
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
@@ -368,6 +430,7 @@ def avatar_load_emotion_templates_from_file(instance_id: str, filename: pathlib.
 
 def avatar_load_animator_settings(instance_id: str, animator_settings: dict) -> None:
     util.require()
+    _update_avatar_state(instance_id, animator_settings=copy.deepcopy(animator_settings))
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
@@ -384,6 +447,7 @@ def avatar_load_animator_settings_from_file(instance_id: str, filename: pathlib.
 def avatar_start(instance_id: str) -> None:
     """Start or resume the animator."""
     util.require()
+    _update_avatar_state(instance_id, started=True)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
@@ -393,6 +457,7 @@ def avatar_start(instance_id: str) -> None:
 def avatar_stop(instance_id: str) -> None:
     """Pause the animator."""
     util.require()
+    _update_avatar_state(instance_id, started=False)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
@@ -416,6 +481,7 @@ def avatar_start_talking(instance_id: str) -> None:
     Stop it with `avatar_stop_talking`.
     """
     util.require()
+    _update_avatar_state(instance_id, talking=True)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
@@ -428,6 +494,7 @@ def avatar_stop_talking(instance_id: str) -> None:
     Not needed for lipsynced speech, which stops itself when the audio ends.
     """
     util.require()
+    _update_avatar_state(instance_id, talking=False)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
@@ -436,6 +503,7 @@ def avatar_stop_talking(instance_id: str) -> None:
 
 def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
     util.require()
+    _update_avatar_state(instance_id, emotion=emotion_name)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
@@ -445,6 +513,7 @@ def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
 
 def avatar_set_overrides(instance_id: str, overrides: dict[str, float]) -> None:
     util.require()
+    _update_avatar_state(instance_id, overrides=dict(overrides))  # replaces them all, as the server does
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
@@ -454,6 +523,16 @@ def avatar_set_overrides(instance_id: str, overrides: dict[str, float]) -> None:
 
 def avatar_modify_overrides(instance_id: str, action: str, overrides: dict[str, float]) -> None:
     util.require()
+    with _avatar_states_lock:  # "set" merges, "unset" removes, as the server does
+        maybe_state = _avatar_state(instance_id)
+        if maybe_state is not None and action in ("set", "unset"):
+            merged = dict(maybe_state.overrides)
+            if action == "set":
+                merged.update(overrides)
+            else:
+                for key in overrides:
+                    merged.pop(key, None)
+            maybe_state.overrides = merged
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
@@ -465,6 +544,7 @@ def avatar_modify_overrides(instance_id: str, action: str, overrides: dict[str, 
 def avatar_start_data_eyes(instance_id: str) -> None:
     """Activate the scifi "data eyes" cel effect (LLM tool access indicator); switches on instantly."""
     util.require()
+    _update_avatar_state(instance_id, data_eyes=True)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
@@ -474,6 +554,7 @@ def avatar_start_data_eyes(instance_id: str) -> None:
 def avatar_stop_data_eyes(instance_id: str) -> None:
     """Begin fading out the scifi "data eyes" cel effect; fade duration is the server's `data_eyes_fadeout_duration` animator setting, and the fade waits until the effect has been on for `data_eyes_min_duration`."""
     util.require()
+    _update_avatar_state(instance_id, data_eyes=False)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}

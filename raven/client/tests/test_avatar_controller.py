@@ -136,28 +136,27 @@ def effect_config(monkeypatch):
 
 
 class TestRebindingToAReloadedInstance:
-    """After Raven-server restarts, the app loads the avatar again and points its record at the new instance."""
+    """After Raven-server restarts, `api.avatar_restore` brings the avatar back, and the record follows it."""
 
-    def test_the_new_instance_gets_the_settings_the_server_lost(self, effect_config, monkeypatch):
-        controller, config, _sent = effect_config
-        received = []
-        monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
-                            lambda instance_id, settings: received.append((instance_id, settings)))
+    def test_only_the_instance_id_changes(self, effect_config, monkeypatch):
+        controller, config, sent = effect_config
         config._current_emotion = "joy"
         controller.rebind_avatar_instance(config, "new-instance")
         assert config.avatar_instance_id == "new-instance"
-        assert received == [("new-instance", {"postprocessor_chain": [["bloom", {"threshold": 0.5}]]})]
-        assert config._current_emotion == "neutral", "a new instance starts neutral"
+        assert sent == [], "the restore already sent the state; rebinding must not send it again"
+        assert config._current_emotion == "joy", "the restore replays the emotion, so the record keeps it"
 
-    def test_with_no_settings_loaded_nothing_is_sent(self, effect_config, monkeypatch):
-        """Control for the test above: an app that never loaded settings through the controller sends them itself."""
+    def test_later_calls_go_to_the_new_instance(self, effect_config, monkeypatch):
         controller, config, _sent = effect_config
-        config._animator_settings = None
-        received = []
+        targets = []
         monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
-                            lambda instance_id, settings: received.append(instance_id))
+                            lambda instance_id, settings: targets.append(instance_id))
         controller.rebind_avatar_instance(config, "new-instance")
-        assert received == [] and config.avatar_instance_id == "new-instance"
+        controller.mark_discontinuity(config, floor=10.0)
+        try:
+            assert targets == ["new-instance"]
+        finally:
+            config._effect_timer.cancel()
 
 
 def chain_of(settings):
