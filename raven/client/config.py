@@ -43,20 +43,23 @@ network_timeout = Timeout(connect=10.0, read=300.0)
 network_timeout_streaming = Timeout(connect=10.0, read=None)
 
 # A request that could not reach Raven-server at all (refused, unreachable, connecting timed out) is tried
-# again `attempts` more times, `delay` seconds apart, so that a short network drop costs a pause rather than
-# whatever was asking. Only such a request: one that failed after it was sent may have been acted on.
+# again `attempts` more times, the first after `delay` seconds and each later wait `factor` times the one before,
+# so that a short network drop costs a pause rather than whatever was asking. Only such a request: one that failed
+# after it was sent may have been acted on.
 class Retry(NamedTuple):
     attempts: int
     delay: float
+    factor: float = 1.0
 
 # `attempts` counts the tries after the first, so `attempts=0` would retry nothing; to say that, pass `None`
 # to `raven.client.api.initialize` instead, which reads as the choice it is.
 #
 # Which of the two an app uses, it names when it calls `raven.client.api.initialize`. Where a person is
 # waiting on each answer, a server that is really gone must be said promptly; a batch run can afford to
-# ride out a Wi-Fi reconnect.
+# ride out a Wi-Fi reconnect. The batch waits are 5, 15 and 45 seconds, as `raven.librarian.llmclient.wait_for_backend`
+# waits for the LLM backend.
 network_retry_interactive = Retry(attempts=2, delay=1.0)
-network_retry_batch = Retry(attempts=3, delay=5.0)
+network_retry_batch = Retry(attempts=3, delay=5.0, factor=3.0)
 
 # Which audio playback device to use for TTS (text to speech, speech synthesizer).
 #

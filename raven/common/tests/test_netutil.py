@@ -340,6 +340,25 @@ class TestSendWithRetry:
             netutil.send_with_retry(send, attempts=2, delay=0, what="test")
         assert len(calls) == 3
 
+    def test_the_waits_grow_by_the_factor(self, monkeypatch):
+        port = _closed_port()
+        slept = []
+        monkeypatch.setattr(netutil.time, "sleep", slept.append)
+        with pytest.raises(requests.exceptions.ConnectionError):
+            netutil.send_with_retry(lambda: requests.get(f"http://127.0.0.1:{port}/", timeout=2),
+                                    attempts=3, delay=5, factor=3, what="test")
+        assert slept == [5, 15, 45]
+
+    def test_without_a_factor_the_waits_are_equal(self, monkeypatch):
+        """Control for the test above: the default factor of 1 keeps the delay as it was."""
+        port = _closed_port()
+        slept = []
+        monkeypatch.setattr(netutil.time, "sleep", slept.append)
+        with pytest.raises(requests.exceptions.ConnectionError):
+            netutil.send_with_retry(lambda: requests.get(f"http://127.0.0.1:{port}/", timeout=2),
+                                    attempts=2, delay=1, what="test")
+        assert slept == [1, 1]
+
     def test_a_failure_that_may_have_reached_the_server_is_not_retried(self):
         calls = []
 

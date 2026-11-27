@@ -175,11 +175,13 @@ def never_reached(exc: BaseException) -> bool:
 _T = TypeVar("_T")
 
 
-def send_with_retry(send: Callable[[], _T], *, attempts: int, delay: float, what: str) -> _T:
-    """Call `send`, which makes one request, and call it again up to `attempts` more times, `delay` seconds
-    apart, while it fails with a request that never reached its server (`never_reached`). Returns what it
-    returns; raises the last failure, and any other at once.
+def send_with_retry(send: Callable[[], _T], *, attempts: int, delay: float, factor: float = 1.0, what: str) -> _T:
+    """Call `send`, which makes one request, and call it again up to `attempts` more times while it fails with a
+    request that never reached its server (`never_reached`). Returns what it returns; raises the last failure, and
+    any other at once.
 
+    `delay`: seconds before the first retry. `factor`: each later wait is this many times the one before; `1.0`
+    waits `delay` every time.
     `what`: the request, for the log, e.g. `"POST http://localhost:5100/api/embeddings/compute"`.
     """
     for attempt in range(attempts + 1):
@@ -191,6 +193,7 @@ def send_with_retry(send: Callable[[], _T], *, attempts: int, delay: float, what
             logger.warning(f"send_with_retry: {what}: could not connect ({type(exc)}: {exc}); "
                            f"trying again in {delay:g} s ({attempt + 1} of {attempts})")
             time.sleep(delay)
+            delay *= factor
     raise AssertionError("send_with_retry: unreachable")  # the loop returns or raises
 
 

@@ -160,7 +160,8 @@ def _send(send: Callable[[], requests.Response], *, what: str) -> requests.Respo
     maybe_retry = api_config.maybe_network_retry
     if maybe_retry is None:
         return send()
-    return netutil.send_with_retry(send, attempts=maybe_retry.attempts, delay=maybe_retry.delay, what=what)
+    return netutil.send_with_retry(send, attempts=maybe_retry.attempts, delay=maybe_retry.delay,
+                                   factor=maybe_retry.factor, what=what)
 
 
 def post_streamed_job(url: str,
