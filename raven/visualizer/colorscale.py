@@ -6,7 +6,7 @@ is the app's (`hovered`).
 """
 
 __all__ = ["series_color", "year_color_position", "colormap_position",
-           "COLOR_BAR", "COLOR_BAR_SIZE", "add_bar", "build_tooltip_window", "draw",
+           "COLOR_BAR", "COLOR_BAR_SIZE", "add_bar", "build_tooltip_window", "bar_values", "draw",
            "hovered", "update_hover"]
 
 import dearpygui.dearpygui as dpg
@@ -87,6 +87,31 @@ def build_tooltip_window() -> None:
 _DIGIT_WIDTH_EM = 1171 / 2048  # the advance of every digit in OpenSans Regular
 
 
+def bar_values(ds, grouping: str) -> env | None:
+    """What the colour bar of `ds` shows for `grouping`: the records shown in full colour per year, or per cluster,
+    from the first to the last. Misc is not among them: in neither grouping does it sit on the scale.
+
+    Returns `env(first, positions, counts)`: the first year or cluster, and per value from it on, its place on the
+    colormap (`year_color_position`, `colormap_position`) and its count. `None` where there is nothing to show: no
+    dataset, no years in a dataset grouped by year, or Misc alone.
+    """
+    if ds is None:
+        return None
+    if grouping == displaystate.YEAR:
+        if ds.year_bounds is None:
+            return None
+        first, last = ds.year_bounds
+        positions = [year_color_position(year, ds.year_bounds) for year in range(first, last + 1)]
+    else:
+        first, last = 0, int(ds.sorted_labels[-1])
+        if last < first:  # Misc alone
+            return None
+        positions = [colormap_position(label, last) for label in range(first, last + 1)]
+    groups = displaystate.points_by_label(ds.sorted_entries, grouping=grouping)
+    counts = [len(groups.get(first + k, ())) for k in range(len(positions))]
+    return env(first=first, positions=positions, counts=counts)
+
+
 def draw(ds) -> None:
     """Draw the colour bar of `ds` for `app_state.grouping`: a column per year, or per cluster, between the first and the
     last, as tall as the number of records shown in full colour there. Misc is not on it: in neither grouping does it
@@ -95,21 +120,12 @@ def draw(ds) -> None:
     dpg.delete_item(COLOR_BAR, children_only=True)
     _layout, _hovered, _highlight = None, None, None
     dpg.hide_item(_TOOLTIP_WINDOW)
-    if ds is None:
-        return
     grouping = app_state.grouping
-    if grouping == displaystate.YEAR:
-        if ds.year_bounds is None:
-            return
-        first, last = ds.year_bounds
-        positions = [year_color_position(year, ds.year_bounds) for year in range(first, last + 1)]
-    else:
-        first, last = 0, int(ds.sorted_labels[-1])
-        if last < first:  # Misc alone
-            return
-        positions = [colormap_position(label, last) for label in range(first, last + 1)]
-    groups = displaystate.points_by_label(ds.sorted_entries, grouping=grouping)
-    counts = [len(groups.get(first + k, ())) for k in range(len(positions))]
+    maybe_values = bar_values(ds, grouping)
+    if maybe_values is None:
+        return
+    first, positions, counts = maybe_values.first, maybe_values.positions, maybe_values.counts
+    last = first + len(positions) - 1
     w, h = COLOR_BAR_SIZE
     text_size = 16
     label_w = 40  # a four-digit year, at that size
