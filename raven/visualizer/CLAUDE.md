@@ -23,7 +23,7 @@ colorscale.py     (~220)  — where a cluster or a year takes its colour, and th
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~280)  — selection state, its combine modes and undo history, and the display filters applied to it
 word_cloud.py     (~440)  — word cloud rendering, from phrases, words or the clusters' themes
-histogram.py      (~400)  — the printable histogram: the colour bar's counts as a matplotlib figure, on a linear,
+histogram.py      (~430)  — the printable histogram: the colour bar's counts as a matplotlib figure, on a linear,
                             log or adaptive scale, shown in a window and saved as PNG, PDF or SVG
 entry_renderer.py (~260)  — per-entry rendering shared by panel and tooltip, the cluster purity readouts, and
                             the themes and terms lines
