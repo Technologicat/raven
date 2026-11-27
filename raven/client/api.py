@@ -45,7 +45,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "tts_server_available",
            "modules",
            "avatar_info",
-           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat",
+           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat", "avatar_add_heartbeat_listener",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
            "avatar_start", "avatar_stop",
@@ -289,6 +289,19 @@ HEARTBEAT_INTERVAL = 10.0  # seconds; the server's `avatar_session_timeout` shou
 _held_instances: set[str] = set()  # loaded through `avatar_load`, not yet unloaded
 _heartbeat_lock = threading.Lock()
 _heartbeat_thread: threading.Thread | None = None
+_heartbeat_listeners: list[Callable[[list[str], list[str]], None]] = []  # `avatar_add_heartbeat_listener`
+
+def avatar_add_heartbeat_listener(callback: Callable[[list[str], list[str]], None]) -> None:
+    """Have `callback(known, lost)` called after every heartbeat that reaches the server.
+
+    `known`: the held avatar instances the server still has. `lost`: those it no longer has, as after a restart;
+    they are no longer reported. Called in the heartbeat thread, every `HEARTBEAT_INTERVAL` seconds while any
+    instance is held, so it should return quickly. An exception it raises is logged and does not stop the beat.
+
+    This is how a client tells a stream that broke on a network drop, which can simply be opened again, from one
+    whose avatar the server has forgotten.
+    """
+    _heartbeat_listeners.append(callback)
 
 def _hold(instance_id: str) -> None:
     """Start reporting `instance_id` to the server, starting the heartbeat thread if this is the first."""
@@ -300,27 +313,38 @@ def _hold(instance_id: str) -> None:
             _heartbeat_thread.start()
 
 def _heartbeat_loop() -> None:
-    failing = False  # log a run of failures once, and its end once, rather than every beat
+    failing = False
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
-        # No lock: `sorted` copies the set in one C-level pass, and an instance loaded or unloaded meanwhile is
-        # simply reported, or not, one beat late.
-        instance_ids = sorted(_held_instances)
-        if not instance_ids:
-            continue
+        failing = _heartbeat_once(failing)
+
+def _heartbeat_once(failing: bool) -> bool:
+    """One beat: report the held instances, and tell the listeners what the server said. Returns whether the server
+    could not be reached, which `failing` says of the beat before, so that a run of failures is logged once and its
+    end once, rather than every beat."""
+    # No lock: `sorted` copies the set in one C-level pass, and an instance loaded or unloaded meanwhile is
+    # simply reported, or not, one beat late.
+    instance_ids = sorted(_held_instances)
+    if not instance_ids:
+        return failing
+    try:
+        unknown = avatar_heartbeat(instance_ids)
+    except Exception as exc:
+        if not failing:
+            logger.warning(f"_heartbeat_once: cannot reach the server, retrying every {HEARTBEAT_INTERVAL:0.0f} s: {type(exc)}: {exc}")
+        return True
+    if failing:
+        logger.info("_heartbeat_once: reaching the server again")
+    for instance_id in unknown:
+        logger.warning(f"_heartbeat_once: the server no longer has avatar instance '{instance_id}'; no longer reporting it")
+        _held_instances.discard(instance_id)
+    known = [instance_id for instance_id in instance_ids if instance_id not in unknown]
+    for listener in tuple(_heartbeat_listeners):  # a copy, as for the instances above
         try:
-            unknown = avatar_heartbeat(instance_ids)
+            listener(known, list(unknown))
         except Exception as exc:
-            if not failing:
-                logger.warning(f"_heartbeat_loop: cannot reach the server, retrying every {HEARTBEAT_INTERVAL:0.0f} s: {type(exc)}: {exc}")
-                failing = True
-            continue
-        if failing:
-            logger.info("_heartbeat_loop: reaching the server again")
-            failing = False
-        for instance_id in unknown:
-            logger.warning(f"_heartbeat_loop: the server no longer has avatar instance '{instance_id}'; no longer reporting it")
-            _held_instances.discard(instance_id)
+            logger.warning(f"_heartbeat_once: a heartbeat listener raised, continuing: {type(exc)}: {exc}")
+    return False
 
 def avatar_load_emotion_templates(instance_id: str, emotions: dict) -> None:
     util.require()

@@ -221,3 +221,50 @@ def test_overlapping_backdrop_configurations_do_not_collide(backdrop_renderer):
     assert overlap(instance._configure_backdrop), \
         "two unserialized calls did not collide, so this fixture cannot show the lock doing anything"
     assert overlap(instance.configure_backdrop) == []
+
+
+class TestResumingALostStream:
+    """After the stream breaks, each heartbeat that reaches the server says whether to open it again."""
+
+    @pytest.fixture
+    def lost(self, renderer, monkeypatch):
+        instance, calls, live_image = renderer
+        instance._resume_lock = threading.Lock()
+        instance._paused_str = "[Video is off]"
+        instance._task_env = None  # the lost stream's task has finished
+        instance.paused_text_gui_widget_value = None
+        on_frame = object()
+        instance._maybe_resume = env(instance_id="test-instance", on_frame_received=on_frame, on_frame_decoded=None)
+        dpg.set_value(instance.paused_text_gui_widget, "[Connection lost; waiting for Raven-server]")
+        started = []
+        monkeypatch.setattr(instance, "start", lambda instance_id, **kw: started.append((instance_id, kw)), raising=False)
+        monkeypatch.setattr(instance, "pause", lambda action: calls.append(action), raising=False)
+        return instance, calls, started, on_frame
+
+    def test_a_server_that_still_has_the_avatar_gets_the_stream_back(self, lost):
+        instance, calls, started, on_frame = lost
+        instance._on_heartbeat(["test-instance"], [])
+        assert started == [("test-instance", {"on_frame_received": on_frame, "on_frame_decoded": None})]
+        assert calls == ["resume"]
+        assert dpg.get_value(instance.paused_text_gui_widget) == "[Video is off]", "the app's own paused text is back"
+        assert instance._maybe_resume is None
+
+    def test_a_server_that_forgot_the_avatar_says_so_and_does_not_resume(self, lost):
+        """Control for the test above: the same beat, with the instance among the lost."""
+        instance, calls, started, _on_frame = lost
+        instance._on_heartbeat([], ["test-instance"])
+        assert started == [] and calls == []
+        assert "restarted" in dpg.get_value(instance.paused_text_gui_widget)
+        assert instance._maybe_resume is None
+
+    def test_a_task_still_finishing_waits_for_the_next_beat(self, lost):
+        instance, _calls, started, _on_frame = lost
+        instance._task_env = env(cancelled=False)
+        instance._on_heartbeat(["test-instance"], [])
+        assert started == [] and instance._maybe_resume is not None, "the resume should still be pending"
+
+    def test_nothing_lost_means_nothing_to_do(self, lost):
+        instance, calls, started, _on_frame = lost
+        instance._maybe_resume = None
+        instance._on_heartbeat(["test-instance"], [])
+        assert started == [] and calls == []

@@ -248,10 +248,16 @@ class DPGAvatarRenderer:
                                                 show=False, parent=self.fps_text_viewport_drawlist)
         # Text to show while paused. This will be positioned when shown.
         paused_str = paused_text if paused_text is not None else ""
+        self._paused_str = paused_str  # put back after a lost connection has borrowed the widget
         self.paused_text_gui_widget = dpg.add_text(paused_str,
                                                    show=False,
                                                    tag="paused_text",
                                                    parent=gui_parent)
+
+        # A stream lost to the network is opened again once the server answers, as the heartbeat finds out.
+        self._resume_lock = threading.Lock()
+        self._maybe_resume = None  # what the lost stream was showing, while waiting for the server
+        api.avatar_add_heartbeat_listener(self._on_heartbeat)
 
     def _get_is_shown(self) -> bool:
         """Return whether the avatar's panel is currently shown."""
@@ -1071,11 +1077,13 @@ class DPGAvatarRenderer:
                 logger.info("DPGAvatarRenderer.start.update_live_texture: Stream closed, shutting down.")
             except Exception:
                 logger.exception("DPGAvatarRenderer.start.update_live_texture")
-
-                # TODO: recovery if the server comes back online
-                dpg.set_value(self.paused_text_gui_widget, "[Connection lost]")
+                dpg.set_value(self.paused_text_gui_widget, "[Connection lost; waiting for Raven-server]")
                 self.pause(action="pause")
                 maybe_set_fps_counter(describe_performance(None, None, None, None))
+                # `_on_heartbeat` opens the stream again once the server answers with this instance still loaded.
+                with self._resume_lock:
+                    self._maybe_resume = envcls(instance_id=avatar_instance_id, on_frame_received=on_frame_received,
+                                                on_frame_decoded=on_frame_decoded)
             finally:
                 reader.stop()  # Close the stream to ensure that the server's network send thread serving our request exits.
                 self.avatar_instance_id = None
@@ -1088,6 +1096,36 @@ class DPGAvatarRenderer:
         self.animator_running = True  # automatically enter animator running state when `start` is called
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
 
+    def _on_heartbeat(self, known: list[str], lost: list[str]) -> None:
+        """After a stream was lost, open it again once the server answers with its avatar instance still loaded, or
+        say that the server has forgotten it. Heartbeat listener (`raven.client.api.avatar_add_heartbeat_listener`)."""
+        with self._resume_lock:
+            pending = self._maybe_resume
+            if pending is None or guiutils.is_shutting_down():
+                return
+            if pending.instance_id in lost:
+                self._maybe_resume = None
+            elif pending.instance_id in known:
+                if self._task_env is not None:  # the lost stream's task has not finished yet; try at the next beat
+                    return
+                self._maybe_resume = None
+            else:  # unloaded meanwhile: nothing to bring back
+                self._maybe_resume = None
+                return
+        if pending.instance_id in lost:
+            # Bringing it back means loading the avatar again, which only the app knows how to do.
+            logger.warning(f"DPGAvatarRenderer._on_heartbeat: Raven-server no longer has avatar instance '{pending.instance_id}', "
+                           f"as after a restart; not resuming.")
+            with guiutils.nonexistent_ok():
+                dpg.set_value(self.paused_text_gui_widget, "[Raven-server restarted; restart the app to bring the avatar back]")
+                self._reposition_paused_text()
+            return
+        logger.info(f"DPGAvatarRenderer._on_heartbeat: Raven-server answers again; resuming the stream of avatar instance '{pending.instance_id}'.")
+        with guiutils.nonexistent_ok():
+            dpg.set_value(self.paused_text_gui_widget, self._paused_str)
+        self.start(pending.instance_id, on_frame_received=pending.on_frame_received, on_frame_decoded=pending.on_frame_decoded)
+        self.pause(action="resume")
+
     def stop(self, wait: bool = False) -> None:
         """The opposite of `start`.
 
@@ -1098,6 +1136,8 @@ class DPGAvatarRenderer:
         `wait`: Whether to wait until the background task actually exits. Useful during app shutdown,
                 so that GUI resources won't go bye-bye before the task has exited.
         """
+        with self._resume_lock:  # a stream stopped on purpose is not brought back
+            self._maybe_resume = None
         if self._task_env is not None:
             logger.info(f"DPGAvatarRenderer.stop: Stopping background task for avatar instance '{self.avatar_instance_id}'.")
             self.task_manager.clear(wait=wait)
