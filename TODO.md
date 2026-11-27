@@ -214,10 +214,24 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   AOKK studies and their follow-ups, so before 0.2.11 is released. Cost M.
   - **Drawn with matplotlib** (decided 2026-11-27), a new dependency: publication-ready axes and ticks, and saving
     to PDF or SVG besides PNG, which suit a printed paper. The window and its save UX are the word cloud's.
-  - **Open: the height scale.** The bar compresses a wide range data-adaptively (`numutils.histogram_adjusted_heights`);
-    a figure for a paper wants an axis a reader can read values off, so linear or logarithmic with labelled ticks,
-    perhaps with the adaptive one as an option. Labels too: years along the bottom, cluster numbers or their themes.
-  - **The hotkey needs a place on the help card**, which is full; the cluster table export has the same need.
+  - **The height scale, decided 2026-11-27**: a toggle between linear, log and adaptive (Ward Larson, Rushmeier and
+    Piatko 1997, linear in the CDF as in SAVU's `hdrplot.m`), in matplotlib's `FuncScale` on the `(forward,
+    inverse)` pairs in `raven.common.numutils`. Labels from `decade_ticks` on log and adaptive, matplotlib's own on
+    linear; labels may leave their ticks with a leader line (`spread_labels`).
+    - **Bar values labelled two ways, both offered**: the N tallest (default 2), for a few high bars over noise;
+      and those that cannot be read off the axis (`data_labels`), as many as fit least readable first, or above a
+      threshold set by hand for a printed figure.
+    - The finer tick fill everywhere (ticks such as 14 and 35) is an option, `decade_ticks(subdivide="all")`.
+  - **Labels along the bottom**: years, or cluster numbers, with an option for each cluster's leading theme, or its
+    leading quoted phrase where it has no theme.
+  - **The hotkey is F12** (decided 2026-11-27), beside the word cloud's F10. It needs a place on the help card,
+    which is full; the cluster table export has the same need.
+- **[Medium]** Export a dataset as a self-contained interactive HTML page, for supplemental material to a
+  bibliometric analysis made with the Visualizer (the maintainer, 2026-11-27). A reference list of 2000 records is
+  read by nobody and admitted by no journal, so an interactive map of the corpus is the honest way to report it.
+  - **Titles, authors and years only**: abstracts are left out for copyright.
+  - The plot, the clusters with their keywords, selection and search, and the histogram's scales, ported to JS (the
+    pool toy in `TODO_DEFERRED.md` needs the same scale code).
 - **[Medium]** Word cloud window: make resizable; add 1:1 button; use Pillow Lanczos for scaling (DPG's built-in scaling is bilinear with no mipmaps, so it aliases when shrinking); selectable color scheme (white background for paper export); move toolbar to top so it stays on-screen if the image is too large; expose size and color settings in GUI (currently only in `config.py`).
 
 - **[Medium]** Settings window: expose `gui_config` in the GUI. Currently only in `config.py`. Note: this is a general gap — most Visualizer settings are not runtime-configurable.
