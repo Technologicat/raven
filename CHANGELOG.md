@@ -263,6 +263,9 @@
 - **The PyTorch package source in `pyproject.toml` is named `pytorch-gpu`**, where it was `pytorch-cu128`, as it now serves AMD GPUs too. It is the same entry; instructions that name it, such as removing it on a Mac, mean this one.
 - **spaCy's language model is downloaded on first use, not at install.** The first run that needs it fetches it, as the other AI models already are, and installs it into Raven's venv.
 - **For scripts: the `raven.client.mayberemote` services take their arguments by name only**, `allow_local=True` rather than a bare `True`. A script passing them positionally needs the names added.
+- **Batch work rides out about a minute of an unreachable Raven-server**, trying again after 5, 15 and 45 seconds, where it gave up after 15.
+  - That includes an import started from Raven-visualizer's window and document indexing inside Raven-librarian, which used to get the few seconds an interactive app allows. A search, a voice message and the avatar keep that short wait.
+  - The command-line tools that use the server had the longer wait already, and now wait longer still.
 
 ### Fixed
 

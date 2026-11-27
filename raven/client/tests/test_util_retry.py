@@ -52,6 +52,36 @@ class TestRetry:
         assert len(attempts) == 1
 
 
+class TestAPolicyForAPieceOfWork:
+    """`util.network_retry` overrides the process's policy within its block, and only there."""
+
+    def test_the_block_s_policy_applies_inside_it(self, unreachable):
+        set_retry, attempts = unreachable
+        set_retry(None)  # the process sends once
+        with util.network_retry(Retry(attempts=3, delay=0.0)):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                util.get(f"{util.api_config.raven_server_url}/api/modules", timeout=util.api_config.network_timeout)
+        assert len(attempts) == 4
+
+    def test_outside_it_the_process_s_policy_applies_again(self, unreachable):
+        """Control for the test above: the same request after the block is sent once, as the process says."""
+        set_retry, attempts = unreachable
+        set_retry(None)
+        with util.network_retry(Retry(attempts=3, delay=0.0)):
+            pass
+        with pytest.raises(requests.exceptions.ConnectionError):
+            util.get(f"{util.api_config.raven_server_url}/api/modules", timeout=util.api_config.network_timeout)
+        assert len(attempts) == 1
+
+    def test_none_in_the_block_sends_once_under_a_retrying_process(self, unreachable):
+        set_retry, attempts = unreachable
+        set_retry(Retry(attempts=2, delay=0.0))
+        with util.network_retry(None):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                util.post(f"{util.api_config.raven_server_url}/api/modules", timeout=util.api_config.network_timeout)
+        assert len(attempts) == 1
+
+
 class TestProbesAreNotRetried:
     """The probes say whether the server is there; trying again would only make them slower to say it is not."""
 

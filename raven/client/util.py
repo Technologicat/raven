@@ -5,7 +5,7 @@ __all__ = ["api_config",  # configuration namespace
            "require",
            "ServerRefused", "JobFailed",
            "yell_on_error",
-           "get", "post",
+           "network_retry", "get", "post",
            "post_streamed_job"]
 
 import logging
@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 from bs4 import BeautifulSoup  # for error message prettification (strip HTML from server's error response)
 
-from unpythonic import equip_with_traceback
+from unpythonic import dyn, equip_with_traceback
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
@@ -141,15 +141,32 @@ def yell_on_error(response: requests.Response) -> None:
         logger.error(_strip_html(response.text))
         raise ServerRefused(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
 
+# The dynamic variable `network_retry` binds; unbound, the process's policy from `initialize_api` applies.
+_NETWORK_RETRY = "raven_client_network_retry"
+
+
+def network_retry(maybe_retry: "Retry | None"):
+    """A context manager: within it, in this thread, requests to Raven-server follow `maybe_retry` while they cannot
+    connect, whatever the process's policy from `initialize_api` is.
+
+    `maybe_retry`: a `raven.client.config.Retry`, or `None` for no retries.
+
+    For a piece of work whose waiting differs from its app's: an import run inside a GUI app is batch work, and can
+    ride out a network drop that a person waiting on each answer should be told about at once. A thread started
+    inside the block does not inherit it (`unpythonic.dyn`), so a background task binds it in its own body.
+    """
+    return dyn.let(**{_NETWORK_RETRY: maybe_retry})
+
+
 def get(url: str, **kwargs) -> requests.Response:
-    """`requests.get` to Raven-server, tried again as `initialize_api`'s `maybe_network_retry` says while it cannot
-    connect."""
+    """`requests.get` to Raven-server, tried again while it cannot connect, as `network_retry` or else
+    `initialize_api`'s `maybe_network_retry` says."""
     return _send(lambda: requests.get(url, **kwargs), what=f"GET {url}")
 
 
 def post(url: str, **kwargs) -> requests.Response:
-    """`requests.post` to Raven-server, tried again as `initialize_api`'s `maybe_network_retry` says while it cannot
-    connect.
+    """`requests.post` to Raven-server, tried again while it cannot connect, as `network_retry` or else
+    `initialize_api`'s `maybe_network_retry` says.
 
     With `stream=True`, only the request that opens the stream is retried; a stream that breaks partway fails.
     """
@@ -157,7 +174,7 @@ def post(url: str, **kwargs) -> requests.Response:
 
 
 def _send(send: Callable[[], requests.Response], *, what: str) -> requests.Response:
-    maybe_retry = api_config.maybe_network_retry
+    maybe_retry = dyn.get(_NETWORK_RETRY, api_config.maybe_network_retry)
     if maybe_retry is None:
         return send()
     return netutil.send_with_retry(send, attempts=maybe_retry.attempts, delay=maybe_retry.delay,

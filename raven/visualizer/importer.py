@@ -48,6 +48,7 @@ from bibtexparser.model import DuplicateBlockKeyBlock, DuplicateFieldKeyBlock, M
 
 from ..client import config as client_config
 from ..client import mayberemote
+from ..client import util as client_util
 
 from ..common import bgtask
 from ..common import deviceinfo
@@ -2258,9 +2259,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
     if visualizer_config.extract_keywords:
         _check_keyword_method()
 
+    # An import is batch work wherever it runs, a GUI app included, so it rides out a network drop to Raven-server
+    # rather than failing as soon as an interactive app would.
     with dyn.let(maybe_update_status=maybe_update_status,
                  clustering_method_override=clustering_method,
-                 clustering_aim=clustering_aim or ""):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
+                 clustering_aim=clustering_aim or ""), \
+            client_util.network_retry(client_config.network_retry_batch):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
         # --------------------------------------------------------------------------------
         # Connect to the LLM backend, if this configuration has a stage that needs one
         #

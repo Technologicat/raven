@@ -467,6 +467,22 @@ class _FakeEmbeddings:
         return [[0.0] for _ in range(self.n)]
 
 
+def test_a_commit_rides_out_a_network_drop_whatever_the_app_s_policy():
+    # Indexing runs inside Librarian, whose own policy is the interactive one; its calls to Raven-server's embedder
+    # and NLP are batch work, and get the batch policy for the length of the commit.
+    from unpythonic import dyn
+    from raven.client import config as client_config
+    from raven.client import util as client_util
+    seen = []
+    fake = types.SimpleNamespace(_indexing_lock=threading.RLock(), _indexing_count=0, _indexing_progress_text="",
+                                 _on_indexing_start=None, _on_indexing_done=None,
+                                 needs_retokenizing=lambda: False,
+                                 _commit_body=lambda task_env: seen.append(dyn.get(client_util._NETWORK_RETRY, "unbound")))
+    hybridir.HybridIR.commit(fake)
+    assert seen == [client_config.network_retry_batch]
+    assert dyn.get(client_util._NETWORK_RETRY, "unbound") == "unbound", "the binding outlived the commit"
+
+
 def test_indexing_progress_keeps_moving_while_tokenizing():
     # A per-document update was fine when a document was a 1.3 kB abstract. On a 216 kB story it leaves the
     # indicator unchanged for tens of seconds while tokenizing, and a frozen indicator reads as a hung job

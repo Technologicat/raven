@@ -59,6 +59,7 @@ import chromadb  # semantic (vector)
 
 from ..client import config as client_config
 from ..client import mayberemote
+from ..client import util as client_util
 
 from ..common import bgtask
 from ..common import datastorelock
@@ -872,10 +873,13 @@ class HybridIR:
             except Exception:
                 logger.exception("HybridIR.commit: on_indexing_start raised")
         try:
-            if self.needs_retokenizing():
-                if not self._retokenize_all(task_env=task_env):
-                    return  # cancelled; the pending edits stay pending
-            self._commit_body(task_env=task_env)
+            # Indexing is batch work, also inside an interactive app, so it rides out a network drop to Raven-server's
+            # embedder and NLP; a search query, outside a commit, keeps the app's own policy.
+            with client_util.network_retry(client_config.network_retry_batch):
+                if self.needs_retokenizing():
+                    if not self._retokenize_all(task_env=task_env):
+                        return  # cancelled; the pending edits stay pending
+                self._commit_body(task_env=task_env)
         finally:
             self._indexing_progress_text = ""
             with self._indexing_lock:
