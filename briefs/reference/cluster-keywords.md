@@ -207,7 +207,9 @@ A dataset with one list only, phrases or the LLM's, shows it as a single label.
 - **The corpus-wide floor of five suits a large corpus, not a small one.** In a corpus of ten clusters a phrase has to
   be in half of them to count as corpus-wide. It depends on the number of clusters rather than on the corpus's size,
   too: once the clustering's granularity is tunable, a large corpus clustered coarsely, at a low "conceptual zoom
-  level", has few clusters as well. To be tuned on small corpora.
+  level", has few clusters as well. To be tuned for few clusters, with two cautions from the rejection below: measured
+  across corpora rather than fitted to one, and with an eye on the Themes list, which the same filter decides, so
+  that a lower floor also removes more shared themes outright.
 - **Two records defining one abbreviation make it corpus-wide**, so two papers on a system called CARE would expand
   every uppercase "CARE" in the corpus, including one meaning something else. A lowercase "care" is safe, the match
   being by spelling.
@@ -221,8 +223,10 @@ A dataset with one list only, phrases or the LLM's, shows it as a single label.
   reasons are in `investigations/cluster-keywords/README.md`).
 - **A word-count limit on a bulleted reply's items**: a number with nothing behind it, where the header and the full
   stops already tell a summary from a list.
-- **Lowering the corpus-wide floor for small corpora as a fix for repeated themes**: a single number, easy to fit to
-  the corpus in front of us, and it removes shared themes outright where ordering only moves them down.
+- **Lowering the corpus-wide floor as the remedy for repeated themes** (2026-11-26, from a small corpus where a few
+  themes repeated across its clusters): a single number, easy to fit to the corpus in front of us, and it removes
+  shared themes outright where ordering only moves them down, so ordering was chosen (`shared_last`). This rejects the
+  floor as that remedy, not its calibration, which *Known limitations* leaves open.
 
 
 ## References
