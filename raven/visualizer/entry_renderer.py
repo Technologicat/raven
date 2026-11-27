@@ -222,33 +222,33 @@ def format_cluster_keywords(file_content, cluster_id: int, *, n: int = 6,
 
     `file_content`: a loaded dataset file (`dataset.file_content`).
     `n`: how many keywords a line shows.
-    `themes_only`: show the themes line alone, where there is one; for a tooltip crowded with clusters.
+    `themes_only`: show the Themes line alone where the cluster has one, and its Quoted line where it has not; for a
+                   tooltip crowded with clusters.
 
-    Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on),
-    `[("Themes", ...), ("Quoted", ...)]`: the LLM's keywords, which name what the cluster's papers share, without
-    those it gave too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and the
-    phrases, which quote what the papers say, without a phrase that repeats a theme, and left out where none is left.
-    Where the LLM found no theme in the cluster, `[("Quoted", ...)]` alone. Otherwise `[(None, "[keyword0, ...]")]`,
-    the cluster's label, which every dataset has.
+    Where the dataset has both the LLM's keywords and the phrases (`"hybrid"`, or `"llm"` with the evidence on), up to
+    two lines: `("Themes", ...)`, the LLM's keywords, which name what the cluster's papers share, without those it gave
+    too many clusters to tell this one apart (`keyphrases.without_umbrella_terms`); and `("Quoted", ...)`, the
+    phrases, which quote what the papers say, without a phrase that repeats a theme. Each is left out where it would
+    be empty, so a cluster with neither has no lines. Otherwise `[(None, "[keyword0, ...]")]`, the cluster's label,
+    which every dataset has.
     """
     def at(maybe_lists):
         return list(maybe_lists[cluster_id]) if maybe_lists is not None and cluster_id < len(maybe_lists) else []
 
-    themes = at(_distinctive_llm_keywords(file_content))
-    phrases = at(getattr(file_content, "cluster_keyword_lists", None))
-    if themes and themes != ["<unknown topic>"] and phrases:
-        themes = themes[:n]
-        if themes_only:
-            return [("Themes", ", ".join(themes))]
-        display = getattr(file_content, "keyphrase_display", None) or {}
-        terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
-        # A small cluster may have no phrase left that a theme does not already say.
-        return [("Themes", ", ".join(themes))] + ([("Quoted", ", ".join(terms))] if terms else [])
-    # The LLM found no theme; the phrases still say something. Read off the LLM's own list, as the corpus-wide filter
-    # would remove the marker from a corpus where many clusters have it.
-    if at(getattr(file_content, "cluster_llm_keywords", None)) == ["<unknown topic>"] and phrases:
-        return [("Quoted", ", ".join(term for term, _share in phrases[:n]))]
-    return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
+    maybe_llm_lists = getattr(file_content, "cluster_llm_keywords", None)
+    maybe_phrase_lists = getattr(file_content, "cluster_keyword_lists", None)
+    if maybe_llm_lists is None or maybe_phrase_lists is None:  # one list only: the label says it
+        return [(None, f"[{', '.join(file_content.vis_keywords_by_cluster[cluster_id])}]")]
+
+    themes = [t for t in at(_distinctive_llm_keywords(file_content)) if t != "<unknown topic>"][:n]
+    phrases = at(maybe_phrase_lists)
+    display = getattr(file_content, "keyphrase_display", None) or {}
+    # A small cluster may have no phrase left that a theme does not already say.
+    terms = keyphrases.lead_with(themes, phrases, len(themes) + n, display=display, nested=False)[len(themes):]
+    lines = ([("Themes", ", ".join(themes))] if themes else []) + ([("Quoted", ", ".join(terms))] if terms else [])
+    if themes_only and themes:
+        return lines[:1]
+    return lines
 
 
 def format_keyword_lines(lines: list[tuple[str | None, str]]) -> str:

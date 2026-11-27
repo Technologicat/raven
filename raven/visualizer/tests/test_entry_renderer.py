@@ -257,9 +257,22 @@ class TestThemesAndQuoted:
         fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
         assert entry_renderer.format_cluster_keywords(fc, 0) == [("Quoted", "intelligence")]
 
-    def test_no_theme_and_no_phrases_shows_the_label(self):
-        """Control for the test above: without phrases there is nothing better than the label."""
+    def test_no_theme_and_no_phrases_shows_no_line(self):
+        """Control for the test above: with neither list, the heading stands alone rather than "[<unknown topic>]"."""
         fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == []
+
+    def test_themes_without_phrases_show_the_themes(self):
+        fc = self.content(cluster_llm_keywords=[["existential risk"]], cluster_keyword_lists=[[]])
+        assert entry_renderer.format_cluster_keywords(fc, 0) == [("Themes", "existential risk")]
+
+    def test_a_crowded_tooltip_shows_the_quoted_line_of_a_cluster_without_themes(self):
+        fc = self.content(cluster_llm_keywords=[["<unknown topic>"]], cluster_keyword_lists=[[("intelligence", 0.5)]])
+        assert entry_renderer.format_cluster_keywords(fc, 0, themes_only=True) == [("Quoted", "intelligence")]
+
+    def test_a_dataset_with_one_list_shows_its_label(self):
+        """Control for the tests above: the two lines are for a dataset carrying both lists."""
+        fc = self.content(cluster_keyword_lists=[[("intelligence", 0.5)]])
         assert entry_renderer.format_cluster_keywords(fc, 0) == [(None, "[label term]")]
 
     def test_a_report_puts_the_lines_on_one(self):
