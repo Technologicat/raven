@@ -162,3 +162,57 @@ class TestHistogramAdjustedHeights:
         # Large counts that crowd nowhere fit a linear scale: the largest is five times the smallest.
         assert not numutils.needs_histogram_adjustment([0, 1000, 2000, 3000, 4000, 5000], low=1, high=6)
         assert numutils.needs_histogram_adjustment([1, 5000], low=1, high=21), "the 1 would vanish linearly"
+
+
+class TestHistogramAdjustment:
+    # Counts spanning four decades, crowded at the low end: compressed on a display range of 100.
+    values = np.array([1, 2, 2, 3, 3, 3, 4, 5, 6, 8, 10, 15, 40, 300, 9000], dtype=float)
+
+    def test_forward_is_the_heights(self):
+        forward, _inverse = numutils.histogram_adjustment(self.values, low=1.0, high=100.0)
+        assert np.allclose(forward(self.values), numutils.histogram_adjusted_heights(self.values, low=1.0, high=100.0))
+
+    @pytest.mark.parametrize("values", [values, np.array([3.0, 5.0, 40.0])], ids=["compressed", "linear"])
+    def test_inverse_undoes_forward(self, values):
+        forward, inverse = numutils.histogram_adjustment(values, low=1.0, high=100.0)
+        assert np.allclose(inverse(forward(values)), values)
+
+    def test_the_scale_is_monotone_everywhere_and_zero_at_zero(self):
+        forward, _inverse = numutils.histogram_adjustment(self.values, low=1.0, high=100.0)
+        grid = np.concatenate([[0.0, 0.25, 0.5], np.geomspace(1.0, 20000.0, 200)])
+        heights = forward(grid)
+        assert heights[0] == 0.0
+        assert np.all(np.diff(heights) >= 0.0)
+        assert heights[1] == pytest.approx(0.25), "below the smallest value, linear down to zero"
+
+    def test_no_positive_value_is_an_error(self):
+        with pytest.raises(ValueError):
+            numutils.histogram_adjustment([0.0, 0.0], low=1.0, high=100.0)
+
+
+class TestDecadeTicks:
+    @staticmethod
+    def log_axis(x):  # 1 to 1000 on a log axis
+        return np.log10(x) / 3.0
+
+    def test_where_there_is_room_the_ticks_run_one_two_five(self):
+        ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.04, min_count=10)
+        assert ticks[:10] == [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0]
+
+    def test_where_there_is_not_only_the_decades(self):
+        """Control for the test above: the same axis with labels too tall for the twos and fives."""
+        assert numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.2) == [1.0, 10.0, 100.0, 1000.0]
+
+    def test_a_compressed_stretch_gets_fewer_ticks(self):
+        def axis(x):  # 1-10 squeezed into the bottom 5%
+            x = np.asarray(x, dtype=float)
+            return np.where(x <= 10, 0.05 * np.log10(x), 0.05 + 0.95 * np.log10(x / 10) / 2)
+        ticks = numutils.decade_ticks(axis, 1.0, 1000.0, spacing=0.04)
+        assert sum(1 for t in ticks if t < 10) <= 1
+        assert sum(1 for t in ticks if t > 10) >= 6
+        positions = sorted(float(axis(t)) for t in ticks)
+        assert min(np.diff(positions)) >= 0.04
+
+    def test_included_values_come_first(self):
+        ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.2, include=(1.0, 700.0))
+        assert 700.0 in ticks and 1000.0 not in ticks, "the included end wins over the decade crowding it"

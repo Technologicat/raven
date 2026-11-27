@@ -5,7 +5,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "maximin_latin_square",
-           "needs_histogram_adjustment", "histogram_adjusted_heights"]
+           "needs_histogram_adjustment", "histogram_adjustment", "histogram_adjusted_heights", "decade_ticks"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 import functools
 import itertools
 import math
+from collections.abc import Callable
 from typing import Union
 
 import numpy as np
@@ -124,30 +125,33 @@ def needs_histogram_adjustment(values, *, low: float, high: float) -> bool:
     return bool(positive.size) and positive.max() / positive.min() > high / low
 
 
-def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 20) -> np.ndarray:
-    """Map positive `values` to display heights in `[low, high]`, compressing a wide range data-adaptively.
+def histogram_adjustment(values, *, low: float, high: float, nbins: int = 20) -> tuple[Callable, Callable]:
+    """The display scale `histogram_adjusted_heights` places `values` on, as `(forward, inverse)` functions.
 
-    The histogram adjustment of Ward Larson, Rushmeier and Piatko (1997, *A Visibility Matching Tone Reproduction
-    Operator for High Dynamic Range Scenes*, https://doi.org/10.1109/2945.646233), for a list of numbers rather than
-    an image's luminances: where the values span more than `high / low`, each is placed by where it falls in the
-    distribution of their logarithms, so that crowded parts of the range get the contrast, while no stretch of it is
-    steepened past a linear mapping. Where they span no more than that, the heights are linear, `value / max * high`.
+    `forward` maps a value, or an array of them, to a display height, and `inverse` maps a height back. The scale is
+    built from `values`, and applies to any value: one of zero or less maps to zero, one between zero and the smallest
+    positive value linearly to a height between zero and `low`, and one above the largest to `high`. Where the
+    positive values span no more than `high / low`, the scale is linear, `value / max * high`.
 
-    `values`: numbers, one per height. A value of zero or less maps to zero.
-    `low`, `high`: the smallest and largest display height, `0 < low < high`; their ratio is the display range.
-    `nbins`: the bins of the histogram of logarithms.
+    For an axis drawn on that scale, as matplotlib's `FuncScale` takes it; `decade_ticks` places its labels.
 
-    Returns a float array shaped as `values`. The order of the values is kept: a larger value is never shorter.
+    `values`, `low`, `high`, `nbins`: as for `histogram_adjusted_heights`. `values` must hold a positive value.
     """
     values = np.asarray(values, dtype=float)
-    heights = np.zeros_like(values)
-    positive = values > 0
-    if not positive.any():
-        return heights
-    if not needs_histogram_adjustment(values, low=low, high=high):  # fits as it is
-        heights[positive] = values[positive] / values[positive].max() * high
-        return heights
-    logs = np.log(values[positive])
+    positive = values[values > 0]
+    if not positive.size:
+        raise ValueError("histogram_adjustment: `values` holds no positive value, so there is no scale to build.")
+    vmin, vmax = positive.min(), positive.max()
+
+    if not needs_histogram_adjustment(positive, low=low, high=high):  # fits as it is
+        def forward(x):
+            return np.clip(np.asarray(x, dtype=float), 0.0, None) / vmax * high
+
+        def inverse(h):
+            return np.clip(np.asarray(h, dtype=float), 0.0, None) * vmax / high
+        return forward, inverse
+
+    logs = np.log(positive)
     data_range = logs.max() - logs.min()
     display_range = math.log(high / low)
 
@@ -171,8 +175,82 @@ def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 
             break
     cdf = np.concatenate([[0.0], np.cumsum(pdf)])
     cdf /= cdf[-1]
+
     # Each value's position in the cumulative distribution, interpolated within its bin, sets its height on a
-    # logarithmic display scale from `low` to `high`.
-    position = np.interp(logs, edges, cdf)
-    heights[positive] = low * np.exp(display_range * position)
-    return heights
+    # logarithmic display scale from `low` to `high`. Below the smallest value the scale continues linearly to zero.
+    def forward(x):
+        x = np.asarray(x, dtype=float)
+        out = np.where(x > 0, x / vmin * low, 0.0)
+        above = x >= vmin
+        position = np.interp(np.log(np.where(above, x, vmin)), edges, cdf)
+        return np.where(above, low * np.exp(display_range * position), out)
+
+    # An empty bin is a flat stretch of `cdf`, where the inverse is not unique; `np.interp` picks a value from it.
+    def inverse(h):
+        h = np.asarray(h, dtype=float)
+        out = np.where(h > 0, h / low * vmin, 0.0)
+        above = h >= low
+        position = np.log(np.where(above, h, low) / low) / display_range
+        return np.where(above, np.exp(np.interp(position, cdf, edges)), out)
+    return forward, inverse
+
+
+def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 20) -> np.ndarray:
+    """Map positive `values` to display heights in `[low, high]`, compressing a wide range data-adaptively.
+
+    The histogram adjustment of Ward Larson, Rushmeier and Piatko (1997, *A Visibility Matching Tone Reproduction
+    Operator for High Dynamic Range Scenes*, https://doi.org/10.1109/2945.646233), for a list of numbers rather than
+    an image's luminances: where the values span more than `high / low`, each is placed by where it falls in the
+    distribution of their logarithms, so that crowded parts of the range get the contrast, while no stretch of it is
+    steepened past a linear mapping. Where they span no more than that, the heights are linear, `value / max * high`.
+
+    `values`: numbers, one per height. A value of zero or less maps to zero.
+    `low`, `high`: the smallest and largest display height, `0 < low < high`; their ratio is the display range.
+    `nbins`: the bins of the histogram of logarithms.
+
+    Returns a float array shaped as `values`. The order of the values is kept: a larger value is never shorter.
+    `histogram_adjustment` gives the same scale as functions, for drawing an axis on it.
+    """
+    values = np.asarray(values, dtype=float)
+    if not (values > 0).any():
+        return np.zeros_like(values)
+    forward, _inverse = histogram_adjustment(values, low=low, high=high, nbins=nbins)
+    return forward(values)
+
+
+def decade_ticks(forward: Callable, low: float, high: float, *,
+                 spacing: float, min_count: int = 16, include: tuple = ()) -> list[float]:
+    """Tick values for an axis on a nonlinear scale, as many as fit without crowding.
+
+    `forward`: maps a value to its position along the axis, as a fraction of its length.
+    `low`, `high`: the positive range of values to place ticks in.
+    `spacing`: the least distance between two ticks, as a fraction of the axis: a label's height, for a vertical axis.
+    `min_count`: once this many ticks are placed, no further kind of tick is tried.
+    `include`: values that get a tick first, such as the ends of the data.
+
+    Ticks are tried in rounds, at each power of ten, then at five times one, then two times, then three, four, six,
+    seven, eight and nine times one; a tick is placed where it is at least `spacing` from every tick already placed.
+    So a stretch the scale compresses gets fewer ticks, and a 1-2-5 sequence appears where there is room for it.
+
+    Returns the tick values, sorted.
+    """
+    # A port of the colour bar labelling of `hdrplot.m`, Juha Jeronen's HDR plotter for the SAVU project (2010).
+    placed: list[tuple[float, float]] = []  # (position, value)
+
+    def try_place(value: float) -> None:
+        y = float(forward(value))
+        if all(abs(y - other) >= spacing for other, _value in placed):
+            placed.append((y, value))
+
+    for value in include:
+        try_place(float(value))
+    kmin, kmax = math.floor(math.log10(low)), math.ceil(math.log10(high))
+    for multipliers in ((1,), (5,), (2,), (3, 4, 6, 7, 8, 9)):
+        if len(placed) >= min_count:
+            break
+        for k in range(kmin, kmax + 1):
+            for m in multipliers:
+                value = m * 10.0 ** k
+                if low <= value <= high:
+                    try_place(value)
+    return sorted(value for _y, value in placed)
