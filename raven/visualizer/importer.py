@@ -1433,6 +1433,9 @@ def _parse_keyword_list(reply):
 
 
 _BULLET = re.compile(r"^\s*(?:[-*\u2022]|\d+[.)])\s+(.*)$")  # "- ", "* ", "\u2022 " (BULLET), "1. ", "1) "
+# A heading that names the keywords, as in "Keywords:", "**Suggested keywords:**", "Recommended cluster keywords:",
+# with what may follow it on the same line.
+_KEYWORDS_HEADING = re.compile(r"^\s*(?:\*\*)?[\w ]*\bkeywords\s*:\s*(?:\*\*)?\s*(.*)$", flags=re.IGNORECASE)
 
 
 def _parse_bulleted_keyword_list(reply):
@@ -1459,14 +1462,42 @@ def _parse_bulleted_keyword_list(reply):
     return keywords
 
 
+def _parse_keywords_section(reply):
+    """Parse an LLM keyword reply that states its theme first and then lists the keywords under a heading.
+
+    The keywords are what follows the last heading naming them (`"Keywords:"`, `"**Suggested keywords:**"`): a
+    comma-separated list on the heading's own line, or a bulleted or numbered list below it, read as
+    `_parse_keyword_list` and `_parse_bulleted_keyword_list` read them. Whatever precedes the heading is ignored.
+
+    Returns the keywords as a `list` of `str`, or `None` when the reply has no such heading or nothing usable under it.
+    """
+    lines = reply.strip().splitlines()
+    for k in range(len(lines) - 1, -1, -1):
+        match = _KEYWORDS_HEADING.match(lines[k])
+        if match is None:
+            continue
+        inline = match.group(1).strip()
+        if inline:
+            return _parse_keyword_list(inline)
+        return _parse_bulleted_keyword_list("\n".join(lines[k + 1:]))
+    return None
+
+
 def _parse_keyword_reply(reply, cluster_id):
-    """`_parse_keyword_list`, falling back to `_parse_bulleted_keyword_list`, which it logs."""
+    """`_parse_keyword_list`, falling back to `_parse_bulleted_keyword_list` and then to `_parse_keywords_section`,
+    which it logs."""
     parsed = _parse_keyword_list(reply)
-    if parsed is None:
-        parsed = _parse_bulleted_keyword_list(reply)
-        if parsed is not None:
-            logger.warning(f"_parse_keyword_reply: the LLM's reply for cluster #{cluster_id} is a bulleted list, "
-                           f"not the comma-separated one asked for; read it as a list.")
+    if parsed is not None:
+        return parsed
+    parsed = _parse_bulleted_keyword_list(reply)
+    if parsed is not None:
+        logger.warning(f"_parse_keyword_reply: the LLM's reply for cluster #{cluster_id} is a bulleted list, "
+                       f"not the comma-separated one asked for; read it as a list.")
+        return parsed
+    parsed = _parse_keywords_section(reply)
+    if parsed is not None:
+        logger.warning(f"_parse_keyword_reply: the LLM's reply for cluster #{cluster_id} states its theme before "
+                       f"listing the keywords under a heading; read the list under the heading.")
     return parsed
 
 

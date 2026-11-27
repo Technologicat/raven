@@ -839,6 +839,23 @@ class TestKeywordRepliesThatAreNotKeywordLists:
         summary = "Summary:\n- Investigated physiological signal-based prediction.\n- Applied explainability.\n"
         assert importer._parse_bulleted_keyword_list(summary) is None
 
+    @pytest.mark.parametrize("reply", [
+        "**Common theme:**  \nReinforcement learning for reasoning.\n\n**Suggested keywords:**\n- Reinforcement learning  \n"
+        "- Policy optimization\n",
+        "Theme: Reinforcement learning methods.\n\nKeywords:\n1. Reinforcement learning\n2. Policy optimization\n",
+        "Common theme: reinforcement learning.\n\nKeywords: Reinforcement learning, Policy optimization",
+    ])
+    def test_a_theme_then_keywords_under_a_heading_is_read(self, reply):
+        # The three shapes one cluster's six rejected replies took, a theme stated before the list.
+        assert importer._parse_bulleted_keyword_list(reply) is None, "prose before the list, so the list reading fails"
+        assert importer._parse_keywords_section(reply) == ["Reinforcement learning", "Policy optimization"]
+
+    def test_prose_without_a_keywords_heading_is_still_rejected(self):
+        """Control for the test above: a summary names no keywords, so nothing in it is read as a list."""
+        assert importer._parse_keywords_section(PROSE_REPLY) is None
+        summary = "Summary:\n- Investigated physiological signal-based prediction.\n"
+        assert importer._parse_keywords_section(summary) is None
+
     def test_the_answer_format_ends_the_prompt(self):
         prompt = visualizer_config.clusters_llm_keyword_extraction_prompt
         assert "comma-separated" not in prompt, "the format rules come after the items and the evidence"

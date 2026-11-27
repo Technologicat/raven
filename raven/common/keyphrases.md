@@ -151,6 +151,8 @@ A term is stored lowercase and displayed with capitals as the corpus writes them
 - **A reply written as a Markdown list is read as one**, with a warning in the log. A good answer formatted as bullets
   was rejected three times over and recorded as no theme at all. A bulleted *summary* is still rejected: its items
   are sentences, ending in a full stop.
+- **So is a reply that states its theme first and then lists the keywords under a heading** ("Keywords:",
+  "Suggested keywords:"), on the heading's line or below it. Prose with no such heading is still rejected.
 - **"keyword extraction failed" is a valid answer**, recorded as no theme and not retried, since asking again only
   pressures the model to invent one. A reply that is no list at all is retried, up to three times.
 - **A second pass folds variants across clusters** (an acronym in one, its expansion in another), asked for as a
