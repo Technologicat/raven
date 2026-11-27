@@ -126,6 +126,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
      canonicalization's mapping, the aliases cannot be checked against the corpus, which by definition does not
      use them.
   - Cost: 1 and 2 are S on top of the search itself; 3 is M (a prompt, a stored field, imports with an LLM only).
+  - **The search side, not only the labels** (the maintainer, 2026-11-27): a query naming a known abbreviation also
+    searches its long form, and the other way round, inflected forms included as the lorebook matches them. And a query
+    such as "fast weight programmer (FWP)" matches either half, which until there is an OR in the search syntax is the
+    only way to ask for both.
   - **The aliases also serve hybrid labels**: `keyphrases.lead_with` already treats an abbreviation and the long
     form the corpus defines for it as one term, so cluster 38 does not show *low-rank adaptation* and then
     *lora*. Pairs no paper in the corpus defines are left, and the same alias table would cover them.

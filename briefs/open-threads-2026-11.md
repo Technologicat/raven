@@ -32,7 +32,7 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 ## Next, 2026-11-27
 
-- **First thing: the maintainer reads the keyword rules draft**, `raven/common/keyphrases.md`, the *Considered and
+- **First thing: the maintainer reads the keyword rules draft**, `briefs/reference/cluster-keywords.md`, the *Considered and
   rejected* section especially.
 - **The re-import started at 16:10 on 2026-11-26** with all of the day's fixes; the previous datasets are kept as
   `investigations/cluster-keywords/data/*-2026-11-25.*`. Check it finished (`*.log` there), then make the shortlists
@@ -67,7 +67,8 @@ maintainer has read the whole arXiv evidence comparison.
   waits on the maintainer's ping.
 - **Then a document of the final keyword rules** (the maintainer, 2026-11-26: a lot of latent knowledge goes into
   them): each rule with the failure it prevents, from extraction to display. A reference document beside the code,
-  `raven/common/keyphrases.md`, linked from the module and from the Visualizer README.
+  `briefs/reference/cluster-keywords.md` (moved there 2026-11-27 from beside the module, describing how the rules
+  are rather than what to build), linked from the module and from the Visualizer README. Reviewed 2026-11-27.
 - **Still open**: the hybrid's ordering prompt (option 3), to be measured against tonight's import.
 
 ## Ready to pick up, no deadline
