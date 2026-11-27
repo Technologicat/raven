@@ -2063,10 +2063,14 @@ keyboardmark.install_focus_follower(list(_FILTER_COMBOS), release_to="clear_sear
 # Load the file optionally provided on the command line. In a frame callback, once the render loop is running,
 # because a file that cannot be opened is reported in a modal dialog, which waits for a frame; before the loop
 # runs, that wait never ends. Frame 10 is the dimmer's, and a frame number holds one callback.
+#
+# The path is resolved now: creating the file dialogs, below, changes the working directory, so a relative path
+# read at frame 11 would be looked up in the wrong place.
 reset_app_state()  # effectively, open a blank dataset
 if opts.filename:
-    _default_path = os.path.dirname(common_utils.absolutize_filename(opts.filename))
-    dpg.set_frame_callback(11, lambda: open_file(opts.filename))
+    _cli_filename = common_utils.absolutize_filename(opts.filename)
+    _default_path = os.path.dirname(_cli_filename)
+    dpg.set_frame_callback(11, lambda: open_file(_cli_filename))
 else:
     _default_path = os.getcwd()
 initialize_filedialogs(_default_path)
