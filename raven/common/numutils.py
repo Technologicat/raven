@@ -356,14 +356,15 @@ def data_labels(forward: Callable, values, ticks, *, spacing: float, threshold: 
     `threshold`: label every value at least this far from the nearest tick, for a figure tuned by hand. The labels
         may then not fit; `spread_labels` says so.
     `max_shift`: without a `threshold`, how far `spread_labels` may move any label, this one or one already placed, to
-        make room; two `spacing`s if not given. Values are then tried least readable first, and each is labelled if
-        the labels still fit, which makes the threshold that of the last one labelled.
+        make room; half a `spacing` if not given, which keeps the ticks' own labels where they are, so a value is
+        labelled only in a gap between ticks. Values are tried least readable first, and each is labelled if the
+        labels still fit, which makes the threshold that of the last one labelled.
     `low`, `high`: the extent labels may be spread over, as for `spread_labels`.
 
     Returns the values to label, sorted.
     """
     if max_shift is None:
-        max_shift = 2.0 * spacing
+        max_shift = 0.5 * spacing
     tick_positions = np.array([float(forward(t)) for t in ticks])
     candidates = sorted({float(v) for v in np.asarray(values, dtype=float).ravel()} - {float(t) for t in ticks})
 
