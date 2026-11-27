@@ -217,6 +217,10 @@ class TestDecadeTicks:
         ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.2, include=(1.0, 700.0))
         assert 700.0 in ticks and 1000.0 not in ticks, "the included end wins over the decade crowding it"
 
+    def test_included_values_are_kept_even_when_they_crowd_each_other(self):
+        ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.2, include=(700.0, 800.0))
+        assert 700.0 in ticks and 800.0 in ticks
+
 
 class TestLinearAndLogScales:
     values = np.array([0.0, 2.0, 20.0, 2000.0])
@@ -224,7 +228,7 @@ class TestLinearAndLogScales:
     def test_log_scale_puts_the_ends_at_low_and_high(self):
         forward, inverse = numutils.log_scale(self.values, low=1.0, high=100.0)
         assert forward(2.0) == pytest.approx(1.0) and forward(2000.0) == pytest.approx(100.0)
-        assert forward(np.sqrt(2.0 * 2000.0)) == pytest.approx(10.0), "the geometric mean of the ends sits halfway"
+        assert forward(np.sqrt(2.0 * 2000.0)) == pytest.approx(50.5), "the geometric mean of the ends sits halfway up"
         assert forward(0.0) == 0.0 and forward(1.0) == pytest.approx(0.5), "linear below the smallest value"
         assert np.allclose(inverse(forward(self.values)), self.values)
 
@@ -279,3 +283,43 @@ class TestSpreadLabels:
                                             bounds=[(0.0, 1.0)] * len(wanted), method="SLSQP", options={"ftol": 1e-12})
         assert np.all(np.diff(got) >= spacing - 1e-12)
         assert np.sum((got - wanted) ** 2) == pytest.approx(reference.fun, rel=1e-6)
+
+
+class TestDecadeTicksSubdivide:
+    @staticmethod
+    def log_axis(x):  # 1 to 1000 on a log axis
+        return np.log10(np.asarray(x, dtype=float)) / 3.0
+
+    def test_by_default_the_gaps_between_round_numbers_stay_unfilled(self):
+        ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.03, min_count=100)
+        assert all(round(t / 10 ** math.floor(math.log10(t)), 9) in range(1, 10) for t in ticks), ticks
+
+    def test_subdividing_everywhere_fills_them(self):
+        """Control for the test above: the same axis does have room for finer ticks."""
+        ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.03, min_count=100, subdivide="all")
+        assert any(round(t / 10 ** math.floor(math.log10(t)), 9) not in range(1, 10) for t in ticks), ticks
+
+
+class TestDataLabels:
+    @staticmethod
+    def axis(v):  # 0 to 100, linear
+        return np.asarray(v, dtype=float) / 100.0
+
+    def test_values_far_from_every_tick_are_labelled_and_near_ones_are_not(self):
+        ticks = [0.0, 50.0, 100.0]
+        labels = numutils.data_labels(self.axis, [24.0, 51.0, 77.0], ticks, spacing=0.05)
+        assert labels == [24.0, 77.0], "51 reads off the 50 tick"
+
+    def test_only_as_many_as_fit(self):
+        ticks = [0.0, 100.0]
+        crowded = [40.0, 41.0, 42.0, 43.0, 44.0, 45.0, 46.0, 47.0]
+        labels = numutils.data_labels(self.axis, crowded, ticks, spacing=0.05, max_shift=0.05)
+        assert 0 < len(labels) < len(crowded)
+        wanted = sorted(float(self.axis(v)) for v in labels + ticks)
+        placed = numutils.spread_labels(wanted, spacing=0.05)
+        assert np.max(np.abs(placed - np.array(wanted))) <= 0.05 + 1e-12
+
+    def test_a_threshold_labels_by_distance_alone(self):
+        ticks = [0.0, 50.0, 100.0]
+        labels = numutils.data_labels(self.axis, [24.0, 40.0, 77.0], ticks, spacing=0.05, threshold=0.2)
+        assert labels == [24.0, 77.0], "40 is a tenth of the axis from the 50 tick, under the threshold"
