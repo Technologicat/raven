@@ -627,7 +627,8 @@ Which counts are written on the axis, besides its round numbers:
 - **Unreadable**: the counts that cannot be read off the axis, because they fall in a wide gap between its round
   numbers; as many as fit.
 - **Themes**, when colouring by cluster: each cluster's leading theme is written under its bar, beside its number, or
-  its leading quoted phrase where it has no theme. For a dataset with few clusters; with many, the captions crowd.
+  its leading quoted phrase where it has no theme. The figure grows taller to fit them, and with many clusters they
+  are set smaller, so that they do not overlap.
 
 Counts written on the axis are bold, and one that would crowd another moves aside, with a line back to its tick. The
 choices are remembered between sessions.

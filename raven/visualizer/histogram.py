@@ -52,10 +52,8 @@ _TICK_FONT_SIZE = 8.0  # points
 _LABEL_GAP = 4.0  # points, between the axis and a label sitting at its tick
 _LEADER_GAP = 14.0  # points, between the axis and a label moved off its tick, leaving room for the leader
 _LINE = 1.25  # a label's height, in font sizes, the least distance between two labels
+_MIN_CAPTION_FONT_SIZE = 4.0  # points; still legible in a printed vector figure
 
-# The figure's margins, in inches. Fixed rather than computed by matplotlib's layout, so that the axes' height is known
-# before any label is placed: the labels' spacing, as a fraction of the axis, depends on it.
-_MARGIN_LEFT, _MARGIN_RIGHT, _MARGIN_TOP, _MARGIN_BOTTOM = 0.85, 0.15, 0.35, 0.5
 
 # --------------------------------------------------------------------------------
 # The figure
@@ -72,6 +70,7 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
     `tallest`: label this many of the tallest bars with their counts.
     `unreadable`: label the bars whose counts cannot be read off the axis, as many as fit (`numutils.data_labels`).
     `captions`: per bar, a caption to write under it in place of its number, such as a cluster's leading theme.
+        The figure grows taller by the longest caption, so that they fit under the axes.
     `title`: written above the axes.
     `figsize`, `dpi`: the figure's size in inches, and its pixels per inch on screen or in a PNG.
 
@@ -83,63 +82,75 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
     if not (counts > 0).any():
         raise ValueError("build_figure: no bar has a positive count, so there is nothing to scale.")
     xs = np.arange(first, first + len(counts))
-
-    bottom = _MARGIN_BOTTOM
-    if captions is not None:  # written vertically under the bars; room for the longest
-        bottom += min(2.5, 0.075 * max((len(c) for c in captions), default=0) * _TICK_FONT_SIZE / 10)
-    fig = Figure(figsize=figsize, dpi=dpi)
-    FigureCanvasAgg(fig)
-    width, height = figsize
-    ax = fig.add_axes((_MARGIN_LEFT / width, bottom / height,
-                       1 - (_MARGIN_LEFT + _MARGIN_RIGHT) / width, 1 - (bottom + _MARGIN_TOP) / height))
-    axes_height_pt = (height - bottom - _MARGIN_TOP) * 72.0
-
-    # The scale's heights are in points, from one point, the shortest bar that still shows, to the axes' height.
-    low, high = 1.0, axes_height_pt
-    if scale == "linear":
-        forward, inverse = numutils.linear_scale(counts, high=high)
-    elif scale == "log":
-        forward, inverse = numutils.log_scale(counts, low=low, high=high)
-    else:
-        forward, inverse = numutils.histogram_adjustment(counts, low=low, high=high)
-    ax.set_yscale(FuncScale(ax, (forward, inverse)))
-    ax.bar(xs, counts, width=0.8, color=colors)
     vmax = float(counts.max())
-    ax.set_ylim(0, vmax)
-    ax.set_xlim(first - 0.6, xs[-1] + 0.6)
-
-    # The ticks: round numbers on a scale of its own, decades and their fractions on the others.
-    spacing = _LINE * _TICK_FONT_SIZE / axes_height_pt
-
-    def position(value):
-        return float(forward(value)) / high
     data_values = sorted({float(v) for v in counts if v > 0})
     tallest_values = data_values[-tallest:] if tallest > 0 else []
-    if scale == "linear":
-        ticks = [float(t) for t in MaxNLocator(nbins=6, integer=True).tick_values(0, vmax) if 0 <= t <= vmax]
-        ticks = sorted(set(ticks) | {vmax} | set(tallest_values))
-    else:
-        ticks = numutils.decade_ticks(position, data_values[0], vmax, spacing=spacing,
-                                      include=(0.0, vmax, *tallest_values), resolution=1.0)
-    unreadable_values = (numutils.data_labels(position, data_values, ticks, spacing=spacing,
-                                              low=-spacing / 2, high=1 + spacing / 2) if unreadable else [])
-    ticks = sorted(set(ticks) | set(unreadable_values))
-    any_moved = _draw_tick_labels(ax, ticks, position, spacing, axes_height_pt,
-                                  marked={vmax, *tallest_values, *unreadable_values})
 
+    fig = Figure(figsize=figsize, dpi=dpi)
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(xs, counts, width=0.8, color=colors)
+    ax.set_xlim(first - 0.6, xs[-1] + 0.6)
     if captions is not None:
-        ax.set_xticks(xs, captions, rotation=90, fontsize=_TICK_FONT_SIZE)
+        # Small enough that neighbouring captions do not overlap: a line of text per bar, the axes taking roughly
+        # the width of the figure. Down to a floor, past which they overlap rather than vanish.
+        bar_pitch_pt = 0.85 * figsize[0] * 72.0 / len(counts)
+        caption_size = max(_MIN_CAPTION_FONT_SIZE, min(_TICK_FONT_SIZE, bar_pitch_pt / _LINE))
+        ax.set_xticks(xs, captions, rotation=90, fontsize=caption_size)
+        fig.canvas.draw()
+        caption_height = max(label.get_window_extent().height for label in ax.get_xticklabels()) / dpi
+        figsize = (figsize[0], figsize[1] + caption_height)
+        fig.set_size_inches(*figsize)
     else:
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.tick_params(axis="x", labelsize=_TICK_FONT_SIZE)
     ax.set_xlabel("Year" if grouping == displaystate.YEAR else "Cluster", fontsize=_TICK_FONT_SIZE + 1)
-    widest = max(len(f"{t:.0f}") for t in ticks)
-    ax.set_ylabel("Records", fontsize=_TICK_FONT_SIZE + 1,
-                  labelpad=(_LEADER_GAP if any_moved else _LABEL_GAP) + 0.6 * _TICK_FONT_SIZE * widest)
     if title:
         ax.set_title(title, fontsize=_TICK_FONT_SIZE + 1)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
+
+    def label_axis(axes_height_pt: float) -> None:
+        """The height scale, its ticks and their labels, for axes `axes_height_pt` points tall."""
+        for text in list(ax.texts):  # the previous pass's labels
+            text.remove()
+        # The scale's heights are in points, from one point, the shortest bar that still shows, to the axes' height.
+        low, high = 1.0, axes_height_pt
+        if scale == "linear":
+            forward, inverse = numutils.linear_scale(counts, high=high)
+        elif scale == "log":
+            forward, inverse = numutils.log_scale(counts, low=low, high=high)
+        else:
+            forward, inverse = numutils.histogram_adjustment(counts, low=low, high=high)
+        ax.set_yscale(FuncScale(ax, (forward, inverse)))
+        ax.set_ylim(0, vmax)
+
+        # The ticks: round numbers on a scale of its own, decades and their fractions on the others.
+        spacing = _LINE * _TICK_FONT_SIZE / axes_height_pt
+
+        def position(value):
+            return float(forward(value)) / high
+        if scale == "linear":
+            ticks = [float(t) for t in MaxNLocator(nbins=6, integer=True).tick_values(0, vmax) if 0 <= t <= vmax]
+            ticks = sorted(set(ticks) | {vmax} | set(tallest_values))
+        else:
+            ticks = numutils.decade_ticks(position, data_values[0], vmax, spacing=spacing,
+                                          include=(0.0, vmax, *tallest_values), resolution=1.0)
+        unreadable_values = (numutils.data_labels(position, data_values, ticks, spacing=spacing,
+                                                  low=-spacing / 2, high=1 + spacing / 2) if unreadable else [])
+        ticks = sorted(set(ticks) | set(unreadable_values))
+        any_moved = _draw_tick_labels(ax, ticks, position, spacing, axes_height_pt,
+                                      marked={vmax, *tallest_values, *unreadable_values})
+        widest = max(len(f"{t:.0f}") for t in ticks)
+        ax.set_ylabel("Records", fontsize=_TICK_FONT_SIZE + 1,
+                      labelpad=(_LEADER_GAP if any_moved else _LABEL_GAP) + 0.6 * _TICK_FONT_SIZE * widest)
+
+    # The labels' spacing, as a fraction of the axis, depends on the axes' height, which `tight_layout` sets only once
+    # it has seen the labels. So: label at the height the figure starts with, lay out, and label again at the height
+    # the layout chose; the second layout then changes the height by a fraction of a point.
+    for _pass in range(2):
+        label_axis(ax.get_position().height * figsize[1] * 72.0)
+        fig.tight_layout()
     return fig
 
 
@@ -316,6 +327,9 @@ def _render_worker(*, task_env) -> None:
     if task_env.cancelled:
         return
     if maybe_fig is not None:
+        # A figure grown taller for its captions is drawn smaller, to fit the window's image, whose size is fixed.
+        fig_w, fig_h = maybe_fig.get_size_inches()
+        maybe_fig.set_dpi(min(gui_config.histogram_display_dpi, w / fig_w, h / fig_h))
         rgba = _render_rgba(maybe_fig)
         rh, rw = min(h, rgba.shape[0]), min(w, rgba.shape[1])
         image[:rh, :rw] = rgba[:rh, :rw]

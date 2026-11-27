@@ -3,6 +3,9 @@
 import numpy as np
 import pytest
 
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+
 from unpythonic.env import env
 
 from raven.visualizer import displaystate, histogram, savedstate
@@ -57,6 +60,34 @@ class TestTheFigure:
             figure([0, 0])
         with pytest.raises(ValueError):
             figure([1, 2], scale="cubic")
+
+    def test_the_layout_has_settled(self):
+        """The labels are placed for the height the layout chose, so laying out once more moves almost nothing."""
+        fig = figure(COUNTS, tallest=2, unreadable=True, figsize=(8.0, 3.5), dpi=72)
+        before = fig.axes[0].get_position().height * 3.5 * 72
+        fig.tight_layout()
+        after = fig.axes[0].get_position().height * 3.5 * 72
+        assert abs(after - before) < 1.0, f"the axes moved {after - before:.2f} pt on another layout"
+
+    def test_every_label_lands_inside_the_figure(self):
+        captions = [f"{k} a long caption that says what cluster {k} is about" for k in range(len(COUNTS))]
+        plain = Figure(figsize=(8.0, 3.5), dpi=72)
+        FigureCanvasAgg(plain)
+        plain_ax = plain.add_subplot(1, 1, 1)
+        plain_ax.set_xticks(range(len(COUNTS)), captions, rotation=90)
+        plain.canvas.draw()
+        assert min(t.get_window_extent().y0 for t in plain_ax.get_xticklabels()) < 0, \
+            "these captions fit a figure with no layout, so this fixture cannot tell a fitted layout from none"
+
+        fig = figure(COUNTS, tallest=2, unreadable=True, captions=captions, figsize=(8.0, 3.5), dpi=72)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        ax = fig.axes[0]
+        width, height = fig.bbox.width, fig.bbox.height
+        for text in [*ax.texts, *ax.get_xticklabels(), ax.xaxis.label, ax.yaxis.label, ax.title]:
+            box = text.get_window_extent(renderer)
+            assert box.x0 >= -1 and box.y0 >= -1 and box.x1 <= width + 1 and box.y1 <= height + 1, \
+                f"{text.get_text()!r} sticks out of the figure: {box}"
 
     def test_it_renders_and_saves(self, tmp_path):
         fig = figure(COUNTS, tallest=2, unreadable=True, figsize=(4.0, 2.0), dpi=50)
