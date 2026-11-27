@@ -53,12 +53,10 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 
 ## Next, Monday 2026-11-30
 
-- **Tonight's re-import**, started 15:00 on 2026-11-27 with extraction version 5, from a worktree frozen at
-  `29d1745b` (`.claude/worktrees/reimport`, run with `PYTHONPATH` pointing into it). The previous datasets are kept as
-  `investigations/cluster-keywords/data/*-2026-11-26b.*`. Check all twelve finished (the `*.log` there), remove the
-  worktree (`git worktree remove .claude/worktrees/reimport`), and make the shortlists again
-  (`shortlist_clusters.py CORPUS --previous 2026-11-26b`) for the maintainer to read; AOKK's *-Based* capitals are
-  the thing to check.
+- **The re-import finished at 21:26 on 2026-11-27**, all twelve datasets, with no errors, at extraction version 5;
+  the previous ones are kept as `investigations/cluster-keywords/data/*-2026-11-26b.*`. AOKK's capitalized *-Based*,
+  *-Assisted* and the like went from 1579 display forms to none. Next: make the shortlists again
+  (`shortlist_clusters.py CORPUS --previous 2026-11-26b`) for the maintainer to read.
 - **The histogram's next steps**, decided 2026-11-27: count the selected records, as the word cloud does, and in
   year mode follow the year filter along the bottom. Open: what an empty selection shows (`TODO.md`).
 - **`FileDialog` changes the process's working directory** (`TODO_DEFERRED.md`): it bit twice on 2026-11-27, so it
