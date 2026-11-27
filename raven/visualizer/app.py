@@ -1164,6 +1164,7 @@ with timer() as tim:
     saved_state = savedstate.load(visualizer_config.state_file)
     panel_side = opts.panel_side if opts.panel_side is not None else saved_state["panel_side"]
     word_cloud.set_mode(saved_state["word_cloud_mode"])
+    word_cloud.set_themes_keep_corpus_wide(saved_state["word_cloud_shared_themes"])
     # The plot column is drawn first in the first frame whatever the side, and a left panel is moved into
     # place a few frames later (below). DPG refuses `focus_item` into a child window moved in front of a
     # sibling that the first frame drew before it: with the plot column drawn second, every swap that brought
@@ -2008,7 +2009,8 @@ finally:
 
     try:
         savedstate.save(visualizer_config.state_file, {"panel_side": panel_side,
-                                                       "word_cloud_mode": word_cloud.get_mode()})
+                                                       "word_cloud_mode": word_cloud.get_mode(),
+                                                       "word_cloud_shared_themes": word_cloud.themes_keep_corpus_wide})
     except Exception as exc:
         logger.warning(f"Could not save the app state to '{visualizer_config.state_file}': {type(exc)}: {exc}")
 

@@ -569,6 +569,12 @@ def theme_gui(phrase_gui, monkeypatch):
     return phrase_gui
 
 
+def test_every_mode_can_be_saved_between_sessions():
+    # `savedstate` cannot import this module, so it lists the modes itself; a mode missing there is reset on load.
+    from raven.visualizer import savedstate
+    assert savedstate.ALLOWED["word_cloud_mode"] == word_cloud.MODES
+
+
 class TestThemeMode:
     def test_a_theme_weighs_the_selected_records_in_the_clusters_having_it(self, theme_gui, monkeypatch):
         monkeypatch.setattr(word_cloud, "themes_keep_corpus_wide", True)

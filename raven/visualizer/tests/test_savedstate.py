@@ -55,7 +55,7 @@ class TestLoad:
 
 class TestSave:
     def test_a_save_round_trips_through_load(self, state_path):
-        state = {"panel_side": "right", "word_cloud_mode": "words"}
+        state = {"panel_side": "right", "word_cloud_mode": "themes", "word_cloud_shared_themes": True}
         assert state != savedstate.DEFAULTS, "this fixture must differ from the defaults, or a lost save reads as kept"
         savedstate.save(state_path, state)
         assert savedstate.load(state_path) == state

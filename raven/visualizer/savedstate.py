@@ -1,8 +1,9 @@
 """Visualizer state kept between sessions: choices made in the GUI, as they were when the app last closed.
 
 A small JSON file. `load` reads it at startup, filling in a default for anything missing or unusable, and
-`save` writes it at shutdown. The entries: `panel_side`, which side of the window the info panel is on, and
-`word_cloud_mode`, whether the word cloud is built from phrases or from words.
+`save` writes it at shutdown. The entries: `panel_side`, which side of the window the info panel is on;
+`word_cloud_mode`, whether the word cloud is built from phrases, words or themes; and `word_cloud_shared_themes`,
+whether the themes cloud keeps the themes most clusters share.
 
 Adding an entry means adding it to `DEFAULTS` and `ALLOWED`; `load`, `save` and the tests derive from those.
 """
@@ -19,11 +20,13 @@ from ..common import utils as common_utils
 
 #: Each entry's value when the file does not say, or says something unusable.
 DEFAULTS = {"panel_side": "left",  # which side of the window the info panel is on
-            "word_cloud_mode": "phrases"}  # what the word cloud is built from
+            "word_cloud_mode": "phrases",  # what the word cloud is built from
+            "word_cloud_shared_themes": False}  # whether the themes cloud keeps the themes most clusters share
 
 #: The values each entry may take. A saved value outside these is replaced by the default.
 ALLOWED = {"panel_side": ("left", "right"),
-           "word_cloud_mode": ("phrases", "words")}
+           "word_cloud_mode": ("phrases", "words", "themes"),  # `word_cloud.MODES`, which this module cannot import
+           "word_cloud_shared_themes": (False, True)}
 
 
 def load(path: str | pathlib.Path) -> dict:
