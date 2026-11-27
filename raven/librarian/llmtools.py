@@ -1061,9 +1061,8 @@ def _call_abandonably(function_name: str,
     if maybe_abort is None:
         return function(**kwargs)
 
-    # A new thread starts from the *main* thread's dynamic bindings, not from those of the thread creating
-    # it (measured 2026-09-29, unpythonic `dyn`). This runs on a background task, so the turn's
-    # `tool_context` has to be handed across by hand.
+    # A new thread does not see the dynamic bindings of the thread creating it (unpythonic `dyn`; from
+    # unpythonic 2.6.0 on it starts with none at all), so the turn's `tool_context` is handed across by hand.
     tool_context = dyn.tool_context
     outcome = {}
     done = threading.Event()
@@ -1384,8 +1383,8 @@ def perform_tool_calls(settings: env,
         for calls in groups.values():
             run_in_order(calls)
     else:
-        # A new thread starts from the *main* thread's dynamic bindings (see `_call_abandonably`), so the
-        # turn's `tool_context` is handed across by hand.
+        # A new thread does not see this thread's dynamic bindings (see `_call_abandonably`), so the turn's
+        # `tool_context` is handed across by hand.
         maybe_tool_context = dyn.tool_context if "tool_context" in dyn else None
         def run_group(calls: list[tuple]) -> None:
             try:
