@@ -453,6 +453,7 @@ AI-animated anime avatar for your LLM.
   - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
 - `avatar_unload`: End an avatar session.
 - `avatar_heartbeat`: Tell the server this client still holds the given sessions. Returns those of them the server does not have.
+- `avatar_is_held`: Whether this client holds the given session: loaded, not unloaded, and not reported lost by the server.
 - `avatar_add_heartbeat_listener`: Have a callback told, after every heartbeat that reaches the server, which held sessions it still has and which it has lost. This is how a client tells a stream lost to the network, which can be opened again, from a session the server has forgotten.
 - `avatar_load_emotion_templates`: Load a set of avatar emotion templates, from a Python dictionary.
   - Format of the dictionary is:

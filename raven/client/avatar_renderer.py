@@ -257,6 +257,10 @@ class DPGAvatarRenderer:
         # A stream lost to the network is opened again once the server answers, as the heartbeat finds out.
         self._resume_lock = threading.Lock()
         self._maybe_resume = None  # what the lost stream was showing, while waiting for the server
+        self._frame_callbacks = (None, None)  # `start`'s, for reattaching to a reloaded avatar
+        # How to load the avatar again once the server has forgotten it, as after a restart: a function returning the
+        # new instance ID, which the app sets, since only the app knows what it loaded. `None` leaves a message.
+        self.reload_avatar: Callable[[], str] | None = None
         api.avatar_add_heartbeat_listener(self._on_heartbeat)
 
     def _get_is_shown(self) -> bool:
@@ -931,6 +935,7 @@ class DPGAvatarRenderer:
         logger.info(f"DPGAvatarRenderer.start: Setting up background task for avatar instance '{avatar_instance_id}'.")
 
         self.avatar_instance_id = avatar_instance_id  # store for pause/resume
+        self._frame_callbacks = (on_frame_received, on_frame_decoded)
         self.first_frame_received = False  # a fresh stream is in warmup until its first frame arrives, however many the previous one delivered
         # And the backdrop waits for that frame too: a backdrop with no avatar in front of it is a picture of
         # nothing, and during warmup that is all it would be.
@@ -987,6 +992,17 @@ class DPGAvatarRenderer:
             def maybe_set_fps_counter(text):
                 with guiutils.nonexistent_ok():
                     dpg.configure_item(self.fps_text_draw_item, text=text)
+
+            def lose_stream() -> None:
+                """Show the stream as lost, and remember it for `_on_heartbeat`, which opens it again once the server
+                answers with this instance still loaded, or loads the avatar again if the server has forgotten it."""
+                with guiutils.nonexistent_ok():
+                    dpg.set_value(self.paused_text_gui_widget, "[Connection lost; waiting for Raven-server]")
+                self.pause(action="pause")
+                maybe_set_fps_counter(describe_performance(None, None, None, None))
+                with self._resume_lock:
+                    self._maybe_resume = envcls(instance_id=avatar_instance_id, on_frame_received=on_frame_received,
+                                                on_frame_decoded=on_frame_decoded)
 
             reader = ResultFeedReader(avatar_instance_id)
             reader.start()
@@ -1073,17 +1089,17 @@ class DPGAvatarRenderer:
                     fps = 1.0 / (elapsed_time / 10**9)
                     self.fps_statistics.add_datapoint(fps)
                     maybe_set_fps_counter(describe_performance(mimetype, h, w, server_stats))
-            except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
-                logger.info("DPGAvatarRenderer.start.update_live_texture: Stream closed, shutting down.")
+            except EOFError:  # `result_feed` has shut down
+                # Normal at app exit, after `api.avatar_unload`, which stops holding the instance first. Still held,
+                # it was the server that closed the stream, having dropped the instance: a lost stream like any other.
+                if api.avatar_is_held(avatar_instance_id) and not task_env.cancelled and not guiutils.is_shutting_down():
+                    logger.warning("DPGAvatarRenderer.start.update_live_texture: The server closed the stream of an avatar this client still holds.")
+                    lose_stream()
+                else:
+                    logger.info("DPGAvatarRenderer.start.update_live_texture: Stream closed, shutting down.")
             except Exception:
                 logger.exception("DPGAvatarRenderer.start.update_live_texture")
-                dpg.set_value(self.paused_text_gui_widget, "[Connection lost; waiting for Raven-server]")
-                self.pause(action="pause")
-                maybe_set_fps_counter(describe_performance(None, None, None, None))
-                # `_on_heartbeat` opens the stream again once the server answers with this instance still loaded.
-                with self._resume_lock:
-                    self._maybe_resume = envcls(instance_id=avatar_instance_id, on_frame_received=on_frame_received,
-                                                on_frame_decoded=on_frame_decoded)
+                lose_stream()
             finally:
                 reader.stop()  # Close the stream to ensure that the server's network send thread serving our request exits.
                 self.avatar_instance_id = None
@@ -1097,34 +1113,78 @@ class DPGAvatarRenderer:
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
 
     def _on_heartbeat(self, known: list[str], lost: list[str]) -> None:
-        """After a stream was lost, open it again once the server answers with its avatar instance still loaded, or
-        say that the server has forgotten it. Heartbeat listener (`raven.client.api.avatar_add_heartbeat_listener`)."""
+        """Heartbeat listener (`raven.client.api.avatar_add_heartbeat_listener`). After a stream was lost, open it again
+        once the server answers with its avatar instance still loaded; and when the server has forgotten the instance,
+        as after a restart, load the avatar again (`reload_avatar`) and show that one."""
+        if guiutils.is_shutting_down():
+            return
         with self._resume_lock:
             pending = self._maybe_resume
-            if pending is None or guiutils.is_shutting_down():
-                return
-            if pending.instance_id in lost:
-                self._maybe_resume = None
-            elif pending.instance_id in known:
-                if self._task_env is not None:  # the lost stream's task has not finished yet; try at the next beat
-                    return
-                self._maybe_resume = None
-            else:  # unloaded meanwhile: nothing to bring back
-                self._maybe_resume = None
-                return
-        if pending.instance_id in lost:
-            # Bringing it back means loading the avatar again, which only the app knows how to do.
-            logger.warning(f"DPGAvatarRenderer._on_heartbeat: Raven-server no longer has avatar instance '{pending.instance_id}', "
-                           f"as after a restart; not resuming.")
-            with guiutils.nonexistent_ok():
-                dpg.set_value(self.paused_text_gui_widget, "[Raven-server restarted; restart the app to bring the avatar back]")
-                self._reposition_paused_text()
+            # The instance this renderer is showing, or was showing when its stream was lost.
+            maybe_instance_id = pending.instance_id if pending is not None else self.avatar_instance_id
+        if maybe_instance_id is None:
             return
+        if maybe_instance_id in lost:
+            self._recover_forgotten_avatar(maybe_instance_id, pending)
+            return
+        if pending is None:
+            return
+        with self._resume_lock:
+            if self._maybe_resume is not pending:  # stopped meanwhile
+                return
+            if pending.instance_id not in known:  # unloaded meanwhile: nothing to bring back
+                self._maybe_resume = None
+                return
+            if self._task_env is not None:  # the lost stream's task has not finished yet; try at the next beat
+                return
+            self._maybe_resume = None
         logger.info(f"DPGAvatarRenderer._on_heartbeat: Raven-server answers again; resuming the stream of avatar instance '{pending.instance_id}'.")
         with guiutils.nonexistent_ok():
             dpg.set_value(self.paused_text_gui_widget, self._paused_str)
         self.start(pending.instance_id, on_frame_received=pending.on_frame_received, on_frame_decoded=pending.on_frame_decoded)
         self.pause(action="resume")
+
+    def _recover_forgotten_avatar(self, instance_id: str, maybe_pending) -> None:
+        """The server no longer has `instance_id`: load the avatar again through `reload_avatar` and show the new instance,
+        paused if the old one was paused, or say why not.
+
+        `maybe_pending`: the lost stream's record, when the stream broke first, as it does when the server goes down.
+        """
+        def say(text: str) -> None:
+            with guiutils.nonexistent_ok():
+                dpg.set_value(self.paused_text_gui_widget, text)
+                self._reposition_paused_text()
+
+        if maybe_pending is not None:
+            was_running = True  # it was streaming when the connection went
+            on_frame_received, on_frame_decoded = maybe_pending.on_frame_received, maybe_pending.on_frame_decoded
+        else:
+            was_running = self.animator_running
+            on_frame_received, on_frame_decoded = self._frame_callbacks
+        with self._resume_lock:
+            self._maybe_resume = None
+        if self.reload_avatar is None:
+            logger.warning(f"DPGAvatarRenderer._recover_forgotten_avatar: Raven-server no longer has avatar instance '{instance_id}', "
+                           f"as after a restart, and the app gave no way to load it again.")
+            say("[Raven-server restarted; restart the app to bring the avatar back]")
+            return
+
+        logger.info(f"DPGAvatarRenderer._recover_forgotten_avatar: Raven-server no longer has avatar instance '{instance_id}', "
+                    f"as after a restart; loading the avatar again.")
+        say("[Raven-server restarted; loading the avatar again]")
+        if self._task_env is not None:  # a stream of the old instance still open, as when it was paused
+            self.task_manager.clear(wait=True)
+        try:
+            new_instance_id = self.reload_avatar()
+        except Exception as exc:
+            logger.warning(f"DPGAvatarRenderer._recover_forgotten_avatar: could not load the avatar again: {type(exc)}: {exc}")
+            say("[Could not load the avatar again; restart the app]")
+            return
+        logger.info(f"DPGAvatarRenderer._recover_forgotten_avatar: avatar loaded again as instance '{new_instance_id}'.")
+        with guiutils.nonexistent_ok():
+            dpg.set_value(self.paused_text_gui_widget, self._paused_str)
+        self.start(new_instance_id, on_frame_received=on_frame_received, on_frame_decoded=on_frame_decoded)
+        self.pause(action="resume" if was_running else "pause")
 
     def stop(self, wait: bool = False) -> None:
         """The opposite of `start`.

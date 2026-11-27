@@ -11,6 +11,7 @@ bookkeeping, not the picture.
 
 import threading
 import time
+import types
 
 import PIL.Image
 import pytest
@@ -232,7 +233,12 @@ class TestResumingALostStream:
         instance._resume_lock = threading.Lock()
         instance._paused_str = "[Video is off]"
         instance._task_env = None  # the lost stream's task has finished
-        instance.paused_text_gui_widget_value = None
+        instance.avatar_instance_id = None  # as the finished task leaves it
+        instance.reload_avatar = None
+        instance._frame_callbacks = (None, None)
+        cleared = []
+        instance.task_manager = types.SimpleNamespace(clear=lambda wait: cleared.append(wait))  # `clear` is reserved in an `env`
+        instance._cleared = cleared
         on_frame = object()
         instance._maybe_resume = env(instance_id="test-instance", on_frame_received=on_frame, on_frame_decoded=None)
         dpg.set_value(instance.paused_text_gui_widget, "[Connection lost; waiting for Raven-server]")
@@ -240,6 +246,38 @@ class TestResumingALostStream:
         monkeypatch.setattr(instance, "start", lambda instance_id, **kw: started.append((instance_id, kw)), raising=False)
         monkeypatch.setattr(instance, "pause", lambda action: calls.append(action), raising=False)
         return instance, calls, started, on_frame
+
+    def test_a_forgotten_avatar_is_loaded_again_and_shown(self, lost):
+        instance, calls, started, on_frame = lost
+        instance.reload_avatar = lambda: "new-instance"
+        instance._on_heartbeat([], ["test-instance"])
+        assert started == [("new-instance", {"on_frame_received": on_frame, "on_frame_decoded": None})]
+        assert calls == ["resume"], "it was streaming when the connection went"
+        assert dpg.get_value(instance.paused_text_gui_widget) == "[Video is off]"
+        assert instance._maybe_resume is None
+
+    def test_a_paused_avatar_is_loaded_again_and_stays_paused(self, lost):
+        # Paused for idling when the server restarted: no stream broke, so nothing was pending, and without this the
+        # next resume would ask the server to start an instance it no longer has.
+        instance, calls, started, _on_frame = lost
+        instance._maybe_resume = None
+        instance.avatar_instance_id = "test-instance"
+        instance._task_env = env(cancelled=False)  # its idle stream task is still running
+        instance.animator_running = False
+        instance.reload_avatar = lambda: "new-instance"
+        instance._on_heartbeat([], ["test-instance"])
+        assert started and started[0][0] == "new-instance"
+        assert calls == ["pause"], "a paused avatar comes back paused"
+        assert instance._cleared == [True], "the old instance's stream task should be stopped first"
+
+    def test_a_reload_that_fails_says_so(self, lost):
+        instance, calls, started, _on_frame = lost
+        def refuse():
+            raise RuntimeError("server still loading")
+        instance.reload_avatar = refuse
+        instance._on_heartbeat([], ["test-instance"])
+        assert started == [] and calls == []
+        assert "Could not load the avatar again" in dpg.get_value(instance.paused_text_gui_widget)
 
     def test_a_server_that_still_has_the_avatar_gets_the_stream_back(self, lost):
         instance, calls, started, on_frame = lost
@@ -249,8 +287,8 @@ class TestResumingALostStream:
         assert dpg.get_value(instance.paused_text_gui_widget) == "[Video is off]", "the app's own paused text is back"
         assert instance._maybe_resume is None
 
-    def test_a_server_that_forgot_the_avatar_says_so_and_does_not_resume(self, lost):
-        """Control for the test above: the same beat, with the instance among the lost."""
+    def test_without_a_way_to_reload_a_forgotten_avatar_is_reported(self, lost):
+        """Control for the reload tests above: the same beat, with no `reload_avatar` from the app."""
         instance, calls, started, _on_frame = lost
         instance._on_heartbeat([], ["test-instance"])
         assert started == [] and calls == []

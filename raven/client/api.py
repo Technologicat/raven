@@ -45,7 +45,7 @@ __all__ = [  # Re-exported: TTS was the one subsystem large enough to want its o
            "tts_server_available",
            "modules",
            "avatar_info",
-           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat", "avatar_add_heartbeat_listener",
+           "avatar_load", "avatar_reload", "avatar_unload", "avatar_heartbeat", "avatar_is_held", "avatar_add_heartbeat_listener",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
            "avatar_start", "avatar_stop",
@@ -290,6 +290,11 @@ _held_instances: set[str] = set()  # loaded through `avatar_load`, not yet unloa
 _heartbeat_lock = threading.Lock()
 _heartbeat_thread: threading.Thread | None = None
 _heartbeat_listeners: list[Callable[[list[str], list[str]], None]] = []  # `avatar_add_heartbeat_listener`
+
+def avatar_is_held(instance_id: str) -> bool:
+    """Whether this client holds avatar instance `instance_id`: loaded through `avatar_load`, not unloaded through
+    `avatar_unload`, and not reported lost by the server."""
+    return instance_id in _held_instances
 
 def avatar_add_heartbeat_listener(callback: Callable[[list[str], list[str]], None]) -> None:
     """Have `callback(known, lost)` called after every heartbeat that reaches the server.

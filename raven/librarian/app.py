@@ -3676,6 +3676,19 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            # already taken. A lambda because the handler
                                                            # takes the instance and this one wants none of it.
                                                            on_idle=lambda config: _apply_panel_occupancy())
+
+
+def _reload_avatar() -> str:
+    """Load the avatar again as at startup, for the renderer when Raven-server has restarted and forgotten it. Returns
+    the new instance ID."""
+    global avatar_instance_id
+    new_instance_id = api.avatar_load(avatar_image_path)
+    api.avatar_load_emotion_templates(new_instance_id, {})  # as at startup: the server's defaults
+    avatar_controller.rebind_avatar_instance(avatar_record, new_instance_id)
+    avatar_instance_id = new_instance_id  # for unloading it at shutdown
+    return new_instance_id
+dpg_avatar_renderer.reload_avatar = _reload_avatar
+
 avatar_controller.tts.warmup(voice=avatar_voice)
 
 chat_controller = DPGChatController(llm_settings=llm_settings,

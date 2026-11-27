@@ -666,6 +666,22 @@ class DPGAvatarController:
         config._current_emotion = emotion  # so the autoreset knows whether it has anything to return from
         config._emotion_autoreset_t0 = time.monotonic_ns()
 
+    def rebind_avatar_instance(self, config: env, avatar_instance_id: str) -> None:
+        """Point `config` at a new avatar instance of the same avatar, as loaded again after Raven-server restarted.
+
+        `avatar_instance_id`: the new instance, from `raven.client.api.avatar_load`, with its emotion templates loaded.
+
+        Sends the new instance the animator settings last loaded through `load_animator_settings`, which the server
+        lost with the old one, and records its emotion as neutral, which is how a new instance starts.
+        """
+        logger.info(f"DPGAvatarController.rebind_avatar_instance: instance '{config.avatar_instance_id}' is now '{avatar_instance_id}'.")
+        config.avatar_instance_id = avatar_instance_id
+        config._current_emotion = "neutral"
+        with config._animator_settings_lock:
+            maybe_settings = copy.deepcopy(config._animator_settings)
+        if maybe_settings is not None:
+            api.avatar_load_animator_settings(avatar_instance_id, maybe_settings)
+
     def load_animator_settings(self, config: env, animator_settings: Dict) -> None:
         """Send animator settings to the server, and remember them as this instance's baseline.
 

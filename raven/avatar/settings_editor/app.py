@@ -496,6 +496,7 @@ class PostprocessorSettingsEditorGUI:
         self.postprocessor_width = viewport_width - initial_avatar_width - self.control_width - self.h_margins
 
         self.current_input_image_path = None  # for the Refresh (reload current character) feature
+        self.current_emotion_templates_path = None  # the emotion templates loaded from a file, if any; for `_reload_avatar`
 
         self.talking_animation_running = False  # simple mouth randomizing animation
         self.speaking = False  # TTS
@@ -1178,6 +1179,7 @@ class PostprocessorSettingsEditorGUI:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
             api.avatar_load_emotion_templates_from_file(avatar_instance_id, filename)
+            self.current_emotion_templates_path = filename
         except Exception as exc:
             logger.exception("PostprocessorSettingsEditorGUI.load_json")
             messagebox.modal_dialog(window_title="Error",
@@ -1835,6 +1837,22 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            emotion_blacklist=(),  # only used for `avatar_controller.update_emotion_from_text`
                                                            emotion_autoreset_interval=None,
                                                            idle_timeout=None)
+
+
+def _reload_avatar() -> str:
+    """Load the avatar again as the editor last had it, for the renderer when Raven-server has restarted and forgotten
+    it: the same image, emotion templates and animator settings. Returns the new instance ID."""
+    global avatar_instance_id
+    new_instance_id = api.avatar_load(gui_instance.current_input_image_path or _startup_input_image_path)
+    if gui_instance.current_emotion_templates_path is not None:
+        api.avatar_load_emotion_templates_from_file(new_instance_id, gui_instance.current_emotion_templates_path)
+    else:
+        api.avatar_load_emotion_templates(new_instance_id, {})  # as at startup: the server's defaults
+    api.avatar_load_animator_settings(new_instance_id, gui_instance.animator_settings)
+    avatar_controller.rebind_avatar_instance(avatar_record, new_instance_id)
+    avatar_instance_id = new_instance_id  # every call in this app reads it from here
+    return new_instance_id
+gui_instance.dpg_avatar_renderer.reload_avatar = _reload_avatar
 
 def _gui_cancel_tasks() -> None:
     """App exit, first phase: signal background work to stop, WITHOUT waiting."""

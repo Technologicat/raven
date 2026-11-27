@@ -135,6 +135,31 @@ def effect_config(monkeypatch):
     return controller, config, sent
 
 
+class TestRebindingToAReloadedInstance:
+    """After Raven-server restarts, the app loads the avatar again and points its record at the new instance."""
+
+    def test_the_new_instance_gets_the_settings_the_server_lost(self, effect_config, monkeypatch):
+        controller, config, _sent = effect_config
+        received = []
+        monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
+                            lambda instance_id, settings: received.append((instance_id, settings)))
+        config._current_emotion = "joy"
+        controller.rebind_avatar_instance(config, "new-instance")
+        assert config.avatar_instance_id == "new-instance"
+        assert received == [("new-instance", {"postprocessor_chain": [["bloom", {"threshold": 0.5}]]})]
+        assert config._current_emotion == "neutral", "a new instance starts neutral"
+
+    def test_with_no_settings_loaded_nothing_is_sent(self, effect_config, monkeypatch):
+        """Control for the test above: an app that never loaded settings through the controller sends them itself."""
+        controller, config, _sent = effect_config
+        config._animator_settings = None
+        received = []
+        monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
+                            lambda instance_id, settings: received.append(instance_id))
+        controller.rebind_avatar_instance(config, "new-instance")
+        assert received == [] and config.avatar_instance_id == "new-instance"
+
+
 def chain_of(settings):
     return [name for name, _parameters in settings["postprocessor_chain"]]
 
