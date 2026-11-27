@@ -30,21 +30,40 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
 - **The shortlist read** found eight keyword faults, fixed as one bundle with Themes putting shared terms last
   (`investigations/cluster-keywords/README.md`).
 
-## Next, 2026-11-27
+## Done 2026-11-27: the printable histogram, recovery from a server restart, and the keyword fixes
 
-- **First thing: the maintainer reads the keyword rules draft**, `briefs/reference/cluster-keywords.md`, the *Considered and
-  rejected* section especially.
-- **The re-import started at 16:10 on 2026-11-26** with all of the day's fixes; the previous datasets are kept as
-  `investigations/cluster-keywords/data/*-2026-11-25.*`. Check it finished (`*.log` there), then make the shortlists
-  again (`shortlist_clusters.py CORPUS --previous 2026-11-25`) for a quick read of what the bundle changed, and settle
-  the rules draft against it.
-- **The re-import finished at 23:23**, all twelve datasets (geography's LLM import retried after one failed name
-  lookup of the server). One regression, on arXiv alone: cluster 4 gave up in both runs, with 4 and 3 malformed
-  replies in all. The reply is a *Common theme:* paragraph, then *Suggested keywords:* and a bulleted list, which the
-  list parser rejects, as it allows a header line but no prose before it. Next: read the bulleted block under a
-  heading that names keywords; how much prose to tolerate is the design call.
+- **The keyword rules document**, `briefs/reference/cluster-keywords.md`, read and revised by the maintainer, with a
+  reference list. The arXiv regression (cluster 4) is fixed: the keyword parser reads a bulleted list under a
+  heading that names keywords.
+- **Keyword fixes**: an abbreviation most papers define shows as *fast weight programmer (FWP)*; every word votes
+  on its casing across the corpus (`keyphrases.EXTRACTION_VERSION` 5), meant to fix AOKK's *LLM-Based*: tonight's
+  import is the first to show whether it does.
+- **The word cloud's Themes mode**, with a *Shared themes* checkbox; both kept between sessions.
+- **The printable histogram (F12)**: the colour bar's counts as a matplotlib figure, on adaptive, log or linear
+  scales (Shift+F12), saved as PNG, PDF or SVG. Its scales, ticks and labels are in `raven.common.numutils`
+  (`histogram_adjustment`, `log_scale`, `decade_ticks`, `spread_labels`, `data_labels`), the adaptive one linear in
+  the CDF as in SAVU's `hdrplot.m`, which the colour bar's sparkline now follows too. The help card gained a
+  *Windows* page. One background setting, `figure_background_color`, for the histogram and the word cloud, and
+  `colormap_ranges` per background lightness for them and the plot.
+- **Recovery from a Raven-server restart**: the client keeps each avatar's desired state (`api.avatar_restore`),
+  batch work retries with backoff, and a dropped feed resumes. Tested live, `kill -9` included.
+- **The Visualizer reports a dataset it cannot open**, from the command line too, where it hung.
+- **Filed**: porting the rest of SAVU, and its pool-opening ensemble as a test and a JS toy (`TODO_DEFERRED.md`); an
+  interactive HTML export of a dataset for supplemental material (`TODO.md`).
+
+## Next, Monday 2026-11-30
+
+- **Tonight's re-import**, started 15:00 on 2026-11-27 with extraction version 5, from a worktree frozen at
+  `29d1745b` (`.claude/worktrees/reimport`, run with `PYTHONPATH` pointing into it). The previous datasets are kept as
+  `investigations/cluster-keywords/data/*-2026-11-26b.*`. Check all twelve finished (the `*.log` there), remove the
+  worktree (`git worktree remove .claude/worktrees/reimport`), and make the shortlists again
+  (`shortlist_clusters.py CORPUS --previous 2026-11-26b`) for the maintainer to read; AOKK's *-Based* capitals are
+  the thing to check.
+- **The histogram's next steps**, decided 2026-11-27: count the selected records, as the word cloud does, and in
+  year mode follow the year filter along the bottom. Open: what an empty selection shows (`TODO.md`).
+- **`FileDialog` changes the process's working directory** (`TODO_DEFERRED.md`): it bit twice on 2026-11-27, so it
+  wants fixing rather than working around a third time.
 - **Then colouring by year's v1**: keywords per year at import (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
-- **Filed 2026-11-26**: `FileDialog` changes the process's working directory (`TODO_DEFERRED.md`).
 
 ## In progress: cluster keywords (2026-11-24)
 
@@ -82,8 +101,8 @@ maintainer has read the whole arXiv evidence comparison.
   - **What remains important for it** (the maintainer, 2026-11-25): **all-fields search**, with the full author
     list shown and searchable (`TODO.md`, *Author search* and *Fragment search across multiple fields*), and
     **colouring the map by year**. Also the README screenshots, retaken.
-  - **Added 2026-11-27, for the health-education and AOKK studies**: a Themes mode for the word cloud (done the same
-    day), and a large, printable version of the colour bar's histogram, with the word cloud's UX (`TODO.md`).
+  - **Added 2026-11-27, for the health-education and AOKK studies**: a Themes mode for the word cloud and a
+    printable histogram, both done the same day; the histogram's next steps are under *Next*.
 - **All-fields search with one-line snippets** around each match and a toggle to the full abstract, designed
   2026-11-25: `TODO.md`, *Fragment search across multiple fields*. M.
 - **Colouring the Visualizer's map by year: v0 done 2026-11-26.** Then v1 with per-year keywords, before 0.2.11
