@@ -204,15 +204,17 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** BibTeX entry type support: show type per entry (article, inproceedings, book, patent, ...); show count by type in current selection; allow filtering by type.
 
-- **[Medium]** A large, printable version of the colour bar's histogram, records per cluster or per year, with the
+- **[High, for 0.2.11]** A large, printable version of the colour bar's histogram, records per cluster or per year, with the
   word cloud's UX: a non-modal window opened and closed by one hotkey, and Ctrl+S to save a PNG (the maintainer,
-  2026-11-27). Same counts as the bar (what is shown in colour) and the same colours.
+  2026-11-27). Same counts as the bar (what is shown in colour) and the same colours. For the health-education and
+  AOKK studies and their follow-ups, so before 0.2.11 is released.
   - **Open: the height scale.** The bar compresses a wide range data-adaptively (`numutils.histogram_adjusted_heights`);
     a figure for a paper wants an axis a reader can read values off, so linear or logarithmic with labelled ticks,
     perhaps with the adaptive one as an option. Labels too: years along the bottom, cluster numbers or their themes.
   - **The hotkey needs a place on the help card**, which is full; the cluster table export has the same need.
-- **[Medium]** Word cloud: a **Themes** mode beside phrases and words, from the LLM's cluster themes (the
-  maintainer, 2026-11-27). Shift+F10 cycles the modes, so it would join the cycle.
+- **[High, for 0.2.11]** Word cloud: a **Themes** mode beside phrases and words, from the LLM's cluster themes (the
+  maintainer, 2026-11-27). Shift+F10 cycles the modes, so it would join the cycle. For the health-education and
+  AOKK studies and their follow-ups, so before 0.2.11 is released.
   - **Open: what a theme weighs.** Themes are per cluster, not per record, so one natural weight is the number of
     selected records in each cluster whose themes include it. Present only in datasets keyworded with the LLM
     (`"llm"` or `"hybrid"`); elsewhere the mode is unavailable and says why.
