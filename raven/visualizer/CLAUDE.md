@@ -34,7 +34,7 @@ displaystate.py   (~260)  — what each record is shown as: its label (`current_
                             the importer's `cluster_id`, and its visibility; the purity cutoff, the
                             Misc mode, the year filter and how filters combine, and which records can be
                             interacted with. No DPG
-savedstate.py      (~67)  — GUI choices kept between sessions (the info panel's side, the word cloud's mode),
+savedstate.py      (~73)  — GUI choices kept between sessions (the info panel's side, the word cloud's mode),
                             as JSON
 app_state.py       (~62)  — top-level app state containers
 ```
