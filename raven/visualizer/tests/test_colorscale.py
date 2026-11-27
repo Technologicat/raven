@@ -30,7 +30,14 @@ class TestFigureColours:
     def test_the_foreground_is_whichever_of_black_and_white_stands_out(self, background, foreground):
         assert colorscale.foreground_for(background) == foreground
 
-    def test_a_figure_takes_the_range_for_its_background(self, monkeypatch):
-        monkeypatch.setattr(colorscale.gui_config, "figure_colormap_ranges", {"dark": (0.2, 1.0), "light": (0.0, 0.85)})
-        assert colorscale.figure_colormap_range("black") == (0.2, 1.0)
-        assert colorscale.figure_colormap_range("white") == (0.0, 0.85)
+    def test_colours_take_the_range_for_their_background(self, monkeypatch):
+        monkeypatch.setattr(colorscale.gui_config, "colormap_ranges", {"dark": (0.2, 1.0), "light": (0.0, 0.85)})
+        assert colorscale.colormap_range_for("black") == (0.2, 1.0)
+        assert colorscale.colormap_range_for("white") == (0.0, 0.85)
+        assert colorscale.colormap_range_for((37, 37, 38)) == (0.2, 1.0), "the GUI config writes 0-255 integers"
+        assert colorscale.colormap_range_for((255, 255, 255)) == (0.0, 0.85)
+
+    def test_the_plot_takes_the_range_for_its_own_background(self):
+        # With the shipped config: the plot is dark, so its colours come from the dark range.
+        assert colorscale.colormap_range_for(colorscale.gui_config.plotter_background_color) == \
+            tuple(colorscale.gui_config.colormap_ranges["dark"])

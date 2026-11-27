@@ -306,7 +306,7 @@ def _figure_for(ds, *, dpi: float):
     if maybe_values is None or not any(maybe_values.counts):
         return None
     # The figure's own part of the colormap, for its background, which for a figure to print is likely light.
-    colormap_range = colorscale.figure_colormap_range(gui_config.figure_background_color)
+    colormap_range = colorscale.colormap_range_for(gui_config.figure_background_color)
     colors = [[c / 255 for c in colorscale.series_color(p, colormap_range=colormap_range)[:3]]
               for p in maybe_values.positions]
     captions = None

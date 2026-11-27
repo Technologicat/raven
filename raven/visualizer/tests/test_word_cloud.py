@@ -620,7 +620,7 @@ class TestThemeMode:
 def test_the_colormap_is_cut_to_what_shows_against_the_background(monkeypatch, background, ends):
     import matplotlib
     monkeypatch.setattr(word_cloud.gui_config, "figure_background_color", background)
-    monkeypatch.setattr(word_cloud.gui_config, "figure_colormap_ranges", {"dark": (0.2, 1.0), "light": (0.0, 0.85)})
+    monkeypatch.setattr(word_cloud.gui_config, "colormap_ranges", {"dark": (0.2, 1.0), "light": (0.0, 0.85)})
     full = matplotlib.colormaps[word_cloud.gui_config.word_cloud_colormap]
     cut = word_cloud._colormap_for_background()
     assert np.allclose(cut(0.0), full(ends[0]), atol=0.01) and np.allclose(cut(1.0), full(ends[1]), atol=0.01)

@@ -356,7 +356,7 @@ def _render_worker(*, task_env):
 
 def _colormap_for_background():
     """`gui_config.word_cloud_colormap`, cut to the part that shows against `gui_config.figure_background_color`."""
-    first, last = colorscale.figure_colormap_range(gui_config.figure_background_color)
+    first, last = colorscale.colormap_range_for(gui_config.figure_background_color)
     full = matplotlib.colormaps[gui_config.word_cloud_colormap]
     return matplotlib.colors.ListedColormap(full(np.linspace(first, last, 256)), name=f"{full.name}_cut")
 

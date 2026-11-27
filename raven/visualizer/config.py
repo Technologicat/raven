@@ -342,11 +342,6 @@ gui_config = env(  # ----------------------------------------
                  # Their background, on screen and as saved: a Matplotlib colour, such as a name ("black", "white")
                  # or a hex string. The histogram's text and axes take black or white, whichever stands out more.
                  figure_background_color="black",
-                 # The part of the colormap each uses, by whether that background is dark or light: each end of
-                 # the colormap is lost against a background near its own lightness. Assumes a colormap that runs
-                 # from dark to light, as perceptually uniform ones such as viridis do; one that runs the other way
-                 # wants the two ranges mirrored.
-                 figure_colormap_ranges={"dark": (0.2, 1.0), "light": (0.0, 0.85)},
                  # ----------------------------------------
                  # Word cloud
                  #
@@ -372,9 +367,12 @@ gui_config = env(  # ----------------------------------------
                  # plotter_grid_color=(255, 128, 64),
                  #
                  plotter_colormap=dpg.mvPlotColormap_Viridis,  # DPG colormap (one of the `dpg.mvPlotColormap_*` constants)
-                 # The part of the colormap the colours are taken from, as `(first, last)` in [0, 1]: an end too close to
-                 # the plot's background is lost against it, Viridis's dark purple on the dark background.
-                 plotter_colormap_range=(0.2, 1.0),
+                 # The part of the colormap the colours are taken from, as `(first, last)` in [0, 1], by whether the
+                 # background they are drawn on is dark or light: the plot's, `plotter_background_color`, and the word
+                 # cloud's and the histogram's, `figure_background_color`. Each end of the colormap is lost against a
+                 # background near its own lightness. Assumes a colormap that runs from dark to light, as perceptually
+                 # uniform ones such as viridis do; one that runs the other way wants the two ranges mirrored.
+                 colormap_ranges={"dark": (0.2, 1.0), "light": (0.0, 0.85)},
                  plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
                  plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
                  # ----------------------------------------
