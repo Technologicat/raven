@@ -271,6 +271,8 @@
 
 #### Raven-librarian
 
+- **The avatar's video comes back when Raven-server answers again.** A stream lost to the network stayed at *[Connection lost]* for the rest of the session; it now resumes within one heartbeat, at most ten seconds, of the server answering.
+  - After a server restart the avatar is gone from the server, and the panel says so; restarting Raven-librarian brings it back.
 - **Works with LLM backends that check the message format strictly**, such as gufo. Every message went out with an empty `tool_calls` list, which the OpenAI format allows on the AI's messages only, and such a backend refused every request.
 - **Clicking the LLM backend pill flashes it**, as clicking the Raven-server pill does.
   - While the backend was not answering, the pill was re-set after each retry, and that cut the click's flash short before it showed.
