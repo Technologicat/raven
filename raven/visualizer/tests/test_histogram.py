@@ -89,6 +89,18 @@ class TestTheFigure:
             assert box.x0 >= -1 and box.y0 >= -1 and box.x1 <= width + 1 and box.y1 <= height + 1, \
                 f"{text.get_text()!r} sticks out of the figure: {box}"
 
+    @pytest.mark.parametrize("background, foreground", [("black", "white"), ("#1e1e1e", "white"),
+                                                         ("white", "black"), ("#f0e8d8", "black")])
+    def test_the_text_stands_out_against_the_background(self, background, foreground):
+        import matplotlib.colors
+        fig = figure(COUNTS, tallest=2, background=background)
+        ax = fig.axes[0]
+        assert matplotlib.colors.to_hex(fig.get_facecolor()) == matplotlib.colors.to_hex(background)
+        expected = matplotlib.colors.to_rgba(foreground)
+        for text in [*ax.texts, ax.xaxis.label, ax.yaxis.label]:
+            assert matplotlib.colors.to_rgba(text.get_color()) == expected, f"{text.get_text()!r} on {background}"
+        assert matplotlib.colors.to_rgba(ax.spines["left"].get_edgecolor()) == expected
+
     def test_it_renders_and_saves(self, tmp_path):
         fig = figure(COUNTS, tallest=2, unreadable=True, figsize=(4.0, 2.0), dpi=50)
         rgba = histogram._render_rgba(fig)

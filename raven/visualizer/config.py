@@ -337,10 +337,15 @@ gui_config = env(  # ----------------------------------------
                  annotation_tooltip_w=800,  # Just the width; height is automatic depending on content.
                  font_size=20,  # Also in pixels.
                  # ----------------------------------------
+                 # Figures: the word cloud and the histogram
+                 #
+                 # Their background, on screen and as saved: a Matplotlib colour, such as a name ("black", "white")
+                 # or a hex string. The histogram's text and axes take black or white, whichever stands out more.
+                 figure_background_color="black",
+                 # ----------------------------------------
                  # Word cloud
                  #
                  word_cloud_w=768, word_cloud_h=768,
-                 word_cloud_background_color="black",
                  word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
                  word_cloud_max_phrases=300,  # phrase mode: at most this many phrases (words mode draws up to 1000 words)
                  # ----------------------------------------

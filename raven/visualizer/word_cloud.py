@@ -324,7 +324,7 @@ def _render_worker(*, task_env):
                     logger.debug(f"_render_worker: {task_env.task_name}: Invoking word cloud generator.")
                     wc = WordCloud(width=gui_config.word_cloud_w,
                                    height=gui_config.word_cloud_h,
-                                   background_color=gui_config.word_cloud_background_color,
+                                   background_color=gui_config.figure_background_color,
                                    colormap=gui_config.word_cloud_colormap,
                                    max_words=1000)
                     wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]

@@ -19,7 +19,7 @@ The file is `~/.config/raven/overrides.json`, and its top-level keys are config 
         "raven.visualizer.config": {
             "clusters_keyword_method": "llm",
             "gui_config.word_cloud_w": 1024,
-            "gui_config.word_cloud_background_color": "white"
+            "gui_config.figure_background_color": "white"
         },
         "raven.config": {
             "GUI_IDLE_FRAMERATE": 30

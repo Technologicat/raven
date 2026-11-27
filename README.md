@@ -837,7 +837,7 @@ So you can put them somewhere else instead. Create `~/.config/raven/overrides.js
     "raven.visualizer.config": {
         "clusters_keyword_method": "llm",
         "gui_config.word_cloud_w": 1024,
-        "gui_config.word_cloud_background_color": "white"
+        "gui_config.figure_background_color": "white"
     },
     "raven.client.config": {
         "stt_capture_audio_device": "Built-in Audio Analog Stereo"
@@ -869,7 +869,7 @@ Settings that have no JSON form at all, such as a function, are simply not overr
 
       "// note": "the larger white word cloud below is for print articles",
       "// gui_config.word_cloud_w": 1024,
-      "// gui_config.word_cloud_background_color": "white"
+      "// gui_config.figure_background_color": "white"
   }
   ```
 

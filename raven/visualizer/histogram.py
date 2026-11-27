@@ -26,6 +26,7 @@ import numpy as np
 
 import dearpygui.dearpygui as dpg
 
+import matplotlib.colors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.scale import FuncScale
@@ -34,6 +35,7 @@ from matplotlib.ticker import FixedLocator, MaxNLocator, NullFormatter
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
+from ..common import color
 from ..common import numutils
 from ..common.gui import animation as gui_animation
 
@@ -60,7 +62,8 @@ _MIN_CAPTION_FONT_SIZE = 4.0  # points; still legible in a printed vector figure
 
 def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "adaptive",
                  tallest: int = 0, unreadable: bool = False, captions: list[str] | None = None,
-                 title: str = "", figsize: tuple[float, float] = (8.0, 3.5), dpi: float = 100.0) -> Figure:
+                 title: str = "", background="white",
+                 figsize: tuple[float, float] = (8.0, 3.5), dpi: float = 100.0) -> Figure:
     """A bar chart of `counts`, one bar per year or cluster from `first` on, for display or for saving.
 
     `counts`: records per bar. At least one must be positive.
@@ -72,6 +75,8 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
     `captions`: per bar, a caption to write under it in place of its number, such as a cluster's leading theme.
         The figure grows taller by the longest caption, so that they fit under the axes.
     `title`: written above the axes.
+    `background`: the figure's background, as matplotlib takes a colour. The text, the axes and the ticks are black or
+        white, whichever stands out more against it.
     `figsize`, `dpi`: the figure's size in inches, and its pixels per inch on screen or in a PNG.
 
     Labels that crowd each other move off their ticks, with a leader line back (`numutils.spread_labels`).
@@ -86,9 +91,10 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
     data_values = sorted({float(v) for v in counts if v > 0})
     tallest_values = data_values[-tallest:] if tallest > 0 else []
 
-    fig = Figure(figsize=figsize, dpi=dpi)
+    foreground = _foreground_for(background)
+    fig = Figure(figsize=figsize, dpi=dpi, facecolor=background)
     FigureCanvasAgg(fig)
-    ax = fig.add_subplot(1, 1, 1)
+    ax = fig.add_subplot(1, 1, 1, facecolor=background)
     ax.bar(xs, counts, width=0.8, color=colors)
     ax.set_xlim(first - 0.6, xs[-1] + 0.6)
     if captions is not None:
@@ -109,6 +115,11 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
         ax.set_title(title, fontsize=_TICK_FONT_SIZE + 1)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(foreground)
+    ax.tick_params(colors=foreground, which="both")
+    for text in (ax.xaxis.label, ax.title):
+        text.set_color(foreground)
 
     def label_axis(axes_height_pt: float) -> None:
         """The height scale, its ticks and their labels, for axes `axes_height_pt` points tall."""
@@ -141,8 +152,10 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
         ticks = sorted(set(ticks) | set(unreadable_values))
         any_moved = _draw_tick_labels(ax, ticks, position, spacing, axes_height_pt,
                                       marked={vmax, *tallest_values, *unreadable_values})
+        for text in ax.texts:
+            text.set_color(foreground)
         widest = max(len(f"{t:.0f}") for t in ticks)
-        ax.set_ylabel("Records", fontsize=_TICK_FONT_SIZE + 1,
+        ax.set_ylabel("Records", color=foreground, fontsize=_TICK_FONT_SIZE + 1,
                       labelpad=(_LEADER_GAP if any_moved else _LABEL_GAP) + 0.6 * _TICK_FONT_SIZE * widest)
 
     # The labels' spacing, as a fraction of the axis, depends on the axes' height, which `tight_layout` sets only once
@@ -152,6 +165,12 @@ def build_figure(counts, colors, *, first: int, grouping: str, scale: str = "ada
         label_axis(ax.get_position().height * figsize[1] * 72.0)
         fig.tight_layout()
     return fig
+
+
+def _foreground_for(background) -> str:
+    """Black or white, whichever has the higher contrast against `background`, a colour as matplotlib takes one."""
+    rgb = matplotlib.colors.to_rgb(background)
+    return "black" if color.contrast_ratio(rgb, (0, 0, 0)) >= color.contrast_ratio(rgb, (1, 1, 1)) else "white"
 
 
 def _draw_tick_labels(ax, ticks, position, spacing, axes_height_pt, *, marked) -> bool:
@@ -302,7 +321,8 @@ def _figure_for(ds, *, dpi: float):
     title = pathlib.Path(ds.filename).stem if getattr(ds, "filename", None) else ""
     return build_figure(maybe_values.counts, colors, first=maybe_values.first, grouping=grouping, scale=_scale,
                         tallest=gui_config.histogram_tallest_labelled if _tallest else 0, unreadable=_unreadable,
-                        captions=captions, title=title, figsize=gui_config.histogram_figure_size, dpi=dpi)
+                        captions=captions, title=title, background=gui_config.figure_background_color,
+                        figsize=gui_config.histogram_figure_size, dpi=dpi)
 
 
 def update(*, only_if_visible: bool = False) -> None:
