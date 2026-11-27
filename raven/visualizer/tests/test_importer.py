@@ -45,11 +45,16 @@ TWO_RECORDS = """
 
 
 class FakeRecord:
-    """Stands in for `agent.turn`'s `TurnRecord`, of which only these two fields are read here."""
+    """Stands in for `agent.turn`'s `TurnRecord`, of which only these fields are read here.
 
-    def __init__(self, reply):
+    `backend_failed`: Raven wrote the reply to report a failed call, which a real record says with `generation`
+                      `None`; otherwise the model wrote it.
+    """
+
+    def __init__(self, reply, *, backend_failed=False):
         self.reply = reply
         self.reasoning = []
+        self.generation = None if backend_failed else {"model": "fake-model"}
 
 
 class ExplodingDehyphenator:
@@ -900,10 +905,39 @@ class TestKeywordRepliesThatAreNotKeywordLists:
         assert len(calls) == 1, f"a decline should be accepted, not retried; got {len(calls)} calls"
 
 
-def run_keyword_extraction(monkeypatch, fake_turn, caplog):
-    """Drive `_collect_cluster_keywords`'s LLM branch over one two-record cluster."""
+class TestABackendFailure:
+    """A turn the backend failed is waited out and asked again, never taken for the model's answer."""
+
+    def test_the_keywords_are_asked_again_once_the_backend_answers(self, monkeypatch, caplog):
+        replies = iter([FakeRecord("**The language model backend returned an error.**", backend_failed=True),
+                        FakeRecord("Knowledge Distillation, Model Compression")])
+        waits = []
+        from raven.librarian import llmclient
+        keywords = run_keyword_extraction(monkeypatch, lambda settings, prompt, **kw: next(replies), caplog,
+                                          wait_for_backend=lambda settings, **kw: waits.append(kw) or
+                                          (llmclient.backend_ready, False))
+        assert keywords == [["Knowledge Distillation", "Model Compression"]]
+        assert len(waits) == 1, "the backend should be waited for once, before asking again"
+        assert not any("not a keyword list" in r.message for r in caplog.records), \
+            "a backend failure is not a malformed reply, so it costs no format attempt"
+
+    def test_a_backend_that_stays_down_stops_the_import(self, monkeypatch, caplog):
+        """Control for the test above: no answer after the wait, so nothing is recorded as the cluster's keywords."""
+        from raven.librarian import llmclient
+        failing = lambda settings, prompt, **kw: FakeRecord("error", backend_failed=True)  # noqa: E731 -- one line
+        with pytest.raises(importer.LLMBackendUnavailable):
+            run_keyword_extraction(monkeypatch, failing, caplog,
+                                   wait_for_backend=lambda settings, **kw: (llmclient.backend_unreachable, False))
+
+
+def run_keyword_extraction(monkeypatch, fake_turn, caplog, *, wait_for_backend=None):
+    """Drive `_collect_cluster_keywords`'s LLM branch over one two-record cluster.
+
+    `wait_for_backend`: stands in for `llmclient.wait_for_backend`, for a test that makes the backend fail.
+    """
     import numpy as np
     from unpythonic.env import env
+    from raven.librarian import llmclient as real_llmclient  # for its status symbols
 
     vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0)
                 for i in range(2)]
@@ -915,8 +949,12 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
     monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
     monkeypatch.setattr(importer, "llmclient",
                         type("_FakeLLMClient", (),
-                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                             {"make_console_progress_handler": staticmethod(lambda _: None),
+                              "wait_for_backend": staticmethod(wait_for_backend or (lambda settings, **kw: None)),
+                              "backend_ready": real_llmclient.backend_ready,
+                              "describe_backend_status": staticmethod(real_llmclient.describe_backend_status)}),
                         raising=False)
+    monkeypatch.setattr(importer, "llm_settings", env(backend_url="http://fake:8080"), raising=False)
     monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
     with caplog.at_level("WARNING"):
@@ -935,7 +973,7 @@ class TestLLMAnswersAreKept:
 
         def fake_turn(settings, prompt, **kwargs):
             calls.append(prompt)
-            return env(reply=replies.pop(0), reasoning=["thinking"], to_dict=lambda: {"reply": "..."})
+            return env(generation={"model": "fake-model"}, reply=replies.pop(0), reasoning=["thinking"], to_dict=lambda: {"reply": "..."})
 
         record = env(model_id="test-model", label="test", quantization="Q4", bits_per_weight=4.5, load_config=None)
         settings = env(model_record=record, backend_url="http://localhost:1", backend_flavor="test", model_id="test-model")
@@ -986,7 +1024,7 @@ class TestSummariesAreKeptPerFile:
 
         def fake_turn(settings, prompt, **kwargs):
             calls.append(prompt)
-            return env(reply=f"summary {len(calls)}", reasoning=[], to_dict=lambda: {})
+            return env(generation={"model": "fake-model"}, reply=f"summary {len(calls)}", reasoning=[], to_dict=lambda: {})
 
         record = env(model_id="test-model", label="test", quantization="Q4", bits_per_weight=4.5, load_config=None)
         settings = env(model_record=record, backend_url="http://localhost:1", backend_flavor="test", model_id="test-model")
@@ -1073,7 +1111,7 @@ class TestLLMKeywordEvidence:
 
         def fake_turn(settings, prompt, **kwargs):
             prompts.append(prompt)
-            return env(reply="neural networks", reasoning=[])
+            return env(generation={"model": "fake-model"}, reply="neural networks", reasoning=[])
 
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
         monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", evidence)
@@ -1120,7 +1158,7 @@ class TestHybridKeywords:
 
         def fake_turn(settings, prompt, **kwargs):
             prompts.append(prompt)
-            return env(reply=replies.pop(0), reasoning=[])
+            return env(generation={"model": "fake-model"}, reply=replies.pop(0), reasoning=[])
 
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "hybrid")
         monkeypatch.setattr(visualizer_config, "clusters_keyword_hybrid_llm_count", n_leading)
@@ -1161,7 +1199,7 @@ class TestHybridKeywords:
         monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
         monkeypatch.setattr(visualizer_config, "clusters_llm_keyword_evidence", False)  # no phrase data here
         monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(
-            lambda settings, prompt, **kw: env(reply="Foundation Models, Solomonoff Induction", reasoning=[]))}),
+            lambda settings, prompt, **kw: env(generation={"model": "fake-model"}, reply="Foundation Models, Solomonoff Induction", reasoning=[]))}),
             raising=False)
         monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
         monkeypatch.setattr(importer, "llmclient", type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None)}),

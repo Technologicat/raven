@@ -309,6 +309,18 @@ class TestSweep:
         assert result.message  # the operator is told why
         assert set(ledger.latest()) == {"item0"}  # the rest were never tried, so nothing is said about them
 
+    def test_the_waits_grow(self, llm_settings, tmp_path, monkeypatch):
+        # A blip such as a network lease renewal can outlast a few seconds, so each wait is longer than the last.
+        ledger = sweep.Ledger(tmp_path, "run", "abcd1234")
+
+        def refuse(backend_url, flavor):
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "resolve_model_info", refuse)
+        slept = []
+        monkeypatch.setattr(llmclient.time, "sleep", slept.append)
+        sweep.Sweep(llm_settings, _echo, _items(3), ledger, reconnect_attempts=3, reconnect_delay=5).run()
+        assert slept == [5, 15, 45]
+
     def test_a_backend_that_drops_out_briefly_is_waited_for_and_the_run_goes_on(self, llm_settings, tmp_path,
                                                                                  monkeypatch, caplog):
         ledger = sweep.Ledger(tmp_path, "run", "abcd1234")

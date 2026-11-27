@@ -295,6 +295,9 @@
   - Combining BibTeX files that may hold the same papers, run them through `raven-deduplicate` first and import its output: `raven-deduplicate -o combined.bib first.bib second.bib`. It matches papers by DOI and title, never by key: the same paper is merged whatever its keys, and different papers sharing a key are both kept, under distinct keys.
 - **LaTeX emphasis in titles and abstracts reads as text again.** `\textit{in vitro}` came out as `\textitin vitro`, and `\textbf`, `\emph`, `\textsuperscript` and `\textsubscript` the same way; `p \textless .001` came out as `p textless .001`. Common in arXiv metadata and in database exports.
   - Bold and italic, from LaTeX or HTML, now arrive as Markdown (`**bold**`, `*italic*`) rather than as `*bold*` and `/italic/`, so the LLM stages read them in the notation they know. Super- and subscripts, from either, become Unicode characters when every character in them has one (H₂O, x²), and are otherwise written as `M_{age}`: Unicode's sub- and superscripts are a partial alphabet, and a half-converted `Mₐgₑ` read worse.
+- **A brief LLM backend outage no longer costs an import a cluster's keywords, or saves an error as a summary.**
+  - The importer waits for the backend, about a minute at most, and asks again; if it stays down, the import stops and says so. Answers already given are kept, so running it again resumes.
+  - Until now a failed call counted as one of the three tries at a malformed reply, with no wait, and a failed summary was stored, error message and all.
 - **An import no longer crashes when the file yields more or fewer records than when it was last imported**, as it does when a parser repair recovers records. The embedding and keyword caches were judged by the file's date alone, and the 2D clustering then failed with an `IndexError`. A cache that does not describe the records now is computed again.
 
 #### Raven-server

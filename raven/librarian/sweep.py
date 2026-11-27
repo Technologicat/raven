@@ -306,10 +306,12 @@ class Sweep:
     `log_interval`: least seconds between the progress lines logged at INFO; the last is always logged.
                     Every failed item is logged as it happens, at WARNING, however often.
 
-    `reconnect_attempts`, `reconnect_delay`: how many times, and how many seconds apart, to ask again a backend
-                                             that stopped answering after a batch, before the run stops. Only
-                                             an unreachable backend is asked again; one with no model, or
-                                             another model, stops the run at once. `0` attempts stops at once.
+    `reconnect_attempts`, `reconnect_delay`: how many times to ask again a backend that stopped answering after a
+                                             batch, before the run stops, and how many seconds to wait before
+                                             the first time; each later wait is three times the one before
+                                             (`llmclient.wait_for_backend`). Only an unreachable backend is
+                                             asked again; one with no model, or another model, stops the run at
+                                             once. `0` attempts stops at once.
     """
 
     def __init__(self,
@@ -459,25 +461,15 @@ class Sweep:
             # One probe after every batch, failed or not: a backend that has gone away fails every batch
             # from here on, and one that has swapped models answers them with another instrument.
             model_before = self.llm_settings.model
-            swapped = llmclient.follow_model_swap(self.llm_settings)
-            status = llmclient.backend_status(self.llm_settings)
-            # A dropped connection is waited out a few times before the run stops, since one short network
-            # blip otherwise ends it. Only for "unreachable": a backend that answers without a model, or with
-            # another one, is a fact about the backend, and a wait would not change it.
-            for attempt in range(1, self.reconnect_attempts + 1):
-                if status is not llmclient.backend_unreachable:
-                    break
+
+            def cancel_requested():
                 with self._lock:
-                    if self._cancel_requested:
-                        break
-                logger.warning(f"Sweep.run: cannot reach the backend at {self.llm_settings.backend_url}; "
-                               f"trying again in {self.reconnect_delay:g} s ({attempt}/{self.reconnect_attempts}).")
-                time.sleep(self.reconnect_delay)
-                swapped = llmclient.follow_model_swap(self.llm_settings, reprobe=True) or swapped
-                status = llmclient.backend_status(self.llm_settings)
-                if status is not llmclient.backend_unreachable:
-                    logger.info(f"Sweep.run: the backend answers again, after {attempt} "
-                                f"{'retry' if attempt == 1 else 'retries'}.")  # plural
+                    return self._cancel_requested
+            # A dropped connection is waited out before the run stops, since one short network blip otherwise
+            # ends it.
+            status, swapped = llmclient.wait_for_backend(self.llm_settings, attempts=self.reconnect_attempts,
+                                                         first_delay=self.reconnect_delay, should_stop=cancel_requested,
+                                                         log=logger, caller="Sweep.run")
             report(ids)
             if status is not llmclient.backend_ready:
                 headline, advice = llmclient.describe_backend_status(status, self.llm_settings.backend_url)

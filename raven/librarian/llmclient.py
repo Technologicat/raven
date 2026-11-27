@@ -26,7 +26,7 @@ __all__ = [  # Re-exported from `llmtools`, which owns them
 
            # For frontends that open a window whether or not a backend answers
            "backend_unreachable", "backend_has_no_model", "backend_ready",
-           "connect", "describe_backend_status", "backend_status", "reconnect", "follow_model_swap",
+           "connect", "describe_backend_status", "backend_status", "reconnect", "follow_model_swap", "wait_for_backend",
            "make_prompt_reloader", "watch_prompt_files", "configure",
 
            # Counting what a prompt costs
@@ -742,6 +742,39 @@ def follow_model_swap(settings: env, *, reprobe: bool = False) -> bool:
                          backend_is_reachable=True,
                          quiet=True)
     return True
+
+
+def wait_for_backend(settings: env, *, attempts: int = 3, first_delay: float = 5.0, factor: float = 3.0,
+                     should_stop: Callable[[], bool] = lambda: False,
+                     log: logging.Logger = logger, caller: str = "wait_for_backend") -> tuple[sym, bool]:
+    """Probe the backend, and while it is unreachable, wait and probe again, `attempts` times.
+
+    `first_delay`: seconds before the first retry; each later wait is `factor` times the one before, so the defaults
+                   wait 5, 15 and 45 seconds, about a minute in all, which outlasts a router's or a network
+                   lease's blip.
+    `should_stop`: asked before each wait; true gives up at once, as a cancelled run wants.
+    `log`, `caller`: whose logger reports the waits, and the name prefixed to its lines.
+
+    Returns `(status, swapped)`: the `backend_status` reached, and whether the model changed meanwhile
+    (`follow_model_swap`). Only an unreachable backend is waited for: one with no model, or another model, is a
+    fact about the backend that a wait would not change.
+    """
+    swapped = follow_model_swap(settings)
+    status = backend_status(settings)
+    delay = first_delay
+    for attempt in range(1, attempts + 1):
+        if status is not backend_unreachable or should_stop():
+            break
+        log.warning(f"{caller}: cannot reach the backend at {settings.backend_url}; "
+                    f"trying again in {delay:g} s ({attempt}/{attempts}).")
+        time.sleep(delay)
+        delay *= factor
+        swapped = follow_model_swap(settings, reprobe=True) or swapped
+        status = backend_status(settings)
+        if status is not backend_unreachable:
+            log.info(f"{caller}: the backend answers again, after {attempt} "
+                     f"{'retry' if attempt == 1 else 'retries'}.")  # plural
+    return status, swapped
 
 
 # --------------------------------------------------------------------------------

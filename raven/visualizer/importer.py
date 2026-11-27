@@ -101,6 +101,44 @@ agent = None
 llmclient = None
 llm_settings = None
 
+# How many times a task is asked again after the backend failed on it, once the backend answers again.
+_MAX_BACKEND_RETRIES = 3
+
+
+def _llm_turn(prompt: str, what: str):
+    """One turn of an LLM-backed task, with no character and no tools, as an `agent.TurnRecord` the model wrote.
+
+    `what`: the task, for the log, such as `"keywords for cluster #4"`.
+
+    A turn the backend failed comes back with Raven's error message as its reply (`record.generation is None`).
+    That is waited out (`llmclient.wait_for_backend`) and asked again, up to `_MAX_BACKEND_RETRIES` times, so a
+    network blip does not cost a cluster its keywords or store an error message as a paper's summary.
+
+    Raises `LLMBackendUnavailable` when the backend does not come back, when it comes back with another model, or
+    when it keeps failing although it answers.
+    """
+    # No character and no tools: the outputs go into dataset fields and are parsed, and the character card asks
+    # for Markdown, a reported train of thought, and conversational prose, all of which would have to be undone.
+    for _retry in range(_MAX_BACKEND_RETRIES + 1):
+        record = agent.turn(llm_settings,
+                            prompt,
+                            use_character_card=False,
+                            tools_enabled=False,
+                            on_progress=llmclient.make_console_progress_handler("."))
+        if record.generation is not None:  # the model wrote this reply, rather than Raven reporting a failure
+            return record
+        logger.warning(f"_llm_turn: the LLM backend failed on {what}: {record.reply}")
+        status, swapped = llmclient.wait_for_backend(llm_settings, log=logger, caller="_llm_turn")
+        if swapped:
+            raise LLMBackendUnavailable("The backend's model changed during the import.",
+                                        "Answers from another model would mix two instruments; run the import again.",
+                                        llm_settings.backend_url)
+        if status is not llmclient.backend_ready:
+            headline, advice = llmclient.describe_backend_status(status, llm_settings.backend_url)
+            raise LLMBackendUnavailable(headline, advice, llm_settings.backend_url)
+    raise LLMBackendUnavailable(f"The backend failed {_MAX_BACKEND_RETRIES + 1} times on {what}, though it answers.",
+                                "Its log should say why.", llm_settings.backend_url)
+
 # What this run had to do without, for a frontend to show: an `LLMBackendUnavailable` describing the
 # backend that did not answer, or `None` where nothing was given up. Written once per run by
 # `_setup_llm_backend` and read from the GUI thread.
@@ -1548,11 +1586,7 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     listing = "\n".join(sorted(known_keywords))
     prompt = f"{visualizer_config.clusters_llm_keyword_canonicalization_prompt}\n-----\n\n{listing}"
 
-    record = agent.turn(llm_settings,
-                        prompt,
-                        use_character_card=False,
-                        tools_enabled=False,
-                        on_progress=llmclient.make_console_progress_handler("."))
+    record = _llm_turn(prompt, "keyword canonicalization")
     for reasoning in record.reasoning:
         logger.info(f"        LLM thoughts for keyword canonicalization:\n{reasoning}")
     logger.info(f"        LLM output (final answer) for keyword canonicalization:\n{record.reply}")
@@ -1790,10 +1824,6 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
 
             # Ask the LLM to provide keywords.
             #
-            # No character and no tools: the output is a comma-separated list this function then splits,
-            # and the character card asks for Markdown, a reported train of thought, and conversational
-            # prose - all of which have to be undone before the result can be parsed. The prompt above
-            # says who is doing what.
             # A reply that is not a keyword list is worth asking again for, since the failure is
             # occasional rather than systematic - one cluster in 338, across five corpora - and the
             # second attempt costs one request against a run that is minutes long either way. Declining
@@ -1806,11 +1836,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_vectors=None, *, key
                 cluster_keywords = ["<unknown topic>"] if parsed == [] else parsed
                 logger.info(f"        Keywords for cluster #{cluster_id}, saved by an earlier run: {maybe_saved['reply']}")
             for attempt in (range(1, max_keyword_attempts + 1) if cluster_keywords is None else ()):
-                record = agent.turn(llm_settings,
-                                    prompt,
-                                    use_character_card=False,
-                                    tools_enabled=False,
-                                    on_progress=llmclient.make_console_progress_handler("."))
+                record = _llm_turn(prompt, f"keywords for cluster #{cluster_id}")
                 scrubbed_output_text = record.reply
 
                 for reasoning in record.reasoning:
@@ -1938,11 +1964,7 @@ def _summarize(input_data, *, keep_answers=True):
                     else:
                         # As in `_collect_cluster_keywords`: the summary goes into a dataset field, not into a
                         # chat, and the failure sentinel below has to arrive verbatim.
-                        record = agent.turn(llm_settings,
-                                            prompt,
-                                            use_character_card=False,
-                                            tools_enabled=False,
-                                            on_progress=llmclient.make_console_progress_handler("."))
+                        record = _llm_turn(prompt, f"the summary of {entry.author} ({entry.year})")
                         scrubbed_output_text = record.reply
                         answer_cache.put(prompt, record)
 

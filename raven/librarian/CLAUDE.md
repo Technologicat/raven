@@ -44,7 +44,7 @@ Layer 4 - Scripting:        agent.py (~880), the headless sibling of the control
                             sweep.py (~600), one question over a set of items;
                             lorebook_expansion.py (~360), the lorebook's inflected forms, asked as a sweep
 Layer 3 - Orchestration:    scaffold.py (~2.0k)
-Layer 2 - Backends:         llmclient.py (~3.1k), llmtools.py (~1.4k), mcpclient.py (~760), skills.py (~330), lorebook.py (~200),
+Layer 2 - Backends:         llmclient.py (~3.3k), llmtools.py (~1.4k), mcpclient.py (~760), skills.py (~330), lorebook.py (~200),
                             hybridir.py (~2.0k)
 Layer 1 - Utilities:        chatutil.py (~2.0k), chatsearch.py (~130), lorebookcore.py (~580), appstate.py (~580), cleanup.py (~290),
                             imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~3.2k),
