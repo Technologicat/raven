@@ -300,6 +300,7 @@
 
 #### Raven-visualizer
 
+- **A dataset given on the command line that cannot be opened is reported in a dialog**, as one chosen in the app is; the app hung at startup instead. The same dialog now reports a dataset that cannot be read when opened from the file dialog or dropped on the window.
 - **The info panel's heading no longer counts Misc as a cluster.** With all items selected it read *in 69 clusters* where the clusters are numbered up to #67; it now reads *in 68 clusters + Misc*.
 - **A dataset with no clusters opens instead of crashing the app.** Where every record was an outlier, colouring the map divided zero by zero, and the plotting library crashed on the result.
 - **Opening a dataset no longer leaves the plot zoomed to the wrong range.** Moving the mouse over the plot while a dataset was loading could highlight points of the previous dataset, and the new plot's zoom fitted itself to them.

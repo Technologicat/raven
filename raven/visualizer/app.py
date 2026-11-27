@@ -534,11 +534,30 @@ def show_all():
 
 
 def open_file(filename):
-    """Load new data into the GUI. Public API."""
+    """Load new data into the GUI. Public API.
+
+    A dataset that cannot be read — missing, unreadable, or not a dataset — is reported in a dialog, and the app
+    is left with no dataset open. The dialog waits for a frame, so call this once the render loop is running, and
+    not on the render thread.
+    """
     logger.info(f"open_file: Opening file '{filename}'.")
     reset_app_state()
-    app_state.dataset = plotter.parse_dataset_file(filename)
-    plotter.load_dataset(app_state.dataset)
+    try:
+        app_state.dataset = plotter.parse_dataset_file(filename)
+        plotter.load_dataset(app_state.dataset)
+    except Exception as exc:
+        logger.error(f"open_file: could not open '{filename}': {type(exc)}: {exc}")
+        reset_app_state()
+        if isinstance(exc, FileNotFoundError):
+            message = f"File not found: '{filename}'"
+        else:
+            message = f"Could not read '{filename}': {type(exc).__name__}: {exc}"
+        messagebox.modal_dialog(window_title="Could not open the dataset",
+                                message=message,
+                                buttons=["Close"],
+                                ok_button="Close",
+                                cancel_button="Close",
+                                centering_reference_window=main_window)
 
 # --------------------------------------------------------------------------------
 # File dialog init
@@ -2041,13 +2060,15 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
 keyboardmark.install_caret_follower(["search_field"])  # tag
 keyboardmark.install_focus_follower(list(_FILTER_COMBOS), release_to="clear_search_button")  # where Esc parks too
 
-# Load the file optionally provided on the command line
+# Load the file optionally provided on the command line. In a frame callback, once the render loop is running,
+# because a file that cannot be opened is reported in a modal dialog, which waits for a frame; before the loop
+# runs, that wait never ends. Frame 10 is the dimmer's, and a frame number holds one callback.
+reset_app_state()  # effectively, open a blank dataset
 if opts.filename:
     _default_path = os.path.dirname(common_utils.absolutize_filename(opts.filename))
-    open_file(opts.filename)
+    dpg.set_frame_callback(11, lambda: open_file(opts.filename))
 else:
     _default_path = os.getcwd()
-    reset_app_state()  # effectively, open a blank dataset
 initialize_filedialogs(_default_path)
 
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
