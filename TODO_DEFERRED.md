@@ -27,6 +27,24 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Port SAVU's `pool_opening.m`, an ensemble uncertainty analysis of a pool opening shot, as a test and as a JS toy
+
+*Cluster: hdr-plotting · Cost: M · Gate: none · Filed: 2026-11-27 · See also: the SAVU HDR plotting item below*
+
+A 2D event-driven simulation of the opening shot in pool: elastic collisions, reflecting edges, a medium with uniform
+resistance, no spin and no pockets, each next collision predicted rather than stepped to. Run as an ensemble over
+perturbed initial conditions, the balls' positions form the smoke-cloud densities SAVU was named for, which is what the
+HDR plotting is for. So it is both a test of the tone-mapping port and a demonstration of it.
+
+- **Check the algorithms while porting.** The collision prediction, the ball-ball collision with its velocity fix-up
+  for simultaneous contacts (`kelmhax`), and the event ordering were written carefully, but in 2010; treat them as
+  needing review, not as known-good.
+- **It would make an interactive JS toy**, an artifact: aim the cue ball, set the spread of the ensemble, watch the
+  cloud spread over the table, switch the tone mapping. Which makes a JS port of the HDR methods the toy uses part of
+  the same job; the Python port and the JS one can share their tests' expected values.
+
+The source is `savu/codes/pool_opening.m`, beside `hdrplot.m`.
+
 ## Port the rest of SAVU's HDR plotting: the other tone-mapping methods, and a tone-mapping colour-sheet plotter
 
 *Cluster: hdr-plotting · Cost: M · Gate: none · Filed: 2026-11-27 · See also: `raven.common.numutils.histogram_adjustment`, `decade_ticks`*
