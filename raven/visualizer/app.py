@@ -1288,9 +1288,9 @@ app_state.update_info_panel = info_panel.update  # Published here so cross-modul
 #
 # The debug keys (Ctrl+Shift+M/R/T/L) are deliberately absent: they are developer tools, `README.md`
 # documents them, and the card is what a visitor reads.
-#: Each auxiliary window's keys that work from the main window: the one that opens it, and any that switch what it
-#: shows. On both the keyboard page and the Windows page, as one definition, because a key described twice on one card
-#: must read the same both times.
+#: Each auxiliary window's keys that work from the main window: the one that opens it, first, and any that switch what
+#: it shows. The opening key is on both the keyboard page and the Windows page, from this one definition, because a
+#: key described twice on one card must read the same both times.
 _WINDOW_LEADERS = {
     "word_cloud": (env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the selection"),
                    env(key_indent=1, key="Shift+F10", action_indent=0, action="Next mode: phrases, words, themes", notes="Kept between sessions")),
@@ -1335,14 +1335,13 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="Also while typing"),
                env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Also while typing"),
                env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Also while typing"),
-               # The auxiliary windows, by the keys that open them and switch what they show; these work from the
-               # main window. The keys that work inside a window are on the Windows page, with the window's prose.
+               # The auxiliary windows, by the key that opens each. The keys that change what a window shows are
+               # on the Windows page, under it, with the window's prose: a window's keys are its own, wherever
+               # they are pressed from.
                helpcard.hotkey_blank_entry,
-               *_WINDOW_LEADERS["word_cloud"],
-               helpcard.hotkey_blank_entry,
-               *_WINDOW_LEADERS["histogram"],
-               helpcard.hotkey_blank_entry,
-               *_WINDOW_LEADERS["importer"],
+               _WINDOW_LEADERS["word_cloud"][0],
+               _WINDOW_LEADERS["histogram"][0],
+               _WINDOW_LEADERS["importer"][0],
 
                helpcard.hotkey_new_column,
                env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch the current item", notes="Searching highlights it in the plotter"),
