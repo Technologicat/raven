@@ -1252,7 +1252,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # names the window.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the selection"),
-               env(key_indent=1, key="Shift+F10", action_indent=0, action="Switch between phrase and word mode", notes="Kept between sessions"),
+               env(key_indent=1, key="Shift+F10", action_indent=0, action="Next mode: phrases, words, themes", notes="Kept between sessions"),
                env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),
@@ -1361,7 +1361,7 @@ def render_help_extras(self: helpcard.HelpWindow,
             # kind of thing from the same key one card over. This section used the colour to mark "a key
             # worth reaching for", leaving the Esc plain to say it does nothing here; that distinction was
             # carried by a colour already doing other work two lines up, so the sentence says it instead.
-            '**F10** opens and closes it, **Shift+F10** switches phrases and words, and **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
+            '**F10** opens and closes it, **Shift+F10** steps through phrases, words and themes, and **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
          helpcard.section(
             "**The importer**",
             'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
@@ -1761,7 +1761,7 @@ def hotkeys_callback(sender, app_data):
         select_visible_all()
     elif key == dpg.mvKey_F10:
         if shift_pressed:
-            word_cloud.toggle_mode()
+            word_cloud.cycle_mode()
         else:
             word_cloud.toggle_window()
     # Ctrl+Shift+...

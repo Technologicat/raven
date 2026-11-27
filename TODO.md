@@ -214,13 +214,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     a figure for a paper wants an axis a reader can read values off, so linear or logarithmic with labelled ticks,
     perhaps with the adaptive one as an option. Labels too: years along the bottom, cluster numbers or their themes.
   - **The hotkey needs a place on the help card**, which is full; the cluster table export has the same need.
-- **[High, for 0.2.11]** Word cloud: a **Themes** mode beside phrases and words, from the LLM's cluster themes (the
-  maintainer, 2026-11-27). Shift+F10 cycles the modes, so it would join the cycle. For the health-education and
-  AOKK studies and their follow-ups, so before 0.2.11 is released. Cost S–M: the two-way mode toggle becomes a
-  cycle of three, each with its own availability.
-  - **Open: what a theme weighs.** Themes are per cluster, not per record, so one natural weight is the number of
-    selected records in each cluster whose themes include it. Present only in datasets keyworded with the LLM
-    (`"llm"` or `"hybrid"`); elsewhere the mode is unavailable and says why.
 - **[Medium]** Word cloud window: make resizable; add 1:1 button; use Pillow Lanczos for scaling (DPG's built-in scaling is bilinear with no mipmaps, so it aliases when shrinking); selectable color scheme (white background for paper export); move toolbar to top so it stays on-screen if the image is too large; expose size and color settings in GUI (currently only in `config.py`).
 
 - **[Medium]** Settings window: expose `gui_config` in the GUI. Currently only in `config.py`. Note: this is a general gap — most Visualizer settings are not runtime-configurable.

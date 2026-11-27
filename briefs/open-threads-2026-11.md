@@ -81,8 +81,8 @@ maintainer has read the whole arXiv evidence comparison.
   - **What remains important for it** (the maintainer, 2026-11-25): **all-fields search**, with the full author
     list shown and searchable (`TODO.md`, *Author search* and *Fragment search across multiple fields*), and
     **colouring the map by year**. Also the README screenshots, retaken.
-  - **Added 2026-11-27, for the health-education and AOKK studies**: a Themes mode for the word cloud, and a large,
-    printable version of the colour bar's histogram, with the word cloud's UX. Both in `TODO.md`.
+  - **Added 2026-11-27, for the health-education and AOKK studies**: a Themes mode for the word cloud (done the same
+    day), and a large, printable version of the colour bar's histogram, with the word cloud's UX (`TODO.md`).
 - **All-fields search with one-line snippets** around each match and a toggle to the full abstract, designed
   2026-11-25: `TODO.md`, *Fragment search across multiple fields*. M.
 - **Colouring the Visualizer's map by year: v0 done 2026-11-26.** Then v1 with per-year keywords, before 0.2.11

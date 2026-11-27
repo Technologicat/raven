@@ -572,12 +572,13 @@ records carry no year does not offer it.
 
 ## Create a word cloud
 
-Raven can make a word cloud of the studies in the current selection, in one of two modes:
+Raven can make a word cloud of the studies in the current selection, in one of three modes:
 
 - **Phrases** (the default): the noun phrases of the selected studies, each sized by how many of them use it. Phrases are counted the way the cluster keywords are: an abbreviation and its long form are one phrase, and a longer phrase stands in for a shorter one it contains where it is found in at least half as many studies (*large language model* for *language model*).
 - **Words**: their single words, each sized by how often it occurs in the selection.
+- **Themes**: the themes the LLM named for the clusters, each sized by how many of the selected studies are in the clusters having it. Available where the dataset was imported with LLM keywords.
 
-The two radio buttons at the bottom of the window choose the mode, and **Shift+F10** switches it from anywhere; the choice is remembered between sessions. A dataset imported before phrase keywords existed has words only, and the radio buttons are then grayed out; import it again to get phrases.
+The radio buttons at the bottom of the window choose the mode, and **Shift+F10** steps to the next from anywhere; the choice is remembered between sessions. They offer the modes the dataset has: a dataset imported before phrase keywords existed has no phrases, and one keyworded without the LLM has no themes. With words alone, the buttons are grayed out.
 
 <p align="center">
 <img src="../../img/screenshot-wordcloud.png" alt="Screenshot of Raven's wordcloud window" width="600"/> <br/>
@@ -684,7 +685,7 @@ can be read down without leaving the field.
 | `Ctrl+Shift+Z` / `Ctrl+Shift+Y` | Undo / redo the last selection change |
 | `F8` | Copy the report to the clipboard as plain text — `Shift+F8` for Markdown |
 | `F10` | Toggle the word cloud window, built from the phrases or words of the selected items |
-| `Shift+F10` | Switch the word cloud between phrases and words |
+| `Shift+F10` | Step the word cloud to its next mode: phrases, words, themes |
 
 ### Word cloud window
 

@@ -524,26 +524,72 @@ class TestTheModeControl:
         with pytest.raises(ValueError):
             word_cloud.set_mode("letters")
 
-    def test_toggle_flips_the_mode(self, phrase_gui):
-        word_cloud.toggle_mode()
+    def test_cycling_goes_through_the_modes_the_dataset_has(self, phrase_gui):
+        word_cloud.cycle_mode()
         assert word_cloud.get_mode() == "words"
-        word_cloud.toggle_mode()
-        assert word_cloud.get_mode() == "phrases"
+        word_cloud.cycle_mode()
+        assert word_cloud.get_mode() == "phrases", "no themes in this dataset, so back round to phrases"
 
-    def test_toggle_does_nothing_without_phrases(self, gui, monkeypatch):
+    def test_cycling_reaches_themes_where_the_dataset_has_them(self, theme_gui):
+        modes = []
+        for _ in range(3):
+            word_cloud.cycle_mode()
+            modes.append(word_cloud.get_mode())
+        assert modes == ["words", "themes", "phrases"]
+
+    def test_cycling_does_nothing_with_words_alone(self, gui, monkeypatch):
         monkeypatch.setattr(app_state, "selection_data_idxs_box", box(np.array([0])), raising=False)
-        word_cloud.toggle_mode()
+        word_cloud.cycle_mode()
         assert word_cloud.get_mode() == "phrases"
 
-    def test_the_control_shows_the_mode_and_is_enabled_with_phrases(self, phrase_gui):
-        phrase_gui.dpg.existing.add("word_cloud_mode_radio")  # tag
+    def test_the_control_offers_the_dataset_s_modes(self, theme_gui):
+        theme_gui.dpg.existing.add("word_cloud_mode_radio")  # tag
         render([0])
-        assert phrase_gui.dpg.values["word_cloud_mode_radio"] == "Phrases"  # tag
-        assert phrase_gui.dpg.configured["word_cloud_mode_radio"]["enabled"] is True  # tag
+        assert theme_gui.dpg.configured["word_cloud_mode_radio"]["items"] == ["Phrases", "Words", "Themes"]  # tag
+        assert theme_gui.dpg.values["word_cloud_mode_radio"] == "Phrases"  # tag
+        assert theme_gui.dpg.configured["word_cloud_mode_radio"]["enabled"] is True  # tag
 
-    def test_the_control_is_disabled_and_shows_words_without_phrases(self, gui):
+    def test_the_control_is_disabled_and_shows_words_without_phrases_or_themes(self, gui):
+        """Control for the test above: a dataset with words alone offers nothing to choose."""
         gui.dpg.existing.add("word_cloud_mode_radio")  # tag
         render([0])
+        assert gui.dpg.configured["word_cloud_mode_radio"]["items"] == ["Words"]  # tag
         assert gui.dpg.values["word_cloud_mode_radio"] == "Words"  # tag
         assert gui.dpg.configured["word_cloud_mode_radio"]["enabled"] is False  # tag
+
+
+@pytest.fixture
+def theme_gui(phrase_gui, monkeypatch):
+    """The `phrase_gui` fixture, its dataset keyworded with the LLM too: records 0 and 1 in cluster 0, 2 in cluster 1."""
+    for entry, cluster_id in zip(phrase_gui.dataset.sorted_entries, (0, 0, 1)):
+        entry.cluster_id = cluster_id
+    phrase_gui.dataset.file_content.cluster_llm_keywords = [["Large language models", "Reasoning"],
+                                                            ["large language models", "Self-regulated learning"]]
+    return phrase_gui
+
+
+class TestThemeMode:
+    def test_a_theme_weighs_the_selected_records_in_the_clusters_having_it(self, theme_gui):
+        word_cloud._mode_box << "themes"
+        render([0, 1, 2])
+        assert FakeWordCloud.instances[0].frequencies == {"Large language models": 3, "Reasoning": 2,
+                                                          "Self-regulated learning": 1}
+
+    def test_only_the_selection_counts(self, theme_gui):
+        """Control for the test above: a cluster with no selected record adds nothing."""
+        word_cloud._mode_box << "themes"
+        render([2])
+        assert FakeWordCloud.instances[0].frequencies == {"large language models": 1, "Self-regulated learning": 1}
+
+    def test_misc_and_unknown_topics_add_nothing(self, theme_gui):
+        theme_gui.dataset.sorted_entries[2].cluster_id = -1
+        theme_gui.dataset.file_content.cluster_llm_keywords[0] = ["<unknown topic>"]
+        word_cloud._mode_box << "themes"
+        render([0, 2])
+        assert FakeWordCloud.instances == [], "nothing to draw, which the generator refuses"
+
+    def test_a_dataset_without_themes_draws_phrases_when_themes_are_chosen(self, phrase_gui):
+        word_cloud._mode_box << "themes"
+        render([0, 1, 2])
+        assert FakeWordCloud.instances[0].frequencies == {"large language model": 2, "self-regulated learning": 1}
 

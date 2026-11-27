@@ -1,7 +1,9 @@
 """Word cloud rendering, display, and PNG save for the Visualizer.
 
-Two modes: phrases (the default), summing the noun phrases each record carries, and words, summing its
-single-word counts. A dataset imported before records carried phrases has only words.
+Three modes: phrases (the default), summing the noun phrases each record carries; words, summing its
+single-word counts; and themes, the LLM's keywords for each cluster, weighted by how many of the selected records
+are in the clusters that have them. A dataset imported before records carried phrases has no phrases, and one
+keyworded without the LLM has no themes; the mode control offers what the dataset has.
 
 Fairly self-contained: the only cross-module dependencies are
 `app_state.{dataset, bg, filedialog_save, themes_and_fonts,
@@ -13,7 +15,7 @@ generated `WordCloud` object — stays module-local.
 """
 
 __all__ = ["MODES",
-           "get_mode", "set_mode", "toggle_mode", "phrases_available", "add_mode_control",
+           "get_mode", "set_mode", "cycle_mode", "available_modes", "add_mode_control",
            "update",
            "toggle_window",
            "handle_key",
@@ -60,25 +62,26 @@ _image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4], 
                          dtype=np.float64))
 _data_box = box(None)  # the last generated `WordCloud` object, for `save_to_file`
 
-MODES = ("phrases", "words")
+MODES = ("phrases", "words", "themes")
 _mode_box = box("phrases")  # what the user chose; the app sets it from the saved state at startup
 _last_mode = None  # the mode the last cloud was rendered in, which is part of what the render cache keys on
 
-_MODE_TOOLTIP = "Build the word cloud from noun phrases, or from single words [Shift+F10]"
-_MODE_TOOLTIP_NO_PHRASES = ("This dataset has no phrases, so the word cloud uses words.\n"
-                            "Import it again to get them.")
+_MODE_TOOLTIP = ("Build the word cloud from noun phrases, from single words, or from the clusters' themes [Shift+F10]\n"
+                 "Themes are weighted by how many of the selected items are in the clusters that have them.")
+_MODE_TOOLTIP_MISSING = {"phrases": "This dataset has no phrases. Import it again to get them.",
+                         "themes": "This dataset has no themes. Import it with LLM keywords to get them."}
 
 
 # --------------------------------------------------------------------------------
 # The mode
 
 def get_mode() -> str:
-    """The mode the user chose, `"phrases"` or `"words"`, whether or not the current dataset can render it."""
+    """The mode the user chose, one of `MODES`, whether or not the current dataset can render it."""
     return unbox(_mode_box)
 
 
 def set_mode(mode: str) -> None:
-    """Choose what the word cloud is built from, `"phrases"` or `"words"`, and redraw it if it is open."""
+    """Choose what the word cloud is built from, one of `MODES`, and redraw it if it is open."""
     if mode not in MODES:
         raise ValueError(f"set_mode: unknown mode {mode!r}; expected one of {MODES}")
     _mode_box << mode
@@ -88,42 +91,77 @@ def set_mode(mode: str) -> None:
     update(unbox(app_state.selection_data_idxs_box), only_if_visible=True)
 
 
-def toggle_mode() -> None:
-    """Switch between phrases and words. Does nothing while the dataset has no phrases to switch to."""
-    if phrases_available(app_state.dataset):
-        set_mode("words" if get_mode() == "phrases" else "phrases")
+def cycle_mode() -> None:
+    """Switch to the next of the modes the dataset has, in the order of `MODES`. Does nothing while it has only one."""
+    modes = available_modes(app_state.dataset)
+    if len(modes) > 1:
+        current = _effective_mode(app_state.dataset)
+        set_mode(modes[(modes.index(current) + 1) % len(modes)])
 
 
-def phrases_available(ds) -> bool:
-    """Whether dataset `ds` carries the phrases phrase mode needs; it does not when imported by an older version."""
+def available_modes(ds) -> tuple[str, ...]:
+    """The modes dataset `ds` can render, in the order of `MODES`.
+
+    Words always. Phrases where the records carry them, which they do not in a dataset imported by an older version.
+    Themes where the dataset keeps the LLM's keywords for each cluster (`clusters_keyword_method` `"llm"` or
+    `"hybrid"`).
+    """
     file_content = getattr(ds, "file_content", None)
-    return getattr(file_content, "keyphrase_display", None) is not None
+    have = {"words": True,
+            "phrases": getattr(file_content, "keyphrase_display", None) is not None,
+            "themes": getattr(file_content, "cluster_llm_keywords", None) is not None}
+    return tuple(mode for mode in MODES if have[mode])
 
 
 def _effective_mode(ds) -> str:
-    return get_mode() if phrases_available(ds) else "words"
+    """The chosen mode where the dataset has it, otherwise the first it has (phrases, else words)."""
+    modes = available_modes(ds)
+    return get_mode() if get_mode() in modes else modes[0]
 
 
 def _sync_mode_control(ds) -> None:
-    """Show the effective mode in the window's control, disabled when the dataset has no phrases."""
+    """Offer the dataset's modes in the window's control, showing the effective one; disabled when there is only one."""
     if not dpg.does_item_exist("word_cloud_mode_radio"):  # tag  # not built yet, or in a test without the window
         return
-    available = phrases_available(ds)
+    modes = available_modes(ds)
+    dpg.configure_item("word_cloud_mode_radio", items=[mode.capitalize() for mode in modes], enabled=len(modes) > 1)  # tag
     dpg.set_value("word_cloud_mode_radio", _effective_mode(ds).capitalize())  # tag
-    dpg.configure_item("word_cloud_mode_radio", enabled=available)  # tag
     maybe_tooltip = getattr(app_state, "word_cloud_mode_tooltip", None)
     if maybe_tooltip is not None:
-        maybe_tooltip.text = _MODE_TOOLTIP if available else _MODE_TOOLTIP_NO_PHRASES
+        missing = [_MODE_TOOLTIP_MISSING[mode] for mode in MODES if mode not in modes]
+        maybe_tooltip.text = "\n\n".join([_MODE_TOOLTIP] + missing)
 
 
 def add_mode_control() -> None:
-    """Add the phrases/words control to the current DPG container, with its tooltip. Call once, when building the window."""
-    def callback(sender, app_data, user_data):  # `app_data` is the label chosen, "Phrases" or "Words"
+    """Add the mode control to the current DPG container, with its tooltip. Call once, when building the window."""
+    def callback(sender, app_data, user_data):  # `app_data` is the label chosen, such as "Phrases"
         set_mode(app_data.lower())
-    dpg.add_radio_button(items=("Phrases", "Words"), tag="word_cloud_mode_radio", horizontal=True,
+    dpg.add_radio_button(items=[mode.capitalize() for mode in MODES], tag="word_cloud_mode_radio", horizontal=True,
                          default_value=get_mode().capitalize(), callback=callback)
     # Self-sizing, as its text changes with what the loaded dataset can do.
     app_state.word_cloud_mode_tooltip = gui_tooltip.Tooltip("word_cloud_mode_radio", _MODE_TOOLTIP)  # tag
+
+
+def _theme_weights(cluster_llm_keywords, cluster_sizes) -> dict[str, int]:
+    """Each theme's weight: how many of the selected records are in the clusters whose LLM keywords include it.
+
+    `cluster_llm_keywords`: the dataset's, a list of keywords per cluster ID.
+    `cluster_sizes`: `{cluster ID: how many of the selected records are in it}`; Misc (-1) has no themes.
+
+    One theme spelled two ways by two clusters ("Large language models", "large language models") counts once, under
+    the spelling met first.
+    """
+    weights: dict[str, int] = {}
+    spelled: dict[str, str] = {}
+    for cluster_id, n in cluster_sizes.items():
+        if cluster_id < 0 or cluster_id >= len(cluster_llm_keywords):
+            continue
+        for theme in dict.fromkeys(cluster_llm_keywords[cluster_id]):  # once per cluster, in order
+            if theme == "<unknown topic>":  # the importer's marker for a cluster the LLM found no theme in
+                continue
+            shown = spelled.setdefault(theme.casefold(), theme)
+            weights[shown] = weights.get(shown, 0) + n
+    return weights
 
 
 def _get_task_manager():
@@ -216,10 +254,12 @@ def _render_worker(*, task_env):
                                            duration=gui_config.acknowledgment_duration)  # the tooltip is handled manually, so it is not flashed along
 
                 # Combine the keyword counts of the specified items: in phrase mode, how many of them hold each
-                # phrase, nested phrases counting once as in the cluster labels; in word mode, each word's count.
+                # phrase, nested phrases counting once as in the cluster labels; in word mode, each word's count;
+                # in theme mode, how many of them are in the clusters having each theme.
                 logger.debug(f"_render_worker: {task_env.task_name}: Collecting {mode} for selected data points.")
                 keywords = collections.defaultdict(lambda: 0)
                 record_terms = []
+                cluster_sizes = collections.Counter()
                 for data_idx in data_idxs:
                     if task_env.cancelled:
                         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task cancelled (while collecting keywords).")
@@ -227,6 +267,8 @@ def _render_worker(*, task_env):
                     entry = ds.sorted_entries[data_idx]
                     if mode == "phrases":
                         record_terms.append(set(getattr(entry, "keyphrases", ())))
+                    elif mode == "themes":
+                        cluster_sizes[entry.cluster_id] += 1  # the importer's cluster, which the themes describe
                     else:
                         for kw, count in entry.keywords.items():
                             keywords[kw] += count
@@ -234,6 +276,8 @@ def _render_worker(*, task_env):
                     display = ds.file_content.keyphrase_display
                     for term, count in keyphrases.top_terms(record_terms, gui_config.word_cloud_max_phrases):
                         keywords[display.get(term, term)] += count
+                elif mode == "themes":
+                    keywords.update(_theme_weights(ds.file_content.cluster_llm_keywords, cluster_sizes))
 
                 if not keywords:  # `generate_from_frequencies` raises on nothing; a selection can hold no words at all
                     logger.debug(f"_render_worker: {task_env.task_name}: Nothing to draw for this selection. Clearing texture.")
