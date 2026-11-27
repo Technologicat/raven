@@ -27,6 +27,14 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Raise the `unpythonic` floor to 2.6.0 once it is released
+
+*Cluster: dependencies · Cost: S · Gate: the `unpythonic` 2.6.0 release · Filed: 2026-11-27*
+
+Decided in a session working on `unpythonic` (2026-11-27): once 2.6.0 is out, `pyproject.toml`'s floor goes to
+`unpythonic>=2.6.0`. As for any floor, through the dependency loop in `CLAUDE.md`: CI's pin first, then a re-lock and a
+green local run, then the floor.
+
 ## FileDialog navigates by changing the process's working directory
 
 *Cluster: file-dialog · Cost: M · Gate: none · Filed: 2026-11-26 · See also: `raven/vendor/file_dialog/fdialog.py`*
