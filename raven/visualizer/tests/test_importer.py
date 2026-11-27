@@ -1048,6 +1048,35 @@ class TestSummariesAreKeptPerFile:
         assert len(calls) == 2, "the second run asked again"
         assert [e.summary for es in again.parsed_data_by_filename.values() for e in es] == ["summary 1", "summary 2"]
 
+    def test_a_summary_the_backend_failed_is_neither_kept_nor_saved(self, monkeypatch, tmp_path):
+        # The failure's text arrives as the reply. Stored, it would be the paper's summary, and saved, a rerun
+        # would keep it.
+        from unpythonic.env import env
+        from raven.librarian import llmclient as real_llmclient
+        replies = iter([env(generation=None, reply="**The language model backend returned an error.**", reasoning=[],
+                            to_dict=lambda: {}),
+                        env(generation={"model": "fake-model"}, reply="a real summary", reasoning=[], to_dict=lambda: {})])
+        waits = []
+        record = env(model_id="test-model", label="test", quantization="Q4", bits_per_weight=4.5, load_config=None)
+        settings = env(model_record=record, backend_url="http://localhost:1", backend_flavor="test", model_id="test-model")
+        monkeypatch.setattr(importer, "agent", type("_A", (), {"turn": staticmethod(lambda s, p, **kw: next(replies))}),
+                            raising=False)
+        monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+        monkeypatch.setattr(importer, "llmclient",
+                            type("_L", (), {"make_console_progress_handler": staticmethod(lambda _: None),
+                                            "wait_for_backend": staticmethod(lambda s, **kw: waits.append(kw) or
+                                                                             (real_llmclient.backend_ready, False)),
+                                            "backend_ready": real_llmclient.backend_ready}),
+                            raising=False)
+        data = env(parsed_data_by_filename={str(tmp_path / "a.bib"): [env(title="t", abstract="an abstract", author="A",
+                                                                          year="2026")]})
+        importer._summarize(data)
+        assert [e.summary for es in data.parsed_data_by_filename.values() for e in es] == ["a real summary"]
+        assert len(waits) == 1
+        ledger_text = "".join(f.read_text() for f in (tmp_path / "a" / "llm").rglob("*.jsonl"))
+        assert "returned an error" not in ledger_text, "the failure was saved as an answer"
+        assert "a real summary" in ledger_text, "the answer was not saved, so this check could not see one"
+
 
 class TestPhraseKeywords:
     """The `"phrases"` branch of `_collect_cluster_keywords`, on hand-built candidates and a stand-in embedder."""
