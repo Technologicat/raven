@@ -85,6 +85,9 @@ dependencies = [
     "torchaudio==2.11.0",  # raven.common.audio.resample (device-agnostic resampler)
     "unpythonic>=2.5.0",  # `mogrify_in_to`, used by `raven.configoverrides`, arrived in 2.5.0; `si_prefix(always_separate=...)`, used by `raven.common.filelisting`, in 2.3.0
     "wordcloud>=1.9.6",  # visualizer
+    # visualizer.histogram: the printable histogram, saved as PNG, PDF or SVG. Already in the tree via wordcloud;
+    # declared because we import it. The floor is the version CI pins and the tree resolves.
+    "matplotlib>=3.11.2",
     "wosfile>=0.7.0",  # wos2bib
     "chromadb>=1.5.9",  # RAG semantic search
     "bm25s>=0.3.16",  # RAG keyword search

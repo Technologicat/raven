@@ -53,6 +53,7 @@ from . import colorscale
 from . import config as visualizer_config
 from . import displaystate
 from . import entry_renderer
+from . import histogram
 from .app_state import app_state
 
 gui_config = visualizer_config.gui_config
@@ -430,6 +431,7 @@ def load_dataset(ds):
         app_state.grouping = displaystate.CLUSTER
         dpg.set_value("color_by_combo", displaystate.CLUSTER)  # tag
         colorscale.draw(ds)
+        histogram.update(only_if_visible=True)  # a dataset opened while it is open
         (dpg.show_item if ds.year_bounds is not None else dpg.hide_item)("year_filter_controls")  # tag
         dpg.disable_item("reset_years_button")  # tag
         dpg.disable_item("reset_misc_cutoff_button")  # tag
@@ -476,6 +478,7 @@ def refresh_series(ds) -> None:
     maybe_summary = displaystate.summary(ds.sorted_entries)
     dpg.set_item_label("plot", ds.plot_label + (f" [{maybe_summary}]" if maybe_summary else ""))  # tag
     colorscale.draw(ds)  # its columns count what is shown
+    histogram.update(only_if_visible=True)  # and so do its bars
 
 
 # --------------------------------------------------------------------------------

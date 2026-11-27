@@ -39,6 +39,7 @@ feedparser==6.0.14
 # Needed *because* of `dearpygui` above, not on its own account: the GUI tests import
 # `raven.common.gui.utils`, which reaches the vendored `DearPyGui_Markdown`, whose parser imports this.
 anyio==4.16.0  # librarian.mcpclient
+matplotlib==3.11.2  # visualizer.histogram draws with it
 mcp==2.3.0  # librarian.mcpclient; its tests run a real server over stdio
 mistletoe==1.6.0
 # Also needed because of the GUI tests: `raven.common.gui.qroverlay` imports it to build the exhibit
@@ -74,8 +75,7 @@ trafilatura==2.3.1
 unpythonic==2.5.0
 urllib3==2.8.0
 watchdog==7.1.0  # common.filewatch; its tests watch real files, renames and symlinks
-# Same story as `scipy`, for `test_word_cloud.py`'s 28 tests. It brings matplotlib with it, which is
-# why that is not listed here: only direct dependencies are pinned (see the scope note above).
+# Same story as `scipy`, for `test_word_cloud.py`'s 28 tests.
 wordcloud==1.9.6
 wosfile==0.7.0
 XlsxWriter==3.3.1  # raven.common.tabular writes .xlsx with it

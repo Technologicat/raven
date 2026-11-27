@@ -10,7 +10,7 @@ checks this table against the package, including whether every module is in it.
 importer.py       (~2.4k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 info_panel.py     (~1.8k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
-app.py            (~2.0k) — GUI app: window layout, event wiring, the main render loop
+app.py            (~2.1k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~380)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.
@@ -18,11 +18,13 @@ config.py         (~380)  — Configuration-as-code (import settings, models, GU
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~520)  — the scatter plot: dataset loading, plotter-space queries, the select brush,
                             refilling the series when the display state changes
-colorscale.py     (~200)  — where a cluster or a year takes its colour, and the colour bar: a sparkline of the
+colorscale.py     (~220)  — where a cluster or a year takes its colour, and the colour bar: a sparkline of the
                             records shown per value, with a tooltip and a click that selects
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~280)  — selection state, its combine modes and undo history, and the display filters applied to it
 word_cloud.py     (~440)  — word cloud rendering, from phrases, words or the clusters' themes
+histogram.py      (~400)  — the printable histogram: the colour bar's counts as a matplotlib figure, on a linear,
+                            log or adaptive scale, shown in a window and saved as PNG, PDF or SVG
 entry_renderer.py (~260)  — per-entry rendering shared by panel and tooltip, the cluster purity readouts, and
                             the themes and terms lines
 search.py         (~210)  — the title scan and the cluster-number search, and the three GUI elements
@@ -34,8 +36,8 @@ displaystate.py   (~260)  — what each record is shown as: its label (`current_
                             the importer's `cluster_id`, and its visibility; the purity cutoff, the
                             Misc mode, the year filter and how filters combine, and which records can be
                             interacted with. No DPG
-savedstate.py      (~73)  — GUI choices kept between sessions (the info panel's side, the word cloud's mode),
-                            as JSON
+savedstate.py      (~82)  — GUI choices kept between sessions (the info panel's side, the word cloud's mode,
+                            the histogram's scale), as JSON
 app_state.py       (~62)  — top-level app state containers
 ```
 

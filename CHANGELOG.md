@@ -61,6 +61,9 @@
 
 #### Raven-visualizer
 
+- **A histogram for print**: records per cluster or per year, with the colour bar's counts and colours, in a window of its own, saved as a PNG, a PDF or an SVG.
+  - **F12** opens and closes it, and **Shift+F12** steps through its height scales: adaptive, which gives the small bars room without flattening the large ones (the histogram adjustment of Ward Larson, Rushmeier and Piatko, 1997), log, and linear.
+  - It can write on its axis the counts of the tallest bars and those that cannot be read off it, and each cluster's leading theme under its bar.
 - **The word cloud has a Themes mode**, beside phrases and words: the themes the LLM named for the clusters, each sized by how many of the selected studies are in the clusters having it.
   - Offered where the dataset was imported with LLM keywords. **Shift+F10** now steps through the modes the dataset has.
   - **Shared themes**, a checkbox beside the modes, brings back the themes most clusters share, which are left out by default as in the cluster labels.
@@ -207,6 +210,7 @@
 
 #### Raven-visualizer
 
+- **The help card has a Windows page**: the word cloud, the histogram and the importer, each with the keys that work inside it. The keyboard page keeps the keys that open them.
 - **An abbreviation most of the papers define is shown after its long form**, as in *fast weight programmer (FWP)*, where the long form showed alone; the papers may write either. For datasets imported from now on.
 - **Within each cluster, the info panel and the plot's tooltip list papers in reference-list order**: by authors, then year, then title, where they were by title.
   - A paper with no authors is listed by its title in their place, as a reference list puts it, and an undated one after the dated ones by the same authors.

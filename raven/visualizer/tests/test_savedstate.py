@@ -55,8 +55,12 @@ class TestLoad:
 
 class TestSave:
     def test_a_save_round_trips_through_load(self, state_path):
-        state = {"panel_side": "right", "word_cloud_mode": "themes", "word_cloud_shared_themes": True}
-        assert state != savedstate.DEFAULTS, "this fixture must differ from the defaults, or a lost save reads as kept"
+        state = {"panel_side": "right", "word_cloud_mode": "themes", "word_cloud_shared_themes": True,
+                 "histogram_scale": "log", "histogram_tallest": False, "histogram_unreadable": False,
+                 "histogram_themes": True}
+        assert state.keys() == savedstate.DEFAULTS.keys(), "this fixture must cover every entry"
+        assert all(state[key] != savedstate.DEFAULTS[key] for key in state), \
+            "every entry must differ from its default, or a lost save of it reads as kept"
         savedstate.save(state_path, state)
         assert savedstate.load(state_path) == state
 

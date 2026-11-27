@@ -126,6 +126,7 @@ with timer() as tim:
     from . import config as visualizer_config
     from . import displaystate
     from . import entry_renderer
+    from . import histogram
     from . import importer  # BibTeX importer
     from . import importer_gui  # ...and its GUI
     from . import info_panel
@@ -241,7 +242,7 @@ def is_any_modal_window_visible():
     and doing something else) does not look like a missing line in this function.
     """
     return (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
-            importer_gui.is_any_dialog_visible() or
+            histogram.is_save_dialog_visible() or importer_gui.is_any_dialog_visible() or
             help_window.is_visible() or
             messagebox.is_visible())
 
@@ -279,6 +280,11 @@ with timer() as tim:
                             default_value=np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4], dtype=np.float64),
                             format=dpg.mvFormat_Float_rgba,
                             tag="word_cloud_texture")
+        histogram_w, histogram_h = histogram.texture_size()
+        dpg.add_raw_texture(width=histogram_w, height=histogram_h,
+                            default_value=np.ones([histogram_h, histogram_w, 4], dtype=np.float32),
+                            format=dpg.mvFormat_Float_rgba,
+                            tag="histogram_texture")
 
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
@@ -304,6 +310,7 @@ def clear_background_tasks(wait: bool):
     info_panel.clear_tasks(wait=wait)
     annotation.clear_tasks(wait=wait)
     word_cloud.clear_tasks(wait=wait)
+    histogram.clear_tasks(wait=wait)
 
 def reset_app_state(_update_gui=True):
     """Reset everything, to prepare for loading new data to the GUI.
@@ -538,6 +545,7 @@ def open_file(filename):
 
 filedialog_open = None
 app_state.filedialog_save = None
+app_state.filedialog_save_histogram = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the file dialogs."""
@@ -555,6 +563,13 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                            filter_list=[".png"],
                                            save_mode=True,
                                            default_path=default_path)
+    app_state.filedialog_save_histogram = FileDialog(title="Save histogram as PNG, PDF or SVG",
+                                                     themes_and_fonts=app_state.themes_and_fonts,
+                                                     tag="save_histogram_dialog",
+                                                     callback=histogram.save_callback,
+                                                     filter_list=[".png", ".pdf", ".svg"],
+                                                     save_mode=True,
+                                                     default_path=default_path)
     importer_gui.initialize_filedialogs(default_path)
 
 # --------------------------------------------------------------------------------
@@ -897,6 +912,16 @@ with timer() as tim:
                 app_state.word_cloud_tooltip = gui_tooltip.Tooltip("word_cloud_button",  # tag
                                                                     "Toggle word cloud window [F10]")
 
+                dpg.add_button(label=fa.ICON_CHART_COLUMN,
+                               tag="histogram_button",
+                               callback=histogram.toggle_window,
+                               indent=gui_config.toolbutton_indent,
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("histogram_button", app_state.themes_and_fonts.icon_font_solid)  # tag
+                dpg.add_tooltip("histogram_button", tag="histogram_tooltip")  # tag
+                dpg.add_text("Toggle histogram window: records per cluster or per year, for print [F12]",
+                             parent="histogram_tooltip")  # tag
+
                 # Miscellaneous controls
 
                 add_separator()
@@ -1165,6 +1190,9 @@ with timer() as tim:
     panel_side = opts.panel_side if opts.panel_side is not None else saved_state["panel_side"]
     word_cloud.set_mode(saved_state["word_cloud_mode"])
     word_cloud.set_themes_keep_corpus_wide(saved_state["word_cloud_shared_themes"])
+    histogram.set_scale(saved_state["histogram_scale"])
+    histogram.set_labels(tallest=saved_state["histogram_tallest"], unreadable=saved_state["histogram_unreadable"],
+                         themes=saved_state["histogram_themes"])
     # The plot column is drawn first in the first frame whatever the side, and a left panel is moved into
     # place a few frames later (below). DPG refuses `focus_item` into a child window moved in front of a
     # sibling that the first frame drew before it: with the plot column drawn second, every swap that brought
@@ -1196,6 +1224,23 @@ with timer() as tim:
                                                                      "Save word cloud as PNG [Ctrl+S]")
             word_cloud.add_mode_control()
 
+    # Histogram display: the colour bar's counts, large enough to print.
+    with dpg.window(show=False, modal=False, no_title_bar=False, tag="histogram_window",
+                    label="Histogram",
+                    no_scrollbar=True, autosize=True):
+        dpg.add_image("histogram_texture", tag="histogram_image")
+        with dpg.group(horizontal=True, tag="histogram_toolbar"):
+            dpg.add_button(label=fa.ICON_HARD_DRIVE,
+                           tag="histogram_save_button",
+                           callback=histogram.show_save_dialog,
+                           indent=gui_config.toolbutton_indent,
+                           width=gui_config.toolbutton_w)
+            dpg.bind_item_font("histogram_save_button", app_state.themes_and_fonts.icon_font_solid)  # tag
+            # Self-sizing: the save acknowledgment names the file, which is longer than the caption.
+            app_state.histogram_save_tooltip = gui_tooltip.Tooltip("histogram_save_button",  # tag
+                                                                    "Save histogram as PNG, PDF or SVG [Ctrl+S]")
+            histogram.add_controls()
+
     # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
     importer_gui.setup_themes()  # its ambient glow registers with the animator, so once per app, not per window
     importer_gui.build_window()
@@ -1224,6 +1269,30 @@ app_state.update_info_panel = info_panel.update  # Published here so cross-modul
 #
 # The debug keys (Ctrl+Shift+M/R/T/L) are deliberately absent: they are developer tools, `README.md`
 # documents them, and the card is what a visitor reads.
+#: Each auxiliary window's keys that work from the main window: the one that opens it, and any that switch what it
+#: shows. On both the keyboard page and the Windows page, as one definition, because a key described twice on one card
+#: must read the same both times.
+_WINDOW_LEADERS = {
+    "word_cloud": (env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the selection"),
+                   env(key_indent=1, key="Shift+F10", action_indent=0, action="Next mode: phrases, words, themes", notes="Kept between sessions")),
+    "histogram": (env(key_indent=0, key="F12", action_indent=0, action="Toggle the histogram window", notes="Records per cluster or year"),
+                  env(key_indent=1, key="Shift+F12", action_indent=0, action="Next scale: adaptive, log, linear", notes="Kept between sessions")),
+    "importer": (env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),),
+}
+
+#: The Windows page's table: each auxiliary window led by its keys from the main window, and under them the keys that
+#: work while the window is open, which is what their notes say.
+window_hotkey_info = (*_WINDOW_LEADERS["word_cloud"],
+                      env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
+                      helpcard.hotkey_blank_entry,
+                      *_WINDOW_LEADERS["histogram"],
+                      env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the histogram as PNG, PDF or SVG", notes="Histogram window"),
+                      helpcard.hotkey_blank_entry,
+                      *_WINDOW_LEADERS["importer"],
+                      env(key_indent=1, key="Ctrl+O", action_indent=0, action="Choose the BibTeX files to read", notes="Importer window"),
+                      env(key_indent=1, key="Ctrl+S", action_indent=0, action="Choose where to save the dataset", notes="Importer window"),
+                      env(key_indent=1, key="Ctrl+Enter", action_indent=0, action="Start the import, or stop it", notes="Importer window"))
+
 hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
                # Alone: loading a dataset is the one thing here that is not about a dataset already loaded.
                helpcard.hotkey_blank_entry,
@@ -1247,19 +1316,14 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="Also while typing"),
                env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Also while typing"),
                env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Also while typing"),
-               # The two auxiliary windows, each led by the key that opens it. The rows under a leader are
-               # live only while that window is up, which is what their notes say — the leader itself works
-               # from the main window, so the distinction is worth keeping even though the grouping already
-               # names the window.
+               # The auxiliary windows, by the keys that open them and switch what they show; these work from the
+               # main window. The keys that work inside a window are on the Windows page, with the window's prose.
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the selection"),
-               env(key_indent=1, key="Shift+F10", action_indent=0, action="Next mode: phrases, words, themes", notes="Kept between sessions"),
-               env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
+               *_WINDOW_LEADERS["word_cloud"],
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),
-               env(key_indent=1, key="Ctrl+O", action_indent=0, action="Choose the BibTeX files to read", notes="Importer window"),
-               env(key_indent=1, key="Ctrl+S", action_indent=0, action="Choose where to save the dataset", notes="Importer window"),
-               env(key_indent=1, key="Ctrl+Enter", action_indent=0, action="Start the import, or stop it", notes="Importer window"),
+               *_WINDOW_LEADERS["histogram"],
+               helpcard.hotkey_blank_entry,
+               *_WINDOW_LEADERS["importer"],
 
                helpcard.hotkey_new_column,
                env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch the current item", notes="Searching highlights it in the plotter"),
@@ -1353,21 +1417,7 @@ def render_help_extras(self: helpcard.HelpWindow,
             # an exhibit is not choosing between algorithms, and this text then survives the engine
             # underneath it changing.
             "Each study's title and abstract is turned into a high-dimensional vector by an embedding model, so that texts about the same thing point in similar directions. Clusters are found among those vectors, and the whole set is flattened to the two dimensions you see — and that picture is the map.",
-            f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it."),
-         helpcard.section(
-            "**The word cloud**",
-            'Built from whatever is selected: from its noun phrases, each sized by how many of the studies use it, or from its single words, each sized by how often it occurs. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.',
-            # A key mentioned in prose is bold and in the text colour, across the constellation. The
-            # highlight is for emphasis — `**near**` above — and a key that took it read as a different
-            # kind of thing from the same key one card over. This section used the colour to mark "a key
-            # worth reaching for", leaving the Esc plain to say it does nothing here; that distinction was
-            # carried by a colour already doing other work two lines up, so the sentence says it instead.
-            '**F10** opens and closes it, **Shift+F10** steps through phrases, words and themes, and **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
-         helpcard.section(
-            "**The importer**",
-            'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
-            '**Ctrl+I** opens and closes it. Not modal either, and likewise not closed by Esc.',
-            'The window shows a progress bar and the stage it has reached. The terminal you started Raven-visualizer from gets the detail — every step, with its timings and counts — which is the place to look when an import of a large database is taking its time.')],
+            f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it.")],
         [helpcard.section(
             "**How search works**",
             f"Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match, and their ordering does **not** matter. The {c_search}search result{self.c_end} and {c_selection}selection{self.c_end} sets are **independent**, and {c_search}search results{self.c_end} live-update as you type.",
@@ -1385,16 +1435,48 @@ def render_help_extras(self: helpcard.HelpWindow,
             # makes the column scan as a list of keys rather than one long string; the highlight was doing
             # that job in a colour that means something else.
             "\n".join(f"- **{key}**: {what}" for key, what in _SEARCH_FIELD_EDIT_KEYS))])
-# Two pages, split by scope rather than to find room — though it does find some, and the keys needed it.
+def render_windows_help(self: helpcard.HelpWindow,
+                        gui_parent: Union[str, int]) -> None:
+    """Render the Windows page's prose into the help card: what each auxiliary window is for."""
+    c_hig, c_end = self.c_hig, self.c_end
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            "**The word cloud**",
+            "Built from whatever is selected: from its noun phrases, each sized by how many of the studies use it; from its single words, each sized by how often it occurs; or from the themes of the clusters it falls in, each sized by how many of the selected studies are in those clusters. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.",
+            # A key mentioned in prose is bold and in the text colour, across the constellation. The
+            # highlight is for emphasis, and for a label to find on screen.
+            "**F10** opens and closes it, **Shift+F10** steps through phrases, words and themes, and **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it."),
+         helpcard.section(
+            "**The importer**",
+            "Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.",
+            "**Ctrl+I** opens and closes it. Not modal either, and likewise not closed by Esc.",
+            "The window shows a progress bar and the stage it has reached. The terminal you started Raven-visualizer from gets the detail — every step, with its timings and counts — which is the place to look when an import of a large database is taking its time.")],
+        [helpcard.section(
+            "**The histogram**",
+            "Records per cluster or per year, as the colour bar beside the colour selector shows them, drawn large enough to print: the same counts and the same colours. It redraws itself when what is shown changes.",
+            "**F12** opens and closes it, **Shift+F12** steps through its height scales, and **Ctrl+S** saves it as a PNG, a PDF or an SVG. Not modal, and not closed by Esc.",
+            textwrap.dedent(f"""
+                - {c_hig}Adaptive{c_end} gives the small bars room without flattening the large ones: a bar's height is where its count falls among the others, after the histogram adjustment of Ward Larson, Rushmeier and Piatko (1997).
+                - {c_hig}Log{c_end}: the height is linear in the logarithm of the count.
+                - {c_hig}Linear{c_end}: the height is proportional to the count.
+            """).strip(),
+            f"{c_hig}Tallest{c_end} writes the counts of the tallest bars on the axis, {c_hig}Unreadable{c_end} those that cannot be read off it, as many as fit, and {c_hig}Themes{c_end} writes each cluster's leading theme under its bar. A count that would crowd another moves aside, with a line back to its tick.")])
+
+
+# Pages split by scope rather than to find room — though it does find some, and the keys needed it.
 # Page one is the app's keyboard and nothing else, so it is a reference a reader can screenshot and keep
 # open beside the app, which is what the card's header has been inviting all along and what prose sharing
-# the page took away. Page two is what the app *does*, read once. If page two outgrows one screen, the
-# answer is a third page rather than shorter prose: the card has no scrollbar by design.
+# the page took away. The Windows page is the auxiliary windows, each with the keys that work inside it, and
+# the last page is what the app *does*, read once. If a prose page outgrows one screen, the
+# answer is another page rather than shorter prose: the card has no scrollbar by design.
 help_window = helpcard.HelpWindow(width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
                                   reference_window=main_window,
                                   themes_and_fonts=app_state.themes_and_fonts,
                                   pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                         helpcard.page("Windows", hotkey_info=window_hotkey_info,
+                                                       on_render_extras=render_windows_help),
                                          helpcard.page("Concepts", on_render_extras=render_help_extras)],
                                   on_show=app_state.enter_modal_mode,
                                   on_hide=app_state.exit_modal_mode)
@@ -1620,6 +1702,7 @@ def mouse_release_callback(sender, app_data):
 # takes the key and reports whether it acted on it; the bindings live in the window's own module, beside
 # what they do.
 _SUBWINDOWS_WITH_HOTKEYS = (("word_cloud_window", word_cloud.handle_key),  # tag
+                            ("histogram_window", histogram.handle_key),  # tag
                             ("importer_window", importer_gui.handle_key))  # tag
 
 
@@ -1669,7 +1752,7 @@ def hotkeys_callback(sender, app_data):
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
     elif (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
-          importer_gui.is_any_dialog_visible()):
+          histogram.is_save_dialog_visible() or importer_gui.is_any_dialog_visible()):
         return
 
     # Hotkeys belonging to a non-modal subwindow that is open
@@ -1765,6 +1848,11 @@ def hotkeys_callback(sender, app_data):
             word_cloud.cycle_mode()
         else:
             word_cloud.toggle_window()
+    elif key == dpg.mvKey_F12:
+        if shift_pressed:
+            histogram.cycle_scale()
+        else:
+            histogram.toggle_window()
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_F:
@@ -2010,7 +2098,10 @@ finally:
     try:
         savedstate.save(visualizer_config.state_file, {"panel_side": panel_side,
                                                        "word_cloud_mode": word_cloud.get_mode(),
-                                                       "word_cloud_shared_themes": word_cloud.themes_keep_corpus_wide})
+                                                       "word_cloud_shared_themes": word_cloud.themes_keep_corpus_wide,
+                                                       "histogram_scale": histogram.get_scale(),
+                                                       **{f"histogram_{key}": value
+                                                          for key, value in histogram.get_labels().items()}})
     except Exception as exc:
         logger.warning(f"Could not save the app state to '{visualizer_config.state_file}': {type(exc)}: {exc}")
 

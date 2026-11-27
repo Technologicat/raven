@@ -44,6 +44,8 @@
     - [Colour the map by year](#colour-the-map-by-year)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
+    - [Draw a histogram for print](#draw-a-histogram-for-print)
+        - [Save the histogram](#save-the-histogram)
 - [Limitations](#limitations)
 - [Other similar tools](#other-similar-tools)
 
@@ -603,6 +605,38 @@ This dialog works similarly to the dataset save-as dialog in the *BibTeX import 
 
 The file extension (`.png`) is added automatically to the filename you specify.
 
+## Draw a histogram for print
+
+The colour bar beside the colour selector is a sparkline of how many studies each cluster, or each year, holds. The
+histogram window draws the same counts, in the same colours, as a figure large enough to print: **F12** opens and
+closes it. Like the word cloud window it is **not** modal and Esc does not close it, and while it is open it redraws
+itself whenever what is shown changes, such as the colouring, the years shown, or the Misc cutoff.
+
+Three height scales, chosen by the radio buttons at the bottom of the window, or stepped through with **Shift+F12**:
+
+- **Adaptive** (the default): the small bars get room without the large ones being flattened. A bar's height is where
+  its count falls among the others, after the histogram adjustment of Ward Larson, Rushmeier and Piatko (1997,
+  [*A Visibility Matching Tone Reproduction Operator for High Dynamic Range Scenes*](https://doi.org/10.1109/2945.646233)).
+  Where the counts span little enough to show as they are, this is the linear scale.
+- **Log**: the height is linear in the logarithm of the count.
+- **Linear**: the height is proportional to the count.
+
+Which counts are written on the axis, besides its round numbers:
+
+- **Tallest**: the counts of the two tallest bars (`histogram_tallest_labelled` in `raven.visualizer.config`).
+- **Unreadable**: the counts that cannot be read off the axis, because they fall in a wide gap between its round
+  numbers; as many as fit.
+- **Themes**, when colouring by cluster: each cluster's leading theme is written under its bar, beside its number, or
+  its leading quoted phrase where it has no theme. For a dataset with few clusters; with many, the captions crowd.
+
+Counts written on the axis are bold, and one that would crowd another moves aside, with a line back to its tick. The
+choices are remembered between sessions.
+
+### Save the histogram
+
+Click the "hard disk" button, or press Ctrl+S while the *histogram window* is open. The save-as dialog offers PNG, PDF
+and SVG: a PNG is written at 300 dpi (`histogram_save_dpi`), and PDF and SVG are vector, for a figure in a paper.
+
 
 ## Keyboard reference
 
@@ -686,6 +720,8 @@ can be read down without leaving the field.
 | `F8` | Copy the report to the clipboard as plain text — `Shift+F8` for Markdown |
 | `F10` | Toggle the word cloud window, built from the phrases or words of the selected items |
 | `Shift+F10` | Step the word cloud to its next mode: phrases, words, themes |
+| `F12` | Toggle the histogram window: records per cluster or per year, for print |
+| `Shift+F12` | Step the histogram to its next height scale: adaptive, log, linear |
 
 ### Word cloud window
 
@@ -694,6 +730,14 @@ Live only while that window is open, which is what leaves `Ctrl+S` free everywhe
 | Key | Action |
 |---|---|
 | `Ctrl+S` | Save the word cloud as a PNG |
+
+### Histogram window
+
+Likewise live only while the histogram window is open.
+
+| Key | Action |
+|---|---|
+| `Ctrl+S` | Save the histogram as a PNG, a PDF or an SVG |
 
 ### BibTeX importer window
 

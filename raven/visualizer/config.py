@@ -344,6 +344,13 @@ gui_config = env(  # ----------------------------------------
                  word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
                  word_cloud_max_phrases=300,  # phrase mode: at most this many phrases (words mode draws up to 1000 words)
                  # ----------------------------------------
+                 # Histogram (records per cluster or per year, for print)
+                 #
+                 histogram_figure_size=(8.0, 3.5),  # inches, as saved; the window shows the same figure
+                 histogram_display_dpi=120,  # the window's image: 8 x 3.5 inches at this is 960 x 420 pixels
+                 histogram_save_dpi=300,  # for a saved PNG; PDF and SVG are vector
+                 histogram_tallest_labelled=2,  # with "Tallest" on, label this many of the tallest bars with their counts
+                 # ----------------------------------------
                  # Plotter
                  #
                  # default colors
