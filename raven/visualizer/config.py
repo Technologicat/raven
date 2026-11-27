@@ -134,8 +134,8 @@ clusters_keyword_pool = 30
 clusters_keyword_umbrella_fraction = 0.1
 
 # For "phrases" and "hybrid": an abbreviation is shown as written ("ChatGPT") when at least this share of the
-# records using it leave it unexplained, the corpus's readers evidently knowing it; otherwise spelled out ("FWP"
-# becomes "fast weight programmer").
+# records using it leave it unexplained, the corpus's readers evidently knowing it; otherwise spelled out, with the
+# abbreviation after it ("FWP" becomes "fast weight programmer (FWP)").
 clusters_keyword_short_form_share = 0.5
 
 # For "llm" and "hybrid": the prompt asking the LLM for a cluster's keywords. It asks for up to fifteen: the label

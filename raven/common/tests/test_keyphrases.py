@@ -199,7 +199,8 @@ class TestNormalize:
         definition = ("fwp", "fast weight programmer")
         records = [_extracted({"fwp"}, [definition], upper={"fwp"})] * 2 + [_extracted({"fwp"}, upper={"fwp"})]
         terms, display = keyphrases.normalize(records)
-        assert display[next(iter(terms[0]))] == "fast weight programmer"
+        assert display[next(iter(terms[0]))] == "fast weight programmer (FWP)", \
+            "spelled out, with the abbreviation as the papers write it"
 
     def test_the_short_form_share_moves_the_line(self):
         definition = ("fwp", "fast weight programmer")

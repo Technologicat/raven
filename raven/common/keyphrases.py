@@ -375,6 +375,8 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
         so "SRL" and "self-regulated learning" are one term, and "generative AI" and "generative artificial
         intelligence" another, while "Co" stays cobalt where "CO" is defined as carbon monoxide. A definition
         made by two or more records applies corpus-wide; one made by a single record applies to that record only.
+        One the corpus defines wherever it uses it displays as its long form with the abbreviation after it, as
+        written ("fast weight programmer (FWP)"); one mostly used unexplained displays as the abbreviation.
       - **Spellings of one term**, where the corpus has more than one, onto the one most of its records use:
         a hyphen, a space or nothing between two words ("retrieval-augmented generation", "retrieval augmented
         generation"; "bit-width", "bitwidth"), a possessive ("prisoner's dilemma", "prisoner dilemma"), and a
@@ -451,10 +453,11 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
 
     surface: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     short_use: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])  # [records defining it, records not]
+    short_written: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)  # how it is written
     terms_out = []
-    corpus_shorts = {short for short, _written in corpus_map}
+    corpus_shorts = {short: written for short, written in corpus_map}
     for record, triples in zip(expanded, definitions):
-        defined_here = {short for short, _long, _written in triples}
+        defined_here = {short: written for short, _long, written in triples}
         canonical = set()
         for term, c in record.items():
             c = folds.get(c, c)
@@ -463,20 +466,22 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
             canonical.add(c)
             if term in corpus_shorts or term in defined_here:  # the bare short form of an abbreviation
                 short_use[c][0 if term in defined_here else 1] += 1
+                short_written[c][defined_here.get(term) or corpus_shorts[term]] += 1
         terms_out.append(canonical)
 
-    # An abbreviation the corpus uses unexplained is one its readers know ("chatgpt"); one it defines wherever
-    # it appears is one they would not ("fwp"), so that one shows spelled out ("fast weight programmer").
+    # An abbreviation the corpus uses unexplained is one its readers know ("chatgpt"); one it defines wherever it
+    # appears is one they would not ("fwp"), so that one shows spelled out, with the abbreviation after it, which tells
+    # a reader that the papers may write either ("fast weight programmer (FWP)").
     casing = casing_table(extracted)
     display = {}
     for c, forms in surface.items():
         defining, undefined = short_use.get(c, (0, 0))
         if defining and undefined < short_form_share * (defining + undefined):
             long_forms = [(n, f) for f, n in forms.items() if " " in f or "-" in f]
-            display[c] = max(long_forms)[1] if long_forms else c
+            long_form = recase(max(long_forms)[1] if long_forms else c, casing)
+            display[c] = f"{long_form} ({short_written[c].most_common(1)[0][0]})"
         else:
-            display[c] = forms.most_common(1)[0][0]
-        display[c] = recase(display[c], casing)
+            display[c] = recase(forms.most_common(1)[0][0], casing)
     return terms_out, display
 
 

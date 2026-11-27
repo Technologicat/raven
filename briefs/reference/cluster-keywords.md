@@ -101,7 +101,8 @@ forms, which is what keeps a word that merely looks like a variant ("process", w
     paper calling its system CARE does not take over the word "care" everywhere else. Since the match is by spelling,
     a lowercase "care" is never taken over either way; see *Known limitations* for an uppercase one.
   - **An abbreviation displays as its short form when most records using it leave it unexplained**, its readers
-    evidently knowing it ("ChatGPT"), and spelled out otherwise ("fast weight programmer" for "FWP").
+    evidently knowing it ("ChatGPT"), and spelled out otherwise, with the abbreviation after it as the papers write
+    it ("fast weight programmer (FWP)"), which tells a reader the papers may use either.
 - **Spellings of one term, onto the one most records use**: a hyphen, a space or nothing between two words
   ("retrieval-augmented", "retrieval augmented"; "bit-width", "bitwidth"), a possessive ("prisoner's dilemma",
   "prisoner dilemma"), and a British and an American spelling ("modelling", "modeling"; "fibre", "fiber").
