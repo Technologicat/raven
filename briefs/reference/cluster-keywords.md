@@ -103,6 +103,9 @@ forms, which is what keeps a word that merely looks like a variant ("process", w
   - **An abbreviation displays as its short form when most records using it leave it unexplained**, its readers
     evidently knowing it ("ChatGPT"), and spelled out otherwise, with the abbreviation after it as the papers write
     it ("fast weight programmer (FWP)"), which tells a reader the papers may use either.
+    - **The line is a share, not a rule of always or never**: an abbreviation is spelled out when fewer than half of
+      the records using it leave it unexplained, which is to say when most of the papers using it also define it.
+      `clusters_keyword_short_form_share`, at 0.5, sets the line.
 - **Spellings of one term, onto the one most records use**: a hyphen, a space or nothing between two words
   ("retrieval-augmented", "retrieval augmented"; "bit-width", "bitwidth"), a possessive ("prisoner's dilemma",
   "prisoner dilemma"), and a British and an American spelling ("modelling", "modeling"; "fibre", "fiber").

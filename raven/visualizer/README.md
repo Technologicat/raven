@@ -285,7 +285,7 @@ and *effluent*.
   which part of the subject each one is.
 - **An abbreviation and its long form count as one keyword**, so *SRL* and *self-regulated learning* do not
   take two places in a label. It is shown as written where the corpus mostly uses it unexplained (*ChatGPT*),
-  and spelled out where papers define it wherever they use it (*FWP* becomes *fast weight programmer (FWP)*, which says the papers may write either).
+  and spelled out where most of the papers using it define it (*FWP* becomes *fast weight programmer (FWP)*, which says the papers may write either).
 - **So do spellings that differ only by a hyphen or a space**: *chain-of-thought* and *chain of thought* are
   one keyword, as are *bit-width* and *bitwidth*, spelled as most of the papers spell it.
 - **Keywords are capitalized as the papers capitalize them**, away from the start of a sentence: *Solomonoff

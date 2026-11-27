@@ -372,7 +372,7 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
         so "SRL" and "self-regulated learning" are one term, and "generative AI" and "generative artificial
         intelligence" another, while "Co" stays cobalt where "CO" is defined as carbon monoxide. A definition
         made by two or more records applies corpus-wide; one made by a single record applies to that record only.
-        One the corpus defines wherever it uses it displays as its long form with the abbreviation after it, as
+        One most of the records using it define displays as its long form with the abbreviation after it, as
         written ("fast weight programmer (FWP)"); one mostly used unexplained displays as the abbreviation.
       - **Spellings of one term**, where the corpus has more than one, onto the one most of its records use:
         a hyphen, a space or nothing between two words ("retrieval-augmented generation", "retrieval augmented
@@ -466,7 +466,7 @@ def normalize(extracted: Sequence[dict], *, short_form_share: float = 0.5) -> tu
                 short_written[c][defined_here.get(term) or corpus_shorts[term]] += 1
         terms_out.append(canonical)
 
-    # An abbreviation the corpus uses unexplained is one its readers know ("chatgpt"); one it defines wherever it
+    # An abbreviation the corpus mostly uses unexplained is one its readers know ("chatgpt"); one it mostly defines where it
     # appears is one they would not ("fwp"), so that one shows spelled out, with the abbreviation after it, which tells
     # a reader that the papers may write either ("fast weight programmer (FWP)").
     casing = casing_table(extracted)

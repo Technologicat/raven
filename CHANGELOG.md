@@ -207,7 +207,7 @@
 
 #### Raven-visualizer
 
-- **An abbreviation the papers always define is shown after its long form**, as in *fast weight programmer (FWP)*, where the long form showed alone; the papers may write either. For datasets imported from now on.
+- **An abbreviation most of the papers define is shown after its long form**, as in *fast weight programmer (FWP)*, where the long form showed alone; the papers may write either. For datasets imported from now on.
 - **Within each cluster, the info panel and the plot's tooltip list papers in reference-list order**: by authors, then year, then title, where they were by title.
   - A paper with no authors is listed by its title in their place, as a reference list puts it, and an undated one after the dated ones by the same authors.
   - Accents do not move a name to the end: *Sá* comes before *Sipos*.
