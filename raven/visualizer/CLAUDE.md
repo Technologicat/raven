@@ -12,13 +12,13 @@ info_panel.py     (~1.8k) — the info panel: its header and navigation bar, con
                             navigation, anchors
 app.py            (~2.1k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
-config.py         (~380)  — Configuration-as-code (import settings, models, GUI settings). The
+config.py         (~400)  — Configuration-as-code (import settings, models, GUI settings). The
                             stopword lists are `raven.common.text.stopwords`.
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~520)  — the scatter plot: dataset loading, plotter-space queries, the select brush,
                             refilling the series when the display state changes
-colorscale.py     (~220)  — where a cluster or a year takes its colour, and the colour bar: a sparkline of the
+colorscale.py     (~240)  — where a cluster or a year takes its colour, and the colour bar: a sparkline of the
                             records shown per value, with a tooltip and a click that selects
 importer_gui.py   (~580)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~280)  — selection state, its combine modes and undo history, and the display filters applied to it
