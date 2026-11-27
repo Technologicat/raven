@@ -16,7 +16,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     Raven chose to fit the dark default: the caution and attention colours, the keyboard mark, the flashes, the
     highlight series, the cluster colormap, the pills.
   - This also makes the colours configurable, which the Visualizer's list asked for separately.
-  - The Visualizer's colormap has a range per background already (`colormap_ranges`); its light range wants a look.
+  - The Visualizer's colormap has a range per background already (`colormap_ranges`), dark and light both chosen.
   - **Density, as a second option beside the colours** (2026-11-16): where Raven looks busy to a newcomer, the
     difference from a professionally designed app is spacing and type, not colour. Raven already follows the
     convention that colour switches on only when something has something to say, as an app like MS Teams does
@@ -224,8 +224,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - The finer tick fill everywhere (ticks such as 14 and 35) is an option, `decade_ticks(subdivide="all")`.
   - **Labels along the bottom**: years, or cluster numbers, with an option for each cluster's leading theme, or its
     leading quoted phrase where it has no theme.
-  - **The hotkey is F12** (decided 2026-11-27), beside the word cloud's F10. It needs a place on the help card,
-    which is full; the cluster table export has the same need.
+  - **Next, decided 2026-11-27** (maintainer):
+    - **Count the selected records**, as the word cloud does, and redraw when the selection changes. Open: what an
+      empty selection shows; all the records shown is the obvious answer, and the word cloud shows nothing.
+    - **In year mode, the horizontal axis follows the year filter**, rather than spanning every year in the dataset.
 - **[Medium]** Export a dataset as a self-contained interactive HTML page, for supplemental material to a
   bibliometric analysis made with the Visualizer (the maintainer, 2026-11-27). A reference list of 2000 records is
   read by nobody and admitted by no journal, so an interactive map of the corpus is the honest way to report it.
@@ -263,16 +265,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. **The hard part is done**: `raven.common.gui.filedrop` shipped 2026-08-10 and is wired into all six GUI apps, so the paths arrive; what is left for Visualizer is deciding what a dropped file *means* here (open a dataset? add to the current one?) and handling the unsupported-file case. The mechanism and its one real constraint — the callback runs on the render thread, so no `split_frame` and therefore no modal messagebox inside it — are in `dpg-notes.md`; the probes are in `investigations/dpg-dnd/`.
 
-- **[Low]** Check the light end of the colormap range by eye: `colormap_ranges["light"]` in the GUI config.
-  - **The mechanism is done** (2026-11-27): a range for a dark background and one for a light one, each colour
-    taking the range for the background it is drawn on (`raven.visualizer.colorscale.colormap_range_for`): the plot
-    by `plotter_background_color`, the word cloud and the histogram by `figure_background_color`. The dark range,
-    `(0.2, 1.0)`, was chosen from 0.0, 0.15, 0.25 and 0.35 side by side (2026-11-26).
-  - **The light range, `(0.0, 0.85)`, is an estimate**, never looked at. On white, 2026-11-18, the yellow end held up
-    better than expected (`img/visualizer-plot-light.png`, with Misc grayed), so it may cut more than it needs to.
-    Compare a few upper bounds side by side on a white histogram.
-  - Keep Viridis, or another perceptually uniform map: its lightness rises steadily, which is what fixes `jet`
-    (maintainer); the ranges assume a map that runs from dark to light.
 - **[Medium]** Datasets of 100k records (coworkers' request, 2026-11-16). DPG cannot draw a scatter that large at an
   interactive frame rate (maintainer), so the plot needs level-of-detail rendering: zoomed out, dense regions
   drawn as aggregates, and individual points only where the view is close enough to tell them apart. The

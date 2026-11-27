@@ -372,6 +372,12 @@ gui_config = env(  # ----------------------------------------
                  # cloud's and the histogram's, `figure_background_color`. Each end of the colormap is lost against a
                  # background near its own lightness. Assumes a colormap that runs from dark to light, as perceptually
                  # uniform ones such as viridis do; one that runs the other way wants the two ranges mirrored.
+                 #
+                 # The dark bound was chosen by eye, from bounds compared side by side on the plot. The light one
+                 # mirrors it: viridis at 0.85 has about the contrast against white (1.7) that it has at 0.2 against
+                 # the plot's dark grey (1.74), and looks right on a white histogram. Both are well short of WCAG's
+                 # 3:1 for graphical objects, which would need about 0.4 on dark and 0.6 on light, giving up 40% of
+                 # the colormap: too much of the range, for an end that shows well enough in practice.
                  colormap_ranges={"dark": (0.2, 1.0), "light": (0.0, 0.85)},
                  plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
                  plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
