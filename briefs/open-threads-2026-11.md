@@ -63,6 +63,10 @@ Visualizer); the light-background plot on its own is `img/visualizer-plot-light.
   year mode follow the year filter along the bottom. Open: what an empty selection shows (`TODO.md`).
 - **`FileDialog` changes the process's working directory** (`TODO_DEFERRED.md`): it bit twice on 2026-11-27, so it
   wants fixing rather than working around a third time.
+- **Help cards: where a secondary window's keys go**, across the apps. The Visualizer's keyboard page now names only
+  the key that opens each window, its other keys on a *Windows* page (2026-11-27). Librarian lists its audio input
+  panel's keys (F9, then D, A, Esc, …) on the keyboard page under the opener, its chat graph on a page of its own.
+  Settle the rule (`raven-style-guide.md` → *Pages*), then bring the apps in line.
 - **Then colouring by year's v1**: keywords per year at import (`briefs/visualizer-filter-by-date-and-recolour-brief.md`).
 
 ## In progress: cluster keywords (2026-11-24)
