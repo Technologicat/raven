@@ -27,6 +27,26 @@ and why hygiene items rank higher than they used to.
 
 <!-- New items go below this line. -->
 
+## Port the rest of SAVU's HDR plotting: the other tone-mapping methods, and a tone-mapping colour-sheet plotter
+
+*Cluster: hdr-plotting · Cost: M · Gate: none · Filed: 2026-11-27 · See also: `raven.common.numutils.histogram_adjustment`, `decade_ticks`*
+
+`hdrplot.m`, from the maintainer's SAVU project (Sample-based Analysis and Visualization of Uncertainty, 2010), plots
+functions with a high dynamic range on an ordinary display. Raven has ported its best method, the histogram
+adjustment of Ward Larson, Rushmeier and Piatko (1997), and its colour bar labelling, for the Visualizer's printable
+histogram. The rest is worth having too:
+
+- **The other methods**, for comparison and for data the histogram adjustment does not suit: linear, full scale and
+  clipped to a fraction of the data mass; plain histogram equalization; linear in the logarithm, full scale and over a
+  given display range; the Nth root; Fattal et al. (2002) in 1D, in the log-amplitude domain; and linear diffusion in
+  the log-amplitude domain.
+- **A colour-sheet plotter that tone-maps**: a 2D field as an image (MATLAB's `imagesc`) on any of the methods, with
+  the colour bar labelled by `decade_ticks`. `hdrplot.m` offers two styles: a linear gradient labelled nonlinearly,
+  and a nonlinear gradient labelled linearly.
+
+The source is in `savu/codes/` in the maintainer's code directory on the personal and the work machine: `hdrplot.m`,
+with usage examples in `hdrplot_comparison.m` and the data preparation in `hdrprepare.m`.
+
 ## Raise the `unpythonic` floor to 2.6.0 once it is released
 
 *Cluster: dependencies · Cost: S · Gate: the `unpythonic` 2.6.0 release · Filed: 2026-11-27*
