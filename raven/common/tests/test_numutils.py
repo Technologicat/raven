@@ -216,3 +216,66 @@ class TestDecadeTicks:
     def test_included_values_come_first(self):
         ticks = numutils.decade_ticks(self.log_axis, 1.0, 1000.0, spacing=0.2, include=(1.0, 700.0))
         assert 700.0 in ticks and 1000.0 not in ticks, "the included end wins over the decade crowding it"
+
+
+class TestLinearAndLogScales:
+    values = np.array([0.0, 2.0, 20.0, 2000.0])
+
+    def test_log_scale_puts_the_ends_at_low_and_high(self):
+        forward, inverse = numutils.log_scale(self.values, low=1.0, high=100.0)
+        assert forward(2.0) == pytest.approx(1.0) and forward(2000.0) == pytest.approx(100.0)
+        assert forward(np.sqrt(2.0 * 2000.0)) == pytest.approx(10.0), "the geometric mean of the ends sits halfway"
+        assert forward(0.0) == 0.0 and forward(1.0) == pytest.approx(0.5), "linear below the smallest value"
+        assert np.allclose(inverse(forward(self.values)), self.values)
+
+    def test_linear_scale(self):
+        forward, inverse = numutils.linear_scale(self.values, high=100.0)
+        assert forward(1000.0) == pytest.approx(50.0)
+        assert np.allclose(inverse(forward(self.values)), self.values)
+
+    def test_equal_values_give_a_linear_log_scale(self):
+        forward, _inverse = numutils.log_scale([5.0, 5.0], low=1.0, high=100.0)
+        assert forward(5.0) == pytest.approx(100.0)
+
+
+class TestDecadeTicksRefinement:
+    @staticmethod
+    def top_of_decade(v):  # 1000 to 1344, linear
+        return (np.asarray(v, dtype=float) - 1000.0) / 344.0
+
+    def test_a_stretch_no_round_number_falls_in_gets_a_finer_tick(self):
+        assert numutils.decade_ticks(self.top_of_decade, 1000.0, 1344.0, spacing=0.2) == [1000.0, 1200.0]
+
+    def test_resolution_keeps_ticks_on_whole_numbers(self):
+        def axis(v):
+            return (np.asarray(v, dtype=float) - 1.0) / 0.344
+        assert numutils.decade_ticks(axis, 1.0, 1.344, spacing=0.2, resolution=1.0) == [1.0]
+        assert numutils.decade_ticks(axis, 1.0, 1.344, spacing=0.2) == [1.0, 1.2], \
+            "without a resolution the finer tick is placed, so this fixture can see the difference"
+
+
+class TestSpreadLabels:
+    def test_labels_with_room_stay_put(self):
+        assert np.allclose(numutils.spread_labels([0.1, 0.5, 0.9], spacing=0.1), [0.1, 0.5, 0.9])
+
+    def test_two_crowded_labels_part_evenly_around_where_they_were(self):
+        assert np.allclose(numutils.spread_labels([0.48, 0.52], spacing=0.1), [0.45, 0.55])
+
+    def test_labels_crowding_an_end_are_pushed_inward(self):
+        assert np.allclose(numutils.spread_labels([0.95, 0.99, 1.0], spacing=0.1), [0.8, 0.9, 1.0])
+
+    def test_too_many_labels_is_an_error(self):
+        with pytest.raises(ValueError):
+            numutils.spread_labels([0.1, 0.2, 0.3], spacing=0.6)
+
+    def test_the_result_is_the_least_squares_layout(self):
+        scipy_optimize = pytest.importorskip("scipy.optimize")
+        rng = np.random.default_rng(1)
+        wanted = np.sort(rng.uniform(0.0, 1.0, 12))
+        spacing = 0.07
+        got = numutils.spread_labels(wanted, spacing=spacing)
+        constraints = [{"type": "ineq", "fun": (lambda p, i=i: p[i + 1] - p[i] - spacing)} for i in range(len(wanted) - 1)]
+        reference = scipy_optimize.minimize(lambda p: np.sum((p - wanted) ** 2), wanted, constraints=constraints,
+                                            bounds=[(0.0, 1.0)] * len(wanted), method="SLSQP", options={"ftol": 1e-12})
+        assert np.all(np.diff(got) >= spacing - 1e-12)
+        assert np.sum((got - wanted) ** 2) == pytest.approx(reference.fun, rel=1e-6)

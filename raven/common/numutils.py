@@ -5,7 +5,8 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "maximin_latin_square",
-           "needs_histogram_adjustment", "histogram_adjustment", "histogram_adjusted_heights", "decade_ticks"]
+           "needs_histogram_adjustment", "linear_scale", "log_scale", "histogram_adjustment", "histogram_adjusted_heights",
+           "decade_ticks", "spread_labels"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -125,6 +126,61 @@ def needs_histogram_adjustment(values, *, low: float, high: float) -> bool:
     return bool(positive.size) and positive.max() / positive.min() > high / low
 
 
+def _positive_range(values, caller: str) -> tuple[float, float]:
+    values = np.asarray(values, dtype=float)
+    positive = values[values > 0]
+    if not positive.size:
+        raise ValueError(f"{caller}: `values` holds no positive value, so there is no scale to build.")
+    return float(positive.min()), float(positive.max())
+
+
+def linear_scale(values, *, high: float) -> tuple[Callable, Callable]:
+    """A linear display scale for `values`, as `(forward, inverse)` functions: `value / max * high`.
+
+    `forward` maps a value, or an array of them, to a display height, and `inverse` maps a height back; a value of zero
+    or less maps to zero. The sibling of `log_scale` and `histogram_adjustment`, for switching between the three.
+
+    `values` must hold a positive value.
+    """
+    _vmin, vmax = _positive_range(values, "linear_scale")
+
+    def forward(x):
+        return np.clip(np.asarray(x, dtype=float), 0.0, None) / vmax * high
+
+    def inverse(h):
+        return np.clip(np.asarray(h, dtype=float), 0.0, None) * vmax / high
+    return forward, inverse
+
+
+def log_scale(values, *, low: float, high: float) -> tuple[Callable, Callable]:
+    """A logarithmic display scale for `values`, as `(forward, inverse)` functions.
+
+    The smallest positive value maps to `low` and the largest to `high`, logarithmically in between. A value of zero or
+    less maps to zero, and one between zero and the smallest positive value linearly to a height between zero and
+    `low`, as `histogram_adjustment` has it. Where all the positive values are equal, the scale is `linear_scale`.
+
+    `values` must hold a positive value. `0 < low < high`.
+    """
+    vmin, vmax = _positive_range(values, "log_scale")
+    if vmax == vmin:
+        return linear_scale(values, high=high)
+    data_range = math.log(vmax / vmin)
+    display_range = math.log(high / low)
+
+    def forward(x):
+        x = np.asarray(x, dtype=float)
+        above = x >= vmin
+        position = np.log(np.where(above, x, vmin) / vmin) / data_range
+        return np.where(above, low * np.exp(display_range * position), np.where(x > 0, x / vmin * low, 0.0))
+
+    def inverse(h):
+        h = np.asarray(h, dtype=float)
+        above = h >= low
+        position = np.log(np.where(above, h, low) / low) / display_range
+        return np.where(above, vmin * np.exp(data_range * position), np.where(h > 0, h / low * vmin, 0.0))
+    return forward, inverse
+
+
 def histogram_adjustment(values, *, low: float, high: float, nbins: int = 20) -> tuple[Callable, Callable]:
     """The display scale `histogram_adjusted_heights` places `values` on, as `(forward, inverse)` functions.
 
@@ -137,19 +193,11 @@ def histogram_adjustment(values, *, low: float, high: float, nbins: int = 20) ->
 
     `values`, `low`, `high`, `nbins`: as for `histogram_adjusted_heights`. `values` must hold a positive value.
     """
+    vmin, _vmax = _positive_range(values, "histogram_adjustment")
     values = np.asarray(values, dtype=float)
     positive = values[values > 0]
-    if not positive.size:
-        raise ValueError("histogram_adjustment: `values` holds no positive value, so there is no scale to build.")
-    vmin, vmax = positive.min(), positive.max()
-
     if not needs_histogram_adjustment(positive, low=low, high=high):  # fits as it is
-        def forward(x):
-            return np.clip(np.asarray(x, dtype=float), 0.0, None) / vmax * high
-
-        def inverse(h):
-            return np.clip(np.asarray(h, dtype=float), 0.0, None) * vmax / high
-        return forward, inverse
+        return linear_scale(positive, high=high)
 
     logs = np.log(positive)
     data_range = logs.max() - logs.min()
@@ -219,7 +267,7 @@ def histogram_adjusted_heights(values, *, low: float, high: float, nbins: int = 
 
 
 def decade_ticks(forward: Callable, low: float, high: float, *,
-                 spacing: float, min_count: int = 16, include: tuple = ()) -> list[float]:
+                 spacing: float, min_count: int = 16, include: tuple = (), resolution: float = 0.0) -> list[float]:
     """Tick values for an axis on a nonlinear scale, as many as fit without crowding.
 
     `forward`: maps a value to its position along the axis, as a fraction of its length.
@@ -227,15 +275,21 @@ def decade_ticks(forward: Callable, low: float, high: float, *,
     `spacing`: the least distance between two ticks, as a fraction of the axis: a label's height, for a vertical axis.
     `min_count`: once this many ticks are placed, no further kind of tick is tried.
     `include`: values that get a tick first, such as the ends of the data.
+    `resolution`: the finest step a tick may fall on; 1 for counts, which keeps ticks on whole numbers.
 
     Ticks are tried in rounds, at each power of ten, then at five times one, then two times, then three, four, six,
     seven, eight and nine times one; a tick is placed where it is at least `spacing` from every tick already placed.
-    So a stretch the scale compresses gets fewer ticks, and a 1-2-5 sequence appears where there is room for it.
+    So a stretch the scale compresses gets fewer ticks, and a 1-2-5 sequence appears where there is room for it. Last,
+    each decade is subdivided a step further, its fives and then its twos ("1500", then "1200", "1400", ...), for a
+    stretch no round number falls in, as between 1000 and the end of data at 1344.
 
     Returns the tick values, sorted.
     """
     # A port of the colour bar labelling of `hdrplot.m`, Juha Jeronen's HDR plotter for the SAVU project (2010).
     placed: list[tuple[float, float]] = []  # (position, value)
+
+    def scaled(n: int, k: int) -> float:  # n * 10**k, dividing for k < 0: 12 / 10 is 1.2 where 12 * 0.1 is not
+        return n * 10.0 ** k if k >= 0 else n / 10.0 ** -k
 
     def try_place(value: float) -> None:
         y = float(forward(value))
@@ -250,7 +304,52 @@ def decade_ticks(forward: Callable, low: float, high: float, *,
             break
         for k in range(kmin, kmax + 1):
             for m in multipliers:
-                value = m * 10.0 ** k
+                value = scaled(m, k)
                 if low <= value <= high:
                     try_place(value)
+    # One level finer: n * 10**(k - 1) for n from 11 to 99, the multiples of five first, then the even ones. Stopping
+    # there keeps a wide gap from filling with every step of the finer level.
+    for keep in (lambda n: n % 5 == 0, lambda n: n % 2 == 0):
+        if len(placed) >= min_count:
+            break
+        for k in range(kmin, kmax + 1):
+            step = 10.0 ** (k - 1)
+            if step < resolution:
+                continue
+            for n in range(11, 100):
+                value = scaled(n, k - 1)
+                if n % 10 and keep(n) and low <= value <= high:
+                    try_place(value)
     return sorted(value for _y, value in placed)
+
+
+def spread_labels(positions, *, spacing: float, low: float = 0.0, high: float = 1.0) -> np.ndarray:
+    """Positions for labels as near as possible to `positions`, at least `spacing` apart and within `[low, high]`.
+
+    For labels along an axis that are allowed to move off their ticks, with a leader line back, rather than be dropped
+    where they crowd. Minimizes the sum of squared moves, exactly.
+
+    `positions`: the labels' wanted positions, sorted ascending. The result keeps their order.
+
+    Raises `ValueError` if the labels cannot fit: `(len(positions) - 1) * spacing > high - low`.
+    """
+    # With q[i] = p[i] - i * spacing, the gaps become q nondecreasing, and the problem is isotonic regression of
+    # positions[i] - i * spacing, which pool-adjacent-violators solves exactly in one pass. The bounds on the first and
+    # last label bound every q to the same interval, and clipping an isotonic fit to an interval keeps it optimal.
+    y = np.asarray(positions, dtype=float)
+    n = len(y)
+    if n == 0:
+        return y.copy()
+    if (n - 1) * spacing > high - low:
+        raise ValueError(f"spread_labels: {n} labels at least {spacing} apart do not fit in [{low}, {high}].")
+    target = y - spacing * np.arange(n)
+    blocks: list[list[float]] = []  # [sum, count]
+    for t in target:
+        blocks.append([t, 1])
+        while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] > blocks[-1][0] / blocks[-1][1]:
+            total, count = blocks.pop()
+            blocks[-1][0] += total
+            blocks[-1][1] += count
+    q = np.concatenate([np.full(count, total / count) for total, count in blocks])
+    q = np.clip(q, low, high - (n - 1) * spacing)
+    return q + spacing * np.arange(n)
