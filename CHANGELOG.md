@@ -63,6 +63,7 @@
 
 - **The word cloud has a Themes mode**, beside phrases and words: the themes the LLM named for the clusters, each sized by how many of the selected studies are in the clusters having it.
   - Offered where the dataset was imported with LLM keywords. **Shift+F10** now steps through the modes the dataset has.
+  - **Shared themes**, a checkbox beside the modes, brings back the themes most clusters share, which are left out by default as in the cluster labels.
 - **`raven-importer` can import without the LLM**, as the GUI importer already could.
   - `--no-llm` leaves out the stages that need one for this run, and tries no backend.
   - `--llm optional` uses the backend if it answers, and otherwise imports with frequency keywords and no summaries, saying so at the end. The default is still to stop before starting when it does not answer.

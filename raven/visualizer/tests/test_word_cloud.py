@@ -122,7 +122,8 @@ def gui(monkeypatch):
                         box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4], dtype=np.float64)))
     monkeypatch.setattr(word_cloud, "_data_box", box(None))
     monkeypatch.setattr(word_cloud, "_mode_box", box("phrases"))
-    monkeypatch.setattr(word_cloud, "_last_mode", None)
+    monkeypatch.setattr(word_cloud, "_last_render_key", None)
+    monkeypatch.setattr(word_cloud, "themes_keep_corpus_wide", False)
 
     dataset = env(sorted_entries=[make_entry(laser=3, ablation=1),
                                   make_entry(laser=2, welding=5),
@@ -569,14 +570,28 @@ def theme_gui(phrase_gui, monkeypatch):
 
 
 class TestThemeMode:
-    def test_a_theme_weighs_the_selected_records_in_the_clusters_having_it(self, theme_gui):
+    def test_a_theme_weighs_the_selected_records_in_the_clusters_having_it(self, theme_gui, monkeypatch):
+        monkeypatch.setattr(word_cloud, "themes_keep_corpus_wide", True)
         word_cloud._mode_box << "themes"
         render([0, 1, 2])
         assert FakeWordCloud.instances[0].frequencies == {"Large language models": 3, "Reasoning": 2,
                                                           "Self-regulated learning": 1}
 
-    def test_only_the_selection_counts(self, theme_gui):
-        """Control for the test above: a cluster with no selected record adds nothing."""
+    def test_by_default_a_theme_every_cluster_shares_is_left_out(self, theme_gui):
+        """Control for the test above: the same selection, with the switch at its default."""
+        word_cloud._mode_box << "themes"
+        render([0, 1, 2])
+        assert FakeWordCloud.instances[0].frequencies == {"Reasoning": 2, "Self-regulated learning": 1}
+
+    def test_flipping_the_switch_renders_the_same_selection_again(self, theme_gui, monkeypatch):
+        word_cloud._mode_box << "themes"
+        render([0, 1, 2])
+        monkeypatch.setattr(word_cloud, "themes_keep_corpus_wide", True)
+        render([0, 1, 2])
+        assert len(FakeWordCloud.instances) == 2, "the render cache must key on the switch too"
+
+    def test_only_the_selection_counts(self, theme_gui, monkeypatch):
+        monkeypatch.setattr(word_cloud, "themes_keep_corpus_wide", True)
         word_cloud._mode_box << "themes"
         render([2])
         assert FakeWordCloud.instances[0].frequencies == {"large language models": 1, "Self-regulated learning": 1}

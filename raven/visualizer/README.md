@@ -576,7 +576,7 @@ Raven can make a word cloud of the studies in the current selection, in one of t
 
 - **Phrases** (the default): the noun phrases of the selected studies, each sized by how many of them use it. Phrases are counted the way the cluster keywords are: an abbreviation and its long form are one phrase, and a longer phrase stands in for a shorter one it contains where it is found in at least half as many studies (*large language model* for *language model*).
 - **Words**: their single words, each sized by how often it occurs in the selection.
-- **Themes**: the themes the LLM named for the clusters, each sized by how many of the selected studies are in the clusters having it. Available where the dataset was imported with LLM keywords.
+- **Themes**: the themes the LLM named for the clusters, each sized by how many of the selected studies are in the clusters having it. Available where the dataset was imported with LLM keywords. The themes most clusters share are left out, as in the cluster labels, unless **Shared themes** is checked.
 
 The radio buttons at the bottom of the window choose the mode, and **Shift+F10** steps to the next from anywhere; the choice is remembered between sessions. They offer the modes the dataset has: a dataset imported before phrase keywords existed has no phrases, and one keyworded without the LLM has no themes. With words alone, the buttons are grayed out.
 

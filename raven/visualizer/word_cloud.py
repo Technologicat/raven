@@ -14,8 +14,8 @@ dataset id, the last-rendered selection, the texture array, the last
 generated `WordCloud` object — stays module-local.
 """
 
-__all__ = ["MODES",
-           "get_mode", "set_mode", "cycle_mode", "available_modes", "add_mode_control",
+__all__ = ["MODES", "themes_keep_corpus_wide",
+           "get_mode", "set_mode", "set_themes_keep_corpus_wide", "cycle_mode", "available_modes", "add_mode_control",
            "update",
            "toggle_window",
            "handle_key",
@@ -64,7 +64,12 @@ _data_box = box(None)  # the last generated `WordCloud` object, for `save_to_fil
 
 MODES = ("phrases", "words", "themes")
 _mode_box = box("phrases")  # what the user chose; the app sets it from the saved state at startup
-_last_mode = None  # the mode the last cloud was rendered in, which is part of what the render cache keys on
+_last_render_key = None  # what the last cloud was rendered with (`_render_key`), part of what the render cache keys on
+
+# Whether the themes cloud keeps the themes the LLM gave too many clusters, as the cluster labels do not. Off, the cloud
+# shows what tells the selection's clusters apart; on, a theme most clusters share leads it. The window's checkbox sets
+# it, for comparing the two on real selections; whether the checkbox stays depends on what that shows.
+themes_keep_corpus_wide = False
 
 _MODE_TOOLTIP = ("Build the word cloud from noun phrases, from single words, or from the clusters' themes [Shift+F10]\n"
                  "Themes are weighted by how many of the selected items are in the clusters that have them.")
@@ -88,6 +93,17 @@ def set_mode(mode: str) -> None:
     if not dpg.does_item_exist("word_cloud_window"):  # tag  # at startup, restoring the saved mode before the GUI exists
         return
     _sync_mode_control(app_state.dataset)
+    update(unbox(app_state.selection_data_idxs_box), only_if_visible=True)
+
+
+def set_themes_keep_corpus_wide(keep: bool) -> None:
+    """Keep the themes most clusters share in the themes cloud, or leave them out, and redraw it if it is open."""
+    global themes_keep_corpus_wide
+    themes_keep_corpus_wide = keep
+    if not dpg.does_item_exist("word_cloud_window"):  # tag
+        return
+    if dpg.does_item_exist("word_cloud_shared_themes_checkbox"):  # tag
+        dpg.set_value("word_cloud_shared_themes_checkbox", keep)  # tag
     update(unbox(app_state.selection_data_idxs_box), only_if_visible=True)
 
 
@@ -119,6 +135,12 @@ def _effective_mode(ds) -> str:
     return get_mode() if get_mode() in modes else modes[0]
 
 
+def _render_key(ds) -> tuple:
+    """What a cloud of `ds` is rendered with, beside the selection: the effective mode, and in themes mode the switch."""
+    mode = _effective_mode(ds)
+    return (mode, themes_keep_corpus_wide if mode == "themes" else None)
+
+
 def _sync_mode_control(ds) -> None:
     """Offer the dataset's modes in the window's control, showing the effective one; disabled when there is only one."""
     if not dpg.does_item_exist("word_cloud_mode_radio"):  # tag  # not built yet, or in a test without the window
@@ -126,6 +148,8 @@ def _sync_mode_control(ds) -> None:
     modes = available_modes(ds)
     dpg.configure_item("word_cloud_mode_radio", items=[mode.capitalize() for mode in modes], enabled=len(modes) > 1)  # tag
     dpg.set_value("word_cloud_mode_radio", _effective_mode(ds).capitalize())  # tag
+    if dpg.does_item_exist("word_cloud_shared_themes_checkbox"):  # tag
+        dpg.configure_item("word_cloud_shared_themes_checkbox", enabled=_effective_mode(ds) == "themes")  # tag
     maybe_tooltip = getattr(app_state, "word_cloud_mode_tooltip", None)
     if maybe_tooltip is not None:
         missing = [_MODE_TOOLTIP_MISSING[mode] for mode in MODES if mode not in modes]
@@ -138,19 +162,32 @@ def add_mode_control() -> None:
         set_mode(app_data.lower())
     dpg.add_radio_button(items=[mode.capitalize() for mode in MODES], tag="word_cloud_mode_radio", horizontal=True,
                          default_value=get_mode().capitalize(), callback=callback)
+    # Disabled rather than hidden outside themes mode, so that nothing beside it moves.
+    dpg.add_checkbox(label="Shared themes", tag="word_cloud_shared_themes_checkbox", default_value=themes_keep_corpus_wide,
+                     enabled=get_mode() == "themes",
+                     callback=lambda sender, app_data: set_themes_keep_corpus_wide(app_data))
+    dpg.bind_item_theme("word_cloud_shared_themes_checkbox", "disablable_widget_theme")  # tag
+    gui_tooltip.Tooltip("word_cloud_shared_themes_checkbox",  # tag
+                        "In themes mode, include the themes most clusters share.\n"
+                        "Left out, the cloud shows what tells the selected clusters apart, as the cluster labels do.")
     # Self-sizing, as its text changes with what the loaded dataset can do.
     app_state.word_cloud_mode_tooltip = gui_tooltip.Tooltip("word_cloud_mode_radio", _MODE_TOOLTIP)  # tag
 
 
-def _theme_weights(cluster_llm_keywords, cluster_sizes) -> dict[str, int]:
+def _theme_weights(cluster_llm_keywords, cluster_sizes, *, keep_corpus_wide: bool = False) -> dict[str, int]:
     """Each theme's weight: how many of the selected records are in the clusters whose LLM keywords include it.
 
     `cluster_llm_keywords`: the dataset's, a list of keywords per cluster ID.
     `cluster_sizes`: `{cluster ID: how many of the selected records are in it}`; Misc (-1) has no themes.
+    `keep_corpus_wide`: keep the themes the LLM gave too many clusters to tell any apart
+                        (`keyphrases.without_umbrella_terms`), which are left out otherwise, as in the cluster labels.
 
     One theme spelled two ways by two clusters ("Large language models", "large language models") counts once, under
     the spelling met first.
     """
+    if not keep_corpus_wide:
+        cluster_llm_keywords = keyphrases.without_umbrella_terms(
+            cluster_llm_keywords, threshold_fraction=visualizer_config.clusters_keyword_umbrella_fraction)
     weights: dict[str, int] = {}
     spelled: dict[str, str] = {}
     for cluster_id, n in cluster_sizes.items():
@@ -217,7 +254,7 @@ def _render_worker(*, task_env):
     """
     global _last_dataset_addr
     global _last_data_idxs
-    global _last_mode
+    global _last_render_key
 
     logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task running.")
     try:
@@ -237,7 +274,7 @@ def _render_worker(*, task_env):
             mode = _effective_mode(ds)
             _sync_mode_control(ds)
             # No need to recompute -> just show the window.
-            if id(ds) == _last_dataset_addr and set(data_idxs) == _last_data_idxs and mode == _last_mode:
+            if id(ds) == _last_dataset_addr and set(data_idxs) == _last_data_idxs and _render_key(ds) == _last_render_key:
                 logger.debug(f"_render_worker: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
                 dpg.show_item("word_cloud_window")
                 return
@@ -277,7 +314,8 @@ def _render_worker(*, task_env):
                     for term, count in keyphrases.top_terms(record_terms, gui_config.word_cloud_max_phrases):
                         keywords[display.get(term, term)] += count
                 elif mode == "themes":
-                    keywords.update(_theme_weights(ds.file_content.cluster_llm_keywords, cluster_sizes))
+                    keywords.update(_theme_weights(ds.file_content.cluster_llm_keywords, cluster_sizes,
+                                                   keep_corpus_wide=themes_keep_corpus_wide))
 
                 if not keywords:  # `generate_from_frequencies` raises on nothing; a selection can hold no words at all
                     logger.debug(f"_render_worker: {task_env.task_name}: Nothing to draw for this selection. Clearing texture.")
@@ -302,7 +340,7 @@ def _render_worker(*, task_env):
 
         _last_dataset_addr = id(ds)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
         _last_data_idxs = set(data_idxs)
-        _last_mode = _effective_mode(ds) if ds is not None else None
+        _last_render_key = _render_key(ds) if ds is not None else None
 
         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task completed.")
 
