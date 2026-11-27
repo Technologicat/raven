@@ -555,6 +555,25 @@ class TestExtract:
         doc = nlp("Programs for solomonoff induction\n\nWe study Solomonoff induction here.")
         assert keyphrases.extract(doc, stopwords=stopwords)["casing"].get("solomonoff") == "Solomonoff"
 
+    def test_a_record_writing_only_the_verb_votes_too(self, nlp, stopwords):
+        # Across the corpus: two records write "based on" and one "AI-Based"; the two must have a vote on "based".
+        capitalized = "Title\n\nWe report the effects of AI-Based Simulation-Based Training on learning."
+        doc = nlp(capitalized)
+        assert any(t.text == "Based" and t.pos_ == "PROPN" for t in doc), \
+            ("the tagger no longer reads this 'Based' as a proper noun, so this fixture cannot tell a corpus-wide vote "
+             "from one counted only where the word is a noun")
+        texts = [capitalized, "Title\n\nThe method is based on data.", "Title\n\nOur estimate is based on surveys."]
+        extracted = [keyphrases.extract(nlp(text), stopwords=stopwords) for text in texts]
+        assert "based" not in keyphrases.casing_table(extracted), "the lowercase spelling wins, so the table has no entry"
+
+    def test_where_most_records_capitalize_it_the_capital_wins(self, nlp, stopwords):
+        """Control for the test above: the majority reversed."""
+        texts = ["Title\n\nWe report the effects of AI-Based Simulation-Based Training on learning.",
+                 "Title\n\nWe compare AI-Based Simulation-Based Training with lectures.",
+                 "Title\n\nThe method is based on data."]
+        extracted = [keyphrases.extract(nlp(text), stopwords=stopwords) for text in texts]
+        assert keyphrases.casing_table(extracted).get("based") == "Based"
+
     def test_a_capitalized_compound_part_does_not_outvote_the_verb(self, nlp, stopwords):
         doc = nlp("Title\n\nWe build AI-Based tools. It is based on data. Results are based on tests.")
         assert keyphrases.extract(doc, stopwords=stopwords)["casing"].get("based", "based") == "based"

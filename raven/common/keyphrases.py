@@ -44,13 +44,12 @@ import numpy as np
 from .text import stopwords as raven_stopwords
 
 # A cache of `extract`'s output is valid only for the version that wrote it. Bump this when extraction changes.
-EXTRACTION_VERSION = 4
+EXTRACTION_VERSION = 5
 
 # Parts of speech that may not start or end a phrase. A noun chunk arrives with its determiner ("a novel
 # method"), and sometimes a number or a pronoun; those say nothing about the topic.
 _EDGE_POS = frozenset({"DET", "PRON", "NUM", "PUNCT", "ADP", "CCONJ", "SCONJ", "PART", "SYM", "AUX", "X", "SPACE"})
 _NOUN_POS = ("NOUN", "PROPN")
-_CASED_POS = frozenset({"NOUN", "PROPN", "ADJ"})
 _MAX_PHRASE_WORDS = 4
 _MIN_CHARS = 3
 
@@ -232,7 +231,7 @@ def extract(doc, *, stopwords: Container[str]) -> dict:
     Returns a picklable `dict`: `"phrases"`, a sorted list of the document's phrase terms; `"cased"`, how it writes
     those whose spelling differs from the term, `{term: as written}`; `"definitions"`, the abbreviations it
     defines, as `(short, long, short as written)`; `"nouns"`, a sorted list of the nouns it uses, as written; and
-    `"casing"`, how it capitalizes its nouns and adjectives where a sentence does not start, as
+    `"casing"`, how it capitalizes its words where a sentence does not start, as
     `{lowercased word: the form most of its occurrences take}`, for `casing_table`.
 
     The text a document was parsed from is best prepared with `sentence_case` on its title, and Unicode NFKC
@@ -247,23 +246,21 @@ def extract(doc, *, stopwords: Container[str]) -> dict:
 
 
 def _casing(doc) -> dict[str, str]:
-    """`{lowercased word: its usual form}` for the nouns and adjectives of `doc` not starting a sentence, counted in
-    its abstract: after the first blank line, where there is one."""
+    """`{lowercased word: its usual form}` for the words of `doc` not starting a sentence, counted in its abstract:
+    after the first blank line, where there is one."""
     # A sentence's first word is capitalized whatever it is, so it says nothing about the word. A title is left
     # out, being sentence-cased before extraction, which lowercases every proper name in a Title Case title.
     #
-    # Every occurrence of a noun or adjective counts, whatever its part of speech there: a capitalized part of a
-    # compound ("AI-Based") is tagged a proper noun, while "based" in "based on" is a verb, so counting nouns and
-    # adjectives alone hands every vote to the capitalized form.
+    # Every word votes, whatever its part of speech. A capitalized part of a compound ("AI-Based") is tagged a proper
+    # noun, while "based" in "based on" is a verb; were only nouns and adjectives counted, the records writing only
+    # "based on" would cast no vote on "based", and the few writing "AI-Based" would carry it for the whole corpus.
     tokens = list(doc)
     breaks = [k for k, t in enumerate(tokens) if t.is_space and "\n\n" in t.text]
     region = tokens[breaks[0] + 1:] if breaks else tokens
-    nominal = {t.text.lower() for t in region if t.pos_ in _CASED_POS}
     forms: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for t in region:
-        word = t.text.lower()
-        if word in nominal and not t.is_sent_start and any(ch.isalpha() for ch in t.text):
-            forms[word][t.text] += 1
+        if not t.is_sent_start and any(ch.isalpha() for ch in t.text):
+            forms[t.text.lower()][t.text] += 1
     return {word: max(c.items(), key=lambda kv: (kv[1], kv[0] == word))[0] for word, c in forms.items()}
 
 
